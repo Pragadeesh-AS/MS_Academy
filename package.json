@@ -20,6 +20,8 @@
     "motion": "^12.42.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1",
+    "styled-components": "^6.4.4",
     "swiper": "^14.0.5",
     "tailwind-merge": "^3.6.0",
     "three": "^0.185.1"

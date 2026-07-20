@@ -1,45 +1,26 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import './index.css';
-import { Carousel_003 } from "./components/ui/swiper-carousel";
+import { ShinyButton } from "./components/ui/shiny-button";
 import { motion } from "motion/react";
-import { BookOpen, Target, Users, ChevronDown } from 'lucide-react';
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import { ChevronDown, GraduationCap, TrendingUp, Settings, Database, MapPin, Monitor, Cpu, Cog, Building2, Zap } from 'lucide-react';
+import Home from './components/Home';
+import AboutUs from './components/AboutUs';
 
-const courses = [
-  {
-    src: "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=3000&auto=format&fit=crop",
-    title: "Computer Science (CSE)",
-    category: "CSE",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1517077304055-6e89abbf09b0?q=80&w=3000&auto=format&fit=crop",
-    title: "Electronics (ECE)",
-    category: "ECE",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1537462715879-360eeb61a0ad?q=80&w=3000&auto=format&fit=crop",
-    title: "Mechanical (ME)",
-    category: "ME",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1508450859948-4e04fabaa4ea?q=80&w=3000&auto=format&fit=crop",
-    title: "Civil (CE)",
-    category: "CE",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1498084393753-b411b2d26b34?q=80&w=3000&auto=format&fit=crop",
-    title: "Electrical (EE)",
-    category: "EE",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=3000&auto=format&fit=crop",
-    title: "Coimbatore Offline",
-    category: "OFFLINE",
-  }
+const gateCoursesDropdown = [
+  { name: "GATE Computer Science (CSE)", icon: Monitor },
+  { name: "GATE Electronics (ECE)", icon: Cpu },
+  { name: "GATE Mechanical (ME)", icon: Cog },
+  { name: "GATE Civil (CE)", icon: Building2 },
+  { name: "GATE Electrical (EE)", icon: Zap },
+  { name: "GATE Production Engineering (PI)", icon: Settings },
+  { name: "GATE Data Science & AI (DS)", icon: Database },
+  { name: "GATE Coaching Coimbatore", icon: MapPin }
 ];
 
 export default function App() {
   const [isScrolled, setIsScrolled] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -49,11 +30,10 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const swiperImages = courses.map(course => ({
-    src: course.src,
-    alt: course.title,
-    category: course.category
-  }));
+  // Reset scroll on route change
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-white relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col pt-24">
@@ -88,110 +68,94 @@ export default function App() {
           }}
           className="hidden md:flex flex-row self-center items-center justify-between py-3 mx-auto px-8 rounded-full relative z-[100]"
         >
-          <div className="flex flex-col justify-center whitespace-nowrap">
+          <Link to="/" className="flex flex-col justify-center whitespace-nowrap">
             <span className="font-black text-[17px] text-slate-900 uppercase tracking-wide leading-none">MS GATE ACADEMY</span>
             <span className="font-bold text-[10px] text-[#f36b2b] uppercase tracking-[0.15em] mt-1 leading-none">COIMBATORE</span>
-          </div>
+          </Link>
           
-          <div className="hidden lg:flex gap-6 text-[14px] font-semibold text-slate-700 whitespace-nowrap items-center">
-            <a href="#" className="text-[#f36b2b] bg-orange-50 px-3 py-1.5 rounded-lg transition-colors">Home</a>
-            <div className="flex items-center gap-1 cursor-pointer hover:text-[#f36b2b] transition-colors group">
-              <span>GATE Courses</span>
-              <ChevronDown size={14} strokeWidth={2.5} className="group-hover:rotate-180 transition-transform duration-200" />
-            </div>
-            <a href="#" className="hover:text-[#f36b2b] transition-colors">Programming Courses</a>
+          <div className="hidden lg:flex gap-2 text-[14px] font-semibold text-slate-700 whitespace-nowrap items-center">
             
-            <div className={`flex items-center gap-6 overflow-hidden transition-all duration-700 ${isScrolled ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-              <a href="#" className="hover:text-[#f36b2b] transition-colors">About Us</a>
-              <a href="#" className="hover:text-[#f36b2b] transition-colors">Careers</a>
-              <a href="#" className="hover:text-[#f36b2b] transition-colors">Blog</a>
-              <a href="#" className="hover:text-[#f36b2b] transition-colors">Contact</a>
+            {/* Home Link */}
+            <Link to="/" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
+              <span className="relative z-10">Home</span>
+              <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+            </Link>
+            
+            {/* GATE Courses Dropdown */}
+            <div className="relative flex items-center cursor-pointer group/nav">
+              <div className="relative group px-4 py-2 flex items-center gap-1 transition-colors duration-300 hover:text-slate-900">
+                <span className="relative z-10">GATE Courses</span>
+                <ChevronDown size={14} strokeWidth={2.5} className="relative z-10 group-hover/nav:rotate-180 transition-transform duration-200" />
+                <div className="absolute inset-0 rounded-full border border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300"></div>
+              </div>
+              
+              {/* Dropdown Menu */}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[340px] bg-white/90 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] opacity-0 invisible group-hover/nav:opacity-100 group-hover/nav:visible transition-all duration-300 z-[110] overflow-hidden transform origin-top group-hover/nav:scale-100 scale-95 pointer-events-none group-hover/nav:pointer-events-auto">
+                <div className="absolute -top-6 left-0 right-0 h-6 bg-transparent" />
+                
+                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                  <span className="text-[11px] font-bold text-slate-500 tracking-widest uppercase">GATE SPECIALIZATIONS</span>
+                </div>
+                <div className="flex flex-col p-2 bg-transparent gap-1">
+                  {gateCoursesDropdown.map((course, idx) => {
+                    const Icon = course.icon;
+                    return (
+                      <a key={idx} href="#" className="relative flex items-center gap-4 p-2.5 group/item transition-colors">
+                        <div className="absolute inset-0 rounded-xl border border-transparent group-hover/item:border-slate-900/10 group-hover/item:bg-slate-900/5 group-hover/item:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300 pointer-events-none"></div>
+                        <div className="relative z-10 w-[42px] h-[42px] rounded-xl bg-slate-50 flex flex-shrink-0 items-center justify-center border border-slate-100 group-hover/item:border-slate-300 group-hover/item:bg-white transition-colors shadow-sm">
+                          <Icon size={18} strokeWidth={2} className="text-slate-500 group-hover/item:text-slate-900 transition-colors" />
+                        </div>
+                        <span className="relative z-10 text-[15px] font-medium text-slate-700 group-hover/item:text-slate-900 transition-colors">{course.name}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Programming Courses */}
+            <a href="#" className="relative group px-4 py-2 transition-colors duration-300 hover:text-slate-900">
+              <span className="relative z-10">Programming Courses</span>
+              <div className="absolute inset-0 rounded-full border border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300"></div>
+            </a>
+            
+            {/* Collapsible Links based on Scroll */}
+            <div className={`flex items-center gap-2 overflow-hidden transition-all duration-700 ${isScrolled ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+              <Link to="/about" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/about' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
+                <span className="relative z-10">About Us</span>
+                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/about' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+              </Link>
+              
+              <a href="#" className="relative group px-4 py-2 transition-colors duration-300 hover:text-slate-900">
+                <span className="relative z-10">Careers</span>
+                <div className="absolute inset-0 rounded-full border border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300"></div>
+              </a>
+              
+              <a href="#" className="relative group px-4 py-2 transition-colors duration-300 hover:text-slate-900">
+                <span className="relative z-10">Blog</span>
+                <div className="absolute inset-0 rounded-full border border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300"></div>
+              </a>
+              
+              <a href="#" className="relative group px-4 py-2 transition-colors duration-300 hover:text-slate-900">
+                <span className="relative z-10">Contact</span>
+                <div className="absolute inset-0 rounded-full border border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300"></div>
+              </a>
             </div>
           </div>
           
           <div className="flex items-center transition-all duration-700 whitespace-nowrap opacity-100 gap-4">
-            <button className={`font-semibold text-white rounded-lg bg-gradient-to-b from-[#3a3a3a] to-[#1a1a1a] shadow-md hover:from-[#2a2a2a] hover:to-[#0a0a0a] transition-all border border-[#2a2a2a] ${isScrolled ? 'px-4 py-2 text-[14px]' : 'px-6 py-2.5 text-[15px]'}`}>
+            <ShinyButton className={`font-semibold text-white rounded-lg bg-gradient-to-b from-[#3a3a3a] to-[#1a1a1a] shadow-md hover:from-[#2a2a2a] hover:to-[#0a0a0a] transition-all border border-[#2a2a2a] ${isScrolled ? 'px-4 py-2 text-[14px]' : 'px-6 py-2.5 text-[15px]'}`}>
               Student Portal
-            </button>
+            </ShinyButton>
           </div>
         </motion.nav>
       </div>
 
-      {/* Hero Section */}
-      <main className="relative flex flex-col lg:flex-row items-center justify-between text-center lg:text-left px-4 pt-10 pb-12 max-w-[1200px] w-full mx-auto gap-12">
-
-        <div className="flex-1 flex flex-col items-center lg:items-start max-w-2xl">
-          <h1 className="text-[52px] md:text-[72px] font-[900] text-slate-900 leading-[1.1] tracking-[-0.03em] mb-6">
-            Best <span className="text-[#f36b2b]">GATE Coaching</span> in Coimbatore <br />
-            <span className="text-[32px] md:text-[42px] text-slate-600 font-bold block mt-4 tracking-tight">| Online & Offline Classes</span>
-          </h1>
-
-          <p className="text-[17px] text-slate-500 mb-10 leading-relaxed">
-            Learn directly from Mr. M. Muthu Samy (NIT Trichy Alumnus). Go from average scores to your dream PSU or IIT with ease using MS Gate Academy, your favourite coaching platform.
-          </p>
-
-          <button className="px-8 py-4 text-[17px] font-semibold text-white rounded-xl bg-gradient-to-b from-[#4a4a4a] via-[#2a2a2a] to-[#111111] shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:scale-[1.02] transition-transform border border-[#333333]">
-            Get Started
-          </button>
-        </div>
-
-        <div className="w-full lg:w-[550px] xl:w-[700px] flex justify-center items-center">
-          <DotLottieReact
-            src="https://lottie.host/a5950b64-131e-4719-ad3f-d507b18b464f/evcOXBnTv7.lottie"
-            loop
-            autoplay
-          />
-        </div>
-      </main>
-
-      {/* Features Section */}
-      <section className="relative z-10 w-full max-w-[1100px] mx-auto px-6 py-16 md:py-24">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 lg:gap-16">
-          {/* Feature 1 */}
-          <div className="flex flex-col items-center text-center group">
-            <div className="w-16 h-16 rounded-[20px] bg-[#fff5f0] text-[#f36b2b] flex items-center justify-center mb-6 group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300">
-              <BookOpen size={30} strokeWidth={1.5} />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-3 tracking-tight">Expert Mentorship</h3>
-            <p className="text-[15px] text-slate-500 leading-relaxed">
-              Learn directly from NIT Trichy alumni. Get the right guidance from someone who has cracked GATE 4 times consecutively.
-            </p>
-          </div>
-
-          {/* Feature 2 */}
-          <div className="flex flex-col items-center text-center group">
-            <div className="w-16 h-16 rounded-[20px] bg-slate-50 text-slate-700 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300 border border-slate-100 shadow-sm">
-              <Target size={30} strokeWidth={1.5} />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-3 tracking-tight">Mock Test Series</h3>
-            <p className="text-[15px] text-slate-500 leading-relaxed">
-              Real GATE-level CBT practice. Evaluate your performance with our in-depth analytics and stay ahead of the competition.
-            </p>
-          </div>
-
-          {/* Feature 3 */}
-          <div className="flex flex-col items-center text-center group">
-            <div className="w-16 h-16 rounded-[20px] bg-[#fff5f0] text-[#f36b2b] flex items-center justify-center mb-6 group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300">
-              <Users size={30} strokeWidth={1.5} />
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-3 tracking-tight">Personalized Attention</h3>
-            <p className="text-[15px] text-slate-500 leading-relaxed">
-              Premium offline coaching in Coimbatore with small batches. Never get lost in a crowd again.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Courses Carousel Section */}
-      <section className="w-full relative z-10 py-12 flex-1 overflow-hidden">
-        <div className="max-w-[1400px] mx-auto px-8 mb-4">
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Explore Courses</h2>
-          <p className="text-slate-500 font-medium">Find the perfect GATE program for your engineering discipline.</p>
-        </div>
-        <div className="mt-8">
-          <Carousel_003 images={swiperImages} showPagination={true} autoplay={true} loop={true} showNavigation={true} />
-        </div>
-      </section>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/about" element={<AboutUs />} />
+      </Routes>
     </div>
   );
 }
+
