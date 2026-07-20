@@ -2,7 +2,8 @@ import React from 'react';
 import { Carousel_003 } from "./ui/swiper-carousel";
 import { ShinyButton } from "./ui/shiny-button";
 import { BookOpen, Target, Users } from 'lucide-react';
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import homeImg from '../assets/home.png';
+import { motion } from 'framer-motion';
 
 const courses = [
   {
@@ -63,50 +64,72 @@ export default function Home() {
           </ShinyButton>
         </div>
 
-        <div className="w-full lg:w-[650px] xl:w-[850px] flex justify-center items-center transform scale-110 lg:scale-125 lg:origin-right mt-10 lg:mt-0 lg:translate-x-24 xl:translate-x-32">
-          <DotLottieReact
-            src="https://lottie.host/a5950b64-131e-4719-ad3f-d507b18b464f/evcOXBnTv7.lottie"
-            loop
-            autoplay
+        <div className="w-full lg:w-[700px] xl:w-[900px] flex justify-center items-center transform scale-110 lg:scale-125 lg:origin-right mt-4 lg:-mt-16 lg:translate-x-16 xl:translate-x-24">
+          <img 
+            src={homeImg} 
+            alt="MS GATE Academy Coaching" 
+            className="w-full h-auto object-contain mix-blend-multiply hover:scale-105 transition-transform duration-700"
           />
         </div>
       </main>
 
       {/* Features Section */}
       <section className="relative z-10 w-full max-w-[1100px] mx-auto px-6 py-16 md:py-24">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 lg:gap-16">
+        {/* Subtle background glow for the section */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] bg-gradient-to-r from-[#ffe0d1]/30 via-transparent to-[#ffe0d1]/30 blur-[80px] -z-10 rounded-[100%] opacity-50 pointer-events-none"></div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
           {/* Feature 1 */}
-          <div className="flex flex-col items-center text-center group">
-            <div className="w-16 h-16 rounded-[20px] bg-[#fff5f0] text-[#f36b2b] flex items-center justify-center mb-6 group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300">
-              <BookOpen size={30} strokeWidth={1.5} />
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
+            viewport={{ once: true, margin: "-50px" }}
+            className="flex flex-col items-center text-center group bg-white/70 backdrop-blur-md border border-slate-100 rounded-[32px] p-8 shadow-[0_8px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(243,107,43,0.08)] hover:-translate-y-2 hover:bg-white transition-all duration-500"
+          >
+            <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-[#fff5f0] to-orange-50 text-[#f36b2b] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 shadow-inner">
+              <BookOpen size={28} strokeWidth={2} />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-3 tracking-tight">Expert Mentorship</h3>
-            <p className="text-[15px] text-slate-500 leading-relaxed">
+            <h3 className="text-[20px] font-bold text-slate-900 mb-3 tracking-tight">Expert Mentorship</h3>
+            <p className="text-[15px] text-slate-500 leading-relaxed font-medium">
               Learn directly from NIT Trichy alumni. Get the right guidance from someone who has cracked GATE 4 times consecutively.
             </p>
-          </div>
+          </motion.div>
 
           {/* Feature 2 */}
-          <div className="flex flex-col items-center text-center group">
-            <div className="w-16 h-16 rounded-[20px] bg-slate-50 text-slate-700 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300 border border-slate-100 shadow-sm">
-              <Target size={30} strokeWidth={1.5} />
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+            viewport={{ once: true, margin: "-50px" }}
+            className="flex flex-col items-center text-center group bg-white/70 backdrop-blur-md border border-slate-100 rounded-[32px] p-8 shadow-[0_8px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(243,107,43,0.08)] hover:-translate-y-2 hover:bg-white transition-all duration-500 relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
+            <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-slate-50 to-slate-100 text-slate-700 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:text-[#f36b2b] group-hover:from-[#fff5f0] group-hover:to-orange-50 transition-all duration-500 shadow-inner border border-slate-200/50 group-hover:border-transparent">
+              <Target size={28} strokeWidth={2} />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-3 tracking-tight">Mock Test Series</h3>
-            <p className="text-[15px] text-slate-500 leading-relaxed">
+            <h3 className="text-[20px] font-bold text-slate-900 mb-3 tracking-tight">Mock Test Series</h3>
+            <p className="text-[15px] text-slate-500 leading-relaxed font-medium">
               Real GATE-level CBT practice. Evaluate your performance with our in-depth analytics and stay ahead of the competition.
             </p>
-          </div>
+          </motion.div>
 
           {/* Feature 3 */}
-          <div className="flex flex-col items-center text-center group">
-            <div className="w-16 h-16 rounded-[20px] bg-[#fff5f0] text-[#f36b2b] flex items-center justify-center mb-6 group-hover:scale-110 group-hover:-translate-y-1 transition-all duration-300">
-              <Users size={30} strokeWidth={1.5} />
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
+            viewport={{ once: true, margin: "-50px" }}
+            className="flex flex-col items-center text-center group bg-white/70 backdrop-blur-md border border-slate-100 rounded-[32px] p-8 shadow-[0_8px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(243,107,43,0.08)] hover:-translate-y-2 hover:bg-white transition-all duration-500"
+          >
+            <div className="w-16 h-16 rounded-[20px] bg-gradient-to-br from-[#fff5f0] to-orange-50 text-[#f36b2b] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500 shadow-inner">
+              <Users size={28} strokeWidth={2} />
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-3 tracking-tight">Personalized Attention</h3>
-            <p className="text-[15px] text-slate-500 leading-relaxed">
+            <h3 className="text-[20px] font-bold text-slate-900 mb-3 tracking-tight">Personalized Attention</h3>
+            <p className="text-[15px] text-slate-500 leading-relaxed font-medium">
               Premium offline coaching in Coimbatore with small batches. Never get lost in a crowd again.
             </p>
-          </div>
+          </motion.div>
         </div>
       </section>
 

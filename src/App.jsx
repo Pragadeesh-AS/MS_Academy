@@ -64,9 +64,13 @@ export default function App() {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-white relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col pt-24">
-      {/* Background Gradient Circle (Bottom Peach/Orange Glow) */}
-      <div className="absolute top-[20%] left-1/2 -translate-x-1/2 w-[150vw] h-[80vh] sm:w-[100vw] sm:h-[100vh] rounded-[100%] bg-gradient-to-t from-[#ffe0d1] to-white/0 -z-10 blur-3xl opacity-80 pointer-events-none"></div>
+    <div className="min-h-screen bg-[#fafafa] relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col pt-24">
+      {/* Background Dotted Pattern */}
+      <div className="absolute inset-0 z-[-1] bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white_20%,transparent_90%)] pointer-events-none"></div>
+
+      {/* Soft Gradient Orbs */}
+      <div className="absolute top-[-10%] left-[-5%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] rounded-full bg-gradient-to-br from-orange-200/20 to-transparent blur-[80px] -z-10 pointer-events-none"></div>
+      <div className="absolute top-[40%] right-[-10%] w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] rounded-full bg-gradient-to-tl from-slate-200/40 to-transparent blur-[100px] -z-10 pointer-events-none"></div>
       
       {/* Background GIF Animation */}
       <div className="absolute inset-0 w-full h-full -z-20 pointer-events-none overflow-hidden">
