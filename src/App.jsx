@@ -15,6 +15,7 @@ import EeCourse from './components/courses/Ee';
 import PiCourse from './components/courses/Pi';
 import DsCourse from './components/courses/Ds';
 import MorphPanel from './components/ui/ai-input';
+import ProgrammingCourses from './components/ProgrammingCourses';
 
 const gateCoursesDropdown = [
   { name: "GATE Computer Science (CSE)", icon: Monitor, path: "/courses/cse" },
@@ -160,10 +161,10 @@ export default function App() {
             </div>
 
             {/* Programming Courses */}
-            <a href="#" className="relative group px-4 py-2 transition-colors duration-300 hover:text-slate-900">
+            <Link to="/programming" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/programming' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
               <span className="relative z-10">Programming Courses</span>
-              <div className="absolute inset-0 rounded-full border border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300"></div>
-            </a>
+              <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/programming' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+            </Link>
             
             {/* Collapsible Links based on Scroll */}
             <div className={`flex items-center gap-2 overflow-hidden transition-all duration-700 ${isScrolled ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
@@ -208,6 +209,7 @@ export default function App() {
         <Route path="/courses/ee" element={<EeCourse />} />
         <Route path="/courses/pi" element={<PiCourse />} />
         <Route path="/courses/ds" element={<DsCourse />} />
+        <Route path="/programming" element={<ProgrammingCourses />} />
       </Routes>
 
       {/* Global Floating Components */}
