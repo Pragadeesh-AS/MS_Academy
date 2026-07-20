@@ -63,7 +63,7 @@ export default function Home() {
           </ShinyButton>
         </div>
 
-        <div className="w-full lg:w-[550px] xl:w-[700px] flex justify-center items-center">
+        <div className="w-full lg:w-[650px] xl:w-[850px] flex justify-center items-center transform scale-110 lg:scale-125 lg:origin-right mt-10 lg:mt-0 lg:translate-x-24 xl:translate-x-32">
           <DotLottieReact
             src="https://lottie.host/a5950b64-131e-4719-ad3f-d507b18b464f/evcOXBnTv7.lottie"
             loop

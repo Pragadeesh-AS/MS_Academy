@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import './index.css';
 import { ShinyButton } from "./components/ui/shiny-button";
@@ -7,21 +7,40 @@ import { ChevronDown, GraduationCap, TrendingUp, Settings, Database, MapPin, Mon
 import Home from './components/Home';
 import AboutUs from './components/AboutUs';
 import Contact from './components/Contact';
+import CseCourse from './components/courses/Cse';
+import MorphPanel from './components/ui/ai-input';
 
 const gateCoursesDropdown = [
-  { name: "GATE Computer Science (CSE)", icon: Monitor },
-  { name: "GATE Electronics (ECE)", icon: Cpu },
-  { name: "GATE Mechanical (ME)", icon: Cog },
-  { name: "GATE Civil (CE)", icon: Building2 },
-  { name: "GATE Electrical (EE)", icon: Zap },
-  { name: "GATE Production Engineering (PI)", icon: Settings },
-  { name: "GATE Data Science & AI (DS)", icon: Database },
-  { name: "GATE Coaching Coimbatore", icon: MapPin }
+  { name: "GATE Computer Science (CSE)", icon: Monitor, path: "/courses/cse" },
+  { name: "GATE Electronics (ECE)", icon: Cpu, path: "/courses/ece" },
+  { name: "GATE Mechanical (ME)", icon: Cog, path: "/courses/me" },
+  { name: "GATE Civil (CE)", icon: Building2, path: "/courses/ce" },
+  { name: "GATE Electrical (EE)", icon: Zap, path: "/courses/ee" },
+  { name: "GATE Production Engineering (PI)", icon: Settings, path: "/courses/pi" },
+  { name: "GATE Data Science & AI (DS)", icon: Database, path: "/courses/ds" },
+  { name: "GATE Coaching Coimbatore", icon: MapPin, path: "/courses/offline" }
 ];
 
 export default function App() {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isDropdownHovered, setIsDropdownHovered] = useState(false);
+  const [isDropdownPinned, setIsDropdownPinned] = useState(false);
+  const isDropdownVisible = isDropdownHovered || isDropdownPinned;
   const location = useLocation();
+  const dropdownRef = useRef(null);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownPinned(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -31,9 +50,11 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Reset scroll on route change
+  // Reset scroll and dropdown on route change
   useEffect(() => {
     window.scrollTo(0, 0);
+    setIsDropdownPinned(false);
+    setIsDropdownHovered(false);
   }, [location.pathname]);
 
   return (
@@ -83,15 +104,26 @@ export default function App() {
             </Link>
             
             {/* GATE Courses Dropdown */}
-            <div className="relative flex items-center cursor-pointer group/nav">
-              <div className="relative group px-4 py-2 flex items-center gap-1 transition-colors duration-300 hover:text-slate-900">
+            <div 
+              ref={dropdownRef}
+              className="relative flex items-center cursor-pointer group/nav"
+              onMouseEnter={() => setIsDropdownHovered(true)}
+              onMouseLeave={() => setIsDropdownHovered(false)}
+            >
+              <div 
+                className="relative group px-4 py-2 flex items-center gap-1 transition-colors duration-300 hover:text-slate-900"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setIsDropdownPinned(!isDropdownPinned);
+                }}
+              >
                 <span className="relative z-10">GATE Courses</span>
-                <ChevronDown size={14} strokeWidth={2.5} className="relative z-10 group-hover/nav:rotate-180 transition-transform duration-200" />
+                <ChevronDown size={14} strokeWidth={2.5} className={`relative z-10 transition-transform duration-200 ${isDropdownVisible ? 'rotate-180' : ''}`} />
                 <div className="absolute inset-0 rounded-full border border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300"></div>
               </div>
               
               {/* Dropdown Menu */}
-              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[340px] bg-white/90 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] opacity-0 invisible group-hover/nav:opacity-100 group-hover/nav:visible transition-all duration-300 z-[110] overflow-hidden transform origin-top group-hover/nav:scale-100 scale-95 pointer-events-none group-hover/nav:pointer-events-auto">
+              <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[340px] bg-white/90 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] transition-all duration-300 z-[110] overflow-hidden transform origin-top ${isDropdownVisible ? 'opacity-100 visible scale-100 pointer-events-auto' : 'opacity-0 invisible scale-95 pointer-events-none'}`}>
                 <div className="absolute -top-6 left-0 right-0 h-6 bg-transparent" />
                 
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
@@ -101,13 +133,13 @@ export default function App() {
                   {gateCoursesDropdown.map((course, idx) => {
                     const Icon = course.icon;
                     return (
-                      <a key={idx} href="#" className="relative flex items-center gap-4 p-2.5 group/item transition-colors">
+                      <Link key={idx} to={course.path || "#"} className="relative flex items-center gap-4 p-2.5 group/item transition-colors">
                         <div className="absolute inset-0 rounded-xl border border-transparent group-hover/item:border-slate-900/10 group-hover/item:bg-slate-900/5 group-hover/item:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300 pointer-events-none"></div>
                         <div className="relative z-10 w-[42px] h-[42px] rounded-xl bg-slate-50 flex flex-shrink-0 items-center justify-center border border-slate-100 group-hover/item:border-slate-300 group-hover/item:bg-white transition-colors shadow-sm">
                           <Icon size={18} strokeWidth={2} className="text-slate-500 group-hover/item:text-slate-900 transition-colors" />
                         </div>
                         <span className="relative z-10 text-[15px] font-medium text-slate-700 group-hover/item:text-slate-900 transition-colors">{course.name}</span>
-                      </a>
+                      </Link>
                     );
                   })}
                 </div>
@@ -156,7 +188,11 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<AboutUs />} />
         <Route path="/contact" element={<Contact />} />
+        <Route path="/courses/cse" element={<CseCourse />} />
       </Routes>
+
+      {/* Global Floating Components */}
+      <MorphPanel />
     </div>
   );
 }
