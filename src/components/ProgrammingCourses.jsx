@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, ArrowRight } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Search, BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const programmingCoursesData = [
@@ -95,8 +95,271 @@ const programmingCoursesData = [
   }
 ];
 
+// Syllabus Data for Java Fundamentals (25 days)
+const javaFundamentalsSyllabus = [
+  { day: "Day 1", duration: "1.25 Hours", topics: "Course Introduction, Java History, JDK/JRE/JVM Architecture", type: "Theory/Lab" },
+  { day: "Day 2", duration: "1.25 Hours", topics: "IDE Setup (IntelliJ/Eclipse), First Program, Compilation Process", type: "Theory/Lab" },
+  { day: "Day 3", duration: "1.25 Hours", topics: "Variables, Data Types, Operators & Expressions", type: "Theory/Lab" },
+  { day: "Day 4", duration: "1.25 Hours", topics: "Type Casting, Scanner Class, Handling User Input", type: "Theory/Lab" },
+  { day: "Day 5", duration: "1.25 Hours", topics: "Conditional Statements (if, if-else, switch-case)", type: "Theory/Lab" },
+  { day: "Day 6", duration: "1.25 Hours", topics: "Loops (for, while, do-while), Basic Pattern Programs", type: "Theory/Lab" },
+  { day: "Day 7", duration: "1.00 Hours", topics: "PRACTICE CHALLENGE Problem Solving Session: HackerRank Coding Practice Challenge", type: "HackerRank Practice" },
+  { day: "Day 8", duration: "1.25 Hours", topics: "Methods (Declaration, Parameters, Return Types), 1D & 2D Arrays", type: "Theory/Lab" },
+  { day: "Day 9", duration: "1.25 Hours", topics: "OOP Basics: Classes, Objects, and Memory Allocation (Heap vs. Stack)", type: "Theory/Lab" },
+  { day: "Day 10", duration: "1.25 Hours", topics: "Constructors (Default, Parameterized), static keyword, this reference", type: "Theory/Lab" },
+  { day: "Day 11", duration: "1.25 Hours", topics: "Encapsulation, Access Modifiers (private, default, protected, public)", type: "Theory/Lab" },
+  { day: "Day 12", duration: "1.25 Hours", topics: "Inheritance (IS-A relationship), Method Overriding, super & final keywords", type: "Theory/Lab" },
+  { day: "Day 13", duration: "1.25 Hours", topics: "Polymorphism, Abstract Classes vs. Interfaces (Loose Coupling)", type: "Theory/Lab" },
+  { day: "Day 14", duration: "1.00 Hours", topics: "PRACTICE CHALLENGE Problem Solving Session: HackerRank Coding Practice Challenge", type: "HackerRank Practice" },
+  { day: "Day 15", duration: "1.25 Hours", topics: "Strings, String Manipulation, Wrapper Classes, and Packages", type: "Theory/Lab" },
+  { day: "Day 16", duration: "1.25 Hours", topics: "Exception Handling (Try-Catch, Finally, Throw/Throws, Custom Exceptions)", type: "Theory/Lab" },
+  { day: "Day 17", duration: "1.25 Hours", topics: "Java Collections Framework: Introduction to List, Set, and Map structures", type: "Theory/Lab" },
+  { day: "Day 18", duration: "1.25 Hours", topics: "Generics, Enums, Sorting with Comparable vs. Comparator", type: "Theory/Lab" },
+  { day: "Day 19", duration: "1.25 Hours", topics: "File Handling Basics, Streams, and Object Serialization", type: "Theory/Lab" },
+  { day: "Day 20", duration: "1.00 Hours", topics: "PRACTICE CHALLENGE Problem Solving Session: HackerRank Coding Practice Challenge", type: "HackerRank Practice" },
+  { day: "Day 21", duration: "1.00 Hours", topics: "PRACTICE CHALLENGE Problem Solving Session: HackerRank Coding Practice Challenge", type: "HackerRank Practice" },
+  { day: "Day 22", duration: "1.25 Hours", topics: "Multithreading Basics: Lifecycle, Threads creation (Thread class vs Runnable)", type: "Theory/Lab" },
+  { day: "Day 23", duration: "1.25 Hours", topics: "Mini Project Kickoff & Implementation (Library or Student Management System)", type: "Project" },
+  { day: "Day 24", duration: "1.00 Hours", topics: "PRACTICE CHALLENGE Problem Solving Session: HackerRank Coding Practice Challenge", type: "HackerRank Practice" },
+  { day: "Day 25", duration: "1.25 Hours", topics: "Introduction to Spring Boot, REST API Demo, Career Guidance, and Resume Review", type: "Theory/Lab" }
+];
+
+// Syllabus Data for Java Full-Stack (45 days)
+const javaFullStackSyllabus = Array.from({ length: 45 }, (_, i) => {
+  const dayNum = i + 1;
+  let topics = "";
+  let type = "Theory/Lab";
+  let duration = "1.25 Hours";
+
+  if (dayNum <= 5) {
+    topics = `Advanced OOP concepts - Day ${dayNum}: ${[
+      "Abstract Classes & Interfaces comparison",
+      "Multiple Inheritance using Interfaces and Default Methods",
+      "Inner Classes, Nested and Static Classes",
+      "Anonymous Inner Classes & Lambda Expressions introduction",
+      "Object Cloning, Deep vs Shallow Copy"
+    ][i]}`;
+  } else if (dayNum <= 10) {
+    topics = `Collections Framework - Day ${dayNum - 5}: ${[
+      "List Interface (ArrayList vs LinkedList internals)",
+      "Set Interface (HashSet vs TreeSet sorting)",
+      "Map Interface (HashMap hashing and collision resolution)",
+      "Queue & Deque implementations (PriorityQueue)",
+      "Collections Utility methods, Sorting and Searching"
+    ][i - 5]}`;
+  } else if (dayNum <= 15) {
+    topics = `Java 8 Streams & Files - Day ${dayNum - 10}: ${[
+      "Lambda expressions syntax, Functional Interfaces",
+      "Stream API operations (Filter, Map, Reduce)",
+      "Stream Collectors, Grouping, Partitioning",
+      "File I/O, Data Streams, buffering configurations",
+      "Serialization and Deserialization implementation"
+    ][i - 10]}`;
+  } else if (dayNum <= 20) {
+    topics = `SQL & JDBC Database Connection - Day ${dayNum - 15}: ${[
+      "Relational Database concepts and SQL basics",
+      "SQL Joins, Subqueries, Aggregate Functions",
+      "JDBC driver architecture and Statement executions",
+      "PreparedStatement, ResultSet metadata handling",
+      "Connection pooling (HikariCP config) and transactions"
+    ][i - 15]}`;
+  } else if (dayNum <= 25) {
+    topics = `Hibernate ORM Framework - Day ${dayNum - 20}: ${[
+      "Hibernate architecture, configuration and setup",
+      "Entity Annotation mappings, Primary key generation",
+      "CRUD operations using Hibernate Session methods",
+      "Association mapping (One-to-One, One-to-Many)",
+      "Hibernate Query Language (HQL) & Criteria API"
+    ][i - 20]}`;
+  } else if (dayNum <= 30) {
+    topics = `Spring Core & Framework Foundations - Day ${dayNum - 25}: ${[
+      "Spring IoC Container and Dependency Injection concepts",
+      "XML vs Annotation-based spring configuration",
+      "Bean Lifecycle, Bean Scopes (Singleton, Prototype)",
+      "Spring AOP (Aspect Oriented Programming) basics",
+      "Spring MVC architecture flow overview"
+    ][i - 25]}`;
+  } else if (dayNum <= 35) {
+    topics = `Spring Boot & RESTful APIs - Day ${dayNum - 30}: ${[
+      "Spring Boot starter templates and Auto-configuration",
+      "Building REST API endpoints with @RestController",
+      "Request Handling (@PathVariable, @RequestParam, @RequestBody)",
+      "Exception Handling in REST Controller (@ControllerAdvice)",
+      "Spring Data JPA integrations with repositories"
+    ][i - 30]}`;
+  } else if (dayNum <= 40) {
+    topics = `Frontend Integration & Web Dev - Day ${dayNum - 35}: ${[
+      "HTML5, CSS3 styling with flexbox layouts",
+      "Modern ES6 JavaScript (Promises, async/await, Fetch API)",
+      "React.js introduction: Vite setup and Component state",
+      "React Hooks: useState and useEffect API integrations",
+      "Axios API client connecting to Spring Boot backend"
+    ][i - 35]}`;
+  } else {
+    topics = `Full-Stack Capstone Project - Day ${dayNum - 40}: ${[
+      "Project Design: E-Commerce REST Services planning",
+      "Spring Security configuration with JWT authentication",
+      "React routing, user login page and catalog page",
+      "Checkout workflow, Cart context, database persistency",
+      "Cloud deployment (AWS/Heroku), Resume Review & Mock Interviews"
+    ][i - 40]}`;
+    type = "Project";
+  }
+
+  // Adjust duration and practice sessions
+  if (dayNum % 7 === 0) {
+    topics = `PRACTICE CHALLENGE: Full-Stack Code Integration & Problem Solving`;
+    type = "HackerRank Practice";
+    duration = "1.00 Hours";
+  }
+
+  return { day: `Day ${dayNum}`, duration, topics, type };
+});
+
+// Syllabus Data for Python & DSA (62 days)
+const pythonDsaSyllabus = Array.from({ length: 62 }, (_, i) => {
+  const dayNum = i + 1;
+  let topics = "";
+  let type = "Theory/Lab";
+  let duration = "1.25 Hours";
+
+  if (dayNum <= 10) {
+    topics = `Python Basics - Day ${dayNum}: ${[
+      "Introduction, Setup, Variables & Data Types",
+      "Operators, Expressions, and Type Casting",
+      "Control Flow: If-else conditions, Nesting",
+      "Loops: For and While statements, range()",
+      "Functions: Arguments, Return Types, Recursion basics",
+      "Lists: indexing, slicing, comprehensions",
+      "Tuples and Sets: mutability, operations",
+      "Dictionaries: key-value stores, methods",
+      "String processing, Formatting, Built-in methods",
+      "File Handling: opening, reading, writing files"
+    ][i]}`;
+  } else if (dayNum <= 20) {
+    topics = `Object Oriented Python - Day ${dayNum - 10}: ${[
+      "OOP Basics: Classes, Objects, __init__ method",
+      "Encapsulation: private/protected variables, properties",
+      "Inheritance: single, multiple, method resolution order",
+      "Polymorphism: method overriding, dunder methods",
+      "Exception Handling: try-except-finally blocks",
+      "Modules, Packages, and virtual environments",
+      "Decorators and Generators implementation",
+      "Iterators and Itertools module usage",
+      "Regular Expressions (re module) parsing",
+      "Python standard libraries (math, datetime, os)"
+    ][i - 10]}`;
+  } else if (dayNum <= 30) {
+    topics = `Data Structures (Linear) - Day ${dayNum - 20}: ${[
+      "Analysis of Algorithms: Big O notation complexity",
+      "Arrays & Dynamic Arrays implementation",
+      "Singly Linked Lists: Creation, Insertion, Deletion",
+      "Doubly Linked Lists: Reverse traversal, manipulation",
+      "Circular Linked Lists and Josephus problem",
+      "Stacks: Array and Linked List implementations",
+      "Queues: FIFO structure, circular queue",
+      "Double ended queue (Deque) usage in Python",
+      "Hash Tables: Collisions, Chaining, probing",
+      "LeetCode Problem Solving on Arrays & Lists"
+    ][i - 20]}`;
+  } else if (dayNum <= 40) {
+    topics = `Algorithms (Sorting & Searching) - Day ${dayNum - 30}: ${[
+      "Linear Search, Binary Search recursion",
+      "Bubble Sort, Selection Sort implementation",
+      "Insertion Sort, Shell Sort mechanics",
+      "Merge Sort: Divide and Conquer paradigm",
+      "Quick Sort: Pivot choices, partition schemes",
+      "Heap Sort: Binary Heap implementation",
+      "Radix and Counting Sort overview",
+      "Recursion: Backtracking (N-Queens, Maze solver)",
+      "Greedy Algorithms: Huffman coding, Knapsack",
+      "Divide & Conquer optimization strategies"
+    ][i - 30]}`;
+  } else if (dayNum <= 50) {
+    topics = `Advanced Data Structures (Non-linear) - Day ${dayNum - 40}: ${[
+      "Binary Trees: Properties, Array/Pointer structures",
+      "Tree Traversals: Preorder, Inorder, Postorder",
+      "Binary Search Trees (BST): insertion, lookup, deletion",
+      "Balanced Trees: AVL Trees rotation basics",
+      "Priority Queues and Binary Heaps",
+      "Graphs: Adjacency Matrix & Adjacency List",
+      "Graph Traversals: Breadth-First Search (BFS)",
+      "Graph Traversals: Depth-First Search (DFS)",
+      "Single Source Shortest Path: Dijkstra's Algorithm",
+      "Minimum Spanning Trees: Prim & Kruskal algorithms"
+    ][i - 40]}`;
+  } else if (dayNum <= 58) {
+    topics = `Dynamic Programming & Advanced Concepts - Day ${dayNum - 50}: ${[
+      "Dynamic Programming: Memoization vs Tabulation",
+      "DP Challenges: Fibonacci, Coin Change problem",
+      "DP Challenges: Longest Common Subsequence (LCS)",
+      "DP Challenges: 0/1 Knapsack optimization",
+      "Bit Manipulation algorithms and tricks",
+      "Sliding Window and Two Pointer techniques",
+      "Trie Data Structure for prefix searching",
+      "Segment Trees for range query problems"
+    ][i - 50]}`;
+  } else {
+    topics = `Capstone Project & Interview Prep - Day ${dayNum - 58}: ${[
+      "System Design: Designing scalable algorithms",
+      "Mock Interviews: Live whiteboard DSA coding",
+      "Resume engineering for Data Science / Software engineering",
+      "Final Project Presentation and code reviews"
+    ][i - 58]}`;
+    type = "Project";
+  }
+
+  // Adjust duration and practice sessions
+  if (dayNum % 8 === 0) {
+    topics = `PRACTICE CHALLENGE: HackerRank Coding Practice Challenge on DSA`;
+    type = "HackerRank Practice";
+    duration = "1.00 Hours";
+  }
+
+  return { day: `Day ${dayNum}`, duration, topics, type };
+});
+
 export default function ProgrammingCourses() {
   const [hoveredIndex, setHoveredIndex] = useState(0);
+  const [activeTrack, setActiveTrack] = useState('java-fundamentals');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const getSyllabusData = () => {
+    switch (activeTrack) {
+      case 'java-fundamentals':
+        return javaFundamentalsSyllabus;
+      case 'java-fullstack':
+        return javaFullStackSyllabus;
+      case 'python-dsa':
+        return pythonDsaSyllabus;
+      default:
+        return javaFundamentalsSyllabus;
+    }
+  };
+
+  const getTypeBadgeStyles = (type) => {
+    switch (type) {
+      case 'Theory/Lab':
+        return 'bg-blue-50 text-blue-600 border border-blue-100';
+      case 'HackerRank Practice':
+        return 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+      case 'Project':
+        return 'bg-purple-50 text-purple-600 border border-purple-100';
+      default:
+        return 'bg-slate-50 text-slate-600 border border-slate-100';
+    }
+  };
+
+  const currentSyllabus = getSyllabusData();
+  const filteredSyllabus = currentSyllabus.filter(item => {
+    const query = searchQuery.toLowerCase();
+    return (
+      item.day.toLowerCase().includes(query) ||
+      item.topics.toLowerCase().includes(query) ||
+      item.type.toLowerCase().includes(query) ||
+      item.duration.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <main className="w-full relative z-10 pb-20 pt-4 lg:pb-24 max-w-[1200px] mx-auto px-6 flex flex-col gap-16 overflow-x-hidden">
@@ -221,6 +484,127 @@ export default function ProgrammingCourses() {
             </motion.div>
           );
         })}
+      </section>
+
+      {/* Curriculum & Syllabus Blueprints Section */}
+      <section className="w-full flex flex-col gap-8 pt-10 border-t border-slate-100">
+        
+        {/* Section Header */}
+        <div className="flex flex-col gap-3">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-50 text-[#f36b2b] font-semibold text-sm w-fit border border-orange-100">
+            <BookOpen size={16} />
+            Syllabus Curriculums
+          </div>
+          <h2 className="text-[32px] md:text-[40px] font-[900] text-slate-900 leading-tight tracking-tight">
+            Curriculum & <span className="text-[#f36b2b]">Syllabus Blueprints</span>
+          </h2>
+          <p className="text-slate-500 text-sm md:text-base max-w-2xl font-medium">
+            Review Day-by-Day training schedules. Select a track tab and type to search topics.
+          </p>
+        </div>
+
+        {/* Filter controls row */}
+        <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 bg-slate-50/50 p-4 rounded-3xl border border-slate-100">
+          {/* Tab buttons */}
+          <div className="flex flex-wrap gap-2.5">
+            {[
+              { id: 'java-fundamentals', label: '25-Day Java Fundamentals' },
+              { id: 'java-fullstack', label: '45-Day Java Full-Stack' },
+              { id: 'python-dsa', label: '62-Day Python & DSA' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTrack(tab.id);
+                  setSearchQuery('');
+                }}
+                className={`py-3 px-5 rounded-2xl text-[13px] font-black uppercase tracking-wider transition-all duration-300 border cursor-pointer ${
+                  activeTrack === tab.id
+                    ? 'bg-gradient-to-r from-[#f36b2b] to-orange-500 text-white border-transparent shadow-[0_5px_15px_rgba(243,107,43,0.15)]'
+                    : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Input */}
+          <div className="relative flex-grow lg:max-w-xs">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+              <Search size={18} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search topics or days..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-[14px] font-medium placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30 transition-all duration-300"
+            />
+          </div>
+        </div>
+
+        {/* Syllabus Table Container */}
+        <div className="w-full bg-white border border-slate-100 rounded-[32px] overflow-hidden shadow-[0_10px_35px_rgba(0,0,0,0.015)]">
+          <div 
+            className="max-h-[480px] overflow-y-auto pr-1"
+            style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(243, 107, 43, 0.2) transparent'
+            }}
+          >
+            <table className="w-full border-collapse text-left">
+              <thead className="sticky top-0 bg-white z-10 shadow-[0_2px_10px_rgba(0,0,0,0.01)]">
+                <tr className="border-b border-slate-100">
+                  <th className="px-6 py-4.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 w-[15%]">
+                    Day
+                  </th>
+                  <th className="px-6 py-4.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 w-[15%]">
+                    Duration
+                  </th>
+                  <th className="px-6 py-4.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 w-[50%]">
+                    Topics Covered
+                  </th>
+                  <th className="px-6 py-4.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 w-[20%]">
+                    Session Type
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filteredSyllabus.length > 0 ? (
+                  filteredSyllabus.map((row, index) => (
+                    <tr
+                      key={index}
+                      className="hover:bg-slate-50/50 transition-colors duration-200"
+                    >
+                      <td className="px-6 py-4 text-[14px] font-extrabold text-slate-900 whitespace-nowrap">
+                        {row.day}
+                      </td>
+                      <td className="px-6 py-4 text-[14px] font-bold text-[#f36b2b]">
+                        {row.duration}
+                      </td>
+                      <td className="px-6 py-4 text-[14.5px] font-semibold text-slate-600 leading-relaxed">
+                        {row.topics}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[11px] font-extrabold tracking-wide uppercase ${getTypeBadgeStyles(row.type)}`}>
+                          {row.type}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="px-6 py-12 text-center text-slate-400 font-semibold text-sm">
+                      No matching syllabus topics found. Try searching for another keyword.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </section>
       
     </main>
