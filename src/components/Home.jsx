@@ -47,7 +47,7 @@ export default function Home() {
   return (
     <>
       {/* Hero Section */}
-      <main className="relative flex flex-col lg:flex-row items-center justify-between text-center lg:text-left px-4 pt-10 pb-12 max-w-[1200px] w-full mx-auto gap-12 mt-12">
+      <main className="relative flex flex-col lg:flex-row items-center justify-between text-center lg:text-left px-4 pt-4 pb-12 max-w-[1200px] w-full mx-auto gap-12">
         <div className="flex-1 flex flex-col items-center lg:items-start max-w-2xl">
           <h1 className="text-[52px] md:text-[72px] font-[900] text-slate-900 leading-[1.1] tracking-[-0.03em] mb-6">
             Best <span className="text-[#f36b2b]">GATE Coaching</span> in Coimbatore <br />
