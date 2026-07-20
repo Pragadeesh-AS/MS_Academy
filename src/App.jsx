@@ -90,9 +90,12 @@ export default function App() {
           }}
           className="hidden md:flex flex-row self-center items-center justify-between py-3 mx-auto px-8 rounded-full relative z-[100]"
         >
-          <Link to="/" className="flex flex-col justify-center whitespace-nowrap">
-            <span className="font-black text-[17px] text-slate-900 uppercase tracking-wide leading-none">MS GATE ACADEMY</span>
-            <span className="font-bold text-[10px] text-[#f36b2b] uppercase tracking-[0.15em] mt-1 leading-none">COIMBATORE</span>
+          <Link to="/" className="flex flex-row items-center gap-3 whitespace-nowrap">
+            <img src="/logo.png" alt="MS Academy Logo" className="w-12 h-12 object-contain" />
+            <div className="flex flex-col justify-center">
+              <span className="font-black text-[17px] text-slate-900 uppercase tracking-wide leading-none">MS GATE ACADEMY</span>
+              <span className="font-bold text-[10px] text-[#f36b2b] uppercase tracking-[0.15em] mt-1 leading-none">COIMBATORE</span>
+            </div>
           </Link>
           
           <div className="hidden lg:flex gap-2 text-[14px] font-semibold text-slate-700 whitespace-nowrap items-center">
