@@ -8,6 +8,12 @@ import Home from './components/Home';
 import AboutUs from './components/AboutUs';
 import Contact from './components/Contact';
 import CseCourse from './components/courses/Cse';
+import EceCourse from './components/courses/Ece';
+import MeCourse from './components/courses/Me';
+import CeCourse from './components/courses/Ce';
+import EeCourse from './components/courses/Ee';
+import PiCourse from './components/courses/Pi';
+import DsCourse from './components/courses/Ds';
 import MorphPanel from './components/ui/ai-input';
 
 const gateCoursesDropdown = [
@@ -189,6 +195,12 @@ export default function App() {
         <Route path="/about" element={<AboutUs />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/courses/cse" element={<CseCourse />} />
+        <Route path="/courses/ece" element={<EceCourse />} />
+        <Route path="/courses/me" element={<MeCourse />} />
+        <Route path="/courses/ce" element={<CeCourse />} />
+        <Route path="/courses/ee" element={<EeCourse />} />
+        <Route path="/courses/pi" element={<PiCourse />} />
+        <Route path="/courses/ds" element={<DsCourse />} />
       </Routes>
 
       {/* Global Floating Components */}
