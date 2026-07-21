@@ -202,16 +202,16 @@ export default function Careers() {
       {/* Hero Section */}
       <section className="relative w-full px-6 pt-4 pb-20 max-w-[1200px] mx-auto mt-2 flex flex-col lg:flex-row items-center justify-between gap-12">
         {/* Background glow */}
-        <div className="absolute top-1/2 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] bg-gradient-to-r from-orange-100/30 to-transparent blur-[80px] -z-10 pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] bg-gradient-to-r from-blue-100/30 to-transparent blur-[80px] -z-10 pointer-events-none"></div>
 
         {/* Left Side: Text */}
         <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left">
-          <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-orange-50 text-[#f36b2b] font-bold text-xs uppercase tracking-wider w-fit border border-orange-100 mb-6">
+          <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-blue-50 text-[#1d4ed8] font-bold text-xs uppercase tracking-wider w-fit border border-blue-100 mb-6">
             <Sparkles size={14} className="animate-pulse" />
             <span>We are hiring</span>
           </div>
           <h1 className="text-[46px] md:text-[64px] font-[900] text-slate-900 leading-[1.1] tracking-[-0.03em] mb-6">
-            Teach at <span className="text-[#f36b2b]">MS Academy</span>
+            Teach at <span className="text-[#1d4ed8]">MS Academy</span>
           </h1>
           <p className="text-[18px] md:text-[20px] text-slate-500 leading-relaxed max-w-[600px] mb-10 font-medium">
             Join our team of NIT/IIT alumni and subject specialists. Help us deliver high-quality conceptual training to student batches in Coimbatore.
@@ -237,7 +237,7 @@ export default function Careers() {
             className="w-full aspect-[1.1] rounded-[2.5rem] shadow-xl p-8 flex flex-col items-center justify-center text-center relative overflow-hidden group"
           >
             {/* Background glowing circle */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full bg-orange-100/30 blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-700"></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full bg-blue-100/30 blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-700"></div>
             
             {/* Logo Wrapper with shadow */}
             <div className="w-32 h-32 rounded-[2rem] bg-white border border-slate-100 shadow-md flex items-center justify-center p-5 z-10 hover:scale-105 transition-transform duration-500">
@@ -254,9 +254,9 @@ export default function Careers() {
             {/* Academy Name */}
             <div className="flex flex-col gap-1 mt-6 z-10">
               <h2 className="text-2xl font-[900] text-slate-900 tracking-tight">MS Academy</h2>
-              <p className="text-xs font-bold tracking-widest text-[#f36b2b] uppercase">MOULDING SCHOLARS</p>
+              <p className="text-xs font-bold tracking-widest text-[#1d4ed8] uppercase">MOULDING SCHOLARS</p>
               <div className="flex items-center justify-center gap-1.5 mt-2 text-slate-400 text-[11px] font-bold">
-                <MapPin size={12} className="text-[#f36b2b]" />
+                <MapPin size={12} className="text-[#1d4ed8]" />
                 <span>Coimbatore, Tamil Nadu</span>
               </div>
             </div>
@@ -269,7 +269,7 @@ export default function Careers() {
         <div className="w-full max-w-[1000px] mx-auto px-6 flex flex-col gap-12">
           
           <div className="text-center">
-            <span className="text-[12px] md:text-[14px] font-bold text-[#f36b2b] tracking-widest uppercase mb-3 block">CAREER OPPORTUNITIES</span>
+            <span className="text-[12px] md:text-[14px] font-bold text-[#1d4ed8] tracking-widest uppercase mb-3 block">CAREER OPPORTUNITIES</span>
             <h2 className="text-3xl md:text-5xl font-[900] text-slate-900 tracking-tight leading-[1.1]">Open Positions</h2>
           </div>
 
@@ -288,13 +288,13 @@ export default function Careers() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <div 
-                      style={{ backgroundColor: '#fff5f0', border: '1px solid #ffeadd' }}
-                      className="w-12 h-12 rounded-xl text-[#f36b2b] flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-500 shadow-inner"
+                      style={{ backgroundColor: '#eff6ff', border: '1px solid #ffeadd' }}
+                      className="w-12 h-12 rounded-xl text-[#1d4ed8] flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-500 shadow-inner"
                     >
                       <GraduationCap size={22} strokeWidth={2} />
                     </div>
                     <div className="flex flex-col">
-                      <h3 className="text-2xl md:text-[26px] font-[900] text-slate-900 group-hover:text-[#f36b2b] transition-colors leading-tight tracking-tight">
+                      <h3 className="text-2xl md:text-[26px] font-[900] text-slate-900 group-hover:text-[#1d4ed8] transition-colors leading-tight tracking-tight">
                         {job.title}
                       </h3>
                       <p className="text-sm md:text-[15px] text-slate-500 font-bold mt-1.5 leading-none">
@@ -317,8 +317,8 @@ export default function Careers() {
                       borderRadius: '9999px',
                       border: '1px solid',
                       borderColor: job.status === 'ACTIVELY HIRING' ? 'rgba(243, 107, 43, 0.25)' : 'rgba(124, 58, 237, 0.25)',
-                      color: job.status === 'ACTIVELY HIRING' ? '#f36b2b' : '#7c3aed',
-                      backgroundColor: job.status === 'ACTIVELY HIRING' ? '#fff5f0' : '#f5f3ff',
+                      color: job.status === 'ACTIVELY HIRING' ? '#1d4ed8' : '#7c3aed',
+                      backgroundColor: job.status === 'ACTIVELY HIRING' ? '#eff6ff' : '#f5f3ff',
                       width: 'fit-content',
                       lineHeight: '1'
                     }}
@@ -337,8 +337,7 @@ export default function Careers() {
                 <div className="flex items-center mt-auto pt-2">
                   <button 
                     onClick={() => handleOpenApply(job.title)}
-                    style={{ background: 'linear-gradient(to right, #f36b2b, #f97316)', border: 'none' }}
-                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-white font-bold text-sm md:text-base hover:shadow-[0_8px_20px_rgba(243,107,43,0.2)] hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 cursor-pointer outline-none shadow-sm"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 font-semibold text-white rounded-lg bg-gradient-to-b from-[#3a3a3a] to-[#1a1a1a] shadow-md hover:from-[#2a2a2a] hover:to-[#0a0a0a] transition-all border border-[#2a2a2a] cursor-pointer outline-none"
                   >
                     <span>Apply Now</span>
                     <ArrowRight size={18} />
@@ -355,7 +354,7 @@ export default function Careers() {
       {/* Recrutement Contact Footer Link */}
       <section className="w-full max-w-[850px] mx-auto px-6 py-16 text-center">
         <p className="text-slate-500 text-xs md:text-sm leading-relaxed font-semibold">
-          Questions about our recruitment? Reach us at <a href="mailto:msacademics.edu@gmail.com" className="text-[#f36b2b] hover:underline font-bold">msacademics.edu@gmail.com</a> or call <a href="tel:+918012052331" className="text-slate-800 hover:text-[#f36b2b] font-bold">+91 80120 52331</a>.
+          Questions about our recruitment? Reach us at <a href="mailto:msacademics.edu@gmail.com" className="text-[#1d4ed8] hover:underline font-bold">msacademics.edu@gmail.com</a> or call <a href="tel:+918012052331" className="text-slate-800 hover:text-[#1d4ed8] font-bold">+91 80120 52331</a>.
         </p>
       </section>
 
@@ -394,7 +393,7 @@ export default function Careers() {
               {/* Modal Header */}
               <div className="flex items-start justify-between border-b border-slate-100 pb-3.5">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-[#f36b2b] tracking-widest uppercase">ONLINE APPLICATION</span>
+                  <span className="text-[10px] font-black text-[#1d4ed8] tracking-widest uppercase">ONLINE APPLICATION</span>
                   <h3 className="text-lg font-[900] text-slate-900 mt-0.5 leading-snug">
                     {selectedRole}
                   </h3>
@@ -429,7 +428,7 @@ export default function Careers() {
                         onChange={handleInputChange}
                         placeholder="Enter your full name"
                         style={{ border: '1px solid #e2e8f0', borderRadius: '12px', height: '44px', padding: '0 14px', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)' }}
-                        className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#f36b2b] focus:ring-2 focus:ring-[#f36b2b]/15 outline-none transition-all"
+                        className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#1d4ed8] focus:ring-2 focus:ring-[#1d4ed8]/15 outline-none transition-all"
                       />
                       {formErrors.fullName && (
                         <div className="flex items-center gap-1 mt-1 text-red-500 text-xs font-semibold">
@@ -451,7 +450,7 @@ export default function Careers() {
                           onChange={handleInputChange}
                           placeholder="john@example.com"
                           style={{ border: '1px solid #e2e8f0', borderRadius: '12px', height: '44px', padding: '0 14px', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)' }}
-                          className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#f36b2b] focus:ring-2 focus:ring-[#f36b2b]/15 outline-none transition-all"
+                          className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#1d4ed8] focus:ring-2 focus:ring-[#1d4ed8]/15 outline-none transition-all"
                         />
                         {formErrors.email && (
                           <div className="flex items-center gap-1 mt-1 text-red-500 text-xs font-semibold">
@@ -471,7 +470,7 @@ export default function Careers() {
                           onChange={handleInputChange}
                           placeholder="10-digit number"
                           style={{ border: '1px solid #e2e8f0', borderRadius: '12px', height: '44px', padding: '0 14px', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)' }}
-                          className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#f36b2b] focus:ring-2 focus:ring-[#f36b2b]/15 outline-none transition-all"
+                          className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#1d4ed8] focus:ring-2 focus:ring-[#1d4ed8]/15 outline-none transition-all"
                         />
                         {formErrors.phone && (
                           <div className="flex items-center gap-1 mt-1 text-red-500 text-xs font-semibold">
@@ -505,7 +504,7 @@ export default function Careers() {
                               backgroundColor: '#ffffff',
                               boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)' 
                             }}
-                            className="w-full text-slate-800 text-sm font-semibold focus:border-[#f36b2b] focus:ring-2 focus:ring-[#f36b2b]/10 outline-none transition-all cursor-pointer"
+                            className="w-full text-slate-800 text-sm font-semibold focus:border-[#1d4ed8] focus:ring-2 focus:ring-[#1d4ed8]/10 outline-none transition-all cursor-pointer"
                           >
                             <option value="Fresher">Fresher (Entry)</option>
                             <option value="1-2 Years">1 - 2 Years</option>
@@ -530,7 +529,7 @@ export default function Careers() {
                           onChange={handleInputChange}
                           placeholder="e.g. CSE, Mathematics"
                           style={{ border: '1px solid #e2e8f0', borderRadius: '12px', height: '44px', padding: '0 14px', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)' }}
-                          className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#f36b2b] focus:ring-2 focus:ring-[#f36b2b]/15 outline-none transition-all"
+                          className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#1d4ed8] focus:ring-2 focus:ring-[#1d4ed8]/15 outline-none transition-all"
                         />
                         {formErrors.specialization && (
                           <div className="flex items-center gap-1 mt-1 text-red-500 text-xs font-semibold">
@@ -558,7 +557,7 @@ export default function Careers() {
                             borderRadius: '16px',
                             padding: '24px'
                           }}
-                          className="flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-orange-50/10 text-center"
+                          className="flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-blue-50/10 text-center"
                         >
                           <input
                             ref={fileInputRef}
@@ -567,7 +566,7 @@ export default function Careers() {
                             onChange={handleFileChange}
                             className="hidden"
                           />
-                          <div className="w-11 h-11 rounded-full bg-white border border-[#ffd0b5] text-[#f36b2b] flex items-center justify-center mb-3 shadow-[0_2px_10px_rgba(243,107,43,0.05)]">
+                          <div className="w-11 h-11 rounded-full bg-white border border-[#ffd0b5] text-[#1d4ed8] flex items-center justify-center mb-3 shadow-[0_2px_10px_rgba(243,107,43,0.05)]">
                             <Upload size={16} />
                           </div>
                           <span className="text-xs font-bold text-slate-700">Drag & drop or click to browse</span>
@@ -579,9 +578,9 @@ export default function Careers() {
                           className="p-3.5 bg-slate-50 flex items-center justify-between gap-3 shadow-inner"
                         >
                           <div className="flex items-center gap-2.5 overflow-hidden">
-                            <div className="w-8 h-8 rounded-lg bg-orange-50 text-[#f36b2b] flex items-center justify-center flex-shrink-0 border border-orange-100">
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#1d4ed8] flex items-center justify-center flex-shrink-0 border border-blue-100">
                               {isUploading ? (
-                                <RefreshCw size={14} className="animate-spin text-[#f36b2b]" />
+                                <RefreshCw size={14} className="animate-spin text-[#1d4ed8]" />
                               ) : (
                                 <FileText size={14} />
                               )}
@@ -606,7 +605,7 @@ export default function Careers() {
                       {isUploading && (
                         <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
                           <div 
-                            className="h-full bg-gradient-to-r from-[#f36b2b] to-orange-400 transition-all duration-150"
+                            className="h-full bg-gradient-to-r from-[#1d4ed8] to-blue-400 transition-all duration-150"
                             style={{ width: `${uploadProgress}%` }}
                           ></div>
                         </div>
@@ -630,7 +629,7 @@ export default function Careers() {
                         rows={2}
                         placeholder="Tell us about yourself..."
                         style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 14px', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)' }}
-                        className="w-full bg-white text-slate-850 text-sm font-semibold placeholder:text-slate-400 focus:border-[#f36b2b] focus:ring-2 focus:ring-[#f36b2b]/10 outline-none transition-all resize-none"
+                        className="w-full bg-white text-slate-850 text-sm font-semibold placeholder:text-slate-400 focus:border-[#1d4ed8] focus:ring-2 focus:ring-[#1d4ed8]/10 outline-none transition-all resize-none"
                       />
                     </div>
 
@@ -639,12 +638,9 @@ export default function Careers() {
                       type="submit"
                       disabled={isUploading}
                       style={{ 
-                        background: 'linear-gradient(to right, #f36b2b, #f97316)', 
-                        border: 'none', 
-                        color: '#ffffff',
                         height: '46px' 
                       }}
-                      className={`w-full inline-flex items-center justify-center gap-2 rounded-xl text-white font-bold text-sm shadow-md shadow-orange-500/10 hover:shadow-lg hover:shadow-orange-500/20 active:scale-[0.99] transition-all duration-300 cursor-pointer outline-none ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.01]'}`}
+                      className={`w-full inline-flex items-center justify-center gap-2 font-semibold text-white rounded-lg bg-gradient-to-b from-[#3a3a3a] to-[#1a1a1a] shadow-md hover:from-[#2a2a2a] hover:to-[#0a0a0a] transition-all border border-[#2a2a2a] cursor-pointer outline-none ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <span>Submit Application</span>
                       <ArrowRight size={16} />
@@ -661,7 +657,7 @@ export default function Careers() {
                     exit={{ opacity: 0, scale: 0.95 }}
                     className="flex flex-col items-center justify-center text-center gap-4 py-8 min-h-[300px]"
                   >
-                    <div className="w-10 h-10 rounded-full border-2 border-orange-100 border-t-[#f36b2b] animate-spin"></div>
+                    <div className="w-10 h-10 rounded-full border-2 border-blue-100 border-t-[#1d4ed8] animate-spin"></div>
                     <div className="flex flex-col gap-1.5">
                       <h4 className="text-base font-bold text-slate-800">Submitting Application</h4>
                       <p className="text-xs text-slate-500 max-w-xs leading-relaxed font-semibold">
@@ -687,7 +683,7 @@ export default function Careers() {
                     <div className="flex flex-col gap-2">
                       <h3 className="text-lg font-black text-slate-900 tracking-tight">Application Sent!</h3>
                       <p className="text-xs text-slate-500 leading-relaxed max-w-xs font-semibold">
-                        Thank you for applying, <span className="font-bold text-slate-800">{formData.fullName}</span>! We have received your application for the role of <span className="font-bold text-[#f36b2b]">{selectedRole}</span>.
+                        Thank you for applying, <span className="font-bold text-slate-800">{formData.fullName}</span>! We have received your application for the role of <span className="font-bold text-[#1d4ed8]">{selectedRole}</span>.
                       </p>
                       <p className="text-[10px] text-slate-400 leading-relaxed max-w-xs mt-1 border-t border-slate-100 pt-3 font-semibold">
                         Our panel will contact you at <span className="font-bold text-slate-600">{formData.email}</span> or by phone soon.
@@ -696,7 +692,7 @@ export default function Careers() {
 
                     <button 
                       onClick={handleCloseModal}
-                      className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-slate-950 hover:bg-[#f36b2b] text-white font-bold text-xs transition-all duration-300 shadow-md cursor-pointer outline-none"
+                      className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-slate-950 hover:bg-[#1d4ed8] text-white font-bold text-xs transition-all duration-300 shadow-md cursor-pointer outline-none"
                     >
                       <span>Close Window</span>
                     </button>

@@ -6,7 +6,7 @@ const Card = () => {
     <StyledWrapper>
       <div className="card">
         <ul>
-          <li className="iso-pro">
+          <li className="iso-pro whatsapp">
             <span />
             <span />
             <span />
@@ -17,7 +17,7 @@ const Card = () => {
             </a>
             <div className="text">WhatsApp</div>
           </li>
-          <li className="iso-pro">
+          <li className="iso-pro instagram">
             <span />
             <span />
             <span />
@@ -28,7 +28,7 @@ const Card = () => {
             </a>
             <div className="text">Instagram</div>
           </li>
-          <li className="iso-pro">
+          <li className="iso-pro youtube">
             <span />
             <span />
             <span />
@@ -39,7 +39,7 @@ const Card = () => {
             </a>
             <div className="text">YouTube</div>
           </li>
-          <li className="iso-pro">
+          <li className="iso-pro email">
             <span />
             <span />
             <span />
@@ -92,6 +92,11 @@ const StyledWrapper = styled.div`
     cursor: pointer;
   }
 
+  .whatsapp { --icon-color: #25D366; }
+  .instagram { --icon-color: #E1306C; }
+  .youtube { --icon-color: #FF0000; }
+  .email { --icon-color: #007BFF; }
+
   .svg {
     transition: all 0.3s;
     /* if you find some problems change w - h : 30px*/
@@ -99,7 +104,7 @@ const StyledWrapper = styled.div`
     height: 60px;
     width: 60px;
     border-radius: 100%;
-    color: #f36b2b;
+    color: var(--icon-color, #1d4ed8);
     fill: currentColor;
     box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.3),
       inset 0 0 5px rgba(255, 255, 255, 0.5), 0 5px 5px rgba(0, 0, 0, 0.164);
@@ -110,7 +115,7 @@ const StyledWrapper = styled.div`
     border-radius: 5px;
     padding: 5px;
     transition: all 0.3s;
-    color: #f36b2b;
+    color: var(--icon-color, #1d4ed8);
     background-color: rgba(255, 255, 255, 0.9);
     position: absolute;
     z-index: 9999;
@@ -141,8 +146,8 @@ const StyledWrapper = styled.div`
   .iso-pro span {
     opacity: 0;
     position: absolute;
-    color: #f36b2b;
-    border-color: #f36b2b;
+    color: var(--icon-color, #1d4ed8);
+    border-color: var(--icon-color, #1d4ed8);
     box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.3),
       inset 0 0 5px rgba(255, 255, 255, 0.5), 0 5px 5px rgba(0, 0, 0, 0.164);
     border-radius: 50%;

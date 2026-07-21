@@ -230,7 +230,7 @@ export const Card = ({
         {card.category && (
           <motion.p
             layoutId={layout ? `category-${card.category}-${index}` : undefined}
-            className="text-left font-sans text-sm font-bold text-orange-600 md:text-base"
+            className="text-left font-sans text-sm font-bold text-blue-600 md:text-base"
           >
             {card.category}
           </motion.p>

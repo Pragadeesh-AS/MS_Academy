@@ -29,7 +29,7 @@ export default function Contact() {
           <div className="space-y-10">
             {/* Phone */}
             <div className="flex items-start gap-6 group">
-              <div className="w-16 h-16 rounded-2xl bg-[#fff5f0] text-[#f36b2b] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-[#ffeadd]">
+              <div className="w-16 h-16 rounded-2xl bg-[#eff6ff] text-[#1d4ed8] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-[#ffeadd]">
                 <Phone size={30} strokeWidth={1.5} />
               </div>
               <div className="flex flex-col justify-center">
@@ -51,7 +51,7 @@ export default function Contact() {
 
             {/* Address */}
             <div className="flex items-start gap-6 group">
-              <div className="w-16 h-16 rounded-2xl bg-[#fff5f0] text-[#f36b2b] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-[#ffeadd]">
+              <div className="w-16 h-16 rounded-2xl bg-[#eff6ff] text-[#1d4ed8] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-[#ffeadd]">
                 <MapPin size={30} strokeWidth={1.5} />
               </div>
               <div className="flex flex-col justify-center">

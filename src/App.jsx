@@ -3,7 +3,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import './index.css';
 import { ShinyButton } from "./components/ui/shiny-button";
 import { motion } from "motion/react";
-import { ChevronDown, GraduationCap, TrendingUp, Settings, Database, MapPin, Monitor, Cpu, Cog, Building2, Zap } from 'lucide-react';
+import { ChevronDown, GraduationCap, TrendingUp, Settings, Database, MapPin, Monitor, Cpu, Cog, Building2, Zap, Sparkles } from 'lucide-react';
 import Home from './components/Home';
 import AboutUs from './components/AboutUs';
 import Contact from './components/Contact';
@@ -94,7 +94,7 @@ export default function App() {
       <div className="absolute inset-0 z-[-1] bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white_20%,transparent_90%)] pointer-events-none"></div>
 
       {/* Soft Gradient Orbs */}
-      <div className="absolute top-[-10%] left-[-5%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] rounded-full bg-gradient-to-br from-orange-200/20 to-transparent blur-[80px] -z-10 pointer-events-none"></div>
+      <div className="absolute top-[-10%] left-[-5%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] rounded-full bg-gradient-to-br from-blue-200/20 to-transparent blur-[80px] -z-10 pointer-events-none"></div>
       <div className="absolute top-[40%] right-[-10%] w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] rounded-full bg-gradient-to-tl from-slate-200/40 to-transparent blur-[100px] -z-10 pointer-events-none"></div>
       
       {/* Background GIF Animation */}
@@ -129,16 +129,16 @@ export default function App() {
             <img src="/logo.png" alt="MS Academy Logo" className="w-12 h-12 object-contain" />
             <div className="flex flex-col justify-center">
               <span className="font-black text-[17px] text-slate-900 uppercase tracking-wide leading-none">MS GATE ACADEMY</span>
-              <span className="font-bold text-[10px] text-[#f36b2b] uppercase tracking-[0.15em] mt-1 leading-none">COIMBATORE</span>
+              <span className="font-bold text-[10px] text-[#1d4ed8] uppercase tracking-[0.15em] mt-1 leading-none">COIMBATORE</span>
             </div>
           </Link>
           
           <div className="hidden lg:flex gap-2 text-[14px] font-semibold text-slate-700 whitespace-nowrap items-center">
             
             {/* Home Link */}
-            <Link to="/" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
+            <Link to="/" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
               <span className="relative z-10">Home</span>
-              <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+              <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
             </Link>
             
             {/* GATE Courses Dropdown */}
@@ -185,31 +185,31 @@ export default function App() {
             </div>
 
             {/* Dynamic Link (Programming Courses / Active Page) */}
-            <Link to={dynamicLink.path} className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === dynamicLink.path ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
+            <Link to={dynamicLink.path} className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === dynamicLink.path ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
               <span className="relative z-10">{dynamicLink.label}</span>
-              <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === dynamicLink.path ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+              <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === dynamicLink.path ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
             </Link>
             
             {/* Collapsible Links based on Scroll */}
             <div className={`flex items-center gap-2 overflow-hidden transition-all duration-700 ${isScrolled ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-              <Link to="/about" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/about' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
+              <Link to="/about" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/about' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">About Us</span>
-                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/about' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/about' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>
               
-              <Link to="/careers" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/careers' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
+              <Link to="/careers" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/careers' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">Careers</span>
-                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/careers' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/careers' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>
               
-              <Link to="/blog" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/blog' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
+              <Link to="/blog" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/blog' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">Blog</span>
-                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/blog' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/blog' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>
               
-              <Link to="/contact" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/contact' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
+              <Link to="/contact" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/contact' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">Contact</span>
-                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/contact' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/contact' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>
             </div>
           </div>
@@ -238,6 +238,22 @@ export default function App() {
       </Routes>
 
       <Footer />
+
+      {/* Floating Quote Badge */}
+      <motion.div 
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 1, duration: 0.8 }}
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] pointer-events-none"
+      >
+        <div className="px-5 py-2.5 rounded-full bg-white/70 backdrop-blur-md border border-[#1d4ed8]/20 shadow-[0_8px_30px_rgba(29,78,216,0.15)] flex items-center gap-2">
+          <Sparkles size={14} className="text-[#1d4ed8] animate-pulse" />
+          <span className="text-[13px] font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-[#1d4ed8] to-blue-500">
+            Ignite your dreams
+          </span>
+          <Sparkles size={14} className="text-[#1d4ed8] animate-pulse" />
+        </div>
+      </motion.div>
 
       {/* Global Floating Components */}
       <MorphPanel />

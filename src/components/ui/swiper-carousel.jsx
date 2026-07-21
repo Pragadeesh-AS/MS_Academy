@@ -42,7 +42,7 @@ const Carousel_003 = ({
   }
 
   .swiper-pagination-bullet {
-    background-color: #f36b2b !important;
+    background-color: #1d4ed8 !important;
   }
 `;
   return (
@@ -112,7 +112,7 @@ const Carousel_003 = ({
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
                  <h3 className="text-white font-bold text-2xl mb-1">{image.alt}</h3>
-                 {image.category && <span className="text-[#f36b2b] font-bold text-sm">{image.category}</span>}
+                 {image.category && <span className="text-[#1d4ed8] font-bold text-sm">{image.category}</span>}
               </div>
             </SwiperSlide>
           ))}

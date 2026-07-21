@@ -366,11 +366,11 @@ export default function ProgrammingCourses() {
       
       {/* Page Header */}
       <section className="text-center max-w-3xl mx-auto flex flex-col items-center gap-4 mt-4">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-50 text-[#f36b2b] font-semibold text-sm w-fit border border-orange-100">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-[#1d4ed8] font-semibold text-sm w-fit border border-blue-100">
           Professional Programming Courses
         </div>
         <h1 className="text-[44px] md:text-[60px] font-[900] text-slate-900 leading-[1.1] tracking-tight">
-          Enhance Your <span className="text-[#f36b2b]">Coding Skills</span>
+          Enhance Your <span className="text-[#1d4ed8]">Coding Skills</span>
         </h1>
         <p className="text-[18px] text-slate-500 leading-relaxed max-w-[650px]">
           Explore our signature interactive course deck. Hover over each card on desktop or tap on mobile to reveal detailed focus areas and syllabus highlights.
@@ -389,7 +389,7 @@ export default function ProgrammingCourses() {
               onMouseEnter={() => setHoveredIndex(idx)}
               className={`relative flex flex-col bg-white rounded-[32px] border transition-all duration-500 overflow-hidden cursor-pointer p-6 lg:p-7 ${
                 isExpanded
-                  ? 'flex-[3.0] border-orange-200/80 shadow-[0_20px_50px_rgba(243,107,43,0.08)]'
+                  ? 'flex-[3.0] border-blue-200/80 shadow-[0_20px_50px_rgba(243,107,43,0.08)]'
                   : 'flex-[0.6] border-slate-100 shadow-[0_10px_35px_rgba(0,0,0,0.015)] hover:bg-slate-50/50'
               } h-[130px] lg:h-full`}
             >
@@ -463,7 +463,7 @@ export default function ProgrammingCourses() {
                       <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
                         {course.focusAreas.map((area, focusIdx) => (
                           <li key={focusIdx} className="flex items-center gap-3.5 text-slate-700">
-                            <CheckCircle2 size={16} className="text-[#f36b2b] flex-shrink-0" />
+                            <CheckCircle2 size={16} className="text-[#1d4ed8] flex-shrink-0" />
                             <span className="text-[13px] font-bold tracking-wide">{area}</span>
                           </li>
                         ))}
@@ -472,7 +472,7 @@ export default function ProgrammingCourses() {
 
                     {/* Enroll CTA Button */}
                     <div className="pt-2 border-t border-slate-100">
-                      <button className="w-full sm:w-fit py-3 px-8 rounded-xl bg-gradient-to-r from-[#f36b2b] to-orange-500 hover:shadow-[0_8px_25px_rgba(243,107,43,0.25)] text-white flex items-center justify-center gap-2 transition-all duration-300 font-bold text-sm tracking-wide cursor-pointer hover:scale-[1.02]">
+                      <button className="w-full sm:w-fit py-3 px-8 rounded-xl bg-gradient-to-r from-[#1d4ed8] to-blue-500 hover:shadow-[0_8px_25px_rgba(243,107,43,0.25)] text-white flex items-center justify-center gap-2 transition-all duration-300 font-bold text-sm tracking-wide cursor-pointer hover:scale-[1.02]">
                         <span>Enroll in {course.title.split(" ")[0]}</span>
                       </button>
                     </div>
@@ -491,12 +491,12 @@ export default function ProgrammingCourses() {
         
         {/* Section Header */}
         <div className="flex flex-col gap-3">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-50 text-[#f36b2b] font-semibold text-sm w-fit border border-orange-100">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-[#1d4ed8] font-semibold text-sm w-fit border border-blue-100">
             <BookOpen size={16} />
             Syllabus Curriculums
           </div>
           <h2 className="text-[32px] md:text-[40px] font-[900] text-slate-900 leading-tight tracking-tight">
-            Curriculum & <span className="text-[#f36b2b]">Syllabus Blueprints</span>
+            Curriculum & <span className="text-[#1d4ed8]">Syllabus Blueprints</span>
           </h2>
           <p className="text-slate-500 text-sm md:text-base max-w-2xl font-medium">
             Review Day-by-Day training schedules. Select a track tab and type to search topics.
@@ -520,7 +520,7 @@ export default function ProgrammingCourses() {
                 }}
                 className={`py-3 px-5 rounded-2xl text-[13px] font-black uppercase tracking-wider transition-all duration-300 border cursor-pointer ${
                   activeTrack === tab.id
-                    ? 'bg-gradient-to-r from-[#f36b2b] to-orange-500 text-white border-transparent shadow-[0_5px_15px_rgba(243,107,43,0.15)]'
+                    ? 'bg-gradient-to-r from-[#1d4ed8] to-blue-500 text-white border-transparent shadow-[0_5px_15px_rgba(243,107,43,0.15)]'
                     : 'bg-white text-slate-600 border-slate-100 hover:bg-slate-50'
                 }`}
               >
@@ -539,7 +539,7 @@ export default function ProgrammingCourses() {
               placeholder="Search topics or days..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-[14px] font-medium placeholder-slate-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30 transition-all duration-300"
+              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 bg-white text-[14px] font-medium placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all duration-300"
             />
           </div>
         </div>
@@ -580,7 +580,7 @@ export default function ProgrammingCourses() {
                       <td className="px-6 py-4 text-[14px] font-extrabold text-slate-900 whitespace-nowrap">
                         {row.day}
                       </td>
-                      <td className="px-6 py-4 text-[14px] font-bold text-[#f36b2b]">
+                      <td className="px-6 py-4 text-[14px] font-bold text-[#1d4ed8]">
                         {row.duration}
                       </td>
                       <td className="px-6 py-4 text-[14.5px] font-semibold text-slate-600 leading-relaxed">
