@@ -11,31 +11,109 @@ const courses = [
     src: "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=3000&auto=format&fit=crop",
     title: "Computer Science (CSE)",
     category: "CSE",
+    path: "/courses/cse"
   },
   {
     src: "https://images.unsplash.com/photo-1517077304055-6e89abbf09b0?q=80&w=3000&auto=format&fit=crop",
     title: "Electronics (ECE)",
     category: "ECE",
+    path: "/courses/ece"
   },
   {
     src: "https://images.unsplash.com/photo-1537462715879-360eeb61a0ad?q=80&w=3000&auto=format&fit=crop",
     title: "Mechanical (ME)",
     category: "ME",
+    path: "/courses/me"
   },
   {
     src: "https://images.unsplash.com/photo-1508450859948-4e04fabaa4ea?q=80&w=3000&auto=format&fit=crop",
     title: "Civil (CE)",
     category: "CE",
+    path: "/courses/ce"
   },
   {
     src: "https://images.unsplash.com/photo-1498084393753-b411b2d26b34?q=80&w=3000&auto=format&fit=crop",
     title: "Electrical (EE)",
     category: "EE",
+    path: "/courses/ee"
   },
   {
-    src: "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=3000&auto=format&fit=crop",
-    title: "Coimbatore Offline",
-    category: "OFFLINE",
+    src: "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?q=80&w=3000&auto=format&fit=crop",
+    title: "Data Science & AI (DS)",
+    category: "DS",
+    path: "/courses/ds"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=3000&auto=format&fit=crop",
+    title: "Production & Industrial Engineering (PI)",
+    category: "PI",
+    path: "/courses/pi"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?q=80&w=3000&auto=format&fit=crop",
+    title: "Instrumentation Engineering (IN)",
+    category: "IN",
+    path: "/courses/in"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1576086213369-97a306d36557?q=80&w=3000&auto=format&fit=crop",
+    title: "Biotechnology (BT)",
+    category: "BT",
+    path: "/courses/bt"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1532187643603-ba119ca4109e?q=80&w=3000&auto=format&fit=crop",
+    title: "Chemical Engineering (CH)",
+    category: "CH",
+    path: "/courses/ch"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?q=80&w=3000&auto=format&fit=crop",
+    title: "Biomedical Engineering (BM)",
+    category: "BM",
+    path: "/courses/bm"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?q=80&w=3000&auto=format&fit=crop",
+    title: "Physics (PH)",
+    category: "PH",
+    path: "/courses/ph"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=3000&auto=format&fit=crop",
+    title: "Architecture & Planning (AR)",
+    category: "AR",
+    path: "/courses/ar"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?q=80&w=3000&auto=format&fit=crop",
+    title: "Agricultural Engineering (AG)",
+    category: "AG",
+    path: "/courses/ag"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?q=80&w=3000&auto=format&fit=crop",
+    title: "Metallurgical Engineering (MT)",
+    category: "MT",
+    path: "/courses/mt"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=3000&auto=format&fit=crop",
+    title: "Environmental Science & Engg (ES)",
+    category: "ES",
+    path: "/courses/es"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1579154204601-01588f351e67?q=80&w=3000&auto=format&fit=crop",
+    title: "Life Sciences (XL)",
+    category: "XL",
+    path: "/courses/xl"
+  },
+  {
+    src: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=3000&auto=format&fit=crop",
+    title: "Aerospace Engineering (AE)",
+    category: "AE",
+    path: "/courses/ae"
   }
 ];
 
@@ -43,7 +121,8 @@ export default function Home() {
   const swiperImages = courses.map(course => ({
     src: course.src,
     alt: course.title,
-    category: course.category
+    category: course.category,
+    path: course.path
   }));
 
   return (

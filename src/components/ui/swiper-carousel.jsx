@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import React from "react";
+import { Link } from "react-router-dom";
 import {
   Autoplay,
   EffectCoverflow,
@@ -103,19 +104,33 @@ const Carousel_003 = ({
           className="Carousal_003"
           modules={[EffectCoverflow, Autoplay, Pagination, Navigation]}
         >
-          {images.map((image, index) => (
-            <SwiperSlide key={index} className="relative group">
-              <img
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                src={image.src}
-                alt={image.alt}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
-                 <h3 className="text-white font-bold text-2xl mb-1">{image.alt}</h3>
-                 {image.category && <span className="text-[#1d4ed8] font-bold text-sm">{image.category}</span>}
-              </div>
-            </SwiperSlide>
-          ))}
+          {images.map((image, index) => {
+            const slideContent = (
+              <>
+                <img
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  src={image.src}
+                  alt={image.alt}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
+                  <h3 className="text-white font-bold text-2xl mb-1">{image.alt}</h3>
+                  {image.category && <span className="text-[#1d4ed8] font-bold text-sm">{image.category}</span>}
+                </div>
+              </>
+            );
+
+            return (
+              <SwiperSlide key={index} className="relative group cursor-pointer">
+                {image.path ? (
+                  <Link to={image.path} className="block w-full h-full">
+                    {slideContent}
+                  </Link>
+                ) : (
+                  slideContent
+                )}
+              </SwiperSlide>
+            );
+          })}
           {showNavigation && (
             <div>
               <div className="swiper-button-next after:hidden">

@@ -75,7 +75,18 @@ export default function Footer() {
                 { name: 'GATE Electronics', path: '/courses/ece' },
                 { name: 'GATE Mechanical', path: '/courses/me' },
                 { name: 'Programming Courses', path: '/programming' },
-                { name: 'Data Science & AI', path: '/courses/ds' }
+                { name: 'Data Science & AI', path: '/courses/ds' },
+                { name: 'GATE Instrumentation', path: '/courses/in' },
+                { name: 'GATE Biotechnology', path: '/courses/bt' },
+                { name: 'GATE Chemical', path: '/courses/ch' },
+                { name: 'GATE Biomedical', path: '/courses/bm' },
+                { name: 'GATE Physics', path: '/courses/ph' },
+                { name: 'GATE Architecture', path: '/courses/ar' },
+                { name: 'GATE Agricultural', path: '/courses/ag' },
+                { name: 'GATE Metallurgical', path: '/courses/mt' },
+                { name: 'GATE Environmental', path: '/courses/es' },
+                { name: 'GATE Life Sciences', path: '/courses/xl' },
+                { name: 'GATE Aerospace', path: '/courses/ae' }
               ].map((link, idx) => (
                 <li key={idx}>
                   <Link to={link.path} className="flex items-center gap-2 text-slate-600 hover:text-[#1d4ed8] transition-colors group">

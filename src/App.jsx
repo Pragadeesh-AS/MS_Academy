@@ -3,7 +3,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import './index.css';
 import { ShinyButton } from "./components/ui/shiny-button";
 import { motion } from "motion/react";
-import { ChevronDown, GraduationCap, TrendingUp, Settings, Database, MapPin, Monitor, Cpu, Cog, Building2, Zap, Sparkles } from 'lucide-react';
+import { ChevronDown, GraduationCap, TrendingUp, Settings, Database, Monitor, Cpu, Cog, Building2, Zap, Gauge, Dna, FlaskConical, HeartPulse, Atom, DraftingCompass, Sprout, Anvil, Leaf, Microscope, Plane, Sparkles } from 'lucide-react';
 import Home from './components/Home';
 import AboutUs from './components/AboutUs';
 import Contact from './components/Contact';
@@ -14,6 +14,17 @@ import CeCourse from './components/courses/Ce';
 import EeCourse from './components/courses/Ee';
 import PiCourse from './components/courses/Pi';
 import DsCourse from './components/courses/Ds';
+import InCourse from './components/courses/In';
+import BtCourse from './components/courses/Bt';
+import ChCourse from './components/courses/Ch';
+import BmCourse from './components/courses/Bm';
+import PhCourse from './components/courses/Ph';
+import ArCourse from './components/courses/Ar';
+import AgCourse from './components/courses/Ag';
+import MtCourse from './components/courses/Mt';
+import EsCourse from './components/courses/Es';
+import XlCourse from './components/courses/Xl';
+import AeCourse from './components/courses/Ae';
 import MorphPanel from './components/ui/ai-input';
 import EnquiryForm from './components/ui/EnquiryForm';
 import ProgrammingCourses from './components/ProgrammingCourses';
@@ -26,9 +37,19 @@ const gateCoursesDropdown = [
   { name: "GATE Mechanical (ME)", icon: Cog, path: "/courses/me" },
   { name: "GATE Civil (CE)", icon: Building2, path: "/courses/ce" },
   { name: "GATE Electrical (EE)", icon: Zap, path: "/courses/ee" },
-  { name: "GATE Production Engineering (PI)", icon: Settings, path: "/courses/pi" },
+  { name: "GATE Production & Industrial (PI)", icon: Settings, path: "/courses/pi" },
   { name: "GATE Data Science & AI (DS)", icon: Database, path: "/courses/ds" },
-  { name: "GATE Coaching Coimbatore", icon: MapPin, path: "/courses/offline" }
+  { name: "GATE Instrumentation (IN)", icon: Gauge, path: "/courses/in" },
+  { name: "GATE Biotechnology (BT)", icon: Dna, path: "/courses/bt" },
+  { name: "GATE Chemical (CH)", icon: FlaskConical, path: "/courses/ch" },
+  { name: "GATE Biomedical (BM)", icon: HeartPulse, path: "/courses/bm" },
+  { name: "GATE Physics (PH)", icon: Atom, path: "/courses/ph" },
+  { name: "GATE Architecture (AR)", icon: DraftingCompass, path: "/courses/ar" },
+  { name: "GATE Agricultural (AG)", icon: Sprout, path: "/courses/ag" },
+  { name: "GATE Metallurgical (MT)", icon: Anvil, path: "/courses/mt" },
+  { name: "GATE Environmental (ES)", icon: Leaf, path: "/courses/es" },
+  { name: "GATE Life Sciences (XL)", icon: Microscope, path: "/courses/xl" },
+  { name: "GATE Aerospace (AE)", icon: Plane, path: "/courses/ae" }
 ];
 
 export default function App() {
@@ -168,7 +189,7 @@ export default function App() {
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
                   <span className="text-[11px] font-bold text-slate-500 tracking-widest uppercase">GATE SPECIALIZATIONS</span>
                 </div>
-                <div className="flex flex-col p-2 bg-transparent gap-1">
+                <div className="flex flex-col p-2 bg-transparent gap-1 max-h-[480px] overflow-y-auto overscroll-contain">
                   {gateCoursesDropdown.map((course, idx) => {
                     const Icon = course.icon;
                     return (
@@ -234,6 +255,17 @@ export default function App() {
         <Route path="/courses/ee" element={<EeCourse />} />
         <Route path="/courses/pi" element={<PiCourse />} />
         <Route path="/courses/ds" element={<DsCourse />} />
+        <Route path="/courses/in" element={<InCourse />} />
+        <Route path="/courses/bt" element={<BtCourse />} />
+        <Route path="/courses/ch" element={<ChCourse />} />
+        <Route path="/courses/bm" element={<BmCourse />} />
+        <Route path="/courses/ph" element={<PhCourse />} />
+        <Route path="/courses/ar" element={<ArCourse />} />
+        <Route path="/courses/ag" element={<AgCourse />} />
+        <Route path="/courses/mt" element={<MtCourse />} />
+        <Route path="/courses/es" element={<EsCourse />} />
+        <Route path="/courses/xl" element={<XlCourse />} />
+        <Route path="/courses/ae" element={<AeCourse />} />
         <Route path="/programming" element={<ProgrammingCourses />} />
         <Route path="/careers" element={<Careers />} />
       </Routes>
