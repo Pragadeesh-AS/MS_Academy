@@ -199,7 +199,7 @@ export function MorphPanel() {
   )
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-center justify-center pointer-events-auto" style={{ width: showForm ? FORM_WIDTH : 'auto', height: showForm ? FORM_HEIGHT : 'auto' }}>
+    <div className="fixed bottom-6 right-6 z-[120] flex items-center justify-center pointer-events-auto" style={{ width: showForm ? FORM_WIDTH : 'auto', height: showForm ? FORM_HEIGHT : 'auto' }}>
       <motion.div
         ref={wrapperRef}
         data-panel

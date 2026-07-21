@@ -15,6 +15,7 @@ import EeCourse from './components/courses/Ee';
 import PiCourse from './components/courses/Pi';
 import DsCourse from './components/courses/Ds';
 import MorphPanel from './components/ui/ai-input';
+import EnquiryForm from './components/ui/EnquiryForm';
 import ProgrammingCourses from './components/ProgrammingCourses';
 import Footer from './components/Footer';
 import Careers from './components/Careers';
@@ -256,7 +257,7 @@ export default function App() {
       </motion.div>
 
       {/* Global Floating Components */}
-      <MorphPanel />
+      {location.pathname === '/' || location.pathname === '/contact' ? <EnquiryForm /> : <MorphPanel />}
     </div>
   );
 }
