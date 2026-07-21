@@ -1,7 +1,7 @@
 import React from 'react';
 import { Monitor, BookOpen, Clock, Target, CheckCircle2 } from 'lucide-react';
 import { ShinyButton } from "../ui/shiny-button";
-import ceHeroImg from '../../assets/cse2.png';
+import ceHeroImg from '../../assets/cse.jpeg';
 
 const syllabusData = [
   {

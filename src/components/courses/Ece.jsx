@@ -1,7 +1,7 @@
 import React from 'react';
 import { Monitor, BookOpen, Clock, Target, CheckCircle2 } from 'lucide-react';
 import { ShinyButton } from "../ui/shiny-button";
-import eceHeroImg from '../../assets/cse2.png';
+import eceHeroImg from '../../assets/ece.png';
 
 const syllabusData = [
   {
@@ -63,14 +63,14 @@ export default function EceCourse() {
         </div>
 
         {/* Right Side: Image */}
-        <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
+        <div className="flex-1 w-full max-w-[800px] flex justify-center items-center lg:pl-10">
           <img 
             src={eceHeroImg} 
             alt="ECE GATE Coaching" 
-            className="w-full h-auto object-contain mix-blend-multiply hover:scale-105 transition-transform duration-700"
+            className="w-full h-auto object-contain mix-blend-multiply scale-125 hover:scale-[1.3] transition-transform duration-700"
             style={{ 
-              WebkitMaskImage: 'radial-gradient(circle at center, black 50%, transparent 100%)',
-              maskImage: 'radial-gradient(circle at center, black 50%, transparent 100%)'
+              WebkitMaskImage: 'radial-gradient(ellipse at center, black 75%, transparent 100%)',
+              maskImage: 'radial-gradient(ellipse at center, black 75%, transparent 100%)'
             }}
           />
         </div>
