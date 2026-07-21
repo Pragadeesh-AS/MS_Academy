@@ -16,6 +16,7 @@ import PiCourse from './components/courses/Pi';
 import DsCourse from './components/courses/Ds';
 import MorphPanel from './components/ui/ai-input';
 import ProgrammingCourses from './components/ProgrammingCourses';
+import Footer from './components/Footer';
 
 const gateCoursesDropdown = [
   { name: "GATE Computer Science (CSE)", icon: Monitor, path: "/courses/cse" },
@@ -64,6 +65,24 @@ export default function App() {
     setIsDropdownHovered(false);
   }, [location.pathname]);
 
+  const getDynamicLink = () => {
+    const defaultLink = { path: '/programming', label: 'Programming Courses' };
+    
+    // Only show dynamic link when scrolled (navbar is small)
+    if (!isScrolled) return defaultLink;
+
+    switch (location.pathname) {
+      case '/about':
+        return { path: '/about', label: 'About Us' };
+      case '/contact':
+        return { path: '/contact', label: 'Contact' };
+      default:
+        return defaultLink;
+    }
+  };
+
+  const dynamicLink = getDynamicLink();
+
   return (
     <div className="min-h-screen bg-[#fafafa] relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col pt-24">
       {/* Background Dotted Pattern */}
@@ -74,7 +93,7 @@ export default function App() {
       <div className="absolute top-[40%] right-[-10%] w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] rounded-full bg-gradient-to-tl from-slate-200/40 to-transparent blur-[100px] -z-10 pointer-events-none"></div>
       
       {/* Background GIF Animation */}
-      <div className="absolute inset-0 w-full h-full -z-20 pointer-events-none overflow-hidden">
+      <div className="fixed inset-0 w-full h-full -z-20 pointer-events-none overflow-hidden">
         <img
           src="https://cdn.dribbble.com/userupload/40544684/file/original-ca49f169331ee9c82833452b691e14f3.gif"
           alt="Background Animation"
@@ -160,10 +179,10 @@ export default function App() {
               </div>
             </div>
 
-            {/* Programming Courses */}
-            <Link to="/programming" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/programming' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
-              <span className="relative z-10">Programming Courses</span>
-              <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/programming' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+            {/* Dynamic Link (Programming Courses / Active Page) */}
+            <Link to={dynamicLink.path} className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === dynamicLink.path ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
+              <span className="relative z-10">{dynamicLink.label}</span>
+              <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === dynamicLink.path ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
             </Link>
             
             {/* Collapsible Links based on Scroll */}
@@ -211,6 +230,8 @@ export default function App() {
         <Route path="/courses/ds" element={<DsCourse />} />
         <Route path="/programming" element={<ProgrammingCourses />} />
       </Routes>
+
+      <Footer />
 
       {/* Global Floating Components */}
       <MorphPanel />
