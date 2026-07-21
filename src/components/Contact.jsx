@@ -2,10 +2,17 @@ import React from 'react';
 import { Phone, Mail, MapPin, Send } from 'lucide-react';
 import { ShinyButton } from "./ui/shiny-button";
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+import SocialCard from './SocialCard';
 
 export default function Contact() {
   return (
-    <main className="relative flex flex-col items-center justify-center px-4 pt-2 pb-16 w-full max-w-[1200px] mx-auto min-h-[calc(100vh-100px)]">
+    <>
+      {/* Fixed Social Sidebar */}
+      <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50 hidden xl:block">
+        <SocialCard />
+      </div>
+
+      <main className="relative flex flex-col items-center justify-center px-4 pt-2 pb-16 w-full max-w-[1200px] mx-auto min-h-[calc(100vh-100px)]">
 
 
       <div className="w-full grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
@@ -69,5 +76,6 @@ export default function Contact() {
 
       </div>
     </main>
+    </>
   );
 }

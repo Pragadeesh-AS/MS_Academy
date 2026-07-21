@@ -50,7 +50,7 @@ export default function CseCourse() {
   return (
     <main className="w-full flex flex-col items-center">
       {/* Hero Section */}
-      <section className="relative w-full px-4 pt-4 pb-20 max-w-[1200px] mx-auto mt-2 flex flex-col lg:flex-row items-center justify-between gap-12">
+      <section className="relative w-full px-4 pt-4 pb-20 max-w-[1300px] mx-auto mt-2 flex flex-col lg:flex-row items-center justify-between gap-12">
         
         {/* Left Side: Text */}
         <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left">
@@ -71,11 +71,11 @@ export default function CseCourse() {
         </div>
 
         {/* Right Side: Image */}
-        <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
+        <div className="flex-1 w-full max-w-[800px] flex justify-center items-center lg:pl-10">
           <img 
             src={cseHeroImg} 
             alt="CSE GATE Coaching" 
-            className="w-full h-auto object-contain mix-blend-multiply hover:scale-105 transition-transform duration-700"
+            className="w-full h-auto object-contain mix-blend-multiply hover:scale-105 transition-transform duration-700 scale-110"
             style={{ 
               WebkitMaskImage: 'radial-gradient(circle at center, black 50%, transparent 100%)',
               maskImage: 'radial-gradient(circle at center, black 50%, transparent 100%)'

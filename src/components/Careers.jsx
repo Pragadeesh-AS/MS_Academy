@@ -294,10 +294,10 @@ export default function Careers() {
                       <GraduationCap size={22} strokeWidth={2} />
                     </div>
                     <div className="flex flex-col">
-                      <h3 className="text-lg md:text-[20px] font-[900] text-slate-900 group-hover:text-[#f36b2b] transition-colors leading-tight tracking-tight">
+                      <h3 className="text-2xl md:text-[26px] font-[900] text-slate-900 group-hover:text-[#f36b2b] transition-colors leading-tight tracking-tight">
                         {job.title}
                       </h3>
-                      <p className="text-xs md:text-[13px] text-slate-400 font-bold mt-1 leading-none">
+                      <p className="text-sm md:text-[15px] text-slate-500 font-bold mt-1.5 leading-none">
                         {job.details}
                       </p>
                     </div>
@@ -310,8 +310,8 @@ export default function Careers() {
                       alignItems: 'center', 
                       justifyContent: 'center', 
                       height: '24px', 
-                      padding: '0 12px',
-                      fontSize: '9px',
+                      padding: '0 16px',
+                      fontSize: '11px',
                       fontWeight: '900',
                       letterSpacing: '0.05em',
                       borderRadius: '9999px',
@@ -329,7 +329,7 @@ export default function Careers() {
                 </div>
 
                 {/* Description */}
-                <p className="text-slate-500 text-[13px] md:text-[14px] leading-relaxed font-semibold flex-grow">
+                <p className="text-slate-600 text-[16px] md:text-[18px] leading-relaxed font-semibold flex-grow mt-2">
                   {job.desc}
                 </p>
 
@@ -338,10 +338,10 @@ export default function Careers() {
                   <button 
                     onClick={() => handleOpenApply(job.title)}
                     style={{ background: 'linear-gradient(to right, #f36b2b, #f97316)', border: 'none' }}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-white font-bold text-xs md:text-sm hover:shadow-[0_8px_20px_rgba(243,107,43,0.2)] hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 cursor-pointer outline-none shadow-sm"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-white font-bold text-sm md:text-base hover:shadow-[0_8px_20px_rgba(243,107,43,0.2)] hover:scale-[1.01] active:scale-[0.99] transition-all duration-300 cursor-pointer outline-none shadow-sm"
                   >
                     <span>Apply Now</span>
-                    <ArrowRight size={14} />
+                    <ArrowRight size={18} />
                   </button>
                 </div>
 

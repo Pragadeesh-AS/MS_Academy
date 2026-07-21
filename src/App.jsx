@@ -77,6 +77,10 @@ export default function App() {
         return { path: '/about', label: 'About Us' };
       case '/contact':
         return { path: '/contact', label: 'Contact' };
+      case '/careers':
+        return { path: '/careers', label: 'Careers' };
+      case '/blog':
+        return { path: '/blog', label: 'Blog' };
       default:
         return defaultLink;
     }
@@ -198,10 +202,10 @@ export default function App() {
                 <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/careers' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>
               
-              <a href="#" className="relative group px-4 py-2 transition-colors duration-300 hover:text-slate-900">
+              <Link to="/blog" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/blog' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">Blog</span>
-                <div className="absolute inset-0 rounded-full border border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300"></div>
-              </a>
+                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/blog' ? 'border-[#f36b2b]/20 bg-orange-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+              </Link>
               
               <Link to="/contact" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/contact' ? 'text-[#f36b2b]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">Contact</span>
