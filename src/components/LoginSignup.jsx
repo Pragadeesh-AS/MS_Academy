@@ -41,9 +41,10 @@ export default function LoginSignup() {
         const user = userCredential.user;
 
         // Check if the authenticated user has the registered admin email
-        if (user.email.toLowerCase() === 'msgateacademy@gmail.com') {
+        const adminEmails = ['msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
+        if (adminEmails.includes(user.email.toLowerCase())) {
           localStorage.setItem('auth_role', 'admin');
-          localStorage.setItem('auth_email', 'msgateacademy@gmail.com');
+          localStorage.setItem('auth_email', user.email);
           localStorage.setItem('auth_name', 'MS Academy Admin');
           window.dispatchEvent(new Event('storage'));
           navigate('/admin');

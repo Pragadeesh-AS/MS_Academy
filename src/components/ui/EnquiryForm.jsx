@@ -4,6 +4,7 @@ import React from "react"
 import { cx } from "class-variance-authority"
 import { AnimatePresence, motion } from "motion/react"
 import { MessageSquarePlus, X, Send } from "lucide-react"
+import emailjs from '@emailjs/browser'
 
 import { Button } from "./button"
 
@@ -123,18 +124,22 @@ function DockBar() {
 }
 
 const FORM_WIDTH = 400
-const FORM_HEIGHT = 580
+const FORM_HEIGHT = 720
 
 const InputForm = React.forwardRef(({ onSuccess }, ref) => {
   const { triggerClose, showForm, successFlag } = useFormContext()
 
   const [formData, setFormData] = React.useState({
     studentName: "",
+    email: "",
+    phone: "",
     department: "",
     college: "",
     course: "",
     description: "",
   })
+
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -142,9 +147,57 @@ const InputForm = React.forwardRef(({ onSuccess }, ref) => {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    setIsSubmitting(true)
+
+    // 1. Save to LocalStorage for Admin Dashboard
+    try {
+      const existingQueries = JSON.parse(localStorage.getItem('contact_queries') || '[]');
+      const newQuery = {
+        id: `query-${Date.now()}`,
+        fullName: formData.studentName,
+        email: formData.email,
+        phone: formData.phone,
+        message: `Course: ${formData.course}\nCollege: ${formData.college}\nDept: ${formData.department}\n\nQuery: ${formData.description}`,
+        date: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+        status: 'Pending'
+      };
+      
+      const updatedQueries = [newQuery, ...existingQueries];
+      localStorage.setItem('contact_queries', JSON.stringify(updatedQueries));
+      // Dispatch storage event so AdminDashboard can re-render if open in another tab
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error("Local storage error", err);
+    }
+
+    // 2. Send Email via EmailJS
+    try {
+      const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID';
+      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'YOUR_TEMPLATE_ID';
+      const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
+      
+      if (SERVICE_ID !== 'YOUR_SERVICE_ID') {
+        const templateParams = {
+          to_email: 'msacademy2026@gmail.com', // Target admin email
+          from_name: formData.studentName,
+          reply_to: formData.email,
+          phone: formData.phone,
+          course: formData.course,
+          college: formData.college,
+          message: formData.description
+        };
+        await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
+      }
+    } catch (err) {
+      console.error("EmailJS Error:", err);
+    }
+
+    setIsSubmitting(false)
     onSuccess()
     setFormData({
       studentName: "",
+      email: "",
+      phone: "",
       department: "",
       college: "",
       course: "",
@@ -196,6 +249,34 @@ const InputForm = React.forwardRef(({ onSuccess }, ref) => {
                   onChange={handleChange}
                   required
                   placeholder="Enter your name"
+                  onKeyDown={handleKeys}
+                  className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#1d4ed8] focus:ring-2 focus:ring-[#1d4ed8]/15 outline-none transition-all rounded-xl h-11 px-4 border border-slate-200"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-black text-slate-500 tracking-widest uppercase">Email Address *</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  placeholder="name@example.com"
+                  onKeyDown={handleKeys}
+                  className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#1d4ed8] focus:ring-2 focus:ring-[#1d4ed8]/15 outline-none transition-all rounded-xl h-11 px-4 border border-slate-200"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-black text-slate-500 tracking-widest uppercase">Phone Number *</label>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  required
+                  placeholder="+91 9876543210"
                   onKeyDown={handleKeys}
                   className="w-full bg-white text-slate-800 text-sm font-semibold placeholder:text-slate-400 focus:border-[#1d4ed8] focus:ring-2 focus:ring-[#1d4ed8]/15 outline-none transition-all rounded-xl h-11 px-4 border border-slate-200"
                 />
@@ -261,10 +342,17 @@ const InputForm = React.forwardRef(({ onSuccess }, ref) => {
             <div className="pt-4 mt-2 border-t border-slate-100">
               <button
                 type="submit"
-                className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 font-semibold text-white rounded-xl bg-gradient-to-b from-[#4a4a4a] via-[#2a2a2a] to-[#111111] shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all border border-[#333333] cursor-pointer"
+                disabled={isSubmitting}
+                className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 font-semibold text-white rounded-xl bg-gradient-to-b from-[#4a4a4a] via-[#2a2a2a] to-[#111111] shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all border border-[#333333] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>Send Enquiry</span>
-                <Send size={16} />
+                {isSubmitting ? (
+                  <span>Sending...</span>
+                ) : (
+                  <>
+                    <span>Send Enquiry</span>
+                    <Send size={16} />
+                  </>
+                )}
               </button>
             </div>
           </motion.div>
