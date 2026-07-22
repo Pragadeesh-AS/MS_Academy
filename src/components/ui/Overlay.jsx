@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 export default function Overlay() {
   return (
@@ -16,9 +17,11 @@ export default function Overlay() {
           <a href="#" className="hover:text-blue-500 transition-colors">About Us</a>
           <a href="#" className="hover:text-blue-500 transition-colors">Contact</a>
         </div>
-        <button className="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-full hover:shadow-lg hover:shadow-blue-500/40 transition-all pointer-events-auto">
-          Student Portal
-        </button>
+        <Link to="/login" target="_blank" rel="noopener noreferrer">
+          <button className="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-full hover:shadow-lg hover:shadow-blue-500/40 transition-all pointer-events-auto">
+            Student Portal
+          </button>
+        </Link>
       </nav>
 
       <main className="flex-1 flex flex-col items-center justify-center text-center px-4 pointer-events-auto">
