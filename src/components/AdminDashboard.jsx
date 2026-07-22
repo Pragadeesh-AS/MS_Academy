@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, FileText, LayoutDashboard, Settings, Mail, LogOut, 
-  Search, Filter, Check, X, Eye, BookOpen, Clock, Tag, RefreshCw 
+  Search, Filter, Check, X, Eye, BookOpen, Clock, Tag, RefreshCw,
+  ChevronLeft, ChevronRight, UserCheck, Database, BarChart2, Megaphone, Sparkles,
+  Plus, Trophy, CheckCircle2, TrendingUp
 } from 'lucide-react';
 
 // Default mock data to populate localStorage if empty
@@ -87,6 +89,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [adminName, setAdminName] = useState('Admin');
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Core datasets states
   const [applications, setApplications] = useState([]);
@@ -100,6 +103,7 @@ export default function AdminDashboard() {
 
   // Modal detail states
   const [selectedApp, setSelectedApp] = useState(null);
+  const [activeHeatmapIndex, setActiveHeatmapIndex] = useState(null);
 
   // Auth Guard
   useEffect(() => {
@@ -196,84 +200,132 @@ export default function AdminDashboard() {
   });
 
   return (
-    <div className="min-h-[calc(100vh-100px)] w-full bg-slate-50/50 flex flex-col md:flex-row relative">
+    <div className="min-h-screen w-full bg-slate-50/50 flex flex-col md:flex-row relative">
       
-      {/* Side Navigation Panel */}
-      <aside className="w-full md:w-64 bg-slate-900 text-white flex flex-col justify-between p-6 md:min-h-[calc(100vh-100px)] flex-shrink-0 relative z-20">
-        <div className="space-y-8">
-          {/* Admin title */}
-          <div>
-            <span className="text-[11px] font-bold text-blue-400 uppercase tracking-widest block mb-1">MS Academy</span>
-            <h3 className="text-xl font-black text-white tracking-tight">Admin Console</h3>
+      {/* Side Navigation Panel Wrapper */}
+      <div className={`transition-all duration-300 ${isCollapsed ? 'w-[88px]' : 'w-full md:w-[280px]'} md:h-screen md:sticky top-0 flex-shrink-0 relative z-20`}>
+        
+        {/* Collapse Button (Now outside the overflow container so it's fully visible!) */}
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="hidden md:flex absolute -right-3.5 top-9 w-7 h-7 bg-white border border-slate-200 rounded-full items-center justify-center shadow-sm text-slate-500 hover:text-slate-800 transition-colors z-30 hover:shadow-md"
+        >
+          {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+
+        <aside className="w-full h-full bg-[#f8f9fa] flex flex-col justify-between pt-8 pb-6 px-4 overflow-y-auto border-r border-slate-200/60 shadow-[4px_0_24px_rgba(0,0,0,0.02)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="space-y-8">
+            {/* Admin title */}
+            <div className={`flex items-center gap-3 px-2 mb-2 ${isCollapsed ? 'justify-center px-0' : ''}`}>
+              <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+                <BookOpen size={18} className="text-white" />
+              </div>
+              {!isCollapsed && <h3 className="text-[19px] font-[900] text-[#5b32ea] tracking-tight whitespace-nowrap">MS Gate Academy</h3>}
+            </div>
+
+            {/* Navigation Links */}
+            <nav className="space-y-1.5 px-1">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'overview' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <LayoutDashboard size={20} className={activeTab === 'overview' ? 'text-[#3b82f6]' : 'text-[#3b82f6]'} />
+                {!isCollapsed && <span>Dashboard</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('queries')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'queries' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <Users size={20} className="text-[#f97316]" />
+                {!isCollapsed && <span>Students</span>}
+                {!isCollapsed && queries.filter(q => q.status === 'Pending').length > 0 && (
+                  <span className="ml-auto w-5 h-5 rounded-full bg-[#f97316] text-[10px] font-bold text-white flex items-center justify-center">
+                    {queries.filter(q => q.status === 'Pending').length}
+                  </span>
+                )}
+                {isCollapsed && queries.filter(q => q.status === 'Pending').length > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#f97316]"></span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('applications')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'applications' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <UserCheck size={20} className="text-[#10b981]" />
+                {!isCollapsed && <span>Teachers</span>}
+                {!isCollapsed && applications.filter(a => a.status === 'Pending').length > 0 && (
+                  <span className="ml-auto w-5 h-5 rounded-full bg-[#10b981] text-[10px] font-bold text-white flex items-center justify-center animate-pulse">
+                    {applications.filter(a => a.status === 'Pending').length}
+                  </span>
+                )}
+                {isCollapsed && applications.filter(a => a.status === 'Pending').length > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#10b981] animate-pulse"></span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('courses')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'courses' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <Database size={20} className="text-[#8b5cf6]" />
+                {!isCollapsed && <span>Course Setup</span>}
+              </button>
+
+              {/* Decorative Placeholders */}
+              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
+                <Tag size={20} className="text-[#0d9488]" />
+                {!isCollapsed && <span>Attributes</span>}
+              </button>
+              
+              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
+                <BarChart2 size={20} className="text-[#e11d48]" />
+                {!isCollapsed && <span>Analytics</span>}
+              </button>
+
+              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
+                <FileText size={20} className="text-[#3b82f6]" />
+                {!isCollapsed && <span>Blogs</span>}
+              </button>
+
+              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
+                <Megaphone size={20} className="text-[#a855f7]" />
+                {!isCollapsed && <span>Popup</span>}
+              </button>
+
+              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
+                <Sparkles size={20} className="text-[#eab308]" />
+                {!isCollapsed && <span>AI Generator</span>}
+              </button>
+
+            </nav>
           </div>
 
-          {/* Navigation Links */}
-          <nav className="space-y-2">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-[14px] transition-all duration-300 ${activeTab === 'overview' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-            >
-              <LayoutDashboard size={18} />
-              <span>Overview</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('applications')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-[14px] transition-all duration-300 ${activeTab === 'applications' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-            >
-              <FileText size={18} />
-              <span>Applications</span>
-              {applications.filter(a => a.status === 'Pending').length > 0 && (
-                <span className="ml-auto w-5 h-5 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center animate-pulse">
-                  {applications.filter(a => a.status === 'Pending').length}
-                </span>
+          {/* Profile Card & Logout */}
+          <div className={`pt-5 border-t border-slate-200 mt-8 space-y-3 ${isCollapsed ? 'px-0' : 'px-2'}`}>
+            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
+              <div className="w-10 h-10 rounded-full bg-[#e0e7ff] text-[#4f46e5] font-black text-[16px] flex items-center justify-center flex-shrink-0">
+                M
+              </div>
+              {!isCollapsed && (
+                <div className="flex flex-col min-w-0 overflow-hidden">
+                  <span className="font-bold text-[14px] text-slate-800 truncate">User</span>
+                  <span className="text-[12px] font-semibold text-slate-500 truncate">msacademics.edu@gmail.com</span>
+                </div>
               )}
-            </button>
+            </div>
 
             <button
-              onClick={() => setActiveTab('queries')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-[14px] transition-all duration-300 ${activeTab === 'queries' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+              onClick={handleLogout}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-2'} py-2.5 mt-2 rounded-xl font-bold text-[14px] text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors`}
             >
-              <Mail size={18} />
-              <span>Inquiries</span>
-              {queries.filter(q => q.status === 'Pending').length > 0 && (
-                <span className="ml-auto w-5 h-5 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center">
-                  {queries.filter(q => q.status === 'Pending').length}
-                </span>
-              )}
+              <LogOut size={18} className="text-slate-500" />
+              {!isCollapsed && <span>Logout</span>}
             </button>
-
-            <button
-              onClick={() => setActiveTab('courses')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-[14px] transition-all duration-300 ${activeTab === 'courses' ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-            >
-              <Settings size={18} />
-              <span>Course Setup</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* Profile Card & Logout */}
-        <div className="pt-6 border-t border-slate-800/60 mt-8 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/25 border border-blue-500/30 text-blue-400 font-bold text-[15px] flex items-center justify-center">
-              {adminName[0].toUpperCase()}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="font-semibold text-sm text-white truncate">{adminName}</span>
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Super Administrator</span>
-            </div>
           </div>
-
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl font-bold text-[13.5px] text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
-          >
-            <LogOut size={16} />
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </aside>
+        </aside>
+      </div>
 
       {/* Main Dashboard Container */}
       <main className="flex-1 p-6 md:p-10 max-w-[1400px] mx-auto w-full space-y-8 overflow-hidden z-10">
@@ -281,169 +333,209 @@ export default function AdminDashboard() {
         {/* Active Tab: Overview Dashboard */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
-            <div>
-              <h2 className="text-[32px] font-[900] text-slate-900 tracking-tight leading-none mb-2">Metrics Overview</h2>
-              <p className="text-slate-500 text-sm font-medium">Real-time statistics and registration tracking details.</p>
+            
+            {/* Top Stat Bar - Unified Glass Pill */}
+            <div className="w-full bg-white border border-slate-100 rounded-full shadow-[0_4px_24px_rgba(0,0,0,0.02)] p-2.5 flex justify-between items-center relative overflow-hidden group/stats">
+              {/* Stat 1 */}
+              <div className="flex-1 flex items-center justify-center gap-4 border-r border-slate-100 px-4 group/stat hover:bg-slate-50/50 rounded-l-full transition-colors cursor-pointer py-3">
+                <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center group-hover/stat:scale-110 transition-transform group-hover/stat:shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+                  <FileText size={20} />
+                </div>
+                <div className="flex flex-col">
+                  <h3 className="text-[26px] font-[900] text-slate-800 leading-none group-hover/stat:text-blue-600 transition-colors">20</h3>
+                  <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mt-1">Total Tests</span>
+                </div>
+              </div>
+              {/* Stat 2 */}
+              <div className="flex-1 flex items-center justify-center gap-4 border-r border-slate-100 px-4 group/stat hover:bg-slate-50/50 transition-colors cursor-pointer py-3">
+                <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-500 flex items-center justify-center group-hover/stat:scale-110 transition-transform group-hover/stat:shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+                  <Users size={20} />
+                </div>
+                <div className="flex flex-col">
+                  <h3 className="text-[26px] font-[900] text-slate-800 leading-none group-hover/stat:text-purple-600 transition-colors">10</h3>
+                  <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mt-1">Active Students</span>
+                </div>
+              </div>
+              {/* Stat 3 */}
+              <div className="flex-1 flex items-center justify-center gap-4 border-r border-slate-100 px-4 group/stat hover:bg-slate-50/50 transition-colors cursor-pointer py-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center group-hover/stat:scale-110 transition-transform group-hover/stat:shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                  <CheckCircle2 size={20} />
+                </div>
+                <div className="flex flex-col">
+                  <h3 className="text-[26px] font-[900] text-slate-800 leading-none group-hover/stat:text-emerald-600 transition-colors">71%</h3>
+                  <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mt-1">Completion Rate</span>
+                </div>
+              </div>
+              {/* Stat 4 */}
+              <div className="flex-1 flex items-center justify-center gap-4 px-4 group/stat hover:bg-slate-50/50 rounded-r-full transition-colors cursor-pointer py-3">
+                <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center group-hover/stat:scale-110 transition-transform group-hover/stat:shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                  <TrendingUp size={20} />
+                </div>
+                <div className="flex flex-col">
+                  <h3 className="text-[26px] font-[900] text-slate-800 leading-none group-hover/stat:text-amber-600 transition-colors">49%</h3>
+                  <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mt-1">Avg. Score</span>
+                </div>
+              </div>
             </div>
 
-            {/* Stat Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Main Grid (Tests + Bento Quick Actions) */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
               
-              {/* Total Job Applications */}
-              <div className="bg-white border border-slate-100 p-6 rounded-[2rem] shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
-                <div className="space-y-1">
-                  <span className="text-[12px] font-bold text-slate-400 uppercase tracking-widest block">Job Applicants</span>
-                  <span className="text-[36px] font-[900] text-slate-900 leading-none">{applications.length}</span>
-                  <span className="text-xs text-blue-600 font-bold block pt-1">{applications.filter(a => a.status === 'Pending').length} Pending</span>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <FileText size={22} />
-                </div>
-              </div>
-
-              {/* Total Queries */}
-              <div className="bg-white border border-slate-100 p-6 rounded-[2rem] shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
-                <div className="space-y-1">
-                  <span className="text-[12px] font-bold text-slate-400 uppercase tracking-widest block">Student Queries</span>
-                  <span className="text-[36px] font-[900] text-slate-900 leading-none">{queries.length}</span>
-                  <span className="text-xs text-amber-600 font-bold block pt-1">{queries.filter(q => q.status === 'Pending').length} Pending</span>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Mail size={22} />
-                </div>
-              </div>
-
-              {/* Total GATE Disciplines */}
-              <div className="bg-white border border-slate-100 p-6 rounded-[2rem] shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
-                <div className="space-y-1">
-                  <span className="text-[12px] font-bold text-slate-400 uppercase tracking-widest block">GATE Courses</span>
-                  <span className="text-[36px] font-[900] text-slate-900 leading-none">18</span>
-                  <span className="text-xs text-emerald-600 font-bold block pt-1">All fully video-linked</span>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <BookOpen size={22} />
-                </div>
-              </div>
-
-              {/* Total Online Registered Students (Mock) */}
-              <div className="bg-white border border-slate-100 p-6 rounded-[2rem] shadow-sm flex items-center justify-between group hover:shadow-md transition-shadow">
-                <div className="space-y-1">
-                  <span className="text-[12px] font-bold text-slate-400 uppercase tracking-widest block">Portal Users</span>
-                  <span className="text-[36px] font-[900] text-slate-900 leading-none">124</span>
-                  <span className="text-xs text-purple-600 font-bold block pt-1">+18 new this week</span>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Users size={22} />
-                </div>
-              </div>
-
-            </div>
-
-            {/* Visual Charts / Graphic Details */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Graphic 1: Registration Trend Line */}
-              <div className="bg-white border border-slate-100 p-6 rounded-[2rem] shadow-sm space-y-6 lg:col-span-2">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-[18px] font-[800] text-slate-950">Student Registration Trend</h4>
-                  <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-full">Last 6 Months</span>
-                </div>
-                {/* SVG Visualizer */}
-                <div className="relative h-64 w-full flex items-end">
-                  <svg className="absolute inset-0 w-full h-full" viewBox="0 0 500 200" preserveAspectRatio="none">
-                    {/* Background Gradients */}
-                    <defs>
-                      <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#1d4ed8" stopOpacity="0.15" />
-                        <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    
-                    {/* Area path */}
-                    <path 
-                      d="M0 200 L50 150 L150 160 L250 90 L350 110 L450 40 L500 30 L500 200 Z" 
-                      fill="url(#chartGradient)"
-                    />
-                    
-                    {/* Trend Line */}
-                    <path 
-                      d="M0 200 L50 150 L150 160 L250 90 L350 110 L450 40 L500 30" 
-                      fill="none" 
-                      stroke="#1d4ed8" 
-                      strokeWidth="3.5" 
-                      strokeLinecap="round"
-                    />
-
-                    {/* Nodes */}
-                    <circle cx="50" cy="150" r="5" fill="#1d4ed8" stroke="white" strokeWidth="2" />
-                    <circle cx="150" cy="160" r="5" fill="#1d4ed8" stroke="white" strokeWidth="2" />
-                    <circle cx="250" cy="90" r="5" fill="#1d4ed8" stroke="white" strokeWidth="2" />
-                    <circle cx="350" cy="110" r="5" fill="#1d4ed8" stroke="white" strokeWidth="2" />
-                    <circle cx="450" cy="40" r="5" fill="#1d4ed8" stroke="white" strokeWidth="2" />
-                    <circle cx="500" cy="30" r="5" fill="#1d4ed8" stroke="white" strokeWidth="2" />
-                  </svg>
-                  {/* Custom Axis Labels */}
-                  <div className="absolute inset-x-0 bottom-0 flex justify-between px-2 pt-2 border-t border-slate-100 text-[10px] font-bold text-slate-400 tracking-wider uppercase">
-                    <span>Feb</span>
-                    <span>Mar</span>
-                    <span>Apr</span>
-                    <span>May</span>
-                    <span>Jun</span>
-                    <span>Jul</span>
+              {/* Left Section: Interactive List-View (Col span 7 or 8) */}
+              <div className="xl:col-span-8 flex flex-col space-y-6">
+                <div className="flex justify-between items-center px-1 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-md">
+                      <FileText size={14} />
+                    </div>
+                    <h3 className="text-[22px] font-[900] text-slate-900 tracking-tight">Recent Tests</h3>
                   </div>
+                  <button className="text-[12px] font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-full hover:bg-indigo-100 transition-colors">View All Directory</button>
                 </div>
-              </div>
 
-              {/* Graphic 2: Branch Breakdown Progress bars */}
-              <div className="bg-white border border-slate-100 p-6 rounded-[2rem] shadow-sm space-y-6">
-                <h4 className="text-[18px] font-[800] text-slate-950">Branch Distribution</h4>
-                <div className="space-y-4">
+                {/* Sleek List Container */}
+                <div className="bg-white border border-slate-100 rounded-[2rem] shadow-[0_4px_24px_rgba(0,0,0,0.02)] p-3 space-y-1 flex-1">
                   
-                  {/* Computer Science */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-bold text-slate-700">
-                      <span>Computer Science</span>
-                      <span>42%</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-blue-600" style={{ width: '42%' }} />
-                    </div>
-                  </div>
+                  {/* Test Row Mapping */}
+                  {[
+                    { title: "Practice Test: ME2023.pdf", diff: "Medium", status: "Draft", time: "60m", pts: "10" },
+                    { title: "Practice Test: ME2024.pdf", diff: "Medium", status: "Draft", time: "60m", pts: "50" },
+                    { title: "Practice Test: ME2025.pdf", diff: "Medium", status: "Draft", time: "180m", pts: "20" },
+                    { title: "Practice Test: CS2025.pdf", diff: "Hard", status: "Active", time: "120m", pts: "100" },
+                    { title: "Mock Test: CE2026.pdf", diff: "Easy", status: "Draft", time: "30m", pts: "5" },
+                    { title: "Aptitude Test: Gen-1.pdf", diff: "Medium", status: "Active", time: "45m", pts: "15" },
+                    { title: "Core Subject: EE-Basics.pdf", diff: "Hard", status: "Draft", time: "90m", pts: "60" },
+                    { title: "Final Mock: ALL-2025.pdf", diff: "Hard", status: "Draft", time: "180m", pts: "200" }
+                  ].map((test, idx) => (
+                    <div key={idx} className="group flex flex-col bg-transparent hover:bg-slate-50 border border-transparent hover:border-slate-100 rounded-[1.5rem] p-5 transition-all cursor-pointer overflow-hidden">
+                      {/* Main Row Content */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-2.5 h-2.5 rounded-full ${test.status === 'Active' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-slate-300'}`}></div>
+                          <h4 className="font-[800] text-[15px] text-slate-800">{test.title}</h4>
+                          <span className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${test.diff === 'Hard' ? 'text-rose-600 bg-rose-50' : test.diff === 'Medium' ? 'text-amber-600 bg-amber-50' : 'text-emerald-600 bg-emerald-50'}`}>{test.diff}</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-2 text-slate-500">
+                            <Clock size={14} className="text-slate-400 group-hover:text-indigo-400 transition-colors" />
+                            <span className="text-[12px] font-semibold">{test.time}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-500 w-16">
+                            <Trophy size={14} className="text-slate-400 group-hover:text-indigo-400 transition-colors" />
+                            <span className="text-[12px] font-semibold">{test.pts} pts</span>
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* ECE */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-bold text-slate-700">
-                      <span>Electronics & EEE</span>
-                      <span>28%</span>
+                      {/* Expandable Actions (Hidden by default, expands on hover) */}
+                      <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-all duration-300 ease-in-out">
+                        <div className="overflow-hidden">
+                          <div className="flex gap-3 pt-5 mt-5 border-t border-slate-200/60">
+                            <button className="px-5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold text-[12px] hover:border-indigo-500 hover:text-indigo-600 transition-colors shadow-sm">Edit Test</button>
+                            <button className="px-5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold text-[12px] hover:border-blue-500 hover:text-blue-600 transition-colors shadow-sm">Analytics</button>
+                            <div className="flex-1"></div>
+                            <button className="px-5 py-2 rounded-xl bg-rose-50 text-rose-600 font-bold text-[12px] hover:bg-rose-500 hover:text-white transition-colors shadow-sm">Delete</button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-purple-500" style={{ width: '28%' }} />
-                    </div>
-                  </div>
-
-                  {/* Mechanical */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-bold text-slate-700">
-                      <span>Mechanical</span>
-                      <span>15%</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-orange-500" style={{ width: '15%' }} />
-                    </div>
-                  </div>
-
-                  {/* Others */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs font-bold text-slate-700">
-                      <span>Civil & Other Specializations</span>
-                      <span>15%</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full rounded-full bg-emerald-500" style={{ width: '15%' }} />
-                    </div>
-                  </div>
-
+                  ))}
                 </div>
+              </div>
+
+              {/* Right Section: Bento Quick Actions (Col span 4) */}
+              <div className="xl:col-span-4 space-y-6">
+
+                {/* Asymmetrical Bento Grid */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Huge Primary Action (Spans 2 cols) */}
+                  <button className="col-span-2 relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[2rem] p-7 text-left shadow-xl shadow-blue-500/20 group hover:scale-[1.02] hover:shadow-blue-500/30 transition-all">
+                    <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                    <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md text-white flex items-center justify-center mb-6 shadow-sm border border-white/10">
+                      <Plus size={24} />
+                    </div>
+                    <h3 className="text-white font-[900] text-[24px] leading-tight mb-1">Create New<br/>Test Module</h3>
+                    <p className="text-blue-100 text-[13px] font-medium">Use AI to generate tests instantly</p>
+                  </button>
+
+                  {/* Secondary Action 1 */}
+                  <button className="bg-white border border-slate-100 rounded-[2rem] p-6 flex flex-col items-center justify-center gap-3 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all group">
+                    <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                      <Users size={20} />
+                    </div>
+                    <span className="font-bold text-[14px] text-slate-800">Students</span>
+                  </button>
+
+                  {/* Secondary Action 2 */}
+                  <button className="bg-white border border-slate-100 rounded-[2rem] p-6 flex flex-col items-center justify-center gap-3 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all group">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                      <BarChart2 size={20} />
+                    </div>
+                    <span className="font-bold text-[14px] text-slate-800">Analytics</span>
+                  </button>
+                  
+                  {/* Secondary Action 3 (Spans 2 cols, thin bar) */}
+                  <button className="col-span-2 bg-white border border-slate-100 rounded-[1.5rem] p-5 flex items-center justify-between shadow-sm hover:shadow-md transition-all group px-7">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <UserCheck size={18} />
+                      </div>
+                      <span className="font-bold text-[14px] text-slate-800">Manage Teachers</span>
+                    </div>
+                    <ChevronRight size={18} className="text-slate-400 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all" />
+                  </button>
+                </div>
+
+                {/* Student Activity Heatmap */}
+                <div className="bg-white border border-slate-100 rounded-[2rem] shadow-[0_4px_24px_rgba(0,0,0,0.02)] p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div>
+                      <h4 className="font-[900] text-[15px] text-slate-800">Student Activity</h4>
+                    </div>
+                    <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2.5 py-1 rounded-full uppercase tracking-wider">This Month</span>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1.5 px-2">
+                    {[
+                      0,1,0,2,3,1,0,
+                      1,4,2,1,0,3,1,
+                      0,1,3,4,4,2,0,
+                      1,2,0,1,3,2,1
+                    ].map((val, i) => {
+                      const levels = [
+                        'bg-slate-100', 
+                        'bg-purple-200', 
+                        'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.4)]', 
+                        'bg-purple-600 shadow-[0_0_12px_rgba(147,51,234,0.4)]', 
+                        'bg-purple-800 shadow-[0_0_16px_rgba(107,33,168,0.4)]'
+                      ];
+                      
+                      const date = new Date();
+                      date.setDate(date.getDate() - (27 - i));
+                      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                      const studentsCount = val === 0 ? 0 : val * 24 + (i % 5);
+
+                      return (
+                        <div key={i} className="relative">
+                          <div 
+                            onClick={() => setActiveHeatmapIndex(activeHeatmapIndex === i ? null : i)}
+                            className={`w-full aspect-square rounded-[4px] ${levels[val]} hover:scale-125 transition-transform cursor-pointer z-10 hover:z-20`}
+                          ></div>
+                          
+                          {activeHeatmapIndex === i && (
+                            <div className="absolute bottom-[120%] left-1/2 -translate-x-1/2 mb-1 w-max bg-slate-900 text-white text-[11px] rounded-xl px-3 py-2 shadow-xl z-[100] animate-in fade-in zoom-in duration-200">
+                              <div className="font-bold text-purple-300 mb-0.5">{dateStr}</div>
+                              <div><span className="font-[900] text-white text-[13px]">{studentsCount}</span> active</div>
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-slate-900"></div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
               </div>
 
             </div>
