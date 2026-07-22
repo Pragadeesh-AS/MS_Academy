@@ -34,38 +34,36 @@ export default function LoginSignup() {
     setLoading(true);
 
     try {
-      // 1. Admin login interceptor
-      if (isLogin && email.toLowerCase() === 'admin@msacademy.com') {
-        if (password === 'admin123') {
+      if (isLogin) {
+        // Authenticate all logins using Firebase Authentication
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // Check if the authenticated user has the registered admin email
+        if (user.email.toLowerCase() === 'msgateacademy@gmail.com') {
           localStorage.setItem('auth_role', 'admin');
-          localStorage.setItem('auth_email', 'admin@msacademy.com');
+          localStorage.setItem('auth_email', 'msgateacademy@gmail.com');
           localStorage.setItem('auth_name', 'MS Academy Admin');
           window.dispatchEvent(new Event('storage'));
           navigate('/admin');
-          return;
         } else {
-          setError('Invalid username/password');
-          return;
+          // Regular student auth
+          localStorage.setItem('auth_role', 'student');
+          localStorage.setItem('auth_email', user.email);
+          localStorage.setItem('auth_name', user.displayName || user.email.split('@')[0]);
+          window.dispatchEvent(new Event('storage'));
+          navigate('/dashboard');
         }
-      }
-
-      // 2. Regular Firebase flow
-      if (isLogin) {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        localStorage.setItem('auth_role', 'student');
-        localStorage.setItem('auth_email', user.email);
-        localStorage.setItem('auth_name', user.displayName || user.email.split('@')[0]);
-        window.dispatchEvent(new Event('storage'));
       } else {
+        // Registration / signup flow (always student)
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         localStorage.setItem('auth_role', 'student');
         localStorage.setItem('auth_email', user.email);
         localStorage.setItem('auth_name', name || user.email.split('@')[0]);
         window.dispatchEvent(new Event('storage'));
+        navigate('/dashboard');
       }
-      navigate('/dashboard');
     } catch (err) {
       console.error(err);
       
