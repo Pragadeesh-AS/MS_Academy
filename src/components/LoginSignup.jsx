@@ -22,12 +22,12 @@ export default function LoginSignup() {
     setError('');
     setResetMessage('');
     
-    if (password !== confirmPassword) {
+    if (!isLogin && password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
     
-    if (!agreedToTerms) {
+    if (!isLogin && !agreedToTerms) {
       setError("You must agree to the Terms & Conditions.");
       return;
     }
