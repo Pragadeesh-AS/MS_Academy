@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import './index.css';
 import { ShinyButton } from "./components/ui/shiny-button";
 import { motion } from "motion/react";
-import { ChevronDown, GraduationCap, TrendingUp, Settings, Database, Monitor, Cpu, Cog, Building2, Zap, Gauge, Dna, FlaskConical, HeartPulse, Atom, DraftingCompass, Sprout, Anvil, Leaf, Microscope, Plane, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import Home from './components/Home';
 import AboutUs from './components/AboutUs';
 import Contact from './components/Contact';
@@ -30,48 +30,11 @@ import EnquiryForm from './components/ui/EnquiryForm';
 import ProgrammingCourses from './components/ProgrammingCourses';
 import Footer from './components/Footer';
 import Careers from './components/Careers';
-
-const gateCoursesDropdown = [
-  { name: "GATE Computer Science (CSE)", icon: Monitor, path: "/courses/cse" },
-  { name: "GATE Electronics (ECE)", icon: Cpu, path: "/courses/ece" },
-  { name: "GATE Mechanical (ME)", icon: Cog, path: "/courses/me" },
-  { name: "GATE Civil (CE)", icon: Building2, path: "/courses/ce" },
-  { name: "GATE Electrical (EE)", icon: Zap, path: "/courses/ee" },
-  { name: "GATE Production & Industrial (PI)", icon: Settings, path: "/courses/pi" },
-  { name: "GATE Data Science & AI (DS)", icon: Database, path: "/courses/ds" },
-  { name: "GATE Instrumentation (IN)", icon: Gauge, path: "/courses/in" },
-  { name: "GATE Biotechnology (BT)", icon: Dna, path: "/courses/bt" },
-  { name: "GATE Chemical (CH)", icon: FlaskConical, path: "/courses/ch" },
-  { name: "GATE Biomedical (BM)", icon: HeartPulse, path: "/courses/bm" },
-  { name: "GATE Physics (PH)", icon: Atom, path: "/courses/ph" },
-  { name: "GATE Architecture (AR)", icon: DraftingCompass, path: "/courses/ar" },
-  { name: "GATE Agricultural (AG)", icon: Sprout, path: "/courses/ag" },
-  { name: "GATE Metallurgical (MT)", icon: Anvil, path: "/courses/mt" },
-  { name: "GATE Environmental (ES)", icon: Leaf, path: "/courses/es" },
-  { name: "GATE Life Sciences (XL)", icon: Microscope, path: "/courses/xl" },
-  { name: "GATE Aerospace (AE)", icon: Plane, path: "/courses/ae" }
-];
+import GateCourses from './components/GateCourses';
 
 export default function App() {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isDropdownHovered, setIsDropdownHovered] = useState(false);
-  const [isDropdownPinned, setIsDropdownPinned] = useState(false);
-  const isDropdownVisible = isDropdownHovered || isDropdownPinned;
   const location = useLocation();
-  const dropdownRef = useRef(null);
-
-  // Click outside to close dropdown
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsDropdownPinned(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -81,11 +44,9 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Reset scroll and dropdown on route change
+  // Reset scroll on route change
   useEffect(() => {
     window.scrollTo(0, 0);
-    setIsDropdownPinned(false);
-    setIsDropdownHovered(false);
   }, [location.pathname]);
 
   const getDynamicLink = () => {
@@ -163,48 +124,11 @@ export default function App() {
               <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
             </Link>
             
-            {/* GATE Courses Dropdown */}
-            <div 
-              ref={dropdownRef}
-              className="relative flex items-center cursor-pointer group/nav"
-              onMouseEnter={() => setIsDropdownHovered(true)}
-              onMouseLeave={() => setIsDropdownHovered(false)}
-            >
-              <div 
-                className="relative group px-4 py-2 flex items-center gap-1 transition-colors duration-300 hover:text-slate-900"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIsDropdownPinned(!isDropdownPinned);
-                }}
-              >
-                <span className="relative z-10">GATE Courses</span>
-                <ChevronDown size={14} strokeWidth={2.5} className={`relative z-10 transition-transform duration-200 ${isDropdownVisible ? 'rotate-180' : ''}`} />
-                <div className="absolute inset-0 rounded-full border border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300"></div>
-              </div>
-              
-              {/* Dropdown Menu */}
-              <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 w-[340px] bg-white/90 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] transition-all duration-300 z-[110] overflow-hidden transform origin-top ${isDropdownVisible ? 'opacity-100 visible scale-100 pointer-events-auto' : 'opacity-0 invisible scale-95 pointer-events-none'}`}>
-                <div className="absolute -top-6 left-0 right-0 h-6 bg-transparent" />
-                
-                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
-                  <span className="text-[11px] font-bold text-slate-500 tracking-widest uppercase">GATE SPECIALIZATIONS</span>
-                </div>
-                <div className="flex flex-col p-2 bg-transparent gap-1 max-h-[480px] overflow-y-auto overscroll-contain">
-                  {gateCoursesDropdown.map((course, idx) => {
-                    const Icon = course.icon;
-                    return (
-                      <Link key={idx} to={course.path || "#"} className="relative flex items-center gap-4 p-2.5 group/item transition-colors">
-                        <div className="absolute inset-0 rounded-xl border border-transparent group-hover/item:border-slate-900/10 group-hover/item:bg-slate-900/5 group-hover/item:shadow-[0_0_15px_rgba(0,0,0,0.05)] backdrop-blur-md transition-all duration-300 pointer-events-none"></div>
-                        <div className="relative z-10 w-[42px] h-[42px] rounded-xl bg-slate-50 flex flex-shrink-0 items-center justify-center border border-slate-100 group-hover/item:border-slate-300 group-hover/item:bg-white transition-colors shadow-sm">
-                          <Icon size={18} strokeWidth={2} className="text-slate-500 group-hover/item:text-slate-900 transition-colors" />
-                        </div>
-                        <span className="relative z-10 text-[15px] font-medium text-slate-700 group-hover/item:text-slate-900 transition-colors">{course.name}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            {/* GATE Courses Link */}
+            <Link to="/gate-courses" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/gate-courses' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
+              <span className="relative z-10">GATE Courses</span>
+              <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/gate-courses' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+            </Link>
 
             {/* Dynamic Link (Programming Courses / Active Page) */}
             <Link to={dynamicLink.path} className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === dynamicLink.path ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
@@ -266,6 +190,7 @@ export default function App() {
         <Route path="/courses/es" element={<EsCourse />} />
         <Route path="/courses/xl" element={<XlCourse />} />
         <Route path="/courses/ae" element={<AeCourse />} />
+        <Route path="/gate-courses" element={<GateCourses />} />
         <Route path="/programming" element={<ProgrammingCourses />} />
         <Route path="/careers" element={<Careers />} />
       </Routes>
