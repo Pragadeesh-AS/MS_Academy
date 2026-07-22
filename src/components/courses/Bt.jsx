@@ -39,7 +39,7 @@ export default function BtCourse() {
         {/* Left Side: Text */}
         <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left">
           <h1 className="text-[46px] md:text-[64px] font-[900] text-slate-900 leading-[1.1] tracking-[-0.03em] mb-6">
-            GATE <span className="text-[#f36b2b]">Biotechnology</span> (BT)
+            GATE <span className="text-[#1d4ed8]">Biotechnology</span> (BT)
           </h1>
           <p className="text-[18px] md:text-[20px] text-slate-500 leading-relaxed max-w-[600px] mb-10">
             Master biochemistry, microbiology, genetics, biological engineering, recombinant DNA technology, and computational tools with our specialized GATE BT program. Designed for top ranks.
@@ -72,7 +72,7 @@ export default function BtCourse() {
       {/* Detailed Syllabus Section */}
       <section className="w-full max-w-[1000px] mx-auto px-4 py-20">
         <div className="text-center mb-16">
-          <h2 className="text-[14px] md:text-[16px] font-bold text-[#f36b2b] tracking-widest uppercase mb-3">Complete Syllabus</h2>
+          <h2 className="text-[14px] md:text-[16px] font-bold text-[#1d4ed8] tracking-widest uppercase mb-3">Complete Syllabus</h2>
           <h1 className="text-3xl md:text-5xl font-[900] text-slate-900 tracking-tight leading-[1.1]">GATE Biotechnology</h1>
         </div>
         
@@ -81,7 +81,7 @@ export default function BtCourse() {
             <div key={i} className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm hover:shadow-md transition-shadow group">
               <div className="flex items-start gap-4">
                 <div className="mt-1 flex-shrink-0">
-                  <CheckCircle2 className="text-[#f36b2b] group-hover:scale-110 transition-transform" size={24} />
+                  <CheckCircle2 className="text-[#1d4ed8] group-hover:scale-110 transition-transform" size={24} />
                 </div>
                 <div>
                   <h3 className="text-[20px] md:text-[22px] font-bold text-slate-900 mb-3">{item.section}</h3>
