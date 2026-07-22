@@ -169,6 +169,34 @@ export default function Careers() {
     }
 
     setPanelState('submitting');
+    
+    // Save to localStorage
+    const newApplication = {
+      id: 'app-' + Date.now(),
+      fullName: formData.fullName,
+      email: formData.email,
+      phone: formData.phone,
+      experience: formData.experience,
+      specialization: formData.specialization,
+      message: formData.message || 'No cover letter message provided.',
+      role: selectedRole,
+      date: new Date().toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      }),
+      status: 'Pending'
+    };
+
+    try {
+      const existing = localStorage.getItem('career_applications');
+      const apps = existing ? JSON.parse(existing) : [];
+      apps.unshift(newApplication);
+      localStorage.setItem('career_applications', JSON.stringify(apps));
+    } catch (err) {
+      console.error('Failed to save career application', err);
+    }
+
     setTimeout(() => {
       setPanelState('success');
     }, 2000);

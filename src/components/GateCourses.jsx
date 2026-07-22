@@ -4,7 +4,7 @@ import {
   Monitor, Cpu, Cog, Building2, Zap, Settings, Database, Gauge, 
   Dna, FlaskConical, HeartPulse, Atom, DraftingCompass, Sprout, 
   Anvil, Leaf, Microscope, Plane, ArrowRight, BookOpen, 
-  GraduationCap, Award, Briefcase, Globe, Sparkles 
+  GraduationCap, Award, Briefcase, Globe, Sparkles, Tag, Clock 
 } from 'lucide-react';
 
 const themes = {
@@ -284,6 +284,18 @@ const postGateOpportunities = [
 ];
 
 export default function GateCourses() {
+  const [coursesList] = React.useState(() => {
+    const saved = localStorage.getItem('gate_courses_config');
+    if (saved) {
+      const overrides = JSON.parse(saved);
+      return gateCoursesData.map(c => {
+        const override = overrides.find(o => o.code === c.code);
+        return override ? { ...c, ...override } : c;
+      });
+    }
+    return gateCoursesData;
+  });
+
   return (
     <main className="w-full relative z-10 pb-20 pt-4 lg:pb-24 max-w-[1200px] mx-auto px-6 flex flex-col gap-16 overflow-x-hidden">
       
@@ -303,7 +315,7 @@ export default function GateCourses() {
 
       {/* Courses Zigzag Section */}
       <section className="w-full flex flex-col divide-y divide-slate-100">
-        {gateCoursesData.map((course, index) => {
+        {coursesList.map((course, index) => {
           const Icon = course.icon;
           const th = course.theme;
           const indexStr = String(index + 1).padStart(2, '0');
@@ -383,6 +395,24 @@ export default function GateCourses() {
                     </span>
                   ))}
                 </div>
+                
+                {/* Admin Configurations (Fee & Batch Info) */}
+                {(course.fee || course.batch) && (
+                  <div className="flex flex-wrap gap-x-6 gap-y-2 mb-6 p-4 bg-slate-50 border border-slate-100 rounded-2xl w-full max-w-md">
+                    {course.fee && (
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                        <Tag size={14} className="text-[#1d4ed8]" />
+                        <span>Fee: {course.fee}</span>
+                      </div>
+                    )}
+                    {course.batch && (
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                        <Clock size={14} className="text-[#1d4ed8]" />
+                        <span>Batch: {course.batch}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* CTA Syllabus Button */}
                 <Link

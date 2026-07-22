@@ -21,10 +21,36 @@ export default function LoginSignup() {
     setLoading(true);
 
     try {
+      // 1. Admin login interceptor
+      if (isLogin && email.toLowerCase() === 'admin@msacademy.com') {
+        if (password === 'admin123') {
+          localStorage.setItem('auth_role', 'admin');
+          localStorage.setItem('auth_email', 'admin@msacademy.com');
+          localStorage.setItem('auth_name', 'MS Academy Admin');
+          window.dispatchEvent(new Event('storage'));
+          navigate('/admin');
+          return;
+        } else {
+          setError('Invalid username/password');
+          return;
+        }
+      }
+
+      // 2. Regular Firebase flow
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        localStorage.setItem('auth_role', 'student');
+        localStorage.setItem('auth_email', user.email);
+        localStorage.setItem('auth_name', user.displayName || user.email.split('@')[0]);
+        window.dispatchEvent(new Event('storage'));
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        localStorage.setItem('auth_role', 'student');
+        localStorage.setItem('auth_email', user.email);
+        localStorage.setItem('auth_name', name || user.email.split('@')[0]);
+        window.dispatchEvent(new Event('storage'));
       }
       navigate('/dashboard');
     } catch (err) {
@@ -52,7 +78,12 @@ export default function LoginSignup() {
     setError('');
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
+      localStorage.setItem('auth_role', 'student');
+      localStorage.setItem('auth_email', user.email);
+      localStorage.setItem('auth_name', user.displayName || user.email.split('@')[0]);
+      window.dispatchEvent(new Event('storage'));
       navigate('/dashboard');
     } catch (err) {
       console.error(err);

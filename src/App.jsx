@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import './index.css';
 import { ShinyButton } from "./components/ui/shiny-button";
 import { motion } from "motion/react";
@@ -33,10 +33,24 @@ import Careers from './components/Careers';
 import GateCourses from './components/GateCourses';
 import LoginSignup from './components/LoginSignup';
 import Dashboard from './components/Dashboard';
+import AdminDashboard from './components/AdminDashboard';
 
 export default function App() {
+  const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
+
+  const [userRole, setUserRole] = useState(() => localStorage.getItem('auth_role'));
+  const [userName, setUserName] = useState(() => localStorage.getItem('auth_name'));
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setUserRole(localStorage.getItem('auth_role'));
+      setUserName(localStorage.getItem('auth_name'));
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -164,11 +178,35 @@ export default function App() {
           </div>
           
           <div className="flex items-center transition-all duration-700 whitespace-nowrap opacity-100 gap-4">
-            <Link to="/login" target="_blank" rel="noopener noreferrer">
-              <ShinyButton className={`font-semibold text-white rounded-lg bg-gradient-to-b from-[#3a3a3a] to-[#1a1a1a] shadow-md hover:from-[#2a2a2a] hover:to-[#0a0a0a] transition-all border border-[#2a2a2a] ${isScrolled ? 'px-4 py-2 text-[14px]' : 'px-6 py-2.5 text-[15px]'}`}>
-                Student Portal
-              </ShinyButton>
-            </Link>
+            {userRole ? (
+              <div className="flex items-center gap-3.5">
+                <Link 
+                  to={userRole === 'admin' ? '/admin' : '/dashboard'}
+                  className="text-xs font-bold text-slate-700 hover:text-slate-900 border border-slate-200 bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-xl transition-all shadow-sm"
+                >
+                  {userRole === 'admin' ? 'Admin Panel' : `Hello, ${userName}`}
+                </Link>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('auth_role');
+                    localStorage.removeItem('auth_email');
+                    localStorage.removeItem('auth_name');
+                    setUserRole(null);
+                    setUserName(null);
+                    navigate('/login');
+                  }}
+                  className="text-xs font-bold text-red-650 hover:text-red-700 border border-red-200/50 bg-red-50 hover:bg-red-100 px-3.5 py-2.5 rounded-xl transition-all shadow-sm"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <Link to="/login">
+                <ShinyButton className={`font-semibold text-white rounded-lg bg-gradient-to-b from-[#3a3a3a] to-[#1a1a1a] shadow-md hover:from-[#2a2a2a] hover:to-[#0a0a0a] transition-all border border-[#2a2a2a] ${isScrolled ? 'px-4 py-2 text-[14px]' : 'px-6 py-2.5 text-[15px]'}`}>
+                  Student Portal
+                </ShinyButton>
+              </Link>
+            )}
           </div>
         </motion.nav>
       </div>
@@ -201,6 +239,7 @@ export default function App() {
         <Route path="/careers" element={<Careers />} />
         <Route path="/login" element={<LoginSignup />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/admin" element={<AdminDashboard />} />
       </Routes>
 
       {location.pathname !== '/login' && <Footer />}
