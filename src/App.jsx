@@ -94,7 +94,7 @@ export default function App() {
         <motion.nav 
           initial={false}
           animate={{
-            width: isScrolled ? "60%" : "80%",
+            width: isScrolled ? "85%" : "95%",
             backgroundColor: isScrolled ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.4)",
             backdropFilter: isScrolled ? "blur(24px) saturate(180%)" : "blur(16px) saturate(150%)",
             boxShadow: isScrolled 
