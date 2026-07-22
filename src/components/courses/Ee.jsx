@@ -1,7 +1,7 @@
 import React from 'react';
 import { Monitor, BookOpen, Clock, Target, CheckCircle2 } from 'lucide-react';
 import { ShinyButton } from "../ui/shiny-button";
-import eeHeroImg from '../../assets/cse.jpeg';
+
 
 const syllabusData = [
   {
@@ -70,16 +70,15 @@ export default function EeCourse() {
           </div>
         </div>
 
-        {/* Right Side: Image */}
+        {/* Right Side: Video */}
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
-          <img 
-            src={eeHeroImg} 
-            alt="EE GATE Coaching" 
-            className="w-full h-auto object-contain mix-blend-multiply hover:scale-105 transition-transform duration-700"
-            style={{ 
-              WebkitMaskImage: 'radial-gradient(circle at center, black 50%, transparent 100%)',
-              maskImage: 'radial-gradient(circle at center, black 50%, transparent 100%)'
-            }}
+          <video 
+            src="/EEE.mp4" 
+            autoPlay 
+            loop 
+            muted 
+            playsInline
+            className="w-full h-auto rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-slate-100/60 hover:scale-[1.01] transition-transform duration-500"
           />
         </div>
 
