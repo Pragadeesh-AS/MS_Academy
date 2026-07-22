@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle2, ArrowRight, Search, BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
-
+import { ShinyButton } from "./ui/shiny-button";
 const programmingCoursesData = [
   {
     title: "C++ Training",
@@ -472,9 +472,9 @@ export default function ProgrammingCourses() {
 
                     {/* Enroll CTA Button */}
                     <div className="pt-2 border-t border-slate-100">
-                      <button className="w-full sm:w-fit py-3 px-8 rounded-xl bg-gradient-to-r from-[#1d4ed8] to-blue-500 hover:shadow-[0_8px_25px_rgba(243,107,43,0.25)] text-white flex items-center justify-center gap-2 transition-all duration-300 font-bold text-sm tracking-wide cursor-pointer hover:scale-[1.02]">
+                      <ShinyButton className="w-full sm:w-fit py-3 px-8 rounded-xl bg-gradient-to-b from-[#3a3a3a] to-[#1a1a1a] shadow-md hover:from-[#2a2a2a] hover:to-[#0a0a0a] border border-[#2a2a2a] text-white flex items-center justify-center gap-2 transition-all font-bold text-sm tracking-wide cursor-pointer hover:scale-[1.02]">
                         <span>Enroll in {course.title.split(" ")[0]}</span>
-                      </button>
+                      </ShinyButton>
                     </div>
 
                   </motion.div>
