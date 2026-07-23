@@ -13,6 +13,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
 import Analytics from './admin/Analytics';
+import AttributesManager from './admin/AttributesManager';
 
 // Default mock data to populate localStorage if empty
 const defaultStudents = [
@@ -503,7 +504,10 @@ export default function AdminDashboard() {
               </button>
 
               {/* Decorative Placeholders */}
-              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
+              <button 
+                onClick={() => setActiveTab('attributes')}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'attributes' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
                 <Tag size={20} className="text-[#0d9488]" />
                 {!isCollapsed && <span>Attributes</span>}
               </button>
@@ -1204,6 +1208,10 @@ export default function AdminDashboard() {
           <div className="h-full">
             <QuestionBank />
           </div>
+        )}
+        
+        {activeTab === 'attributes' && (
+          <AttributesManager />
         )}
 
         {/* Analytics Tab */}

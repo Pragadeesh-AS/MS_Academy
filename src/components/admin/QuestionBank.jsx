@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, Plus, Trash2, Edit2, Search, Filter } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
 export default function QuestionBank() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreatorOpen, setIsCreatorOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   
@@ -14,17 +15,33 @@ export default function QuestionBank() {
   const [filterDept, setFilterDept] = useState('All');
 
   const [formData, setFormData] = useState({
+    questionType: 'Single Choice',
     questionText: '',
-    department: 'CSE',
+    questionImageUrl: '',
+    explanation: '',
     optionA: '',
+    optionAImage: '',
     optionB: '',
+    optionBImage: '',
     optionC: '',
+    optionCImage: '',
     optionD: '',
+    optionDImage: '',
     correctAnswer: 'A',
-    explanation: ''
+    department: '',
+    subject: '',
+    topic: '',
+    year: '',
+    mark: '1 Mark (-0.33)',
+    difficultyLevel: ''
   });
 
   const departments = ['CSE', 'ECE', 'ME', 'CE', 'EE'];
+  const subjects = ['Algorithms', 'Data Structures', 'Operating Systems', 'Networks'];
+  const topics = ['Graph Theory', 'Trees', 'Memory Management', 'TCP/IP'];
+  const years = ['2023', '2024', '2025', '2026'];
+  const marks = ['1 Mark (-0.33)', '2 Marks (-0.66)'];
+  const difficulties = ['Easy', 'Medium', 'Hard'];
   const optionsList = ['A', 'B', 'C', 'D'];
 
   const fetchQuestions = async () => {
@@ -47,6 +64,27 @@ export default function QuestionBank() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Generic Image Handler for Base64 (Question or Options)
+  const handleImageUpload = (e, field) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (file.size > 1048576) {
+      alert("Image is too large. Please upload an image under 1MB.");
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData(prev => ({ ...prev, [field]: reader.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = (field) => {
+    setFormData(prev => ({ ...prev, [field]: '' }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -58,27 +96,59 @@ export default function QuestionBank() {
           createdAt: new Date().toISOString()
         });
       }
-      setIsModalOpen(false);
+      setIsCreatorOpen(false);
       fetchQuestions();
     } catch (e) {
       console.error("Failed to save question", e);
+      alert("Failed to save question. Please try again.");
+    }
+  };
+
+  const handleSaveAndNext = async (e) => {
+    e.preventDefault();
+    try {
+      if (isEditing) {
+        await updateDoc(doc(db, 'question_bank', currentId), formData);
+      } else {
+        await addDoc(collection(db, 'question_bank'), {
+          ...formData,
+          createdAt: new Date().toISOString()
+        });
+      }
+      // Reset form for next question
+      openAddCreator();
+      fetchQuestions();
+    } catch (e) {
+      console.error("Failed to save question", e);
+      alert("Failed to save question. Please try again.");
     }
   };
 
   const handleEdit = (q) => {
     setFormData({
-      questionText: q.questionText,
-      department: q.department,
-      optionA: q.optionA,
-      optionB: q.optionB,
-      optionC: q.optionC,
-      optionD: q.optionD,
-      correctAnswer: q.correctAnswer,
-      explanation: q.explanation || ''
+      questionType: q.questionType || 'Single Choice',
+      questionText: q.questionText || '',
+      questionImageUrl: q.questionImageUrl || '',
+      explanation: q.explanation || '',
+      optionA: q.optionA || '',
+      optionAImage: q.optionAImage || '',
+      optionB: q.optionB || '',
+      optionBImage: q.optionBImage || '',
+      optionC: q.optionC || '',
+      optionCImage: q.optionCImage || '',
+      optionD: q.optionD || '',
+      optionDImage: q.optionDImage || '',
+      correctAnswer: q.correctAnswer || 'A',
+      department: q.department || '',
+      subject: q.subject || '',
+      topic: q.topic || '',
+      year: q.year || '',
+      mark: q.mark || '1 Mark (-0.33)',
+      difficultyLevel: q.difficultyLevel || ''
     });
     setCurrentId(q.id);
     setIsEditing(true);
-    setIsModalOpen(true);
+    setIsCreatorOpen(true);
   };
 
   const handleDelete = async (id) => {
@@ -92,41 +162,52 @@ export default function QuestionBank() {
     }
   };
 
-  const openAddModal = () => {
+  const openAddCreator = () => {
     setFormData({
+      questionType: 'Single Choice',
       questionText: '',
-      department: 'CSE',
+      questionImageUrl: '',
+      explanation: '',
       optionA: '',
+      optionAImage: '',
       optionB: '',
+      optionBImage: '',
       optionC: '',
+      optionCImage: '',
       optionD: '',
+      optionDImage: '',
       correctAnswer: 'A',
-      explanation: ''
+      department: '',
+      subject: '',
+      topic: '',
+      year: '',
+      mark: '1 Mark (-0.33)',
+      difficultyLevel: ''
     });
     setIsEditing(false);
-    setIsModalOpen(true);
+    setIsCreatorOpen(true);
   };
 
   const filteredQuestions = questions.filter(q => {
-    const matchesSearch = q.questionText.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = q.questionText?.toLowerCase().includes(search.toLowerCase());
     const matchesDept = filterDept === 'All' || q.department === filterDept;
     return matchesSearch && matchesDept;
   });
 
   return (
-    <div className="w-full h-full flex flex-col bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Header */}
+    <div className="w-full h-full flex flex-col bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden relative">
+      {/* List View Header */}
       <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
         <div>
           <h2 className="text-2xl font-[900] text-slate-800 tracking-tight flex items-center gap-2">
-            <BookOpen className="text-blue-600" /> Question Bank
+            <BookOpen className="text-[#1d4ed8]" /> Question Bank
           </h2>
-          <p className="text-slate-500 text-sm mt-1">Manage practice questions for students across all departments</p>
+          <p className="text-slate-500 text-sm mt-1 font-medium">Manage practice questions for students across all departments</p>
         </div>
         
         <button 
-          onClick={openAddModal}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all w-fit"
+          onClick={openAddCreator}
+          className="flex items-center gap-2 bg-[#1d4ed8] hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all w-fit"
         >
           <Plus size={18} />
           Add Question
@@ -142,7 +223,7 @@ export default function QuestionBank() {
             placeholder="Search questions..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none transition-all"
           />
         </div>
         
@@ -151,7 +232,7 @@ export default function QuestionBank() {
           <select 
             value={filterDept}
             onChange={(e) => setFilterDept(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+            className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-bold rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
           >
             <option value="All">All Departments</option>
             {departments.map(d => <option key={d} value={d}>{d}</option>)}
@@ -159,11 +240,11 @@ export default function QuestionBank() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Question List */}
       <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
         {loading ? (
           <div className="flex justify-center items-center h-full">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d4ed8]"></div>
           </div>
         ) : filteredQuestions.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-400">
@@ -179,7 +260,10 @@ export default function QuestionBank() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-3">
                       <span className="bg-blue-50 text-blue-700 font-bold text-[10px] uppercase tracking-wider px-2 py-1 rounded-md">
-                        {q.department}
+                        {q.department || 'General'}
+                      </span>
+                      <span className="bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider px-2 py-1 rounded-md">
+                        {q.mark}
                       </span>
                       <span className="text-xs font-semibold text-slate-400">Q{i + 1}</span>
                     </div>
@@ -187,18 +271,12 @@ export default function QuestionBank() {
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                       {optionsList.map(opt => (
-                        <div key={opt} className={`p-2 rounded-lg text-sm border ${q.correctAnswer === opt ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-medium' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
-                          <span className="font-bold mr-2">{opt}.</span> {q[`option${opt}`]}
+                        <div key={opt} className={`p-2 rounded-lg text-sm border flex items-center gap-2 ${q.correctAnswer === opt ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-medium' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
+                          <span className="font-bold">{opt}.</span> 
+                          <span className="truncate">{q[`option${opt}`] || (q[`option${opt}Image`] ? '[Image Option]' : '')}</span>
                         </div>
                       ))}
                     </div>
-
-                    {q.explanation && (
-                      <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                        <p className="text-xs font-bold text-slate-500 mb-1">Explanation:</p>
-                        <p className="text-xs text-slate-600 leading-relaxed">{q.explanation}</p>
-                      </div>
-                    )}
                   </div>
                   
                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -224,100 +302,315 @@ export default function QuestionBank() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="p-6 md:p-8">
-              <h3 className="text-2xl font-[900] text-slate-800 mb-6">
-                {isEditing ? 'Edit Question' : 'Add New Question'}
-              </h3>
+      {/* FULL-SCREEN STANDALONE QUESTION CREATOR */}
+      {isCreatorOpen && createPortal(
+        <div className="fixed inset-0 bg-[#f4f7fb] z-[99999] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
+          
+          {/* TOP BAR */}
+          <div className="h-[72px] bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-sm">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+                <BookOpen size={18} className="text-blue-600" />
+                <span className="font-bold text-blue-900 text-[15px]">Standalone Question Creator</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Questions:</span>
+                <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold shadow-sm">1</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <button onClick={() => {}} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-bold text-sm bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl transition-colors border border-blue-100">
+                <Plus size={16} /> Add Question
+              </button>
+              <div className="w-px h-6 bg-slate-200"></div>
+              <button 
+                onClick={() => setIsCreatorOpen(false)}
+                className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 font-bold text-sm bg-white hover:bg-slate-50 px-4 py-2 rounded-xl transition-colors border border-slate-200"
+              >
+                <X size={16} /> Close
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="flex-1 flex overflow-hidden">
+            
+            {/* LEFT / CENTER SCROLLABLE AREA */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 lg:p-8 flex flex-col xl:flex-row gap-8">
               
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Question Text</label>
+              {/* LEFT COLUMN: QUESTION CONTENT */}
+              <div className="flex-1 min-w-0 flex flex-col gap-6 max-w-4xl xl:max-w-none">
+                
+                {/* Header info */}
+                <div className="flex items-center justify-between">
+                  <div className="relative">
+                    <select 
+                      name="questionType"
+                      value={formData.questionType}
+                      onChange={handleInputChange}
+                      className="appearance-none bg-white border border-slate-200 text-slate-800 font-bold text-sm rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm cursor-pointer"
+                    >
+                      <option value="Single Choice">Single Choice</option>
+                      <option value="Multiple Choice">Multiple Choice</option>
+                      <option value="NAT">Numerical Answer Type (NAT)</option>
+                    </select>
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Marks:</span>
+                    <span className="bg-white border border-blue-200 text-blue-700 text-sm font-bold px-3 py-1.5 rounded-lg shadow-sm">
+                      {formData.mark}
+                    </span>
+                    <span className="bg-red-50 border border-red-200 text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div> Neg: {formData.mark.includes('2') ? '-0.66' : '-0.33'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Question Text Editor */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[13px] font-[800] text-slate-600 uppercase tracking-wider">Question Text <span className="text-red-500">*</span></label>
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+                    {/* Rich text toolbar mock */}
+                    <div className="h-12 border-b border-slate-100 bg-slate-50/50 flex items-center px-2 gap-1">
+                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><Bold size={16}/></button>
+                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><Italic size={16}/></button>
+                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                      <button type="button" className="p-1.5 text-slate-500 hover:bg-slate-200 rounded-lg font-serif text-sm font-bold">x²</button>
+                      <button type="button" className="p-1.5 text-slate-500 hover:bg-slate-200 rounded-lg font-serif text-sm font-bold">x₂</button>
+                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><List size={16}/></button>
+                      <div className="ml-auto flex pr-2">
+                         <button type="button" className="p-2 text-slate-400 hover:bg-slate-200 rounded-lg"><Paperclip size={16}/></button>
+                      </div>
+                    </div>
                     <textarea 
                       name="questionText"
                       required
                       value={formData.questionText}
                       onChange={handleInputChange}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none h-24"
-                      placeholder="Enter the question here..."
+                      className="w-full p-4 h-40 resize-none outline-none text-slate-700 placeholder-slate-300"
+                      placeholder="Start typing your question here..."
                     ></textarea>
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Department</label>
-                    <select 
-                      name="department"
-                      value={formData.department}
-                      onChange={handleInputChange}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Correct Answer</label>
-                    <select 
-                      name="correctAnswer"
-                      value={formData.correctAnswer}
-                      onChange={handleInputChange}
-                      className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm font-bold text-emerald-700 focus:ring-2 focus:ring-emerald-500 outline-none"
-                    >
-                      {optionsList.map(opt => <option key={opt} value={opt}>Option {opt}</option>)}
-                    </select>
-                  </div>
-
-                  {optionsList.map(opt => (
-                    <div key={opt}>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Option {opt}</label>
-                      <input 
-                        type="text"
-                        name={`option${opt}`}
-                        required
-                        value={formData[`option${opt}`]}
-                        onChange={handleInputChange}
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder={`Value for option ${opt}`}
-                      />
+                {/* Question Image (Optional) */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[13px] font-[800] text-slate-600 uppercase tracking-wider">Question Image (Optional)</label>
+                  {formData.questionImageUrl ? (
+                    <div className="relative bg-slate-100 rounded-2xl border border-slate-200 p-2 w-fit">
+                      <img src={formData.questionImageUrl} alt="Question" className="max-h-40 rounded-xl" />
+                      <button type="button" onClick={() => removeImage('questionImageUrl')} className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full shadow-lg hover:bg-red-600">
+                        <X size={14} />
+                      </button>
                     </div>
-                  ))}
+                  ) : (
+                    <label className="border-2 border-dashed border-slate-300 hover:border-blue-400 bg-white hover:bg-slate-50 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors shadow-sm group">
+                      <ImageIcon size={24} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
+                      <span className="text-sm font-bold text-slate-600 group-hover:text-blue-600 transition-colors">Upload, Paste or Drop Image</span>
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'questionImageUrl')} />
+                    </label>
+                  )}
+                </div>
 
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Explanation (Optional)</label>
+                {/* Explanation Editor */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[13px] font-[800] text-slate-600 uppercase tracking-wider">Explanation <span className="text-slate-400 normal-case tracking-normal">(shown after test)</span></label>
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+                    <div className="h-12 border-b border-slate-100 bg-slate-50/50 flex items-center px-2 gap-1">
+                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><Bold size={16}/></button>
+                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><Italic size={16}/></button>
+                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><List size={16}/></button>
+                    </div>
                     <textarea 
                       name="explanation"
                       value={formData.explanation}
                       onChange={handleInputChange}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none h-20"
-                      placeholder="Explain why the answer is correct..."
+                      className="w-full p-4 h-32 resize-none outline-none text-slate-700 placeholder-slate-300"
+                      placeholder="Add detailed explanation here..."
                     ></textarea>
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
-                  <button 
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit"
-                    className="px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg transition-all"
-                  >
-                    {isEditing ? 'Save Changes' : 'Add Question'}
-                  </button>
+              </div>
+
+              {/* CENTER COLUMN: ANSWER OPTIONS */}
+              <div className="w-full xl:w-[450px] shrink-0 flex flex-col bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden h-fit xl:h-full">
+                
+                <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                    <ListTodo size={20} />
+                  </div>
+                  <h3 className="text-lg font-[900] text-slate-800 tracking-tight">Answer Options</h3>
                 </div>
-              </form>
+
+                <div className="p-6 flex flex-col gap-4 overflow-y-auto bg-slate-50/30 flex-1">
+                  <p className="text-sm font-bold text-slate-500 mb-2">Select the correct answer</p>
+
+                  {optionsList.map(opt => (
+                    <div key={opt} className={`relative flex flex-col bg-white border-2 rounded-2xl transition-all ${formData.correctAnswer === opt ? 'border-emerald-500 shadow-md ring-4 ring-emerald-500/10' : 'border-slate-200 hover:border-slate-300 shadow-sm'}`}>
+                      
+                      {/* Option Header & Selection */}
+                      <div className="flex items-center gap-3 p-4 border-b border-slate-100">
+                        <div className={`w-8 h-8 rounded-lg font-[900] flex items-center justify-center ${formData.correctAnswer === opt ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {opt}
+                        </div>
+                        <div className="flex-1">
+                          <input 
+                            type="text"
+                            name={`option${opt}`}
+                            value={formData[`option${opt}`]}
+                            onChange={handleInputChange}
+                            placeholder={`Enter Option ${opt}`}
+                            className="w-full bg-transparent outline-none text-[15px] font-medium text-slate-800 placeholder-slate-400"
+                          />
+                        </div>
+                        <label className="cursor-pointer">
+                          <input 
+                            type="radio"
+                            name="correctAnswer"
+                            value={opt}
+                            checked={formData.correctAnswer === opt}
+                            onChange={handleInputChange}
+                            className="hidden"
+                          />
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${formData.correctAnswer === opt ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`}>
+                            {formData.correctAnswer === opt && <div className="w-2.5 h-2.5 rounded-full bg-white"></div>}
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Image Upload Area for Option */}
+                      <div className="p-3 bg-slate-50/50 rounded-b-2xl flex items-center justify-center">
+                         {formData[`option${opt}Image`] ? (
+                            <div className="relative group">
+                              <img src={formData[`option${opt}Image`]} alt={`Option ${opt}`} className="max-h-24 rounded-lg shadow-sm border border-slate-200" />
+                              <button type="button" onClick={() => removeImage(`option${opt}Image`)} className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                                <X size={12} />
+                              </button>
+                            </div>
+                         ) : (
+                            <label className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-blue-600 cursor-pointer transition-colors py-2">
+                              <ImageIcon size={14} /> ADD IMAGE
+                              <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, `option${opt}Image`)} />
+                            </label>
+                         )}
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
-          </div>
-        </div>
+
+            {/* RIGHT SIDEBAR: ATTRIBUTES & ACTIONS */}
+            <div className="w-80 shrink-0 bg-white border-l border-slate-200 flex flex-col shadow-[-10px_0_20px_rgba(0,0,0,0.02)] z-10 relative">
+              <div className="p-6 border-b border-slate-100 flex items-center gap-2">
+                <Settings size={16} className="text-blue-600" />
+                <h3 className="text-[13px] font-[900] text-slate-800 uppercase tracking-widest">Question Attributes</h3>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-bold text-slate-500">Department</label>
+                  <div className="relative">
+                    <select name="department" value={formData.department} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                      <option value="">-- No Department --</option>
+                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-bold text-slate-500">Subject</label>
+                  <div className="relative">
+                    <select name="subject" value={formData.subject} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                      <option value="">-- No Subject --</option>
+                      {subjects.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-bold text-slate-500">Topic</label>
+                  <div className="relative">
+                    <select name="topic" value={formData.topic} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                      <option value="">-- No Topic --</option>
+                      {topics.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-bold text-slate-500">Year</label>
+                  <div className="relative">
+                    <select name="year" value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                      <option value="">-- No Year --</option>
+                      {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-bold text-slate-500">Mark</label>
+                  <div className="relative">
+                    <select name="mark" value={formData.mark} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                      {marks.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-bold text-slate-500">Difficulty Level</label>
+                  <div className="relative">
+                    <select name="difficultyLevel" value={formData.difficultyLevel} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                      <option value="">-- No Difficulty Level --</option>
+                      {difficulties.map(df => <option key={df} value={df}>{df}</option>)}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="p-6 border-t border-slate-100 bg-white space-y-3 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+                <button 
+                  type="button"
+                  onClick={handleSaveAndNext}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
+                >
+                  <ChevronRight size={16} /> Save & Next
+                </button>
+                <button 
+                  type="submit"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#059669] hover:bg-emerald-700 text-white font-bold text-sm transition-colors shadow-md shadow-emerald-500/20"
+                >
+                  <CheckCircle2 size={16} /> Save & Close
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setIsCreatorOpen(false)}
+                  className="w-full py-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  Close Creator
+                </button>
+              </div>
+
+            </div>
+          </form>
+        </div>,
+        document.body
       )}
+
     </div>
   );
 }
