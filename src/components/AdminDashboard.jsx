@@ -4,11 +4,23 @@ import {
   Users, FileText, LayoutDashboard, Settings, Mail, LogOut, 
   Search, Filter, Check, X, Eye, BookOpen, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, UserCheck, Database, BarChart2, Megaphone, Sparkles,
-  Plus, Trophy, CheckCircle2, TrendingUp
+  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2
 } from 'lucide-react';
+import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
+import { db } from '../firebase';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import QuestionBank from './admin/QuestionBank';
 
 // Default mock data to populate localStorage if empty
+const defaultStudents = [
+  { id: 1, name: "Arjun Kumar", email: "arjun.k@gmail.com", joinedDate: "15 Jul 2026", status: "Active" },
+  { id: 2, name: "Priya Sharma", email: "priya.sharma@yahoo.com", joinedDate: "18 Jul 2026", status: "Active" },
+  { id: 3, name: "Rahul Verma", email: "rahul.v@nitc.ac.in", joinedDate: "20 Jul 2026", status: "Inactive" },
+  { id: 4, name: "Sneha Reddy", email: "sneha.r@gmail.com", joinedDate: "21 Jul 2026", status: "Active" },
+  { id: 5, name: "Karthik Raja", email: "karthik.r@iitm.ac.in", joinedDate: "22 Jul 2026", status: "Active" }
+];
+
 const defaultApplications = [
   {
     id: 'app-1',
@@ -98,14 +110,15 @@ export default function AdminDashboard() {
   const [courses, setCourses] = useState([]);
   
   // Joined students dataset and subtab state
-  const [joinedStudents, setJoinedStudents] = useState([
-    { id: 1, name: "Arjun Kumar", email: "arjun.k@gmail.com", joinedDate: "15 Jul 2026", status: "Active" },
-    { id: 2, name: "Priya Sharma", email: "priya.sharma@yahoo.com", joinedDate: "18 Jul 2026", status: "Active" },
-    { id: 3, name: "Rahul Verma", email: "rahul.v@nitc.ac.in", joinedDate: "20 Jul 2026", status: "Inactive" },
-    { id: 4, name: "Sneha Reddy", email: "sneha.r@gmail.com", joinedDate: "21 Jul 2026", status: "Active" },
-    { id: 5, name: "Karthik Raja", email: "karthik.r@iitm.ac.in", joinedDate: "22 Jul 2026", status: "Active" }
-  ]);
+  const [joinedStudents, setJoinedStudents] = useState([]);
   const [studentSubTab, setStudentSubTab] = useState('joined'); // 'joined' or 'queries'
+
+  // Invited teachers dataset
+  const [invitedTeachers, setInvitedTeachers] = useState([]);
+  const [teacherSubTab, setTeacherSubTab] = useState('faculty'); // 'faculty' or 'recruitment'
+  const [isTeacherInviteModalOpen, setIsTeacherInviteModalOpen] = useState(false);
+  const [teacherInviteForm, setTeacherInviteForm] = useState({ name: '', department: '', qualification: '', email: '' });
+  const [isTeacherInviting, setIsTeacherInviting] = useState(false);
 
   // Search & Filter states
   const [appSearch, setAppSearch] = useState('');
@@ -116,6 +129,11 @@ export default function AdminDashboard() {
   const [selectedApp, setSelectedApp] = useState(null);
   const [selectedQuery, setSelectedQuery] = useState(null);
   const [activeHeatmapIndex, setActiveHeatmapIndex] = useState(null);
+
+  // Invite Student states
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ name: '', department: '', email: '' });
+  const [isInviting, setIsInviting] = useState(false);
 
   // Auth Guard
   useEffect(() => {
@@ -128,42 +146,64 @@ export default function AdminDashboard() {
     }
   }, [navigate]);
 
-  // Load database from localStorage or seed defaults
+  // Load database from Firestore (with fallbacks to localStorage for courses config)
   useEffect(() => {
-    const syncData = () => {
-      const savedApps = localStorage.getItem('career_applications');
-      if (savedApps) {
-        setApplications(JSON.parse(savedApps));
-      } else {
-        localStorage.setItem('career_applications', JSON.stringify(defaultApplications));
-        setApplications(defaultApplications);
-      }
+    const syncData = async () => {
+      try {
+        // 1. Fetch Applications
+        const appsSnapshot = await getDocs(collection(db, 'career_applications'));
+        const fetchedApps = appsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // If Firestore is empty, we fall back to defaults just to show UI visually, 
+        // but normally we would just use fetchedApps.
+        if (fetchedApps.length > 0) {
+          setApplications(fetchedApps);
+        } else {
+          setApplications(defaultApplications);
+        }
 
-      const savedQueries = localStorage.getItem('contact_queries');
-      if (savedQueries) {
-        setQueries(JSON.parse(savedQueries));
-      } else {
-        localStorage.setItem('contact_queries', JSON.stringify(defaultQueries));
-        setQueries(defaultQueries);
-      }
+        // 2. Fetch Queries
+        const queriesSnapshot = await getDocs(collection(db, 'contact_queries'));
+        const fetchedQueries = queriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (fetchedQueries.length > 0) {
+          setQueries(fetchedQueries);
+        } else {
+          setQueries(defaultQueries);
+        }
 
-      const savedCourses = localStorage.getItem('gate_courses_config');
-      if (savedCourses) {
-        setCourses(JSON.parse(savedCourses));
-      } else {
-        localStorage.setItem('gate_courses_config', JSON.stringify(defaultCourseOverrides));
-        setCourses(defaultCourseOverrides);
+        // 3. Fetch Joined Students
+        const studentsSnapshot = await getDocs(collection(db, 'joined_students'));
+        const fetchedStudents = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (fetchedStudents.length > 0) {
+          setJoinedStudents(fetchedStudents);
+        } else {
+          setJoinedStudents(defaultStudents);
+        }
+
+        // 4. Fetch Invited Teachers
+        const teachersSnapshot = await getDocs(collection(db, 'invited_teachers'));
+        const fetchedTeachers = teachersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setInvitedTeachers(fetchedTeachers);
+
+        // 5. Keep courses config in localStorage for now since it's just settings
+        const savedCourses = localStorage.getItem('gate_courses_config');
+        if (savedCourses) {
+          setCourses(JSON.parse(savedCourses));
+        } else {
+          localStorage.setItem('gate_courses_config', JSON.stringify(defaultCourseOverrides));
+          setCourses(defaultCourseOverrides);
+        }
+      } catch (err) {
+        console.error("Failed to sync data from Firestore", err);
       }
     };
 
     // Run initial sync
     syncData();
 
-    // Listen for storage events (real-time cross-tab updates)
-    window.addEventListener('storage', syncData);
-    
-    // Cleanup listener on unmount
-    return () => window.removeEventListener('storage', syncData);
+    // Listen for storage events on courses config
+    const handleStorage = () => syncData();
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const handleLogout = () => {
@@ -174,25 +214,38 @@ export default function AdminDashboard() {
     navigate('/login');
   };
 
-  // Actions for applications
-  const updateAppStatus = (id, newStatus) => {
+  const updateAppStatus = async (id, status) => {
     const updated = applications.map(app => 
-      app.id === id ? { ...app, status: newStatus } : app
+      app.id === id ? { ...app, status } : app
     );
     setApplications(updated);
-    localStorage.setItem('career_applications', JSON.stringify(updated));
-    if (selectedApp && selectedApp.id === id) {
-      setSelectedApp({ ...selectedApp, status: newStatus });
+    try {
+      await updateDoc(doc(db, 'career_applications', id), { status });
+      if (selectedApp && selectedApp.id === id) {
+        setSelectedApp({ ...selectedApp, status });
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  // Actions for queries
-  const toggleQueryStatus = (id) => {
+  const toggleQueryStatus = async (id) => {
+    const query = queries.find(q => q.id === id);
+    if (!query) return;
+    const newStatus = query.status === 'Pending' ? 'Resolved' : 'Pending';
+
     const updated = queries.map(q => 
-      q.id === id ? { ...q, status: q.status === 'Pending' ? 'Resolved' : 'Pending' } : q
+      q.id === id ? { ...q, status: newStatus } : q
     );
     setQueries(updated);
-    localStorage.setItem('contact_queries', JSON.stringify(updated));
+    try {
+      await updateDoc(doc(db, 'contact_queries', id), { status: newStatus });
+      if (selectedQuery && selectedQuery.id === id) {
+        setSelectedQuery({ ...selectedQuery, status: newStatus });
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   // Actions for courses config
@@ -206,6 +259,114 @@ export default function AdminDashboard() {
     }
     setCourses(updated);
     localStorage.setItem('gate_courses_config', JSON.stringify(updated));
+  };
+
+  const handleInviteSubmit = async (e) => {
+    e.preventDefault();
+    setIsInviting(true);
+
+    try {
+      const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID';
+      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_INVITE_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
+      const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
+
+      const loginLink = window.location.origin + '/login';
+
+      if (SERVICE_ID !== 'YOUR_SERVICE_ID') {
+        const templateParams = {
+          student_name: inviteForm.name,
+          to_email: inviteForm.email,
+          department: inviteForm.department,
+          login_link: loginLink
+        };
+        await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
+      }
+
+      // Add to enrolled students list in Firestore
+      const newStudent = {
+        name: inviteForm.name,
+        email: inviteForm.email,
+        joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+        status: "Invited"
+      };
+      
+      const docRef = await addDoc(collection(db, 'joined_students'), newStudent);
+      newStudent.id = docRef.id;
+      
+      const updatedStudents = [newStudent, ...joinedStudents];
+      setJoinedStudents(updatedStudents);
+      
+      setIsInviteModalOpen(false);
+      setInviteForm({ name: '', department: '', email: '' });
+      
+    } catch (error) {
+      console.error('Failed to send invite:', error);
+      alert('Failed to send invite email. Please check your EmailJS configuration.');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  const handleTeacherInviteSubmit = async (e) => {
+    e.preventDefault();
+    setIsTeacherInviting(true);
+
+    try {
+      const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID';
+      // Reusing the Student Invite Template to bypass the free tier 2-template limit
+      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_INVITE_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
+      const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
+
+      const loginLink = window.location.origin + '/login';
+
+      if (SERVICE_ID !== 'YOUR_SERVICE_ID') {
+        const templateParams = {
+          // Mapping teacher variables into the student template variables
+          student_name: `${teacherInviteForm.name} (Faculty)`,
+          to_email: teacherInviteForm.email,
+          department: teacherInviteForm.department,
+          login_link: loginLink
+        };
+        await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
+      }
+
+      // Add to invited teachers list in Firestore
+      const newTeacher = {
+        name: teacherInviteForm.name,
+        email: teacherInviteForm.email,
+        department: teacherInviteForm.department,
+        qualification: teacherInviteForm.qualification,
+        invitedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+        status: "Invited"
+      };
+      
+      const docRef = await addDoc(collection(db, 'invited_teachers'), newTeacher);
+      newTeacher.id = docRef.id;
+      
+      const updatedTeachers = [newTeacher, ...invitedTeachers];
+      setInvitedTeachers(updatedTeachers);
+      
+      setIsTeacherInviteModalOpen(false);
+      setTeacherInviteForm({ name: '', department: '', qualification: '', email: '' });
+      
+    } catch (error) {
+      console.error('Failed to send teacher invite:', error);
+      alert('Failed to send teacher invite email. Please check your EmailJS configuration.');
+    } finally {
+      setIsTeacherInviting(false);
+    }
+  };
+
+  const deleteTeacher = async (teacherId) => {
+    if (window.confirm('Are you sure you want to remove this teacher? They will lose access to the Faculty portal.')) {
+      const updatedTeachers = invitedTeachers.filter(t => t.id !== teacherId);
+      setInvitedTeachers(updatedTeachers);
+      try {
+        await deleteDoc(doc(db, 'invited_teachers', teacherId));
+      } catch (e) {
+        console.error("Failed to delete teacher", e);
+      }
+    }
   };
 
   // Filter lists
@@ -257,6 +418,22 @@ export default function AdminDashboard() {
               </button>
 
               <button
+                onClick={() => setActiveTab('teachers')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'teachers' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <BookOpen size={20} className={activeTab === 'teachers' ? 'text-[#8b5cf6]' : 'text-[#8b5cf6]'} />
+                {!isCollapsed && <span>Teachers</span>}
+                {!isCollapsed && applications.filter(a => a.status === 'Pending').length > 0 && (
+                  <span className="ml-auto w-5 h-5 rounded-full bg-[#10b981] text-[10px] font-bold text-white flex items-center justify-center animate-pulse">
+                    {applications.filter(a => a.status === 'Pending').length}
+                  </span>
+                )}
+                {isCollapsed && applications.filter(a => a.status === 'Pending').length > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#10b981] animate-pulse"></span>
+                )}
+              </button>
+
+              <button
                 onClick={() => setActiveTab('queries')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'queries' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
               >
@@ -269,22 +446,6 @@ export default function AdminDashboard() {
                 )}
                 {isCollapsed && queries.filter(q => q.status === 'Pending').length > 0 && (
                   <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#f97316]"></span>
-                )}
-              </button>
-
-              <button
-                onClick={() => setActiveTab('applications')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'applications' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
-              >
-                <UserCheck size={20} className="text-[#10b981]" />
-                {!isCollapsed && <span>Teachers</span>}
-                {!isCollapsed && applications.filter(a => a.status === 'Pending').length > 0 && (
-                  <span className="ml-auto w-5 h-5 rounded-full bg-[#10b981] text-[10px] font-bold text-white flex items-center justify-center animate-pulse">
-                    {applications.filter(a => a.status === 'Pending').length}
-                  </span>
-                )}
-                {isCollapsed && applications.filter(a => a.status === 'Pending').length > 0 && (
-                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#10b981] animate-pulse"></span>
                 )}
               </button>
 
@@ -305,6 +466,14 @@ export default function AdminDashboard() {
               <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
                 <BarChart2 size={20} className="text-[#e11d48]" />
                 {!isCollapsed && <span>Analytics</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('questions')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'questions' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <BookOpen size={20} className="text-[#0ea5e9]" />
+                {!isCollapsed && <span>Question Bank</span>}
               </button>
 
               <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
@@ -504,7 +673,7 @@ export default function AdminDashboard() {
                       <div className="w-10 h-10 rounded-full bg-blue-50 text-[#1D4ED8] flex items-center justify-center group-hover:scale-110 transition-transform">
                         <UserCheck size={18} />
                       </div>
-                      <span className="font-bold text-[14px] text-slate-800">Manage Teachers</span>
+                      <span className="font-bold text-[14px] text-slate-800">Manage Faculty</span>
                     </div>
                     <ChevronRight size={18} className="text-slate-400 group-hover:text-[#1D4ED8] group-hover:translate-x-1 transition-all" />
                   </button>
@@ -565,30 +734,50 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Active Tab: Applications Manager */}
-        {activeTab === 'applications' && (
+        {/* Active Tab: Teachers (Faculty & Recruitment) */}
+        {activeTab === 'teachers' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-[32px] font-[900] text-slate-900 tracking-tight leading-none mb-2">Job Applicants</h2>
-                <p className="text-slate-500 text-sm font-medium">Review and shortlist applicants from the Careers portal.</p>
+                <h2 className="text-[32px] font-[900] text-slate-900 tracking-tight leading-none mb-2">Teacher Directory</h2>
+                <p className="text-slate-500 text-sm font-medium">Manage faculty and process job applications.</p>
               </div>
               
-              {/* Reset seed button */}
-              <button 
-                onClick={() => {
-                  localStorage.removeItem('career_applications');
-                  localStorage.setItem('career_applications', JSON.stringify(defaultApplications));
-                  setApplications(defaultApplications);
-                }}
-                className="w-fit self-start px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
-              >
-                <RefreshCw size={12} />
-                <span>Reset Seed Data</span>
-              </button>
+              {/* Sub-tab Navigation */}
+              <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
+                <button 
+                  onClick={() => setTeacherSubTab('faculty')}
+                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${teacherSubTab === 'faculty' ? 'bg-white text-[#8b5cf6] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Active Faculty
+                </button>
+                <button 
+                  onClick={() => setTeacherSubTab('recruitment')}
+                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${teacherSubTab === 'recruitment' ? 'bg-white text-[#8b5cf6] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Recruitment
+                </button>
+              </div>
             </div>
 
-            {/* Filter controls */}
+            {teacherSubTab === 'recruitment' ? (
+              <>
+                <div className="flex flex-col sm:flex-row justify-end gap-4">
+                  {/* Reset seed button */}
+                  <button 
+                    onClick={() => {
+                      localStorage.removeItem('career_applications');
+                      localStorage.setItem('career_applications', JSON.stringify(defaultApplications));
+                      setApplications(defaultApplications);
+                    }}
+                    className="w-fit self-end px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  >
+                    <RefreshCw size={12} />
+                    <span>Reset Seed Data</span>
+                  </button>
+                </div>
+
+                {/* Filter controls */}
             <div className="bg-white border border-slate-100 p-4 rounded-3xl flex flex-col md:flex-row items-center gap-4">
               <div className="relative w-full md:flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -698,7 +887,81 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+              </div>
+            </>
+            ) : (
+            <>
+              <div className="flex justify-end gap-4">
+                <button 
+                  onClick={() => setIsTeacherInviteModalOpen(true)}
+                  className="bg-[#5b32ea] hover:bg-[#4c28c8] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+                >
+                  <MailPlus size={16} />
+                  <span className="hidden sm:inline">Invite Teacher</span>
+                </button>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/50">
+                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">Teacher Name</th>
+                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">Department</th>
+                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">Qualification</th>
+                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {invitedTeachers.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="px-6 py-12 text-center text-slate-500 font-medium">No faculty members invited yet.</td>
+                      </tr>
+                    ) : (
+                      invitedTeachers.map(teacher => (
+                        <tr key={teacher.id} className="hover:bg-slate-50/80 transition-colors group">
+                          <td className="px-6 py-4">
+                            <div className="font-bold text-slate-900">{teacher.name}</div>
+                            <div className="text-xs font-medium text-slate-500 mt-0.5">{teacher.email}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100/50">
+                              {teacher.department}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-slate-700 text-sm">{teacher.qualification}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            {teacher.status === 'Accepted' ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-100">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Accepted
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 text-amber-600 text-xs font-bold border border-amber-100">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Invited
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button
+                              onClick={() => deleteTeacher(teacher.id)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                              title="Remove Teacher"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
+            </>
+            )}
           </div>
         )}
 
@@ -711,19 +974,29 @@ export default function AdminDashboard() {
                 <p className="text-slate-500 text-sm font-medium">Manage enrolled students and support inquiries.</p>
               </div>
 
-              {/* Sub-tab Navigation */}
-              <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
+              {/* Sub-tab Navigation & Actions */}
+              <div className="flex items-center gap-4">
+                <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
+                  <button 
+                    onClick={() => setStudentSubTab('joined')}
+                    className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${studentSubTab === 'joined' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Enrolled Students
+                  </button>
+                  <button 
+                    onClick={() => setStudentSubTab('queries')}
+                    className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${studentSubTab === 'queries' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Support Queries
+                  </button>
+                </div>
+
                 <button 
-                  onClick={() => setStudentSubTab('joined')}
-                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${studentSubTab === 'joined' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  onClick={() => setIsInviteModalOpen(true)}
+                  className="bg-[#1D4ED8] hover:bg-blue-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:shadow-md transition-all flex items-center gap-2"
                 >
-                  Enrolled Students
-                </button>
-                <button 
-                  onClick={() => setStudentSubTab('queries')}
-                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${studentSubTab === 'queries' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Support Queries
+                  <MailPlus size={16} />
+                  <span className="hidden sm:inline">Invite Student</span>
                 </button>
               </div>
             </div>
@@ -875,6 +1148,13 @@ export default function AdminDashboard() {
       </div>
     )}
 
+        {/* Question Bank Tab */}
+        {activeTab === 'questions' && (
+          <div className="h-full">
+            <QuestionBank />
+          </div>
+        )}
+
         {/* Active Tab: Course Configurator */}
         {activeTab === 'courses' && (
           <div className="space-y-6">
@@ -1021,7 +1301,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-3">
                   <FileText size={24} className="text-[#1d4ed8]" />
                   <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800 truncate max-w-[250px]">Resume_{selectedApp.fullName.replace(/\s+/g, '_')}.pdf</span>
+                    <span className="text-xs font-bold text-slate-800 truncate max-w-[250px]">{selectedApp.resumeName || `Resume_${selectedApp.fullName.replace(/\s+/g, '_')}.pdf`}</span>
                     <span className="text-[10px] font-medium text-slate-400">PDF Document • 1.4 MB</span>
                   </div>
                 </div>
@@ -1109,6 +1389,178 @@ export default function AdminDashboard() {
                 <span>Mark as {selectedQuery.status === 'Resolved' ? 'Pending' : 'Resolved'}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Student Modal */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-[500px] shadow-2xl p-8 relative">
+            <button
+              onClick={() => setIsInviteModalOpen(false)}
+              className="absolute right-6 top-6 p-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors focus:outline-none"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="mb-8">
+              <span className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4">
+                <MailPlus size={24} />
+              </span>
+              <h3 className="text-2xl font-[900] text-slate-900">Invite Student</h3>
+              <p className="text-slate-500 text-sm font-medium mt-1">Send an official invitation with a secure login link.</p>
+            </div>
+
+            <form onSubmit={handleInviteSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Student Name</label>
+                <input
+                  type="text"
+                  required
+                  value={inviteForm.name}
+                  onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#1D4ED8] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                  placeholder="e.g. Rahul Sharma"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Department / Course</label>
+                <input
+                  type="text"
+                  required
+                  value={inviteForm.department}
+                  onChange={(e) => setInviteForm({ ...inviteForm, department: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#1D4ED8] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                  placeholder="e.g. Computer Science"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#1D4ED8] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                  placeholder="student@example.com"
+                />
+              </div>
+
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  disabled={isInviting}
+                  className="w-full bg-[#1D4ED8] hover:bg-blue-800 text-white font-bold py-3.5 rounded-2xl transition-all shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isInviting ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Sending Invitation...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail size={18} />
+                      <span>Send Invitation via Email</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Teacher Invite Modal */}
+      {isTeacherInviteModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-[500px] shadow-2xl p-8 relative">
+            <button
+              onClick={() => setIsTeacherInviteModalOpen(false)}
+              className="absolute right-6 top-6 p-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors focus:outline-none"
+            >
+              <X size={16} />
+            </button>
+
+            <div className="mb-8">
+              <span className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-4">
+                <MailPlus size={24} />
+              </span>
+              <h3 className="text-2xl font-[900] text-slate-900">Invite Faculty</h3>
+              <p className="text-slate-500 text-sm font-medium mt-1">Send an official invitation to a new teacher.</p>
+            </div>
+
+            <form onSubmit={handleTeacherInviteSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Teacher Name</label>
+                <input
+                  type="text"
+                  required
+                  value={teacherInviteForm.name}
+                  onChange={(e) => setTeacherInviteForm({ ...teacherInviteForm, name: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#5b32ea] focus:ring-4 focus:ring-purple-500/10 transition-all font-semibold text-slate-800"
+                  placeholder="e.g. Dr. Rajesh Kumar"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Department</label>
+                <input
+                  type="text"
+                  required
+                  value={teacherInviteForm.department}
+                  onChange={(e) => setTeacherInviteForm({ ...teacherInviteForm, department: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#5b32ea] focus:ring-4 focus:ring-purple-500/10 transition-all font-semibold text-slate-800"
+                  placeholder="e.g. Computer Science"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Qualification</label>
+                <input
+                  type="text"
+                  required
+                  value={teacherInviteForm.qualification}
+                  onChange={(e) => setTeacherInviteForm({ ...teacherInviteForm, qualification: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#5b32ea] focus:ring-4 focus:ring-purple-500/10 transition-all font-semibold text-slate-800"
+                  placeholder="e.g. Ph.D. in AI"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={teacherInviteForm.email}
+                  onChange={(e) => setTeacherInviteForm({ ...teacherInviteForm, email: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#5b32ea] focus:ring-4 focus:ring-purple-500/10 transition-all font-semibold text-slate-800"
+                  placeholder="faculty@university.edu"
+                />
+              </div>
+
+              <div className="pt-4">
+                <button
+                  type="submit"
+                  disabled={isTeacherInviting}
+                  className="w-full bg-[#5b32ea] hover:bg-[#4c28c8] text-white font-bold py-3.5 rounded-2xl transition-all shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isTeacherInviting ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Sending Invitation...</span>
+                    </>
+                  ) : (
+                    <>
+                      <MailPlus size={18} />
+                      <span>Send Invitation via Email</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

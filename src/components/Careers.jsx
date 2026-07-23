@@ -5,6 +5,8 @@ import {
   ArrowRight, Sparkles, FileText, AlertCircle, RefreshCw 
 } from 'lucide-react';
 import { ShinyButton } from "./ui/shiny-button";
+import { db } from '../firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 export default function Careers() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -144,7 +146,7 @@ export default function Careers() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     const errors = {};
@@ -170,36 +172,42 @@ export default function Careers() {
 
     setPanelState('submitting');
     
-    // Save to localStorage
-    const newApplication = {
-      id: 'app-' + Date.now(),
-      fullName: formData.fullName,
-      email: formData.email,
-      phone: formData.phone,
-      experience: formData.experience,
-      specialization: formData.specialization,
-      message: formData.message || 'No cover letter message provided.',
-      role: selectedRole,
-      date: new Date().toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      }),
-      status: 'Pending'
-    };
-
     try {
-      const existing = localStorage.getItem('career_applications');
-      const apps = existing ? JSON.parse(existing) : [];
-      apps.unshift(newApplication);
-      localStorage.setItem('career_applications', JSON.stringify(apps));
+      const newApplication = {
+        fullName: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        experience: formData.experience,
+        specialization: formData.specialization,
+        message: formData.message || 'No cover letter message provided.',
+        role: selectedRole,
+        // Since we are simulating, we just store the file name for visual purposes in Admin
+        resumeName: resumeFile ? resumeFile.name : null,
+        date: new Date().toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        }),
+        status: 'Pending'
+      };
+
+      await addDoc(collection(db, 'career_applications'), newApplication);
+      
+      setPanelState('success');
+      setFormData({
+        fullName: '',
+        email: '',
+        phone: '',
+        experience: 'Fresher',
+        specialization: '',
+        message: ''
+      });
+      removeFile();
     } catch (err) {
       console.error('Failed to save career application', err);
+      alert("Failed to submit application. Please check your internet connection.");
+      setPanelState('form');
     }
-
-    setTimeout(() => {
-      setPanelState('success');
-    }, 2000);
   };
 
   const handleCloseModal = () => {

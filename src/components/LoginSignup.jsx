@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { User, Mail, Lock, TrendingUp, BookOpen, Trophy, Quote } from 'lucide-react';
 import signupImage from '../assets/signup2.png';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
+import { collection, getDocs, query, where, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
 export default function LoginSignup() {
@@ -16,6 +17,45 @@ export default function LoginSignup() {
   const [resetMessage, setResetMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  const markStudentAsActive = async (email, name) => {
+    try {
+      const q = query(collection(db, 'joined_students'), where('email', '==', email));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const docId = querySnapshot.docs[0].id;
+        await updateDoc(doc(db, 'joined_students', docId), { status: 'Active' });
+      } else {
+        const newStudentRef = doc(collection(db, 'joined_students'));
+        await setDoc(newStudentRef, {
+          id: Date.now(),
+          name: name,
+          email: email,
+          joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+          status: "Active"
+        });
+      }
+    } catch (e) {
+      console.error("Failed to update student database in Firestore:", e);
+    }
+  };
+
+  const checkTeacherRole = async (email) => {
+    try {
+      const q = query(collection(db, 'invited_teachers'), where('email', '==', email));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        const docId = querySnapshot.docs[0].id;
+        await updateDoc(doc(db, 'invited_teachers', docId), { status: 'Accepted' });
+        return true;
+      }
+    } catch (e) {
+      console.error("Failed to check teacher database in Firestore:", e);
+    }
+    return false;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,22 +89,47 @@ export default function LoginSignup() {
           window.dispatchEvent(new Event('storage'));
           navigate('/admin');
         } else {
-          // Regular student auth
+          const userName = user.displayName || user.email.split('@')[0];
+          const isTeacher = await checkTeacherRole(user.email);
+          
+          if (isTeacher) {
+            localStorage.setItem('auth_role', 'teacher');
+            localStorage.setItem('auth_email', user.email);
+            localStorage.setItem('auth_name', userName);
+            window.dispatchEvent(new Event('storage'));
+            navigate('/teacher-dashboard');
+          } else {
+            // Regular student auth
+            await markStudentAsActive(user.email, userName);
+            localStorage.setItem('auth_role', 'student');
+            localStorage.setItem('auth_email', user.email);
+            localStorage.setItem('auth_name', userName);
+            window.dispatchEvent(new Event('storage'));
+            navigate('/dashboard');
+          }
+        }
+      } else {
+        // Registration / signup flow
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        const userName = name || user.email.split('@')[0];
+        
+        const isTeacher = await checkTeacherRole(user.email);
+        if (isTeacher) {
+          localStorage.setItem('auth_role', 'teacher');
+          localStorage.setItem('auth_email', user.email);
+          localStorage.setItem('auth_name', userName);
+          window.dispatchEvent(new Event('storage'));
+          navigate('/teacher-dashboard');
+        } else {
+          // Always student if not an invited teacher
+          await markStudentAsActive(user.email, userName);
           localStorage.setItem('auth_role', 'student');
           localStorage.setItem('auth_email', user.email);
-          localStorage.setItem('auth_name', user.displayName || user.email.split('@')[0]);
+          localStorage.setItem('auth_name', userName);
           window.dispatchEvent(new Event('storage'));
           navigate('/dashboard');
         }
-      } else {
-        // Registration / signup flow (always student)
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-        localStorage.setItem('auth_role', 'student');
-        localStorage.setItem('auth_email', user.email);
-        localStorage.setItem('auth_name', name || user.email.split('@')[0]);
-        window.dispatchEvent(new Event('storage'));
-        navigate('/dashboard');
       }
     } catch (err) {
       console.error(err);
@@ -81,11 +146,35 @@ export default function LoginSignup() {
       const provider = new GoogleAuthProvider();
       const userCredential = await signInWithPopup(auth, provider);
       const user = userCredential.user;
-      localStorage.setItem('auth_role', 'student');
-      localStorage.setItem('auth_email', user.email);
-      localStorage.setItem('auth_name', user.displayName || user.email.split('@')[0]);
-      window.dispatchEvent(new Event('storage'));
-      navigate('/dashboard');
+      
+      // Check admin emails for Google Login
+      const adminEmails = ['msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
+      if (adminEmails.includes(user.email.toLowerCase())) {
+        localStorage.setItem('auth_role', 'admin');
+        localStorage.setItem('auth_email', user.email);
+        localStorage.setItem('auth_name', 'MS Academy Admin');
+        window.dispatchEvent(new Event('storage'));
+        navigate('/admin');
+        return;
+      }
+
+      const userName = user.displayName || user.email.split('@')[0];
+      const isTeacher = await checkTeacherRole(user.email);
+      
+      if (isTeacher) {
+        localStorage.setItem('auth_role', 'teacher');
+        localStorage.setItem('auth_email', user.email);
+        localStorage.setItem('auth_name', userName);
+        window.dispatchEvent(new Event('storage'));
+        navigate('/teacher-dashboard');
+      } else {
+        await markStudentAsActive(user.email, userName);
+        localStorage.setItem('auth_role', 'student');
+        localStorage.setItem('auth_email', user.email);
+        localStorage.setItem('auth_name', userName);
+        window.dispatchEvent(new Event('storage'));
+        navigate('/dashboard');
+      }
     } catch (err) {
       console.error(err);
       setError(err.message);

@@ -28,6 +28,7 @@ import AeCourse from './components/courses/Ae';
 import MorphPanel from './components/ui/ai-input';
 import EnquiryForm from './components/ui/EnquiryForm';
 import ProgrammingCourses from './components/ProgrammingCourses';
+import TeacherDashboard from './components/TeacherDashboard';
 import Footer from './components/Footer';
 import Careers from './components/Careers';
 import GateCourses from './components/GateCourses';
@@ -181,10 +182,10 @@ export default function App() {
             {userRole ? (
               <div className="flex items-center gap-3.5">
                 <Link 
-                  to={userRole === 'admin' ? '/admin' : '/dashboard'}
+                  to={userRole === 'admin' ? '/admin' : userRole === 'teacher' ? '/teacher-dashboard' : '/dashboard'}
                   className="text-xs font-bold text-slate-700 hover:text-slate-900 border border-slate-200 bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-xl transition-all shadow-sm"
                 >
-                  {userRole === 'admin' ? 'Admin Panel' : `Hello, ${userName}`}
+                  {userRole === 'admin' ? 'Admin Panel' : userRole === 'teacher' ? 'Faculty Portal' : `Hello, ${userName}`}
                 </Link>
                 <button
                   onClick={() => {
@@ -239,13 +240,14 @@ export default function App() {
         <Route path="/careers" element={<Careers />} />
         <Route path="/login" element={<LoginSignup />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
         <Route path="/admin" element={<AdminDashboard />} />
       </Routes>
 
-      {location.pathname !== '/login' && location.pathname !== '/admin' && <Footer />}
+      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && <Footer />}
 
       {/* Floating Quote Badge */}
-      {location.pathname !== '/login' && location.pathname !== '/admin' && (
+      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && (
       <motion.div 
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -263,7 +265,7 @@ export default function App() {
       )}
 
       {/* Global Floating Components */}
-      {location.pathname !== '/login' && location.pathname !== '/admin' && (
+      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && (
         location.pathname === '/' || location.pathname === '/contact' ? <EnquiryForm /> : <MorphPanel />
       )}
     </div>

@@ -5,6 +5,8 @@ import { cx } from "class-variance-authority"
 import { AnimatePresence, motion } from "motion/react"
 import { MessageSquarePlus, X, Send } from "lucide-react"
 import emailjs from '@emailjs/browser'
+import { db } from '../../firebase'
+import { collection, addDoc } from 'firebase/firestore'
 
 import { Button } from "./button"
 
@@ -149,11 +151,9 @@ const InputForm = React.forwardRef(({ onSuccess }, ref) => {
     e.preventDefault()
     setIsSubmitting(true)
 
-    // 1. Save to LocalStorage for Admin Dashboard
+    // 1. Save to Firestore for Admin Dashboard
     try {
-      const existingQueries = JSON.parse(localStorage.getItem('contact_queries') || '[]');
       const newQuery = {
-        id: `query-${Date.now()}`,
         fullName: formData.studentName,
         email: formData.email,
         phone: formData.phone,
@@ -162,12 +162,9 @@ const InputForm = React.forwardRef(({ onSuccess }, ref) => {
         status: 'Pending'
       };
       
-      const updatedQueries = [newQuery, ...existingQueries];
-      localStorage.setItem('contact_queries', JSON.stringify(updatedQueries));
-      // Dispatch storage event so AdminDashboard can re-render if open in another tab
-      window.dispatchEvent(new Event('storage'));
+      await addDoc(collection(db, 'contact_queries'), newQuery);
     } catch (err) {
-      console.error("Local storage error", err);
+      console.error("Firestore database error", err);
     }
 
     // 2. Send Email via EmailJS
