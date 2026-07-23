@@ -7,7 +7,6 @@ const attributeTypes = [
   { id: 'department', name: 'Department', childOf: null },
   { id: 'subject', name: 'Subject', childOf: 'department' },
   { id: 'topic', name: 'Topic', childOf: 'subject' },
-  { id: 'year', name: 'Year', childOf: null },
   { id: 'mark', name: 'Mark', childOf: null },
   { id: 'difficulty', name: 'Difficulty Level', childOf: null },
 ];
@@ -194,7 +193,7 @@ export default function AttributesManager() {
 
             <button 
               onClick={handleAdd}
-              disabled={!newValue.trim()}
+              disabled={!newValue.trim() || (activeAttribute.childOf && !newParent)}
               className="w-full md:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-sm transition-all shrink-0"
             >
               Add {activeAttribute.name}

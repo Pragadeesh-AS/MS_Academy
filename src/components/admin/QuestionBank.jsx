@@ -4,6 +4,81 @@ import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageI
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
+// Searchable Select Component
+const SearchableSelect = ({ label, options, value, onChange, placeholder = "Select..." }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  
+  // Close when clicking outside
+  useEffect(() => {
+    const handleWindowClick = (e) => {
+      if (!e.target.closest(`.select-container-${label.replace(/\\s+/g, '-')}`)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, [isOpen, label]);
+
+  const filteredOptions = options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className={`relative select-container-${label.replace(/\\s+/g, '-')}`}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-white border border-slate-200 text-slate-800 text-[13px] font-bold rounded-xl pl-9 pr-8 py-2.5 hover:border-blue-300 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all shadow-sm flex items-center justify-between"
+      >
+        <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap text-ellipsis max-w-full">
+          <span className={value === 'All' ? 'text-slate-500' : 'text-blue-700'}>
+            {value === 'All' ? placeholder : value}
+          </span>
+        </div>
+        <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-2 w-full min-w-[200px] bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col max-h-[300px]">
+          <div className="p-2 border-b border-slate-100 sticky top-0 bg-white">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder={`Search ${label.toLowerCase()}...`}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full bg-slate-50 border border-slate-200 text-xs font-medium rounded-lg pl-8 pr-3 py-2 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 transition-all"
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="overflow-y-auto flex-1 p-1">
+            <div 
+              onClick={() => { onChange('All'); setIsOpen(false); setSearch(''); }}
+              className={`px-3 py-2 text-[13px] font-bold rounded-lg cursor-pointer transition-colors ${value === 'All' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+            >
+              {placeholder}
+            </div>
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-4 text-center text-[12px] font-medium text-slate-400">No results found</div>
+            ) : (
+              filteredOptions.map(opt => (
+                <div 
+                  key={opt}
+                  onClick={() => { onChange(opt); setIsOpen(false); setSearch(''); }}
+                  className={`px-3 py-2 text-[13px] font-bold rounded-lg cursor-pointer transition-colors ${value === opt ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                >
+                  {opt}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function QuestionBank() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,6 +88,11 @@ export default function QuestionBank() {
   
   const [search, setSearch] = useState('');
   const [filterDept, setFilterDept] = useState('All');
+  const [filterSubject, setFilterSubject] = useState('All');
+  const [filterTopic, setFilterTopic] = useState('All');
+  const [filterYear, setFilterYear] = useState('All');
+  const [filterMark, setFilterMark] = useState('All');
+  const [filterDifficulty, setFilterDifficulty] = useState('All');
 
   const [formData, setFormData] = useState({
     questionType: 'Single Choice',
@@ -36,13 +116,7 @@ export default function QuestionBank() {
     difficultyLevel: ''
   });
 
-  const departments = ['CSE', 'ECE', 'ME', 'CE', 'EE'];
-  const subjects = ['Algorithms', 'Data Structures', 'Operating Systems', 'Networks'];
-  const topics = ['Graph Theory', 'Trees', 'Memory Management', 'TCP/IP'];
-  const years = ['2023', '2024', '2025', '2026'];
-  const marks = ['1 Mark (-0.33)', '2 Marks (-0.66)'];
-  const difficulties = ['Easy', 'Medium', 'Hard'];
-  const optionsList = ['A', 'B', 'C', 'D'];
+  const [attributes, setAttributes] = useState([]);
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -50,8 +124,12 @@ export default function QuestionBank() {
       const qSnapshot = await getDocs(collection(db, 'question_bank'));
       const qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setQuestions(qData);
+      
+      const attrSnapshot = await getDocs(collection(db, 'question_attributes'));
+      const attrData = attrSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAttributes(attrData);
     } catch (e) {
-      console.error("Failed to fetch questions", e);
+      console.error("Failed to fetch data", e);
     }
     setLoading(false);
   };
@@ -59,6 +137,30 @@ export default function QuestionBank() {
   useEffect(() => {
     fetchQuestions();
   }, []);
+
+  // Cascading logic to get parent IDs
+  const selectedDeptObj = filterDept !== 'All' 
+    ? attributes.find(a => a.type === 'department' && a.name === filterDept) 
+    : null;
+    
+  const selectedSubjectObj = filterSubject !== 'All' 
+    ? attributes.find(a => a.type === 'subject' && a.name === filterSubject) 
+    : null;
+
+  const departments = attributes.filter(a => a.type === 'department').map(a => a.name);
+  
+  const subjects = attributes
+    .filter(a => a.type === 'subject' && (!selectedDeptObj || a.parentId === selectedDeptObj.id))
+    .map(a => a.name);
+    
+  const topics = attributes
+    .filter(a => a.type === 'topic' && (!selectedSubjectObj || a.parentId === selectedSubjectObj.id))
+    .map(a => a.name);
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({length: currentYear - 1990 + 1}, (_, i) => (currentYear - i).toString()); // 1990 to current year, descending
+  const marks = attributes.filter(a => a.type === 'mark').map(a => a.name);
+  const difficulties = attributes.filter(a => a.type === 'difficulty').map(a => a.name);
+  const optionsList = ['A', 'B', 'C', 'D'];
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -191,7 +293,13 @@ export default function QuestionBank() {
   const filteredQuestions = questions.filter(q => {
     const matchesSearch = q.questionText?.toLowerCase().includes(search.toLowerCase());
     const matchesDept = filterDept === 'All' || q.department === filterDept;
-    return matchesSearch && matchesDept;
+    const matchesSubject = filterSubject === 'All' || q.subject === filterSubject;
+    const matchesTopic = filterTopic === 'All' || q.topic === filterTopic;
+    const matchesYear = filterYear === 'All' || q.year === filterYear;
+    const matchesMark = filterMark === 'All' || q.mark === filterMark;
+    const matchesDifficulty = filterDifficulty === 'All' || q.difficultyLevel === filterDifficulty;
+    
+    return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty;
   });
 
   return (
@@ -214,29 +322,115 @@ export default function QuestionBank() {
         </button>
       </div>
 
-      {/* Controls */}
-      <div className="p-6 border-b border-slate-100 bg-white flex flex-col sm:flex-row gap-4 justify-between">
-        <div className="relative w-full max-w-md">
-          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Advanced Filter Controls */}
+      <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-6">
+        
+        {/* Search Bar */}
+        <div className="relative w-full">
+          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500" />
           <input 
             type="text" 
-            placeholder="Search questions..."
+            placeholder="Search questions by text..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+            className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-[15px] font-bold text-slate-800 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 placeholder:font-medium shadow-sm"
           />
         </div>
         
-        <div className="flex items-center gap-2">
-          <Filter size={18} className="text-slate-400" />
-          <select 
-            value={filterDept}
-            onChange={(e) => setFilterDept(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-bold rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
-          >
-            <option value="All">All Departments</option>
-            {departments.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
+        {/* Dropdowns Row */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Department</label>
+            <div className="relative">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+              <SearchableSelect 
+                label="Department"
+                placeholder="All Departments"
+                options={departments}
+                value={filterDept}
+                onChange={(val) => {
+                  setFilterDept(val);
+                  setFilterSubject('All'); // Reset child
+                  setFilterTopic('All'); // Reset grandchild
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Subject</label>
+            <div className="relative">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+              <SearchableSelect 
+                label="Subject"
+                placeholder="All Subjects"
+                options={subjects}
+                value={filterSubject}
+                onChange={(val) => {
+                  setFilterSubject(val);
+                  setFilterTopic('All'); // Reset child
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Topic</label>
+            <div className="relative">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+              <SearchableSelect 
+                label="Topic"
+                placeholder="All Topics"
+                options={topics}
+                value={filterTopic}
+                onChange={setFilterTopic}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Year</label>
+            <div className="relative">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+              <SearchableSelect 
+                label="Year"
+                placeholder="All Years"
+                options={years}
+                value={filterYear}
+                onChange={setFilterYear}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Marks</label>
+            <div className="relative">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+              <SearchableSelect 
+                label="Marks"
+                placeholder="All Marks"
+                options={marks}
+                value={filterMark}
+                onChange={setFilterMark}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Difficulty</label>
+            <div className="relative">
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
+              <SearchableSelect 
+                label="Difficulty"
+                placeholder="All Difficulties"
+                options={difficulties}
+                value={filterDifficulty}
+                onChange={setFilterDifficulty}
+              />
+            </div>
+          </div>
+
         </div>
       </div>
 
