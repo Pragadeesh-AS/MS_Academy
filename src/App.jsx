@@ -35,6 +35,7 @@ import GateCourses from './components/GateCourses';
 import LoginSignup from './components/LoginSignup';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
+import MarketingPopup from './components/MarketingPopup';
 
 export default function App() {
   const navigate = useNavigate();
@@ -268,6 +269,9 @@ export default function App() {
       {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && (
         location.pathname === '/' || location.pathname === '/contact' ? <EnquiryForm /> : <MorphPanel />
       )}
+
+      {/* Marketing Popup (Only on Home Page) */}
+      {location.pathname === '/' && <MarketingPopup />}
     </div>
   );
 }

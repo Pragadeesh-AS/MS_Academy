@@ -8,9 +8,11 @@ import {
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
-import { db } from '../firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { db, storage } from '../firebase';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
+import Analytics from './admin/Analytics';
 
 // Default mock data to populate localStorage if empty
 const defaultStudents = [
@@ -135,6 +137,11 @@ export default function AdminDashboard() {
   const [inviteForm, setInviteForm] = useState({ name: '', department: '', email: '' });
   const [isInviting, setIsInviting] = useState(false);
 
+  // Popup States
+  const [popupActive, setPopupActive] = useState(false);
+  const [popupImageUrl, setPopupImageUrl] = useState('');
+  const [isUploadingPopup, setIsUploadingPopup] = useState(false);
+
   // Auth Guard
   useEffect(() => {
     const role = localStorage.getItem('auth_role');
@@ -153,8 +160,6 @@ export default function AdminDashboard() {
         // 1. Fetch Applications
         const appsSnapshot = await getDocs(collection(db, 'career_applications'));
         const fetchedApps = appsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // If Firestore is empty, we fall back to defaults just to show UI visually, 
-        // but normally we would just use fetchedApps.
         if (fetchedApps.length > 0) {
           setApplications(fetchedApps);
         } else {
@@ -206,6 +211,22 @@ export default function AdminDashboard() {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  useEffect(() => {
+    const fetchPopup = async () => {
+      try {
+        const docRef = doc(db, 'site_settings', 'popup');
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          setPopupActive(snap.data().isActive || false);
+          setPopupImageUrl(snap.data().imageUrl || '');
+        }
+      } catch (e) {
+        console.error("Popup fetch error:", e);
+      }
+    };
+    fetchPopup();
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem('auth_role');
     localStorage.removeItem('auth_email');
@@ -248,12 +269,10 @@ export default function AdminDashboard() {
     }
   };
 
-  // Actions for courses config
   const updateCourseDetail = (code, field, value) => {
     const updated = courses.map(c => 
       c.code === code ? { ...c, [field]: value } : c
     );
-    // If course isn't in overrides list yet, add it
     if (!courses.some(c => c.code === code)) {
       updated.push({ code, fee: '₹30,000', batch: 'TBD', status: 'Active', [field]: value });
     }
@@ -282,7 +301,6 @@ export default function AdminDashboard() {
         await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
       }
 
-      // Add to enrolled students list in Firestore
       const newStudent = {
         name: inviteForm.name,
         email: inviteForm.email,
@@ -300,10 +318,56 @@ export default function AdminDashboard() {
       setInviteForm({ name: '', department: '', email: '' });
       
     } catch (error) {
-      console.error('Failed to send invite:', error);
-      alert('Failed to send invite email. Please check your EmailJS configuration.');
+      console.error('Error sending invite:', error);
+      alert('Failed to send invite email. Please try again.');
     } finally {
       setIsInviting(false);
+    }
+  };
+
+  const handlePopupImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (file.size > 1048576) {
+      alert("Image is too large. Please upload an image under 1MB.");
+      return;
+    }
+    
+    setIsUploadingPopup(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          const base64Url = reader.result;
+          setPopupImageUrl(base64Url);
+          
+          const docRef = doc(db, 'site_settings', 'popup');
+          await setDoc(docRef, { imageUrl: base64Url, isActive: popupActive }, { merge: true });
+        } catch (err) {
+          console.error("Firestore error:", err);
+          alert("Failed to save image to database.");
+        } finally {
+          setIsUploadingPopup(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("FileReader error:", err);
+      setIsUploadingPopup(false);
+      alert("Failed to read image file.");
+    }
+  };
+
+  const handleTogglePopup = async () => {
+    const newStatus = !popupActive;
+    setPopupActive(newStatus);
+    try {
+      const docRef = doc(db, 'site_settings', 'popup');
+      await setDoc(docRef, { isActive: newStatus, imageUrl: popupImageUrl }, { merge: true });
+    } catch (err) {
+      console.error(err);
+      setPopupActive(!newStatus); 
     }
   };
 
@@ -313,7 +377,6 @@ export default function AdminDashboard() {
 
     try {
       const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID';
-      // Reusing the Student Invite Template to bypass the free tier 2-template limit
       const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_INVITE_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
       const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
 
@@ -321,7 +384,6 @@ export default function AdminDashboard() {
 
       if (SERVICE_ID !== 'YOUR_SERVICE_ID') {
         const templateParams = {
-          // Mapping teacher variables into the student template variables
           student_name: `${teacherInviteForm.name} (Faculty)`,
           to_email: teacherInviteForm.email,
           department: teacherInviteForm.department,
@@ -330,7 +392,6 @@ export default function AdminDashboard() {
         await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
       }
 
-      // Add to invited teachers list in Firestore
       const newTeacher = {
         name: teacherInviteForm.name,
         email: teacherInviteForm.email,
@@ -423,14 +484,6 @@ export default function AdminDashboard() {
               >
                 <BookOpen size={20} className={activeTab === 'teachers' ? 'text-[#8b5cf6]' : 'text-[#8b5cf6]'} />
                 {!isCollapsed && <span>Teachers</span>}
-                {!isCollapsed && applications.filter(a => a.status === 'Pending').length > 0 && (
-                  <span className="ml-auto w-5 h-5 rounded-full bg-[#10b981] text-[10px] font-bold text-white flex items-center justify-center animate-pulse">
-                    {applications.filter(a => a.status === 'Pending').length}
-                  </span>
-                )}
-                {isCollapsed && applications.filter(a => a.status === 'Pending').length > 0 && (
-                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#10b981] animate-pulse"></span>
-                )}
               </button>
 
               <button
@@ -439,14 +492,6 @@ export default function AdminDashboard() {
               >
                 <Users size={20} className="text-[#f97316]" />
                 {!isCollapsed && <span>Students</span>}
-                {!isCollapsed && queries.filter(q => q.status === 'Pending').length > 0 && (
-                  <span className="ml-auto w-5 h-5 rounded-full bg-[#f97316] text-[10px] font-bold text-white flex items-center justify-center">
-                    {queries.filter(q => q.status === 'Pending').length}
-                  </span>
-                )}
-                {isCollapsed && queries.filter(q => q.status === 'Pending').length > 0 && (
-                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#f97316]"></span>
-                )}
               </button>
 
               <button
@@ -462,8 +507,11 @@ export default function AdminDashboard() {
                 <Tag size={20} className="text-[#0d9488]" />
                 {!isCollapsed && <span>Attributes</span>}
               </button>
-              
-              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
+
+              <button 
+                onClick={() => setActiveTab('analytics')}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'analytics' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
                 <BarChart2 size={20} className="text-[#e11d48]" />
                 {!isCollapsed && <span>Analytics</span>}
               </button>
@@ -481,7 +529,10 @@ export default function AdminDashboard() {
                 {!isCollapsed && <span>Blogs</span>}
               </button>
 
-              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
+              <button 
+                onClick={() => setActiveTab('popup')}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'popup' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
                 <Megaphone size={20} className="text-[#a855f7]" />
                 {!isCollapsed && <span>Popup</span>}
               </button>
@@ -520,7 +571,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Dashboard Container */}
-      <main className="flex-1 p-6 md:p-10 max-w-[1400px] mx-auto w-full space-y-8 overflow-y-auto h-full z-10">
+      <main className={`flex-1 w-full z-10 ${activeTab === 'analytics' ? 'h-full flex flex-col' : 'p-6 md:p-10 max-w-[1400px] mx-auto space-y-8 overflow-y-auto h-full'}`}>
         
         {/* Active Tab: Overview Dashboard */}
         {activeTab === 'overview' && (
@@ -1152,6 +1203,91 @@ export default function AdminDashboard() {
         {activeTab === 'questions' && (
           <div className="h-full">
             <QuestionBank />
+          </div>
+        )}
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' && (
+          <div className="h-full">
+            <Analytics joinedStudents={joinedStudents} />
+          </div>
+        )}
+
+        {/* Popup Configuration Tab */}
+        {activeTab === 'popup' && (
+          <div className="max-w-4xl mx-auto flex flex-col gap-8 pb-12 animate-in fade-in duration-300">
+            <div className="flex flex-col gap-2">
+              <h2 className="text-3xl font-[900] text-slate-800 tracking-tight">Marketing Popup</h2>
+              <p className="text-slate-500 font-medium">Configure the global announcement popup that greets visitors on the home page.</p>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm flex flex-col gap-8">
+              
+              {/* Status Toggle */}
+              <div className="flex items-center justify-between p-6 rounded-2xl bg-slate-50 border border-slate-100">
+                <div className="flex flex-col gap-1">
+                  <span className="text-lg font-[800] text-slate-800 flex items-center gap-2">
+                    Popup Status 
+                    {popupActive ? 
+                      <span className="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-md font-bold uppercase tracking-widest">Live</span> : 
+                      <span className="bg-slate-200 text-slate-500 text-xs px-2.5 py-1 rounded-md font-bold uppercase tracking-widest">Off</span>
+                    }
+                  </span>
+                  <span className="text-sm font-medium text-slate-500">Enable or disable the popup from appearing on the website.</span>
+                </div>
+                
+                <button 
+                  onClick={handleTogglePopup}
+                  className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${popupActive ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                >
+                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${popupActive ? 'translate-x-3' : '-translate-x-3'}`} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Upload Section */}
+                <div className="flex flex-col gap-4">
+                  <h3 className="text-[15px] font-[800] text-slate-800 uppercase tracking-widest">Upload Banner</h3>
+                  <label className="relative flex flex-col items-center justify-center w-full h-64 border-2 border-slate-300 border-dashed rounded-2xl cursor-pointer bg-slate-50 hover:bg-slate-100 hover:border-blue-400 transition-all group overflow-hidden">
+                    {isUploadingPopup ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-sm font-bold text-slate-500">Uploading Image...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <div className="w-16 h-16 mb-4 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                            <svg className="w-8 h-8 text-blue-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                                <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
+                            </svg>
+                          </div>
+                          <p className="mb-2 text-sm text-slate-500"><span className="font-bold text-blue-600">Click to upload</span> or drag and drop</p>
+                          <p className="text-xs text-slate-400 font-medium">SVG, PNG, JPG or GIF (MAX. 800x800px)</p>
+                        </div>
+                        <input type="file" className="hidden" accept="image/*" onChange={handlePopupImageUpload} disabled={isUploadingPopup} />
+                      </>
+                    )}
+                  </label>
+                </div>
+
+                {/* Preview Section */}
+                <div className="flex flex-col gap-4">
+                  <h3 className="text-[15px] font-[800] text-slate-800 uppercase tracking-widest flex justify-between items-center">
+                    Preview
+                    {popupImageUrl && <button onClick={() => setPopupImageUrl('')} className="text-xs text-red-500 hover:text-red-700 capitalize tracking-normal">Clear</button>}
+                  </h3>
+                  <div className="w-full h-64 border border-slate-200 rounded-2xl bg-slate-100 flex items-center justify-center overflow-hidden relative shadow-inner">
+                    {popupImageUrl ? (
+                      <img src={popupImageUrl} alt="Popup Preview" className="w-full h-full object-contain p-2" />
+                    ) : (
+                      <span className="text-slate-400 font-bold text-sm">No image uploaded</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+            </div>
           </div>
         )}
 
