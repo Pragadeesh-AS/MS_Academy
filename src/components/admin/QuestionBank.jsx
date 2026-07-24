@@ -510,58 +510,6 @@ export default function QuestionBank() {
         <div className="absolute top-[-10%] left-[-5%] w-[600px] h-[600px] bg-blue-200/40 rounded-full blur-[100px] pointer-events-none -z-10"></div>
         <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-blue-100/30 rounded-full blur-[100px] pointer-events-none -z-10"></div>
 
-        {/* ==================== LEFT SIDEBAR ==================== */}
-        <div className="w-full xl:w-[300px] shrink-0 bg-[#FFFFFF] border border-[#EEF2F7] rounded-[28px] shadow-[0_12px_35px_rgba(15,23,42,0.06)] flex flex-col h-fit overflow-hidden relative z-10">
-          
-          <div className="p-7 border-b border-[#EEF2F7] flex items-center gap-3">
-            <div className="w-10 h-10 rounded-[14px] bg-blue-50 flex items-center justify-center border border-blue-100/50">
-              <BookOpen size={20} className="text-[#2563EB]" strokeWidth={2.5} />
-            </div>
-            <h3 className="text-[17px] font-[800] text-[#0F172A] tracking-tight">Question Bank</h3>
-          </div>
-          
-          <div className="p-5 flex flex-col gap-1.5">
-            {[
-              { id: 'all', name: 'All Questions', count: totalQuestions, icon: LayoutList },
-              { id: 'mcq', name: 'MCQ', count: mcqQuestions, icon: CheckCircle2 },
-              { id: 'numerical', name: 'Numerical', count: numericalQuestions, icon: Calculator },
-              { id: 'theory', name: 'Theory', count: 64, icon: FileText },
-              { id: 'diagram', name: 'Diagram Based', count: 20, icon: ImageIcon },
-              { id: 'bookmarked', name: 'Bookmarked', count: 18, icon: Bookmark },
-              { id: 'recent', name: 'Recently Added', count: 32, icon: Clock },
-              { id: 'pending', name: 'Pending Review', count: pendingReview, icon: AlertCircle },
-              { id: 'trash', name: 'Trash', count: 6, icon: Trash2 },
-            ].map((item, idx) => {
-              const isActive = idx === 0; // Just styling the first one as active for now
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  className={`relative flex items-center justify-between p-3.5 rounded-[18px] transition-all duration-300 group ${
-                    isActive 
-                    ? 'bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] shadow-[0_4px_12px_rgba(37,99,235,0.2)]' 
-                    : 'hover:bg-[#F8FAFF] hover:translate-x-1'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-white' : 'text-[#64748B] group-hover:text-[#2563EB] transition-colors'} />
-                    <span className={`font-[600] text-[14px] ${isActive ? 'text-white' : 'text-[#0F172A]'}`}>
-                      {item.name}
-                    </span>
-                  </div>
-                  <span className={`text-[12px] font-[700] min-w-[26px] h-[26px] flex items-center justify-center rounded-full ${
-                    isActive 
-                    ? 'bg-white/20 text-white' 
-                    : 'bg-white border border-[#EEF2F7] text-[#64748B] group-hover:border-[#2563EB]/20 group-hover:text-[#2563EB]'
-                  }`}>
-                    {item.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {/* ==================== MAIN CONTENT PANEL ==================== */}
         <div className="flex-1 flex flex-col gap-6 relative z-10 w-full min-w-0">
           

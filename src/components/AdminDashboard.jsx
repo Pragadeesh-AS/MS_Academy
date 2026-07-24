@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CreateTestButton from './CreateTestButton';
 import { 
-  Users, FileText, LayoutDashboard, Settings, Mail, LogOut, 
-  Search, Filter, Check, X, Eye, BookOpen, Clock, Tag, RefreshCw,
+  Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut, 
+  Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, UserCheck, Database, BarChart2, Megaphone, Sparkles,
   Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight
 } from 'lucide-react';
@@ -16,6 +16,8 @@ import QuestionBank from './admin/QuestionBank';
 import Analytics from './admin/Analytics';
 import AttributesManager from './admin/AttributesManager';
 import CourseSetup from './admin/CourseSetup';
+import StudentDirectory from './admin/StudentDirectory';
+import TeacherDirectory from './admin/TeacherDirectory';
 
 // Default mock data to populate localStorage if empty
 const defaultStudents = [
@@ -477,7 +479,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('overview')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'overview' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
               >
-                <LayoutDashboard size={20} className={activeTab === 'overview' ? 'text-[#3b82f6]' : 'text-[#3b82f6]'} />
+                <LayoutGrid size={20} className={activeTab === 'overview' ? 'text-[#3b82f6]' : 'text-[#3b82f6]'} />
                 {!isCollapsed && <span>Dashboard</span>}
               </button>
 
@@ -526,7 +528,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('questions')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'questions' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
               >
-                <BookOpen size={20} className="text-[#0ea5e9]" />
+                <Book size={20} className="text-[#0ea5e9]" />
                 {!isCollapsed && <span>Question Bank</span>}
               </button>
 
@@ -991,30 +993,13 @@ export default function AdminDashboard() {
 
         {/* Active Tab: Teachers (Faculty & Recruitment) */}
         {activeTab === 'teachers' && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-[32px] font-[900] text-slate-900 tracking-tight leading-none mb-2">Teacher Directory</h2>
-                <p className="text-slate-500 text-sm font-medium">Manage faculty and process job applications.</p>
-              </div>
-              
-              {/* Sub-tab Navigation */}
-              <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
-                <button 
-                  onClick={() => setTeacherSubTab('faculty')}
-                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${teacherSubTab === 'faculty' ? 'bg-white text-[#8b5cf6] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Active Faculty
-                </button>
-                <button 
-                  onClick={() => setTeacherSubTab('recruitment')}
-                  className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${teacherSubTab === 'recruitment' ? 'bg-white text-[#8b5cf6] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Recruitment
-                </button>
-              </div>
-            </div>
-
+          <TeacherDirectory
+            invitedTeachers={invitedTeachers}
+            deleteTeacher={deleteTeacher}
+            onInvite={() => setIsTeacherInviteModalOpen(true)}
+            activeSubTab={teacherSubTab}
+            setActiveSubTab={setTeacherSubTab}
+          >
             {teacherSubTab === 'recruitment' ? (
               <>
                 <div className="flex flex-col sm:flex-row justify-end gap-4">
@@ -1143,179 +1128,23 @@ export default function AdminDashboard() {
                 </table>
               </div>
               </div>
-            </>
-            ) : (
-            <>
-              <div className="flex justify-end gap-4">
-                <button 
-                  onClick={() => setIsTeacherInviteModalOpen(true)}
-                  className="bg-[#5b32ea] hover:bg-[#4c28c8] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:shadow-md transition-all flex items-center gap-2"
-                >
-                  <MailPlus size={16} />
-                  <span className="hidden sm:inline">Invite Teacher</span>
-                </button>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/50">
-                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">Teacher Name</th>
-                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">Department</th>
-                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">Qualification</th>
-                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-4 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {invitedTeachers.length === 0 ? (
-                      <tr>
-                        <td colSpan="5" className="px-6 py-12 text-center text-slate-500 font-medium">No faculty members invited yet.</td>
-                      </tr>
-                    ) : (
-                      invitedTeachers.map(teacher => (
-                        <tr key={teacher.id} className="hover:bg-slate-50/80 transition-colors group">
-                          <td className="px-6 py-4">
-                            <div className="font-bold text-slate-900">{teacher.name}</div>
-                            <div className="text-xs font-medium text-slate-500 mt-0.5">{teacher.email}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100/50">
-                              {teacher.department}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="font-medium text-slate-700 text-sm">{teacher.qualification}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            {teacher.status === 'Accepted' ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold border border-emerald-100">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Accepted
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 text-amber-600 text-xs font-bold border border-amber-100">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Invited
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <button
-                              onClick={() => deleteTeacher(teacher.id)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                              title="Remove Teacher"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            </>
-            )}
-          </div>
+              </>
+            ) : null}
+          </TeacherDirectory>
         )}
 
         {/* Active Tab: Contact Queries / Joined Students */}
         {activeTab === 'queries' && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-[32px] font-[900] text-slate-900 tracking-tight leading-none mb-2">Student Directory</h2>
-                <p className="text-slate-500 text-sm font-medium">Manage enrolled students and support inquiries.</p>
-              </div>
-
-              {/* Sub-tab Navigation & Actions */}
-              <div className="flex items-center gap-4">
-                <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
-                  <button 
-                    onClick={() => setStudentSubTab('joined')}
-                    className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${studentSubTab === 'joined' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Enrolled Students
-                  </button>
-                  <button 
-                    onClick={() => setStudentSubTab('queries')}
-                    className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${studentSubTab === 'queries' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Support Queries
-                  </button>
-                </div>
-
-                <button 
-                  onClick={() => setIsInviteModalOpen(true)}
-                  className="bg-[#1D4ED8] hover:bg-blue-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:shadow-md transition-all flex items-center gap-2"
-                >
-                  <MailPlus size={16} />
-                  <span className="hidden sm:inline">Invite Student</span>
-                </button>
-              </div>
-            </div>
-
-            {studentSubTab === 'joined' ? (
-              <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        <th className="py-4 px-6">Student Name & Email</th>
-                        <th className="py-4 px-6 text-center">Status</th>
-                        <th className="py-4 px-6">Joined Date</th>
-                        <th className="py-4 px-6 text-center">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100/60 text-slate-700 text-sm">
-                      {joinedStudents.length === 0 ? (
-                        <tr>
-                          <td colSpan="4" className="py-12 text-center text-slate-400 font-semibold bg-white">
-                            No enrolled students found.
-                          </td>
-                        </tr>
-                      ) : (
-                        joinedStudents.map((student) => (
-                          <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="py-4 px-6">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-700 font-bold flex items-center justify-center shrink-0">
-                                  {student.name.charAt(0)}
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="font-bold text-slate-900 text-sm">{student.name}</span>
-                                  <span className="text-[12px] text-slate-500 font-medium">{student.email}</span>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-4 px-6 text-center">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                                student.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-100 text-slate-500 border border-slate-200'
-                              }`}>
-                                {student.status}
-                              </span>
-                            </td>
-                            <td className="py-4 px-6 font-semibold text-slate-800 text-[13px]">{student.joinedDate}</td>
-                            <td className="py-4 px-6 text-center">
-                              <button 
-                                onClick={() => setJoinedStudents(joinedStudents.filter(s => s.id !== student.id))}
-                                className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-colors inline-flex"
-                                title="Delete Student"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
+          <StudentDirectory
+            joinedStudents={joinedStudents}
+            setJoinedStudents={setJoinedStudents}
+            onInvite={() => setIsInviteModalOpen(true)}
+            activeSubTab={studentSubTab}
+            setActiveSubTab={setStudentSubTab}
+          >
+            {studentSubTab === 'queries' && (
               <>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-6">
                   <div className="flex gap-2">
                     {['All', 'Pending', 'Resolved'].map((status) => (
                       <button
@@ -1398,10 +1227,10 @@ export default function AdminDashboard() {
                 ))
               )}
             </div>
-          </>
+            </>
+            )}
+          </StudentDirectory>
         )}
-      </div>
-    )}
 
         {/* Question Bank Tab */}
         {activeTab === 'questions' && (
