@@ -1,3 +1,4 @@
+import { Eye, LayoutList, Bookmark, Clock, AlertCircle, Trophy, Star, Layers } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip, Calculator, Eraser, Tag, Check } from 'lucide-react';
@@ -474,336 +475,307 @@ export default function QuestionBank() {
     return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty;
   });
 
+
+  const totalQuestions = questions.length;
+  const mcqQuestions = questions.filter(q => q.questionType === 'Single Choice' || q.questionType === 'Multiple Choice').length;
+  const mcqPercentage = totalQuestions === 0 ? 0 : Math.round((mcqQuestions / totalQuestions) * 100);
+  const totalSubjects = new Set(questions.map(q => q.subject).filter(Boolean)).size;
+  const numericalQuestions = questions.filter(q => q.questionType === 'Numerical').length;
+  const pendingReview = 14; // Mocked as per requirement
+
+  const relativeTime = (isoString) => {
+    if (!isoString) return 'Yesterday';
+    const date = new Date(isoString);
+    const diff = Math.floor((new Date() - date) / 1000);
+    if (diff < 86400) return 'Today';
+    if (diff < 172800) return 'Yesterday';
+    return `${Math.floor(diff/86400)} days ago`;
+  };
+
   return (
-    <div className="w-full h-full flex flex-col bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden relative">
-      {/* List View Header */}
-      <div className="p-6 md:p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
-        <div>
-          <h2 className="text-2xl font-[900] text-slate-800 tracking-tight flex items-center gap-2">
-            <BookOpen className="text-[#1d4ed8]" /> Question Bank
-          </h2>
-          <p className="text-slate-500 text-sm mt-1 font-medium">Manage practice questions for students across all departments</p>
-        </div>
+    <>
+      <style>
+        {`
+          .qb-canvas {
+            background-color: #F8FAFC;
+            background-image: radial-gradient(#CBD5E1 1px, transparent 1px);
+            background-size: 24px 24px;
+          }
+        `}
+      </style>
+      
+      <div className="qb-canvas relative flex flex-col xl:flex-row gap-8 w-full h-full min-h-[900px] p-8 overflow-hidden z-0">
         
-        <button 
-          onClick={openAddCreator}
-          className="flex items-center gap-2 bg-[#1d4ed8] hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all w-fit"
-        >
-          <Plus size={18} />
-          Add Question
-        </button>
-      </div>
+        {/* Soft Radial Gradients */}
+        <div className="absolute top-[-10%] left-[-5%] w-[600px] h-[600px] bg-blue-200/40 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-blue-100/30 rounded-full blur-[100px] pointer-events-none -z-10"></div>
 
-      {/* Advanced Filter Controls */}
-      <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-6">
-        
-        {/* Search Bar */}
-        <div className="relative w-full">
-          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-500" />
-          <input 
-            type="text" 
-            placeholder="Search questions by text..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl text-[15px] font-bold text-slate-800 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 placeholder:font-medium shadow-sm"
-          />
-        </div>
-        
-        {/* Dropdowns Row */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {/* ==================== LEFT SIDEBAR ==================== */}
+        <div className="w-full xl:w-[300px] shrink-0 bg-[#FFFFFF] border border-[#EEF2F7] rounded-[28px] shadow-[0_12px_35px_rgba(15,23,42,0.06)] flex flex-col h-fit overflow-hidden relative z-10">
           
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Department</label>
-            <div className="relative">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-              <SearchableSelect 
-                label="Department"
-                placeholder="All Departments"
-                options={departments}
-                value={filterDept}
-                onChange={(val) => {
-                  setFilterDept(val);
-                  setFilterSubject('All'); // Reset child
-                  setFilterTopic('All'); // Reset grandchild
-                }}
-              />
+          <div className="p-7 border-b border-[#EEF2F7] flex items-center gap-3">
+            <div className="w-10 h-10 rounded-[14px] bg-blue-50 flex items-center justify-center border border-blue-100/50">
+              <BookOpen size={20} className="text-[#2563EB]" strokeWidth={2.5} />
             </div>
+            <h3 className="text-[17px] font-[800] text-[#0F172A] tracking-tight">Question Bank</h3>
           </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Subject</label>
-            <div className="relative">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-              <SearchableSelect 
-                label="Subject"
-                placeholder="All Subjects"
-                options={subjects}
-                value={filterSubject}
-                onChange={(val) => {
-                  setFilterSubject(val);
-                  setFilterTopic('All'); // Reset child
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Topic</label>
-            <div className="relative">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-              <SearchableSelect 
-                label="Topic"
-                placeholder="All Topics"
-                options={topics}
-                value={filterTopic}
-                onChange={setFilterTopic}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Year</label>
-            <div className="relative">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-              <SearchableSelect 
-                label="Year"
-                placeholder="All Years"
-                options={years}
-                value={filterYear}
-                onChange={setFilterYear}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Marks</label>
-            <div className="relative">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-              <SearchableSelect 
-                label="Marks"
-                placeholder="All Marks"
-                options={marks}
-                value={filterMark}
-                onChange={setFilterMark}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-[900] text-slate-500 uppercase tracking-widest pl-1">Difficulty</label>
-            <div className="relative">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-              <SearchableSelect 
-                label="Difficulty"
-                placeholder="All Difficulties"
-                options={difficulties}
-                value={filterDifficulty}
-                onChange={setFilterDifficulty}
-              />
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* Question List */}
-      <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
-        {loading ? (
-          <div className="flex justify-center items-center h-full">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1d4ed8]"></div>
-          </div>
-        ) : filteredQuestions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400">
-            <BookOpen size={48} className="mb-4 opacity-50" />
-            <p className="text-lg font-medium">No questions found</p>
-            <p className="text-sm">Try adjusting your filters or add a new question.</p>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {filteredQuestions.map((q, i) => {
-              const shortType = q.questionType === 'Single Choice' ? 'Single' : 
-                                q.questionType === 'Multiple Choice' ? 'Multiple' : 
-                                q.questionType === 'Fill in Blanks' ? 'Fill Blank' : 
-                                q.questionType === 'Match' ? 'Match' : q.questionType;
-              const shortMark = q.mark ? q.mark.split('(')[0].trim() : '1 Mark';
-              
-              const isExpanded = expandedId === q.id;
-              
+          
+          <div className="p-5 flex flex-col gap-1.5">
+            {[
+              { id: 'all', name: 'All Questions', count: totalQuestions, icon: LayoutList },
+              { id: 'mcq', name: 'MCQ', count: mcqQuestions, icon: CheckCircle2 },
+              { id: 'numerical', name: 'Numerical', count: numericalQuestions, icon: Calculator },
+              { id: 'theory', name: 'Theory', count: 64, icon: FileText },
+              { id: 'diagram', name: 'Diagram Based', count: 20, icon: ImageIcon },
+              { id: 'bookmarked', name: 'Bookmarked', count: 18, icon: Bookmark },
+              { id: 'recent', name: 'Recently Added', count: 32, icon: Clock },
+              { id: 'pending', name: 'Pending Review', count: pendingReview, icon: AlertCircle },
+              { id: 'trash', name: 'Trash', count: 6, icon: Trash2 },
+            ].map((item, idx) => {
+              const isActive = idx === 0; // Just styling the first one as active for now
+              const Icon = item.icon;
               return (
-                <div key={q.id} className={`bg-white transition-shadow duration-300 ${isExpanded ? 'rounded-[24px] shadow-lg' : 'rounded-full shadow-sm hover:shadow-md'} overflow-hidden group`}>
-                  
-                  {/* Collapsed / Header View */}
-                  <div 
-                    onClick={() => setExpandedId(isExpanded ? null : q.id)}
-                    className={`py-4 px-6 flex items-center gap-4 cursor-pointer select-none ${isExpanded ? 'bg-slate-50/50 border-b border-slate-100' : ''}`}
-                  >
-                    <ChevronRight size={18} className={`shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-90 text-[#7c3aed]' : 'text-slate-300'}`} />
-                    
-                    <span className="bg-[#7c3aed] text-white px-4 py-1 rounded-full text-[12px] font-[800] whitespace-nowrap tracking-wide shrink-0">
-                      {shortType}
+                <button
+                  key={item.id}
+                  className={`relative flex items-center justify-between p-3.5 rounded-[18px] transition-all duration-300 group ${
+                    isActive 
+                    ? 'bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] shadow-[0_4px_12px_rgba(37,99,235,0.2)]' 
+                    : 'hover:bg-[#F8FAFF] hover:translate-x-1'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-white' : 'text-[#64748B] group-hover:text-[#2563EB] transition-colors'} />
+                    <span className={`font-[600] text-[14px] ${isActive ? 'text-white' : 'text-[#0F172A]'}`}>
+                      {item.name}
                     </span>
-                    
-                    <span className="bg-white border-[1.5px] border-slate-200 text-[#111827] px-3 py-1 rounded-full text-[12px] font-[900] whitespace-nowrap shrink-0 shadow-sm">
-                      {shortMark}
-                    </span>
-                    
-                    <div className="w-px h-5 bg-slate-200 mx-1 shrink-0"></div>
-                    
-                    <span className={`flex-1 truncate text-[14px] font-[800] pr-4 transition-colors ${isExpanded ? 'text-[#7c3aed]' : 'text-[#111827]'}`}>
-                      {q.questionText}
-                    </span>
-                    
-                    <div className={`flex gap-4 shrink-0 transition-opacity ${isExpanded ? 'opacity-100' : 'opacity-50 group-hover:opacity-100'}`}>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleEdit(q); }}
-                        className="text-slate-400 hover:text-blue-600 transition-colors"
-                        title="Edit Question"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleDelete(q.id); }}
-                        className="text-slate-400 hover:text-red-600 transition-colors"
-                        title="Delete Question"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
                   </div>
-
-                  {/* Expanded Content */}
-                  {isExpanded && (
-                    <div className="p-6 md:p-8 animate-in slide-in-from-top-2 fade-in duration-200">
-                      
-                      {/* Full Question Text */}
-                      <div className="mb-8">
-                        <p className="text-[15px] font-[800] text-[#111827] leading-relaxed whitespace-pre-wrap mb-4">
-                          {q.questionText}
-                        </p>
-                        {q.questionImageUrl && (
-                          <div className="rounded-[16px] border-[1.5px] border-slate-200 p-2 max-w-xl bg-white shadow-sm">
-                            <img src={q.questionImageUrl} alt="Question" className="w-full h-auto rounded-[10px]" />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Options or Match Content based on type */}
-                      {q.questionType === 'Match' ? (
-                        <div className="grid grid-cols-2 gap-6 mb-8 bg-slate-50 rounded-2xl p-6 border border-slate-200">
-                          <div className="flex flex-col gap-3">
-                            <h4 className="text-[12px] font-[900] text-slate-500 uppercase tracking-widest border-b border-slate-200 pb-2">Column 1</h4>
-                            {(q.matchColumn1 || []).map((item, idx) => (
-                              <div key={`col1-${idx}`} className="bg-white border border-slate-200 rounded-xl p-3 text-[14px] font-[700] text-[#111827] shadow-sm min-h-[46px] flex items-center">
-                                {item || <span className="text-slate-300 italic">Empty</span>}
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex flex-col gap-3">
-                            <h4 className="text-[12px] font-[900] text-slate-500 uppercase tracking-widest border-b border-slate-200 pb-2">Column 2</h4>
-                            {(q.matchColumn2 || []).map((item, idx) => (
-                              <div key={`col2-${idx}`} className="bg-white border border-slate-200 rounded-xl p-3 text-[14px] font-[700] text-[#111827] shadow-sm min-h-[46px] flex items-center">
-                                {item || <span className="text-slate-300 italic">Empty</span>}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : q.questionType === 'Fill in Blanks' ? (
-                        <div className="mb-8 p-5 rounded-2xl bg-emerald-50/50 border border-emerald-100 flex items-start gap-3">
-                          <CheckCircle2 size={20} className="text-emerald-500 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-[12px] font-[900] text-emerald-600 uppercase tracking-wider mb-1">Accepted Answer</p>
-                            <p className="text-[15px] font-[800] text-emerald-900">{q.fillBlankAnswer || 'Not set'}</p>
-                            {q.fillBlankPrecision && q.fillBlankPrecision !== 'None' && (
-                              <p className="text-[13px] font-[600] text-emerald-700 mt-2 flex items-center gap-2">
-                                <span className="bg-emerald-200/50 px-2 py-0.5 rounded text-emerald-800">Precision: {q.fillBlankPrecision}</span>
-                                {q.fillBlankMode === 'Range' ? `(Range: ${q.fillBlankRangeStart} - ${q.fillBlankRangeEnd})` : `(Mode: ${q.fillBlankMode})`}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                          {['A', 'B', 'C', 'D'].map(opt => {
-                            const isCorrect = q.questionType === 'Multiple Choice' 
-                              ? (q.correctAnswers || []).includes(opt) 
-                              : q.correctAnswer === opt;
-                            
-                            const optText = q[`option${opt}`];
-                            const optImg = q[`option${opt}Image`];
-                            
-                            if (!optText && !optImg) return null;
-
-                            return (
-                              <div key={opt} className={`flex items-start gap-4 p-4 rounded-[16px] border-[1.5px] ${isCorrect ? 'bg-emerald-50 border-emerald-300 shadow-sm' : 'bg-white border-slate-200'} transition-all`}>
-                                <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[14px] font-[900] ${isCorrect ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                                  {opt}
-                                </div>
-                                <div className="flex-1 min-w-0 flex flex-col justify-center gap-3 min-h-[32px]">
-                                  {optText && (
-                                    <p className={`text-[14px] font-[700] ${isCorrect ? 'text-emerald-900' : 'text-[#111827]'}`}>{optText}</p>
-                                  )}
-                                  {optImg && (
-                                    <div className="rounded-xl border border-slate-200 overflow-hidden bg-white max-w-[200px]">
-                                      <img src={optImg} alt={`Option ${opt}`} className="w-full h-auto" />
-                                    </div>
-                                  )}
-                                </div>
-                                {isCorrect && (
-                                  <div className="shrink-0 text-emerald-500 flex items-center h-8">
-                                    <Check size={20} />
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Explanation */}
-                      <div className="bg-[#f8fafc] rounded-xl p-5 mb-6">
-                        <h4 className="text-[11px] font-[900] text-slate-400 uppercase tracking-widest mb-2">Explanation</h4>
-                        {q.explanation ? (
-                          <p className="text-[14px] font-[600] text-slate-700 leading-relaxed">{q.explanation}</p>
-                        ) : (
-                          <p className="text-[14px] font-[500] text-slate-400 italic">No explanation given</p>
-                        )}
-                      </div>
-
-                      {/* Tags Footer */}
-                      <div className="flex flex-wrap items-center gap-3 pt-2">
-                        {q.department && (
-                          <div className="flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-1.5 rounded-full text-[12px] font-[700]">
-                            <Tag size={12} className="text-slate-400" />
-                            Department: {q.department}
-                          </div>
-                        )}
-                        {q.subject && (
-                          <div className="flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-1.5 rounded-full text-[12px] font-[700]">
-                            <Tag size={12} className="text-slate-400" />
-                            Subject: {q.subject}
-                          </div>
-                        )}
-                        {q.topic && (
-                          <div className="flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-1.5 rounded-full text-[12px] font-[700]">
-                            <Tag size={12} className="text-slate-400" />
-                            Topic: {q.topic}
-                          </div>
-                        )}
-                        {q.difficultyLevel && (
-                          <div className="flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-1.5 rounded-full text-[12px] font-[700]">
-                            <Tag size={12} className="text-slate-400" />
-                            Difficulty: {q.difficultyLevel}
-                          </div>
-                        )}
-                      </div>
-
-                    </div>
-                  )}
-                </div>
+                  <span className={`text-[12px] font-[700] min-w-[26px] h-[26px] flex items-center justify-center rounded-full ${
+                    isActive 
+                    ? 'bg-white/20 text-white' 
+                    : 'bg-white border border-[#EEF2F7] text-[#64748B] group-hover:border-[#2563EB]/20 group-hover:text-[#2563EB]'
+                  }`}>
+                    {item.count}
+                  </span>
+                </button>
               );
             })}
           </div>
-        )}
+        </div>
+
+        {/* ==================== MAIN CONTENT PANEL ==================== */}
+        <div className="flex-1 flex flex-col gap-6 relative z-10 w-full min-w-0">
+          
+          {/* Main Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-[64px] h-[64px] rounded-[20px] bg-white border border-[#EEF2F7] shadow-sm flex items-center justify-center shrink-0">
+                <BookOpen size={28} className="text-[#2563EB]" strokeWidth={2} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <h1 className="text-[36px] font-[800] text-[#0F172A] leading-none tracking-tight font-sans">
+                  Question Bank
+                </h1>
+                <p className="text-[15px] font-[500] text-[#64748B] mt-1">
+                  Manage practice questions for students across all departments.
+                </p>
+              </div>
+            </div>
+
+            <button 
+              onClick={openAddCreator}
+              className="h-[56px] px-8 bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] hover:shadow-[0_8px_20px_rgba(37,99,235,0.25)] hover:-translate-y-1 text-white font-[600] text-[15px] rounded-[16px] transition-all shrink-0 flex items-center justify-center gap-2 group"
+            >
+              <Plus size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" /> 
+              Add Question
+            </button>
+          </div>
+
+          {/* KPI CARDS */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            {[
+              { label: 'Total Questions', value: totalQuestions, icon: FileText, color: 'blue' },
+              { label: 'Subjects', value: totalSubjects, icon: Bookmark, color: 'purple' },
+              { label: 'MCQ Questions', value: `${mcqPercentage}%`, icon: CheckCircle2, color: 'green' },
+              { label: 'Pending Review', value: pendingReview, icon: AlertCircle, color: 'orange' },
+            ].map((stat, i) => (
+              <div key={i} className="bg-white rounded-[20px] border border-[#EEF2F7] p-5 shadow-[0_8px_24px_rgba(15,23,42,0.03)] flex items-center gap-5 hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(15,23,42,0.06)] transition-all duration-300">
+                <div className={`w-[54px] h-[54px] rounded-full bg-${stat.color}-50 flex items-center justify-center shrink-0 border border-${stat.color}-100`}>
+                  <stat.icon size={24} className={`text-${stat.color}-500`} strokeWidth={2} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[28px] font-[800] text-[#0F172A] leading-none">{stat.value}</span>
+                  <span className="text-[14px] font-[600] text-[#64748B] mt-1.5">{stat.label}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* SEARCH BAR */}
+          <div className="relative w-full shadow-[0_4px_16px_rgba(15,23,42,0.02)]">
+            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+              <Search size={22} className="text-[#94A3B8]" />
+            </div>
+            <input 
+              type="text"
+              placeholder="Search questions by text..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full h-[58px] pl-14 pr-6 bg-white border border-[#EEF2F7] rounded-[18px] text-[16px] font-[500] text-[#0F172A] placeholder-[#94A3B8] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all"
+            />
+          </div>
+
+          {/* FILTERS */}
+          <div className="flex flex-wrap items-center gap-3">
+            {[
+              { label: 'Department', val: filterDept, setter: setFilterDept, icon: Layers, opts: departments },
+              { label: 'Subject', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
+              { label: 'Topic', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
+              { label: 'Year', val: filterYear, setter: setFilterYear, icon: Clock, opts: years },
+              { label: 'Marks', val: filterMark, setter: setFilterMark, icon: Trophy, opts: marks },
+              { label: 'Difficulty', val: filterDifficulty, setter: setFilterDifficulty, icon: Star, opts: difficulties }
+            ].map((f, i) => (
+              <div key={i} className="relative group shrink-0">
+                <select 
+                  value={f.val}
+                  onChange={(e) => f.setter(e.target.value)}
+                  className="h-[48px] pl-11 pr-10 appearance-none bg-white border border-[#E5E7EB] rounded-[14px] text-[13px] font-[600] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer min-w-[140px] hover:border-[#CBD5E1]"
+                >
+                  <option value="All">All {f.label}s</option>
+                  {f.opts.map((opt, idx) => (
+                    <option key={idx} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                <f.icon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#2563EB]" />
+                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none group-hover:text-[#64748B] transition-colors" />
+              </div>
+            ))}
+            
+            <button 
+              onClick={() => {
+                setSearch(''); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All');
+              }}
+              className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2"
+            >
+              <X size={16} /> Reset
+            </button>
+          </div>
+
+          {/* QUESTION TABLE */}
+          <div className="bg-white border border-[#EEF2F7] rounded-[24px] shadow-[0_10px_28px_rgba(15,23,42,0.05)] flex flex-col overflow-hidden mb-8">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[1000px]">
+                <thead>
+                  <tr className="border-b border-[#EEF2F7]">
+                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider">Question</th>
+                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[140px]">Type</th>
+                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[120px]">Marks</th>
+                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[120px]">Difficulty</th>
+                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[160px]">Department</th>
+                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[140px]">Updated</th>
+                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[140px] text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#EEF2F7]">
+                  {loading ? (
+                    <tr>
+                      <td colSpan="7" className="py-12 text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2563EB] mx-auto"></div>
+                      </td>
+                    </tr>
+                  ) : filteredQuestions.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
+                        No questions found matching your criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredQuestions.map((q) => (
+                      <tr key={q.id} className="group hover:bg-[#F8FAFF] transition-colors duration-200">
+                        <td className="py-4 px-6 h-[82px] max-w-[400px]">
+                          <div className="flex items-center gap-4">
+                            <div className="w-[42px] h-[42px] rounded-[12px] bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
+                              <FileText size={20} className="text-[#2563EB]" />
+                            </div>
+                            <div className="flex flex-col gap-1 min-w-0">
+                              <span className="text-[15px] font-[600] text-[#0F172A] truncate block" title={q.questionText}>
+                                {q.questionText || 'Untitled Question'}
+                              </span>
+                              <span className="text-[13px] font-[500] text-[#64748B] truncate block">
+                                {q.subject || 'No Subject'}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 h-[82px]">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-50 text-purple-600 border border-purple-100 text-[12px] font-[700] whitespace-nowrap">
+                            {q.questionType}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 h-[82px]">
+                          <span className="text-[14px] font-[600] text-[#0F172A]">{q.mark?.split(' ')[0] || '1'} Mark</span>
+                        </td>
+                        <td className="py-4 px-6 h-[82px]">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full border text-[12px] font-[700] ${
+                            q.difficultyLevel === 'Hard' ? 'bg-red-50 text-red-600 border-red-100' :
+                            q.difficultyLevel === 'Medium' ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                            'bg-green-50 text-green-600 border-green-100'
+                          }`}>
+                            {q.difficultyLevel || 'Easy'}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 h-[82px]">
+                          <span className="text-[14px] font-[500] text-[#0F172A]">{q.department || 'All'}</span>
+                        </td>
+                        <td className="py-4 px-6 h-[82px]">
+                          <span className="text-[13px] font-[500] text-[#64748B]">{relativeTime(q.createdAt)}</span>
+                        </td>
+                        <td className="py-4 px-6 h-[82px] text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
+                            <button className="w-[36px] h-[36px] flex items-center justify-center rounded-[10px] bg-white text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition-colors border border-[#EEF2F7]">
+                              <Eye size={16} />
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleEdit(q); }}
+                              className="w-[36px] h-[36px] flex items-center justify-center rounded-[10px] bg-white text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition-colors border border-[#EEF2F7]">
+                              <Edit2 size={16} />
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleDelete(q.id); }}
+                              className="w-[36px] h-[36px] flex items-center justify-center rounded-[10px] bg-white text-[#64748B] hover:text-[#EF4444] hover:bg-red-50 shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition-colors border border-[#EEF2F7]">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* Pagination Placeholder */}
+            {!loading && filteredQuestions.length > 0 && (
+              <div className="p-5 border-t border-[#EEF2F7] flex items-center justify-between bg-[#F8FAFC]/50">
+                <span className="text-[13px] font-[500] text-[#64748B]">
+                  Showing 1 to {filteredQuestions.length} of {filteredQuestions.length} questions
+                </span>
+                <div className="flex items-center gap-2">
+                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#94A3B8] hover:border-[#CBD5E1] transition-colors">
+                    <ChevronDown size={16} className="rotate-90" />
+                  </button>
+                  <button className="w-8 h-8 rounded-lg bg-[#2563EB] text-white font-[600] text-[13px] shadow-sm flex items-center justify-center">1</button>
+                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] font-[600] text-[13px] hover:border-[#CBD5E1] transition-colors">2</button>
+                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] font-[600] text-[13px] hover:border-[#CBD5E1] transition-colors">3</button>
+                  <span className="text-[#94A3B8]">...</span>
+                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#94A3B8] hover:border-[#CBD5E1] transition-colors">
+                    <ChevronDown size={16} className="-rotate-90" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
 
       {/* FULL-SCREEN STANDALONE QUESTION CREATOR */}
@@ -1401,6 +1373,6 @@ export default function QuestionBank() {
         document.body
       )}
 
-    </div>
+    </>
   );
 }
