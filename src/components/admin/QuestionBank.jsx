@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip, Calculator, Eraser, Tag, Check } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
@@ -85,6 +85,14 @@ export default function QuestionBank() {
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
+  };
   
   const [search, setSearch] = useState('');
   const [filterDept, setFilterDept] = useState('All');
@@ -108,6 +116,14 @@ export default function QuestionBank() {
     optionD: '',
     optionDImage: '',
     correctAnswer: 'A',
+    correctAnswers: [],
+    fillBlankAnswer: '',
+    fillBlankPrecision: 'None',
+    fillBlankMode: 'Exact Match',
+    fillBlankRangeStart: '',
+    fillBlankRangeEnd: '',
+    matchColumn1: ['', ''],
+    matchColumn2: ['', ''],
     department: '',
     subject: '',
     topic: '',
@@ -166,13 +182,56 @@ export default function QuestionBank() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleCheckboxChange = (opt) => {
+    setFormData(prev => {
+      const current = prev.correctAnswers || [];
+      if (current.includes(opt)) {
+        return { ...prev, correctAnswers: current.filter(o => o !== opt) };
+      } else {
+        return { ...prev, correctAnswers: [...current, opt] };
+      }
+    });
+  };
+
+  const handleMatchColumn1Change = (index, value) => {
+    setFormData(prev => {
+      const newCol = [...(prev.matchColumn1 || [])];
+      newCol[index] = value;
+      return { ...prev, matchColumn1: newCol };
+    });
+  };
+
+  const handleMatchColumn2Change = (index, value) => {
+    setFormData(prev => {
+      const newCol = [...(prev.matchColumn2 || [])];
+      newCol[index] = value;
+      return { ...prev, matchColumn2: newCol };
+    });
+  };
+
+  const addMatchColumn1Item = () => {
+    setFormData(prev => ({ ...prev, matchColumn1: [...(prev.matchColumn1 || []), ''] }));
+  };
+
+  const addMatchColumn2Item = () => {
+    setFormData(prev => ({ ...prev, matchColumn2: [...(prev.matchColumn2 || []), ''] }));
+  };
+
+  const removeMatchColumn1Item = (index) => {
+    setFormData(prev => ({ ...prev, matchColumn1: (prev.matchColumn1 || []).filter((_, i) => i !== index) }));
+  };
+
+  const removeMatchColumn2Item = (index) => {
+    setFormData(prev => ({ ...prev, matchColumn2: (prev.matchColumn2 || []).filter((_, i) => i !== index) }));
+  };
+
   // Generic Image Handler for Base64 (Question or Options)
   const handleImageUpload = (e, field) => {
     const file = e.target.files[0];
     if (!file) return;
     
     if (file.size > 1048576) {
-      alert("Image is too large. Please upload an image under 1MB.");
+      showToast("Image is too large. Please upload an image under 1MB.", "error");
       return;
     }
     
@@ -189,40 +248,67 @@ export default function QuestionBank() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    try {
-      if (isEditing) {
-        await updateDoc(doc(db, 'question_bank', currentId), formData);
-      } else {
-        await addDoc(collection(db, 'question_bank'), {
-          ...formData,
-          createdAt: new Date().toISOString()
-        });
-      }
-      setIsCreatorOpen(false);
-      fetchQuestions();
-    } catch (e) {
-      console.error("Failed to save question", e);
-      alert("Failed to save question. Please try again.");
+    const payload = { ...formData, createdAt: new Date().toISOString() };
+    
+    // Optimistic UI Update & close instantly
+    setIsCreatorOpen(false);
+    
+    if (isEditing) {
+      setQuestions(prev => prev.map(q => q.id === currentId ? { id: currentId, ...payload } : q));
+      updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
+        showToast("Question saved successfully", "success");
+      }).catch(e => {
+        console.error("Failed to update question", e);
+        showToast("Failed to save. Changes reverted.", "error");
+        fetchQuestions();
+      });
+    } else {
+      const tempId = 'temp-' + Date.now();
+      setQuestions(prev => [{ id: tempId, ...payload }, ...prev]);
+      addDoc(collection(db, 'question_bank'), payload).then(docRef => {
+        setQuestions(prev => prev.map(q => q.id === tempId ? { ...q, id: docRef.id } : q));
+        showToast("Question saved successfully", "success");
+      }).catch(e => {
+        console.error("Failed to add question", e);
+        showToast("Failed to save. Changes reverted.", "error");
+        fetchQuestions();
+      });
     }
   };
 
   const handleSaveAndNext = async (e) => {
     e.preventDefault();
-    try {
-      if (isEditing) {
-        await updateDoc(doc(db, 'question_bank', currentId), formData);
-      } else {
-        await addDoc(collection(db, 'question_bank'), {
-          ...formData,
-          createdAt: new Date().toISOString()
-        });
-      }
-      // Reset form for next question
-      openAddCreator();
-      fetchQuestions();
-    } catch (e) {
-      console.error("Failed to save question", e);
-      alert("Failed to save question. Please try again.");
+    const form = e.target.closest('form');
+    if (form && !form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+    
+    const payload = { ...formData, createdAt: new Date().toISOString() };
+    
+    // Reset form instantly
+    openAddCreator();
+    
+    if (isEditing) {
+      setQuestions(prev => prev.map(q => q.id === currentId ? { id: currentId, ...payload } : q));
+      updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
+        showToast("Question saved successfully. Add next.", "success");
+      }).catch(e => {
+        console.error("Failed to update question", e);
+        showToast("Failed to save. Changes reverted.", "error");
+        fetchQuestions();
+      });
+    } else {
+      const tempId = 'temp-' + Date.now();
+      setQuestions(prev => [{ id: tempId, ...payload }, ...prev]);
+      addDoc(collection(db, 'question_bank'), payload).then(docRef => {
+        setQuestions(prev => prev.map(q => q.id === tempId ? { ...q, id: docRef.id } : q));
+        showToast("Question saved successfully. Add next.", "success");
+      }).catch(e => {
+        console.error("Failed to add question", e);
+        showToast("Failed to save. Changes reverted.", "error");
+        fetchQuestions();
+      });
     }
   };
 
@@ -241,6 +327,14 @@ export default function QuestionBank() {
       optionD: q.optionD || '',
       optionDImage: q.optionDImage || '',
       correctAnswer: q.correctAnswer || 'A',
+      correctAnswers: q.correctAnswers || [],
+      fillBlankAnswer: q.fillBlankAnswer || '',
+      fillBlankPrecision: q.fillBlankPrecision || 'None',
+      fillBlankMode: q.fillBlankMode || 'Exact Match',
+      fillBlankRangeStart: q.fillBlankRangeStart || '',
+      fillBlankRangeEnd: q.fillBlankRangeEnd || '',
+      matchColumn1: q.matchColumn1 || ['', ''],
+      matchColumn2: q.matchColumn2 || ['', ''],
       department: q.department || '',
       subject: q.subject || '',
       topic: q.topic || '',
@@ -253,14 +347,20 @@ export default function QuestionBank() {
     setIsCreatorOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this question?")) {
-      try {
-        await deleteDoc(doc(db, 'question_bank', id));
-        fetchQuestions();
-      } catch (e) {
-        console.error("Failed to delete question", e);
-      }
+  const handleDelete = (id) => {
+    setDeleteConfirmId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    try {
+      await deleteDoc(doc(db, 'question_bank', deleteConfirmId));
+      setDeleteConfirmId(null);
+      showToast("Question deleted successfully", "success");
+      fetchQuestions();
+    } catch (e) {
+      console.error("Failed to delete question", e);
+      showToast("Failed to delete question", "error");
     }
   };
 
@@ -279,6 +379,14 @@ export default function QuestionBank() {
       optionD: '',
       optionDImage: '',
       correctAnswer: 'A',
+      correctAnswers: [],
+      fillBlankAnswer: '',
+      fillBlankPrecision: 'None',
+      fillBlankMode: 'Exact Match',
+      fillBlankRangeStart: '',
+      fillBlankRangeEnd: '',
+      matchColumn1: ['', ''],
+      matchColumn2: ['', ''],
       department: '',
       subject: '',
       topic: '',
@@ -448,50 +556,188 @@ export default function QuestionBank() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {filteredQuestions.map((q, i) => (
-              <div key={q.id} className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-blue-300 hover:shadow-md transition-all group">
-                <div className="flex justify-between items-start gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="bg-blue-50 text-blue-700 font-bold text-[10px] uppercase tracking-wider px-2 py-1 rounded-md">
-                        {q.department || 'General'}
-                      </span>
-                      <span className="bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider px-2 py-1 rounded-md">
-                        {q.mark}
-                      </span>
-                      <span className="text-xs font-semibold text-slate-400">Q{i + 1}</span>
-                    </div>
-                    <p className="text-slate-800 font-semibold mb-4 leading-relaxed">{q.questionText}</p>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-                      {optionsList.map(opt => (
-                        <div key={opt} className={`p-2 rounded-lg text-sm border flex items-center gap-2 ${q.correctAnswer === opt ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-medium' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
-                          <span className="font-bold">{opt}.</span> 
-                          <span className="truncate">{q[`option${opt}`] || (q[`option${opt}Image`] ? '[Image Option]' : '')}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+            {filteredQuestions.map((q, i) => {
+              const shortType = q.questionType === 'Single Choice' ? 'Single' : 
+                                q.questionType === 'Multiple Choice' ? 'Multiple' : 
+                                q.questionType === 'Fill in Blanks' ? 'Fill Blank' : 
+                                q.questionType === 'Match' ? 'Match' : q.questionType;
+              const shortMark = q.mark ? q.mark.split('(')[0].trim() : '1 Mark';
+              
+              const isExpanded = expandedId === q.id;
+              
+              return (
+                <div key={q.id} className={`bg-white transition-shadow duration-300 ${isExpanded ? 'rounded-[24px] shadow-lg' : 'rounded-full shadow-sm hover:shadow-md'} overflow-hidden group`}>
                   
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <button 
-                      onClick={() => handleEdit(q)}
-                      className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                      title="Edit Question"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(q.id)}
-                      className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                      title="Delete Question"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                  {/* Collapsed / Header View */}
+                  <div 
+                    onClick={() => setExpandedId(isExpanded ? null : q.id)}
+                    className={`py-4 px-6 flex items-center gap-4 cursor-pointer select-none ${isExpanded ? 'bg-slate-50/50 border-b border-slate-100' : ''}`}
+                  >
+                    <ChevronRight size={18} className={`shrink-0 transition-transform duration-300 ${isExpanded ? 'rotate-90 text-[#7c3aed]' : 'text-slate-300'}`} />
+                    
+                    <span className="bg-[#7c3aed] text-white px-4 py-1 rounded-full text-[12px] font-[800] whitespace-nowrap tracking-wide shrink-0">
+                      {shortType}
+                    </span>
+                    
+                    <span className="bg-white border-[1.5px] border-slate-200 text-[#111827] px-3 py-1 rounded-full text-[12px] font-[900] whitespace-nowrap shrink-0 shadow-sm">
+                      {shortMark}
+                    </span>
+                    
+                    <div className="w-px h-5 bg-slate-200 mx-1 shrink-0"></div>
+                    
+                    <span className={`flex-1 truncate text-[14px] font-[800] pr-4 transition-colors ${isExpanded ? 'text-[#7c3aed]' : 'text-[#111827]'}`}>
+                      {q.questionText}
+                    </span>
+                    
+                    <div className={`flex gap-4 shrink-0 transition-opacity ${isExpanded ? 'opacity-100' : 'opacity-50 group-hover:opacity-100'}`}>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleEdit(q); }}
+                        className="text-slate-400 hover:text-blue-600 transition-colors"
+                        title="Edit Question"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleDelete(q.id); }}
+                        className="text-slate-400 hover:text-red-600 transition-colors"
+                        title="Delete Question"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Expanded Content */}
+                  {isExpanded && (
+                    <div className="p-6 md:p-8 animate-in slide-in-from-top-2 fade-in duration-200">
+                      
+                      {/* Full Question Text */}
+                      <div className="mb-8">
+                        <p className="text-[15px] font-[800] text-[#111827] leading-relaxed whitespace-pre-wrap mb-4">
+                          {q.questionText}
+                        </p>
+                        {q.questionImageUrl && (
+                          <div className="rounded-[16px] border-[1.5px] border-slate-200 p-2 max-w-xl bg-white shadow-sm">
+                            <img src={q.questionImageUrl} alt="Question" className="w-full h-auto rounded-[10px]" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Options or Match Content based on type */}
+                      {q.questionType === 'Match' ? (
+                        <div className="grid grid-cols-2 gap-6 mb-8 bg-slate-50 rounded-2xl p-6 border border-slate-200">
+                          <div className="flex flex-col gap-3">
+                            <h4 className="text-[12px] font-[900] text-slate-500 uppercase tracking-widest border-b border-slate-200 pb-2">Column 1</h4>
+                            {(q.matchColumn1 || []).map((item, idx) => (
+                              <div key={`col1-${idx}`} className="bg-white border border-slate-200 rounded-xl p-3 text-[14px] font-[700] text-[#111827] shadow-sm min-h-[46px] flex items-center">
+                                {item || <span className="text-slate-300 italic">Empty</span>}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex flex-col gap-3">
+                            <h4 className="text-[12px] font-[900] text-slate-500 uppercase tracking-widest border-b border-slate-200 pb-2">Column 2</h4>
+                            {(q.matchColumn2 || []).map((item, idx) => (
+                              <div key={`col2-${idx}`} className="bg-white border border-slate-200 rounded-xl p-3 text-[14px] font-[700] text-[#111827] shadow-sm min-h-[46px] flex items-center">
+                                {item || <span className="text-slate-300 italic">Empty</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : q.questionType === 'Fill in Blanks' ? (
+                        <div className="mb-8 p-5 rounded-2xl bg-emerald-50/50 border border-emerald-100 flex items-start gap-3">
+                          <CheckCircle2 size={20} className="text-emerald-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-[12px] font-[900] text-emerald-600 uppercase tracking-wider mb-1">Accepted Answer</p>
+                            <p className="text-[15px] font-[800] text-emerald-900">{q.fillBlankAnswer || 'Not set'}</p>
+                            {q.fillBlankPrecision && q.fillBlankPrecision !== 'None' && (
+                              <p className="text-[13px] font-[600] text-emerald-700 mt-2 flex items-center gap-2">
+                                <span className="bg-emerald-200/50 px-2 py-0.5 rounded text-emerald-800">Precision: {q.fillBlankPrecision}</span>
+                                {q.fillBlankMode === 'Range' ? `(Range: ${q.fillBlankRangeStart} - ${q.fillBlankRangeEnd})` : `(Mode: ${q.fillBlankMode})`}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                          {['A', 'B', 'C', 'D'].map(opt => {
+                            const isCorrect = q.questionType === 'Multiple Choice' 
+                              ? (q.correctAnswers || []).includes(opt) 
+                              : q.correctAnswer === opt;
+                            
+                            const optText = q[`option${opt}`];
+                            const optImg = q[`option${opt}Image`];
+                            
+                            if (!optText && !optImg) return null;
+
+                            return (
+                              <div key={opt} className={`flex items-start gap-4 p-4 rounded-[16px] border-[1.5px] ${isCorrect ? 'bg-emerald-50 border-emerald-300 shadow-sm' : 'bg-white border-slate-200'} transition-all`}>
+                                <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[14px] font-[900] ${isCorrect ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                  {opt}
+                                </div>
+                                <div className="flex-1 min-w-0 flex flex-col justify-center gap-3 min-h-[32px]">
+                                  {optText && (
+                                    <p className={`text-[14px] font-[700] ${isCorrect ? 'text-emerald-900' : 'text-[#111827]'}`}>{optText}</p>
+                                  )}
+                                  {optImg && (
+                                    <div className="rounded-xl border border-slate-200 overflow-hidden bg-white max-w-[200px]">
+                                      <img src={optImg} alt={`Option ${opt}`} className="w-full h-auto" />
+                                    </div>
+                                  )}
+                                </div>
+                                {isCorrect && (
+                                  <div className="shrink-0 text-emerald-500 flex items-center h-8">
+                                    <Check size={20} />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Explanation */}
+                      <div className="bg-[#f8fafc] rounded-xl p-5 mb-6">
+                        <h4 className="text-[11px] font-[900] text-slate-400 uppercase tracking-widest mb-2">Explanation</h4>
+                        {q.explanation ? (
+                          <p className="text-[14px] font-[600] text-slate-700 leading-relaxed">{q.explanation}</p>
+                        ) : (
+                          <p className="text-[14px] font-[500] text-slate-400 italic">No explanation given</p>
+                        )}
+                      </div>
+
+                      {/* Tags Footer */}
+                      <div className="flex flex-wrap items-center gap-3 pt-2">
+                        {q.department && (
+                          <div className="flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-1.5 rounded-full text-[12px] font-[700]">
+                            <Tag size={12} className="text-slate-400" />
+                            Department: {q.department}
+                          </div>
+                        )}
+                        {q.subject && (
+                          <div className="flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-1.5 rounded-full text-[12px] font-[700]">
+                            <Tag size={12} className="text-slate-400" />
+                            Subject: {q.subject}
+                          </div>
+                        )}
+                        {q.topic && (
+                          <div className="flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-1.5 rounded-full text-[12px] font-[700]">
+                            <Tag size={12} className="text-slate-400" />
+                            Topic: {q.topic}
+                          </div>
+                        )}
+                        {q.difficultyLevel && (
+                          <div className="flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-1.5 rounded-full text-[12px] font-[700]">
+                            <Tag size={12} className="text-slate-400" />
+                            Difficulty: {q.difficultyLevel}
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -501,81 +747,92 @@ export default function QuestionBank() {
         <div className="fixed inset-0 bg-[#f4f7fb] z-[99999] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
           
           {/* TOP BAR */}
-          <div className="h-[72px] bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0 shadow-sm">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
-                <BookOpen size={18} className="text-blue-600" />
-                <span className="font-bold text-blue-900 text-[15px]">Standalone Question Creator</span>
+          <div className="h-[60px] bg-white px-6 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-lg">
+                <BookOpen size={16} className="text-indigo-600" />
+                <span className="font-[800] text-indigo-900 text-[13px] tracking-wide">Standalone Question Creator</span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Questions:</span>
-                <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold shadow-sm">1</div>
+              <div className="bg-slate-100 px-3 py-1 rounded-full text-[12px] font-[700] text-slate-500">
+                1 Saved
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <button onClick={() => {}} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-bold text-sm bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl transition-colors border border-blue-100">
-                <Plus size={16} /> Add Question
+              <button type="button" className="p-2 text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors">
+                <Calculator size={18} />
               </button>
-              <div className="w-px h-6 bg-slate-200"></div>
+              <div className="w-px h-5 bg-slate-200"></div>
               <button 
+                type="button"
                 onClick={() => setIsCreatorOpen(false)}
-                className="flex items-center gap-1.5 text-slate-500 hover:text-slate-800 font-bold text-sm bg-white hover:bg-slate-50 px-4 py-2 rounded-xl transition-colors border border-slate-200"
+                className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-[800] text-[14px] transition-colors"
               >
-                <X size={16} /> Close
+                <X size={16} /> Done
               </button>
             </div>
+          </div>
+
+          {/* SECOND TOOLBAR */}
+          <div className="h-[60px] bg-white border-b border-slate-100 px-6 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <span className="text-[13px] font-[900] text-[#111827]">Questions:</span>
+              <div className="w-7 h-7 rounded-full bg-[#059669] text-white flex items-center justify-center font-[800] text-[13px] shadow-sm">1</div>
+            </div>
+            <button type="button" className="flex items-center gap-1.5 text-[#059669] hover:text-emerald-700 font-[800] text-[13px] bg-white hover:bg-emerald-50 px-4 py-2 rounded-full transition-colors border-[1.5px] border-[#059669]">
+              <Plus size={16} /> Add Question
+            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="flex-1 flex overflow-hidden">
             
             {/* LEFT / CENTER SCROLLABLE AREA */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 lg:p-8 flex flex-col xl:flex-row gap-8">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 lg:p-8 flex flex-col xl:flex-row gap-8 bg-[#fcfcfd]">
               
               {/* LEFT COLUMN: QUESTION CONTENT */}
-              <div className="flex-1 min-w-0 flex flex-col gap-6 max-w-4xl xl:max-w-none">
+              <div className="flex-1 min-w-0 flex flex-col gap-6 max-w-4xl xl:max-w-none xl:border-r-[4px] xl:border-slate-200/60 xl:pr-8">
                 
                 {/* Header info */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-100">
                   <div className="relative">
                     <select 
                       name="questionType"
                       value={formData.questionType}
                       onChange={handleInputChange}
-                      className="appearance-none bg-white border border-slate-200 text-slate-800 font-bold text-sm rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm cursor-pointer"
+                      className="appearance-none bg-white border-[1.5px] border-slate-200 text-[#111827] font-[900] text-[13px] rounded-full pl-5 pr-10 py-2.5 outline-none shadow-sm cursor-pointer hover:border-slate-300"
                     >
                       <option value="Single Choice">Single Choice</option>
                       <option value="Multiple Choice">Multiple Choice</option>
-                      <option value="NAT">Numerical Answer Type (NAT)</option>
+                      <option value="Fill in Blanks">Fill in Blanks</option>
+                      <option value="Match">Match (Column 1 ≤ Column 2)</option>
                     </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-slate-500 uppercase tracking-widest">Marks:</span>
-                    <span className="bg-white border border-blue-200 text-blue-700 text-sm font-bold px-3 py-1.5 rounded-lg shadow-sm">
-                      {formData.mark}
-                    </span>
-                    <span className="bg-red-50 border border-red-200 text-red-600 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div> Neg: {formData.mark.includes('2') ? '-0.66' : '-0.33'}
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                    <span className="text-[13px] font-[900] text-[#111827] whitespace-nowrap">Marks:</span>
+                    <button type="button" onClick={() => setFormData({...formData, mark: '1 Mark (-0.33)'})} className={`whitespace-nowrap px-4 sm:px-5 py-2 text-[13px] font-[800] rounded-full transition-colors ${formData.mark === '1 Mark (-0.33)' ? 'border-[1.5px] border-blue-600 text-blue-600 bg-white shadow-sm' : 'text-slate-500'}`}>1 Mark (-0.33)</button>
+                    <button type="button" onClick={() => setFormData({...formData, mark: '2 Mark (-0.66)'})} className={`whitespace-nowrap px-4 sm:px-5 py-2 text-[13px] font-[800] rounded-full transition-colors ${formData.mark === '2 Mark (-0.66)' ? 'border-[1.5px] border-blue-600 text-blue-600 bg-white shadow-sm' : 'text-slate-500'}`}>2 Mark (-0.66)</button>
+                    <span className="bg-red-50 border-[1.5px] border-red-200 text-red-600 text-[13px] font-[900] px-3 sm:px-4 py-2 rounded-full flex items-center gap-1.5 sm:gap-2 ml-1 sm:ml-2 shadow-sm whitespace-nowrap">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></div> Neg: {formData.mark.includes('2') ? '-0.66' : '-0.33'}
                     </span>
                   </div>
                 </div>
 
                 {/* Question Text Editor */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-[13px] font-[800] text-slate-600 uppercase tracking-wider">Question Text <span className="text-red-500">*</span></label>
-                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-                    {/* Rich text toolbar mock */}
-                    <div className="h-12 border-b border-slate-100 bg-slate-50/50 flex items-center px-2 gap-1">
-                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><Bold size={16}/></button>
-                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><Italic size={16}/></button>
-                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
-                      <button type="button" className="p-1.5 text-slate-500 hover:bg-slate-200 rounded-lg font-serif text-sm font-bold">x²</button>
-                      <button type="button" className="p-1.5 text-slate-500 hover:bg-slate-200 rounded-lg font-serif text-sm font-bold">x₂</button>
-                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
-                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><List size={16}/></button>
-                      <div className="ml-auto flex pr-2">
-                         <button type="button" className="p-2 text-slate-400 hover:bg-slate-200 rounded-lg"><Paperclip size={16}/></button>
+                <div className="flex flex-col gap-3">
+                  <label className="text-[15px] font-[900] text-[#111827]">Question Text <span className="text-red-500">*</span></label>
+                  <div className="bg-white border-[1.5px] border-slate-200 rounded-[20px] overflow-hidden flex flex-col shadow-sm">
+                    {/* Rich text toolbar */}
+                    <div className="h-14 border-b border-slate-100 flex items-center px-4 gap-2">
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><Bold size={16}/></button>
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><Italic size={16}/></button>
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold">x²</button>
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold">x₂</button>
+                      <div className="w-px h-5 bg-slate-200 mx-2"></div>
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><List size={16}/></button>
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><ListTodo size={16}/></button>
+                      <div className="ml-auto flex">
+                         <button type="button" className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg"><Eraser size={16}/></button>
                       </div>
                     </div>
                     <textarea 
@@ -583,47 +840,112 @@ export default function QuestionBank() {
                       required
                       value={formData.questionText}
                       onChange={handleInputChange}
-                      className="w-full p-4 h-40 resize-none outline-none text-slate-700 placeholder-slate-300"
-                      placeholder="Start typing your question here..."
+                      className="w-full p-6 h-48 resize-none outline-none text-[16px] font-[500] text-[#111827] placeholder-slate-300"
+                      placeholder="Match the following:"
                     ></textarea>
                   </div>
                 </div>
 
+                {/* MATCH BUILDER (LEFT COLUMN) */}
+                {formData.questionType === 'Match' && (
+                  <div className="flex flex-col gap-2 mt-4">
+                    <div className="bg-white border-[1.5px] border-slate-200 rounded-[24px] p-6 flex flex-col shadow-sm">
+                      <div className="flex gap-6">
+                        
+                        {/* Column 1 */}
+                        <div className="flex-1 min-w-0 flex flex-col gap-4">
+                          <h4 className="text-[13px] font-[900] text-[#111827] border-b border-slate-100 pb-3">Column 1</h4>
+                          
+                          {(formData.matchColumn1 || []).map((item, idx) => (
+                            <div key={idx} className="flex items-start gap-3">
+                              <div className="w-8 h-8 shrink-0 rounded-full bg-blue-50 text-indigo-600 flex items-center justify-center font-[900] text-[13px] mt-2">
+                                {String.fromCharCode(97 + idx)}
+                              </div>
+                              <textarea 
+                                value={item}
+                                onChange={(e) => handleMatchColumn1Change(idx, e.target.value)}
+                                className={`flex-1 w-full bg-white border-[1.5px] ${idx === 0 ? 'border-indigo-400' : 'border-slate-200'} rounded-[16px] p-4 text-[15px] font-[600] text-[#111827] outline-none focus:border-indigo-400 transition-colors shadow-sm min-h-[100px] resize-none`}
+                              />
+                              <button type="button" onClick={() => removeMatchColumn1Item(idx)} className="text-slate-300 hover:text-red-500 transition-colors mt-4 shrink-0">
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          ))}
+                          
+                          <button type="button" onClick={addMatchColumn1Item} className="w-full py-3 mt-2 border-[1.5px] border-dashed border-slate-300 text-[13px] font-[800] text-[#111827] rounded-full hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
+                            <Plus size={14} /> Add Column 1 Item
+                          </button>
+                        </div>
+
+                        {/* Column 2 */}
+                        <div className="flex-1 min-w-0 flex flex-col gap-4">
+                          <h4 className="text-[13px] font-[900] text-[#111827] border-b border-slate-100 pb-3">Column 2</h4>
+                          
+                          {(formData.matchColumn2 || []).map((item, idx) => (
+                            <div key={idx} className="flex items-start gap-3">
+                              <div className="w-8 h-8 shrink-0 rounded-full bg-blue-50 text-indigo-600 flex items-center justify-center font-[900] text-[13px] mt-2">
+                                {idx + 1}
+                              </div>
+                              <textarea 
+                                value={item}
+                                onChange={(e) => handleMatchColumn2Change(idx, e.target.value)}
+                                className="flex-1 w-full bg-white border-[1.5px] border-slate-200 rounded-[16px] p-4 text-[15px] font-[600] text-[#111827] outline-none focus:border-indigo-400 transition-colors shadow-sm min-h-[100px] resize-none"
+                              />
+                              <button type="button" onClick={() => removeMatchColumn2Item(idx)} className="text-slate-300 hover:text-red-500 transition-colors mt-4 shrink-0">
+                                <Trash2 size={18} />
+                              </button>
+                            </div>
+                          ))}
+
+                          <button type="button" onClick={addMatchColumn2Item} className="w-full py-3 mt-2 border-[1.5px] border-dashed border-slate-300 text-[13px] font-[800] text-[#111827] rounded-full hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
+                            <Plus size={14} /> Add Column 2 Item
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Question Image (Optional) */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-[13px] font-[800] text-slate-600 uppercase tracking-wider">Question Image (Optional)</label>
+                <div className="flex flex-col gap-3 mt-6">
+                  <label className="text-[13px] font-[900] text-slate-500 uppercase tracking-widest">Question Image (Optional)</label>
                   {formData.questionImageUrl ? (
-                    <div className="relative bg-slate-100 rounded-2xl border border-slate-200 p-2 w-fit">
+                    <div className="relative bg-slate-50 rounded-[20px] border-[1.5px] border-slate-200 p-2 w-fit">
                       <img src={formData.questionImageUrl} alt="Question" className="max-h-40 rounded-xl" />
                       <button type="button" onClick={() => removeImage('questionImageUrl')} className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full shadow-lg hover:bg-red-600">
                         <X size={14} />
                       </button>
                     </div>
                   ) : (
-                    <label className="border-2 border-dashed border-slate-300 hover:border-blue-400 bg-white hover:bg-slate-50 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors shadow-sm group">
-                      <ImageIcon size={24} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
-                      <span className="text-sm font-bold text-slate-600 group-hover:text-blue-600 transition-colors">Upload, Paste or Drop Image</span>
+                    <label className="border-[1.5px] border-dashed border-slate-300 hover:border-blue-400 bg-white rounded-full py-5 flex items-center justify-center gap-3 cursor-pointer transition-colors shadow-sm group">
+                      <ImageIcon size={18} className="text-[#111827]" />
+                      <span className="text-[14px] font-[900] text-[#111827]">Upload, Paste or Drop Image</span>
                       <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'questionImageUrl')} />
                     </label>
                   )}
                 </div>
 
                 {/* Explanation Editor */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-[13px] font-[800] text-slate-600 uppercase tracking-wider">Explanation <span className="text-slate-400 normal-case tracking-normal">(shown after test)</span></label>
-                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-                    <div className="h-12 border-b border-slate-100 bg-slate-50/50 flex items-center px-2 gap-1">
-                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><Bold size={16}/></button>
-                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><Italic size={16}/></button>
-                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
-                      <button type="button" className="p-2 text-slate-500 hover:bg-slate-200 rounded-lg"><List size={16}/></button>
+                <div className="flex flex-col gap-3 mt-6">
+                  <label className="text-[15px] font-[900] text-[#111827]">Explanation <span className="text-slate-500 text-[14px] font-[700]">(shown after test)</span></label>
+                  <div className="bg-white border-[1.5px] border-slate-200 rounded-[20px] overflow-hidden flex flex-col shadow-sm">
+                    <div className="h-14 border-b border-slate-100 flex items-center px-4 gap-2">
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><Bold size={16}/></button>
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><Italic size={16}/></button>
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold">x²</button>
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold">x₂</button>
+                      <div className="w-px h-5 bg-slate-200 mx-2"></div>
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><List size={16}/></button>
+                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><ListTodo size={16}/></button>
+                      <div className="ml-auto flex">
+                         <button type="button" className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg"><Eraser size={16}/></button>
+                      </div>
                     </div>
                     <textarea 
                       name="explanation"
                       value={formData.explanation}
                       onChange={handleInputChange}
-                      className="w-full p-4 h-32 resize-none outline-none text-slate-700 placeholder-slate-300"
-                      placeholder="Add detailed explanation here..."
+                      className="w-full p-6 h-32 resize-none outline-none text-[16px] font-[500] text-[#111827] placeholder-slate-300"
                     ></textarea>
                   </div>
                 </div>
@@ -633,174 +955,322 @@ export default function QuestionBank() {
               {/* CENTER COLUMN: ANSWER OPTIONS */}
               <div className="w-full xl:w-[450px] shrink-0 flex flex-col bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden h-fit xl:h-full">
                 
-                <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                    <ListTodo size={20} />
+                <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+                  <div className="w-11 h-11 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center">
+                    <List size={22} />
                   </div>
-                  <h3 className="text-lg font-[900] text-slate-800 tracking-tight">Answer Options</h3>
+                  <h3 className="text-[19px] font-[900] text-[#111827] tracking-tight">Answer Options</h3>
                 </div>
 
-                <div className="p-6 flex flex-col gap-4 overflow-y-auto bg-slate-50/30 flex-1">
-                  <p className="text-sm font-bold text-slate-500 mb-2">Select the correct answer</p>
+                <div className="p-6 flex flex-col gap-4 overflow-y-auto flex-1 bg-white">
+                  
+                  {/* SINGLE CHOICE & MULTIPLE CHOICE & MATCH */}
+                  {(formData.questionType === 'Single Choice' || formData.questionType === 'Multiple Choice' || formData.questionType === 'Match') && (
+                    <>
+                      <p className="text-[14px] font-[600] text-slate-500 mb-2">
+                        {formData.questionType === 'Single Choice' || formData.questionType === 'Match' ? 'Select the correct answer' : 'Select all correct answers'}
+                      </p>
 
-                  {optionsList.map(opt => (
-                    <div key={opt} className={`relative flex flex-col bg-white border-2 rounded-2xl transition-all ${formData.correctAnswer === opt ? 'border-emerald-500 shadow-md ring-4 ring-emerald-500/10' : 'border-slate-200 hover:border-slate-300 shadow-sm'}`}>
+                      {optionsList.map(opt => {
+                        const isChecked = formData.questionType === 'Single Choice' 
+                          ? formData.correctAnswer === opt
+                          : (formData.correctAnswers || []).includes(opt);
+
+                        return (
+                          <div key={opt} className={`relative flex flex-col bg-white border-[1.5px] rounded-[24px] transition-all p-3 ${isChecked ? 'border-[#059669]' : 'border-slate-200'}`}>
+                            
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 shrink-0 rounded-full font-[900] text-[15px] flex items-center justify-center transition-colors ${isChecked ? 'bg-[#059669] text-white' : 'bg-slate-100 text-slate-700'}`}>
+                                {opt}
+                              </div>
+                              
+                              <div className="flex-1">
+                                <input 
+                                  type="text"
+                                  name={`option${opt}`}
+                                  value={formData[`option${opt}`]}
+                                  onChange={handleInputChange}
+                                  placeholder={`Option ${opt}`}
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-[15px] font-[700] text-slate-800 placeholder-slate-400 outline-none focus:border-slate-300 transition-colors"
+                                />
+                              </div>
+
+                              {isChecked && (
+                                <div className="px-3 py-1.5 rounded-full bg-emerald-50 text-[#059669] font-[800] text-[13px]">
+                                  Correct
+                                </div>
+                              )}
+                              
+                              <label className="cursor-pointer shrink-0 ml-1">
+                                {(formData.questionType === 'Single Choice' || formData.questionType === 'Match') ? (
+                                  <>
+                                    <input type="radio" name="correctAnswer" value={opt} checked={isChecked} onChange={handleInputChange} className="hidden" />
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${isChecked ? 'bg-[#059669]' : 'border-[2px] border-slate-200 bg-slate-50 hover:bg-slate-100'}`}>
+                                      {isChecked && <CheckCircle2 size={18} className="text-white" />}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <input type="checkbox" checked={isChecked} onChange={() => handleCheckboxChange(opt)} className="hidden" />
+                                    <div className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${isChecked ? 'bg-[#059669]' : 'border-[2px] border-slate-200 bg-slate-50 hover:bg-slate-100'}`}>
+                                      {isChecked && <CheckCircle2 size={18} className="text-white" />}
+                                    </div>
+                                  </>
+                                )}
+                              </label>
+                            </div>
+
+                            <div className="flex items-center justify-end px-12 pt-2">
+                              {formData[`option${opt}Image`] ? (
+                                  <div className="relative group w-fit">
+                                    <img src={formData[`option${opt}Image`]} alt={`Option ${opt}`} className="max-h-20 rounded-lg shadow-sm border border-slate-200" />
+                                    <button type="button" onClick={() => removeImage(`option${opt}Image`)} className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                              ) : (
+                                  <label className="flex items-center gap-1.5 text-[11px] font-[800] text-slate-400 hover:text-blue-600 cursor-pointer transition-colors">
+                                    <ImageIcon size={14} /> ADD IMAGE
+                                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, `option${opt}Image`)} />
+                                  </label>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+
+                  {/* FILL IN BLANKS / NAT */}
+                  {formData.questionType === 'Fill in Blanks' && (
+                    <div className="flex flex-col gap-6">
                       
-                      {/* Option Header & Selection */}
-                      <div className="flex items-center gap-3 p-4 border-b border-slate-100">
-                        <div className={`w-8 h-8 rounded-lg font-[900] flex items-center justify-center ${formData.correctAnswer === opt ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                          {opt}
+                      {/* Decimal Precision */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <label className="text-[13px] font-[900] text-slate-800">Decimal Precision</label>
+                          <span className="text-[12px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">(numeric check)</span>
                         </div>
-                        <div className="flex-1">
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-1 flex items-center">
+                          {['None', '.00', '.000', '.0000'].map(prec => (
+                            <button
+                              key={prec}
+                              type="button"
+                              onClick={() => setFormData({...formData, fillBlankPrecision: prec})}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${formData.fillBlankPrecision === prec ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'}`}
+                            >
+                              {prec}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Answer Matching Mode */}
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[13px] font-[900] text-slate-800">Answer Matching Mode</label>
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-1 flex items-center">
+                          {['Exact Match', 'Numeric Range'].map(mode => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setFormData({...formData, fillBlankMode: mode})}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${formData.fillBlankMode === mode ? 'bg-white border-2 border-blue-600 text-slate-900 shadow-sm ring-4 ring-blue-500/10' : 'text-slate-500 border-2 border-transparent hover:text-slate-700 hover:bg-slate-100/50'}`}
+                            >
+                              {mode}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="w-full h-px bg-slate-100 my-2"></div>
+
+                      {/* Value Input */}
+                      {formData.fillBlankMode === 'Exact Match' ? (
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[13px] font-[900] text-slate-800">Exact Answer Value <span className="text-red-500">*</span></label>
                           <input 
                             type="text"
-                            name={`option${opt}`}
-                            value={formData[`option${opt}`]}
+                            name="fillBlankAnswer"
+                            value={formData.fillBlankAnswer || ''}
                             onChange={handleInputChange}
-                            placeholder={`Enter Option ${opt}`}
-                            className="w-full bg-transparent outline-none text-[15px] font-medium text-slate-800 placeholder-slate-400"
+                            placeholder="e.g. 2"
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-[15px] font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
                           />
                         </div>
-                        <label className="cursor-pointer">
-                          <input 
-                            type="radio"
-                            name="correctAnswer"
-                            value={opt}
-                            checked={formData.correctAnswer === opt}
-                            onChange={handleInputChange}
-                            className="hidden"
-                          />
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${formData.correctAnswer === opt ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`}>
-                            {formData.correctAnswer === opt && <div className="w-2.5 h-2.5 rounded-full bg-white"></div>}
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[13px] font-[900] text-slate-800">Numeric Range <span className="text-red-500">*</span></label>
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="text"
+                              name="fillBlankRangeStart"
+                              value={formData.fillBlankRangeStart || ''}
+                              onChange={handleInputChange}
+                              placeholder="Min (e.g. 1.9)"
+                              className="flex-1 bg-white border border-slate-200 rounded-2xl px-4 py-3 text-[15px] font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                            />
+                            <span className="text-slate-400 font-bold">to</span>
+                            <input 
+                              type="text"
+                              name="fillBlankRangeEnd"
+                              value={formData.fillBlankRangeEnd || ''}
+                              onChange={handleInputChange}
+                              placeholder="Max (e.g. 2.1)"
+                              className="flex-1 bg-white border border-slate-200 rounded-2xl px-4 py-3 text-[15px] font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
+                            />
                           </div>
-                        </label>
-                      </div>
-
-                      {/* Image Upload Area for Option */}
-                      <div className="p-3 bg-slate-50/50 rounded-b-2xl flex items-center justify-center">
-                         {formData[`option${opt}Image`] ? (
-                            <div className="relative group">
-                              <img src={formData[`option${opt}Image`]} alt={`Option ${opt}`} className="max-h-24 rounded-lg shadow-sm border border-slate-200" />
-                              <button type="button" onClick={() => removeImage(`option${opt}Image`)} className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                                <X size={12} />
-                              </button>
-                            </div>
-                         ) : (
-                            <label className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-blue-600 cursor-pointer transition-colors py-2">
-                              <ImageIcon size={14} /> ADD IMAGE
-                              <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, `option${opt}Image`)} />
-                            </label>
-                         )}
-                      </div>
+                        </div>
+                      )}
 
                     </div>
-                  ))}
+                  )}
+
                 </div>
               </div>
 
             </div>
 
             {/* RIGHT SIDEBAR: ATTRIBUTES & ACTIONS */}
-            <div className="w-80 shrink-0 bg-white border-l border-slate-200 flex flex-col shadow-[-10px_0_20px_rgba(0,0,0,0.02)] z-10 relative">
-              <div className="p-6 border-b border-slate-100 flex items-center gap-2">
-                <Settings size={16} className="text-blue-600" />
-                <h3 className="text-[13px] font-[900] text-slate-800 uppercase tracking-widest">Question Attributes</h3>
+            <div className="w-80 shrink-0 bg-[#f8fafc] border-l border-slate-200 flex flex-col z-10 relative">
+              <div className="p-6 pb-2 flex items-center gap-2">
+                <Tag size={16} className="text-indigo-600" />
+                <h3 className="text-[13px] font-[900] text-[#111827] uppercase tracking-wider">Question Attributes</h3>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="flex-1 overflow-y-auto p-6 space-y-5">
                 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-bold text-slate-500">Department</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Department</label>
                   <div className="relative">
-                    <select name="department" value={formData.department} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                    <select name="department" value={formData.department} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- No Department --</option>
                       {departments.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-bold text-slate-500">Subject</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Subject</label>
                   <div className="relative">
-                    <select name="subject" value={formData.subject} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                    <select name="subject" value={formData.subject} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- No Subject --</option>
                       {subjects.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-bold text-slate-500">Topic</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Topic</label>
                   <div className="relative">
-                    <select name="topic" value={formData.topic} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                    <select name="topic" value={formData.topic} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- No Topic --</option>
                       {topics.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-bold text-slate-500">Year</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Year</label>
                   <div className="relative">
-                    <select name="year" value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                    <select name="year" value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- No Year --</option>
                       {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-bold text-slate-500">Mark</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Mark</label>
                   <div className="relative">
-                    <select name="mark" value={formData.mark} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                    <select name="mark" value={formData.mark} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       {marks.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-bold text-slate-500">Difficulty Level</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Difficulty Level</label>
                   <div className="relative">
-                    <select name="difficultyLevel" value={formData.difficultyLevel} onChange={handleInputChange} className="w-full appearance-none bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer">
+                    <select name="difficultyLevel" value={formData.difficultyLevel} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- No Difficulty Level --</option>
                       {difficulties.map(df => <option key={df} value={df}>{df}</option>)}
                     </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="p-6 border-t border-slate-100 bg-white space-y-3 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+              <div className="p-6 bg-[#f8fafc] space-y-4">
                 <button 
                   type="button"
                   onClick={handleSaveAndNext}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-white border border-slate-200 text-[#111827] font-[800] text-[13px] hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
                 >
                   <ChevronRight size={16} /> Save & Next
                 </button>
                 <button 
                   type="submit"
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#059669] hover:bg-emerald-700 text-white font-bold text-sm transition-colors shadow-md shadow-emerald-500/20"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-[#059669] hover:bg-emerald-700 text-white font-[800] text-[13px] transition-colors shadow-md shadow-emerald-500/20"
                 >
-                  <CheckCircle2 size={16} /> Save & Close
+                  <Check size={16} /> Save & Close
                 </button>
                 <button 
                   type="button"
                   onClick={() => setIsCreatorOpen(false)}
-                  className="w-full py-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-2 text-[12px] font-[800] text-slate-400 hover:text-slate-600 transition-colors"
                 >
-                  Close Creator
+                  <X size={14} /> Close Creator
                 </button>
               </div>
 
             </div>
           </form>
+        </div>,
+        document.body
+      )}
+
+      {/* Toast Notification */}
+      {toast.show && createPortal(
+        <div className="fixed bottom-6 right-6 z-[999999] animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className={`flex items-center gap-3 px-5 py-3 rounded-xl shadow-lg border ${toast.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
+            {toast.type === 'error' ? <X size={20} className="text-red-500" /> : <CheckCircle2 size={20} className="text-emerald-500" />}
+            <span className="text-[14px] font-[800]">{toast.message}</span>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && createPortal(
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 pb-4">
+              <h3 className="text-[18px] font-[900] text-slate-800 mb-2">Delete Question</h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed">
+                Are you sure you want to delete this question? This action cannot be undone.
+              </p>
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button 
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-4 py-2 text-[13px] font-[800] text-slate-600 hover:text-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="px-5 py-2 text-[13px] font-[800] bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}
