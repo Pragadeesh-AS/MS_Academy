@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip, Calculator, Eraser, Tag, Check } from 'lucide-react';
 import { db } from '../../firebase';
@@ -79,6 +79,20 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder = "Sele
   );
 };
 
+const SYMBOL_PALETTE = {
+  "Basic Math": ["+", "-", "×", "÷", "=", "≠", "≈", "±", "∓", "∞", "√", "∛", "∜", "%", "°", "π", "∝"],
+  "Fractions": ["½", "⅓", "⅔", "¼", "¾", "⅕", "⅖", "⅗", "⅘", "⅙", "⅚", "⅛", "⅜", "⅝", "⅞"],
+  "Calculus": ["∫", "∬", "∭", "∮", "∯", "∰", "∂", "∇", "lim", "Σ", "∏", "∐", "dx", "dy", "dt", "′", "″", "‴", "⁗"],
+  "Algebra & Sets": ["∀", "∃", "∄", "∈", "∉", "⊂", "⊃", "⊆", "⊇", "⊄", "⊅", "∪", "∩", "∅", "ℝ", "ℕ", "ℤ", "ℚ", "ℂ", "ℙ", "ℵ"],
+  "Geometry": ["∠", "∡", "∢", "△", "⊥", "∥", "∦", "≅", "∼", "≃", "≄", "∴", "∵", "π", "θ", "α", "β", "γ", "ϕ", "ω"],
+  "Greek (Lower)": ["α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ", "ν", "ξ", "ο", "π", "ρ", "σ", "τ", "υ", "φ", "χ", "ψ", "ω"],
+  "Greek (Upper)": ["Α", "Β", "Γ", "Δ", "Ε", "Ζ", "Η", "Θ", "Ι", "Κ", "Λ", "Μ", "Ν", "Ξ", "Ο", "Π", "Ρ", "Σ", "Τ", "Υ", "Φ", "Χ", "Ψ", "Ω"],
+  "Logic & Arrows": ["∧", "∨", "¬", "⇒", "⇐", "⇔", "→", "←", "↔", "↑", "↓", "⊕", "⊗", "⊢", "⊨"],
+  "Superscripts": ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹", "⁺", "⁻", "⁼", "⁽", "⁾", "ⁿ"],
+  "Subscripts": ["₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉", "₊", "₋", "₌", "₍", "₎"],
+  "Expressions": ["f(x)", "d/dx", "∫_a^b", "lim_{x→∞}", "lim_{x→0}", "sin(θ)", "cos(θ)", "tan(θ)", "log_{10}(x)", "ln(x)", "e^x", "e^{iπ}", "n!", "P(A∪B)"]
+};
+
 export default function QuestionBank() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -89,6 +103,56 @@ export default function QuestionBank() {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   
+  const [isSymbolPaletteOpen, setIsSymbolPaletteOpen] = useState(false);
+  const [palettePos, setPalettePos] = useState({ x: window.innerWidth > 800 ? window.innerWidth - 350 : 20, y: 80 });
+  const [isDraggingPalette, setIsDraggingPalette] = useState(false);
+  const dragRef = useRef({ startX: 0, startY: 0 });
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDraggingPalette) return;
+      setPalettePos({
+        x: e.clientX - dragRef.current.startX,
+        y: e.clientY - dragRef.current.startY
+      });
+    };
+    const handleMouseUp = () => setIsDraggingPalette(false);
+    
+    if (isDraggingPalette) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingPalette]);
+
+  const insertSymbol = (symbol) => {
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT')) {
+      const start = activeEl.selectionStart;
+      const end = activeEl.selectionEnd;
+      const val = activeEl.value;
+      const newVal = val.substring(0, start) + symbol + val.substring(end);
+      
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+      const nativeInputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      const setter = activeEl.tagName === 'TEXTAREA' ? nativeInputValueSetter : nativeInputSetter;
+      
+      if (setter) {
+        setter.call(activeEl, newVal);
+        const ev = new Event('input', { bubbles: true});
+        activeEl.dispatchEvent(ev);
+      }
+      
+      setTimeout(() => {
+        activeEl.focus();
+        activeEl.selectionStart = activeEl.selectionEnd = start + symbol.length;
+      }, 0);
+    }
+  };
+
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
@@ -758,7 +822,11 @@ export default function QuestionBank() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <button type="button" className="p-2 text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors">
+              <button 
+                type="button" 
+                onClick={() => setIsSymbolPaletteOpen(!isSymbolPaletteOpen)}
+                className={`p-2 rounded-lg transition-colors shadow-sm ${isSymbolPaletteOpen ? 'bg-[#5b32ea] text-white' : 'text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200'}`}
+              >
                 <Calculator size={18} />
               </button>
               <div className="w-px h-5 bg-slate-200"></div>
@@ -1231,8 +1299,66 @@ export default function QuestionBank() {
 
             </div>
           </form>
+
+          {/* SYMBOL PALETTE */}
+          {isSymbolPaletteOpen && (
+            <div 
+              style={{ left: Math.max(0, Math.min(window.innerWidth - 300, palettePos.x)), top: Math.max(0, Math.min(window.innerHeight - 400, palettePos.y)) }}
+              className="fixed w-[320px] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[999999] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+            >
+              <div 
+                className="flex items-center justify-between px-4 py-3 bg-slate-50/80 backdrop-blur-sm border-b border-slate-100 cursor-move"
+                onMouseDown={(e) => {
+                  setIsDraggingPalette(true);
+                  dragRef.current = { startX: e.clientX - palettePos.x, startY: e.clientY - palettePos.y };
+                }}
+              >
+                <div className="flex items-center gap-2 pointer-events-none">
+                  <Calculator size={16} className="text-[#5b32ea]" />
+                  <div>
+                    <h3 className="text-[13px] font-[800] text-slate-800 leading-none mb-0.5">Symbol Palette</h3>
+                    <p className="text-[10px] font-[600] text-slate-500 leading-none">Hold & drag title bar to move</p>
+                  </div>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setIsSymbolPaletteOpen(false)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              
+              <div className="p-4 max-h-[420px] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full bg-white">
+                {Object.entries(SYMBOL_PALETTE).map(([category, symbols]) => (
+                  <div key={category} className="mb-6 last:mb-0">
+                    <h4 className="text-[11px] font-[800] text-slate-400 uppercase tracking-widest mb-3">{category}</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {symbols.map((sym, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()} // Prevent taking focus away from input
+                          onClick={() => insertSymbol(sym)}
+                          className="h-10 min-w-[40px] px-2 flex items-center justify-center text-[16px] font-[600] text-slate-800 bg-white hover:bg-[#5b32ea]/10 hover:text-[#5b32ea] rounded-xl transition-all shadow-sm border border-slate-100 hover:border-[#5b32ea]/20 whitespace-nowrap"
+                        >
+                          {sym}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="py-2 text-center border-t border-slate-50 mt-4">
+                  <span className="text-[11px] font-[600] text-slate-400">Scroll for more ↓</span>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>,
         document.body
+
       )}
 
       {/* Toast Notification */}
