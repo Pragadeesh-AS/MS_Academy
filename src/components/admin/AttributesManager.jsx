@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Tags, Plus, Edit2, Trash2, Folder, ChevronDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, ChevronDown, Search, MoreHorizontal, CheckCircle2, Bookmark, LayoutList, Trophy, Star, Clock, Landmark, FileText } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore';
 
 const attributeTypes = [
-  { id: 'department', name: 'Department', childOf: null },
-  { id: 'subject', name: 'Subject', childOf: 'department' },
-  { id: 'topic', name: 'Topic', childOf: 'subject' },
-  { id: 'mark', name: 'Mark', childOf: null },
-  { id: 'difficulty', name: 'Difficulty Level', childOf: null },
+  { id: 'department', name: 'Department', childOf: null, icon: Landmark, iconBg: 'bg-blue-100', iconColor: 'text-blue-600' },
+  { id: 'subject', name: 'Subject', childOf: 'department', icon: Bookmark, iconBg: 'bg-purple-100', iconColor: 'text-purple-600' },
+  { id: 'topic', name: 'Topic', childOf: 'subject', icon: FileText, iconBg: 'bg-orange-100', iconColor: 'text-orange-500' },
+  { id: 'mark', name: 'Mark', childOf: null, icon: Trophy, iconBg: 'bg-green-100', iconColor: 'text-green-500' },
+  { id: 'difficulty', name: 'Difficulty Level', childOf: null, icon: Star, iconBg: 'bg-pink-100', iconColor: 'text-pink-500' },
 ];
 
 export default function AttributesManager() {
@@ -17,6 +17,7 @@ export default function AttributesManager() {
   const [newParent, setNewParent] = useState('');
   const [attributes, setAttributes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Modal states
   const [editingAttr, setEditingAttr] = useState(null);
@@ -84,24 +85,66 @@ export default function AttributesManager() {
   const activeAttribute = attributeTypes.find(a => a.id === activeTab);
   const currentValues = attributes.filter(a => a.type === activeTab);
   
-  // Get parent options if this attribute has a parent
   const parentOptions = activeAttribute.childOf 
     ? attributes.filter(a => a.type === activeAttribute.childOf)
     : [];
 
+  const getInitials = (name) => {
+    if (!name) return 'EC';
+    const words = name.split(' ');
+    if (words.length > 1) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const getRelativeTime = (isoString) => {
+    if (!isoString) return 'Updated today';
+    const date = new Date(isoString);
+    const diff = Math.floor((new Date() - date) / 1000); 
+    if (diff < 86400) return 'Updated today';
+    if (diff < 172800) return 'Updated yesterday';
+    return `Updated ${Math.floor(diff/86400)} days ago`;
+  };
+
+  const getChildCountText = (attrId, attrType) => {
+    const childType = attributeTypes.find(t => t.childOf === attrType)?.id;
+    if (!childType) return null;
+    const childCount = attributes.filter(a => a.parentId === attrId && a.type === childType).length;
+    return `${childCount} ${attributeTypes.find(t => t.id === childType)?.name}s`;
+  };
+
+  // Generate color styles for initials badges
+  const getInitialsStyles = (index) => {
+    const colors = [
+      { text: 'text-blue-600', bg: 'bg-blue-50', shadow: 'shadow-[0_0_15px_rgba(37,99,235,0.15)]' },
+      { text: 'text-purple-600', bg: 'bg-purple-50', shadow: 'shadow-[0_0_15px_rgba(147,51,234,0.15)]' },
+      { text: 'text-green-600', bg: 'bg-green-50', shadow: 'shadow-[0_0_15px_rgba(22,163,74,0.15)]' },
+      { text: 'text-orange-500', bg: 'bg-orange-50', shadow: 'shadow-[0_0_15px_rgba(249,115,22,0.15)]' },
+      { text: 'text-pink-500', bg: 'bg-pink-50', shadow: 'shadow-[0_0_15px_rgba(236,72,153,0.15)]' },
+    ];
+    return colors[index % colors.length];
+  };
+
   return (
-    <div className="flex flex-col lg:flex-row gap-6 h-full">
+    <div className="flex flex-col xl:flex-row gap-6 w-full h-full min-h-[800px] px-6 pb-6 pt-0 lg:px-8 lg:pb-8 lg:pt-0 bg-[#F8FAFC]">
       
-      {/* LEFT SIDEBAR: ATTRIBUTE FIELDS */}
-      <div className="w-full lg:w-80 shrink-0 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-fit">
-        <div className="p-6 border-b border-slate-100 flex items-center gap-3 bg-slate-50/50">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-          <h3 className="text-lg font-[900] text-slate-800 tracking-tight">Attribute Fields</h3>
+      {/* ==================== LEFT SIDEBAR ==================== */}
+      <div className="w-full xl:w-[280px] shrink-0 bg-[#FFFFFF] border border-[#F1F5F9] rounded-[24px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col h-fit overflow-hidden">
+        
+        {/* Sidebar Header */}
+        <div className="p-6 pb-4 flex items-center gap-3">
+          <div className="w-2.5 h-2.5 rounded-full bg-[#10B981]"></div>
+          <h3 className="text-[15px] font-[700] text-[#0F172A]">Attribute Fields</h3>
         </div>
         
-        <div className="p-4 flex flex-col gap-2 overflow-y-auto max-h-[60vh] lg:max-h-none">
+        {/* Sidebar Items */}
+        <div className="p-4 pt-0 flex flex-col gap-1">
           {attributeTypes.map(attr => {
             const count = attributes.filter(a => a.type === attr.id).length;
+            const isActive = activeTab === attr.id;
+            const Icon = attr.icon;
+
             return (
               <button
                 key={attr.id}
@@ -110,27 +153,36 @@ export default function AttributesManager() {
                   setNewValue('');
                   setNewParent('');
                 }}
-                className={`flex items-center justify-between p-4 rounded-2xl transition-all border-2 ${
-                  activeTab === attr.id 
-                  ? 'bg-blue-50 border-blue-500 shadow-sm' 
-                  : 'bg-white border-transparent hover:border-slate-200 hover:bg-slate-50'
+                className={`relative flex items-center justify-between p-3 rounded-[16px] transition-all duration-200 ${
+                  isActive 
+                  ? 'bg-[#2563EB] shadow-[0_4px_12px_rgba(37,99,235,0.25)]' 
+                  : 'hover:bg-slate-50 bg-transparent'
                 }`}
               >
-                <div className="flex flex-col items-start gap-1">
-                  <div className="flex items-center gap-3">
-                    <Tags size={18} className={activeTab === attr.id ? 'text-blue-600' : 'text-slate-400'} />
-                    <span className={`font-bold ${activeTab === attr.id ? 'text-blue-900' : 'text-slate-700'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                    isActive 
+                    ? 'bg-white text-[#2563EB]' 
+                    : `${attr.iconBg} ${attr.iconColor} shadow-[0_0_10px_rgba(0,0,0,0.03)]`
+                  }`}>
+                    <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                  </div>
+                  <div className="flex flex-col items-start text-left">
+                    <span className={`font-[700] text-[15px] ${isActive ? 'text-white' : 'text-[#0F172A]'}`}>
                       {attr.name}
                     </span>
+                    {attr.childOf && (
+                      <span className={`text-[10px] font-[600] uppercase tracking-wider mt-0.5 ${isActive ? 'text-blue-100' : 'text-[#94A3B8]'}`}>
+                        Child of {attributeTypes.find(a => a.id === attr.childOf)?.name}
+                      </span>
+                    )}
                   </div>
-                  {attr.childOf && (
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider ml-8">
-                      Child of {attributeTypes.find(a => a.id === attr.childOf)?.name}
-                    </span>
-                  )}
                 </div>
-                <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${
-                  activeTab === attr.id ? 'bg-blue-200 text-blue-800' : 'bg-slate-100 text-slate-500'
+                
+                <span className={`text-[12px] font-[700] min-w-[24px] h-[24px] flex items-center justify-center rounded-full ${
+                  isActive 
+                  ? 'bg-white/20 text-white' 
+                  : 'bg-[#F1F5F9] text-[#64748B]'
                 }`}>
                   {count}
                 </span>
@@ -140,142 +192,219 @@ export default function AttributesManager() {
         </div>
       </div>
 
-      {/* MAIN CONTENT AREA */}
-      <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[600px]">
+      {/* ==================== MAIN CONTENT PANEL ==================== */}
+      <div className="flex-1 bg-[#FFFFFF] border border-[#F1F5F9] rounded-[24px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col overflow-hidden min-h-[700px]">
         
-        {/* Header */}
-        <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-r from-blue-50/50 to-transparent">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shadow-inner">
-              <Tags size={20} />
+        {/* Content Header */}
+        <div className="p-8 pb-6 border-b border-[#F1F5F9] flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div className="w-[60px] h-[60px] rounded-[16px] bg-[#2563EB] flex items-center justify-center shrink-0 shadow-[0_4px_12px_rgba(37,99,235,0.2)]">
+              <activeAttribute.icon size={30} className="text-white" strokeWidth={2} />
             </div>
-            <h2 className="text-2xl font-[900] text-slate-800 tracking-tight">{activeAttribute.name} Configuration</h2>
+            <div className="flex flex-col gap-1.5 pt-1">
+              <h2 className="text-[28px] font-[800] text-[#0F172A] leading-none tracking-tight">
+                {activeAttribute.name} Configuration
+              </h2>
+              <div className="flex flex-col gap-1 mt-1">
+                <p className="text-[14px] font-[500] text-[#64748B]">
+                  Manage system-wide options for {activeAttribute.name}.
+                </p>
+                <p className="text-[14px] font-[500] text-[#64748B]">
+                  Add new values or organize existing ones to keep the platform structured.
+                </p>
+              </div>
+            </div>
           </div>
-          <p className="text-slate-500 text-sm font-medium leading-relaxed max-w-2xl">
-            Manage system-wide options for <span className="font-bold text-slate-700">{activeAttribute.name}</span>. Add new values or organize existing ones to keep the platform structured.
-          </p>
+
+          {/* Mini Statistics Card */}
+          <div className="flex flex-col bg-[#FFFFFF] border border-[#EEF2F7] rounded-[16px] p-4 shadow-sm min-w-[180px]">
+            <div className="flex items-center gap-4 pb-3 border-b border-[#F1F5F9]">
+              <activeAttribute.icon size={22} className="text-[#2563EB]" strokeWidth={2} />
+              <div className="flex flex-col">
+                <span className="text-[20px] font-[800] text-[#0F172A] leading-none">{currentValues.length}</span>
+                <span className="text-[12px] font-[600] text-[#64748B] mt-1">{activeAttribute.name}s</span>
+              </div>
+            </div>
+            <div className="pt-3 flex items-center gap-2">
+              <Clock size={14} className="text-[#2563EB]" />
+              <span className="text-[12px] font-[500] text-[#64748B]">
+                Updated today
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="p-6 md:p-8 flex-1 overflow-y-auto space-y-8 bg-slate-50/30">
-          
-          {/* Add Option Form - Sleek Inline Row */}
-          <div className="bg-white rounded-2xl p-2 md:p-3 border border-slate-200 shadow-sm flex flex-col md:flex-row items-center gap-2 md:gap-4 w-full transition-all hover:border-blue-300 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10">
-            
-            <div className="flex items-center gap-3 px-3 w-full flex-1">
-              <Plus size={20} className="text-blue-500 shrink-0" />
+        {/* Add Department Horizontal Section */}
+        <div className="px-8 py-6">
+          <div className="flex flex-col md:flex-row items-center gap-4 w-full">
+            <div className="flex-1 w-full relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search size={20} className="text-[#94A3B8]" />
+              </div>
               <input 
                 type="text"
                 placeholder={`Type new ${activeAttribute.name.toLowerCase()}...`}
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
-                className="w-full bg-transparent text-[15px] font-bold text-slate-800 outline-none placeholder:text-slate-400 placeholder:font-medium py-2"
+                className="w-full h-[52px] pl-12 pr-4 bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] placeholder-[#94A3B8] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all shadow-sm"
               />
             </div>
-
+            
             {activeAttribute.childOf && (
-              <>
-                <div className="hidden md:block w-px h-8 bg-slate-200"></div>
-                <div className="relative w-full md:w-64 shrink-0 px-2 md:px-0">
-                  <select 
-                    value={newParent}
-                    onChange={(e) => setNewParent(e.target.value)}
-                    className="w-full appearance-none bg-slate-50 md:bg-transparent text-slate-700 text-[14px] font-bold pl-3 pr-10 py-2.5 rounded-xl md:rounded-none outline-none cursor-pointer border md:border-transparent border-slate-200 hover:bg-slate-50 transition-colors"
-                  >
-                    <option value="">Assign to {attributeTypes.find(a => a.id === activeAttribute.childOf)?.name}...</option>
-                    {parentOptions.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-4 md:right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
-              </>
+              <div className="w-full md:w-[240px] relative shrink-0">
+                <select 
+                  value={newParent}
+                  onChange={(e) => setNewParent(e.target.value)}
+                  className="w-full h-[52px] pl-4 pr-10 appearance-none bg-white border border-[#EEF2F7] rounded-[12px] text-[14px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all shadow-sm cursor-pointer"
+                >
+                  <option value="" disabled>Select parent...</option>
+                  {parentOptions.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
+              </div>
             )}
 
             <button 
-              onClick={handleAdd}
-              disabled={!newValue.trim() || (activeAttribute.childOf && !newParent)}
-              className="w-full md:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-sm transition-all shrink-0"
+              onClick={() => {
+                if (!newValue.trim() || (activeAttribute.childOf && !newParent)) {
+                  setEditingAttr({ id: 'NEW', name: newValue });
+                } else {
+                  handleAdd();
+                }
+              }}
+              className="relative overflow-hidden w-full md:w-auto h-[52px] px-6 text-[#2563EB] border-2 border-[#2563EB] rounded-[34px] font-[600] text-[15px] bg-transparent transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-white hover:scale-105 hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-100 shrink-0 flex items-center justify-center gap-2 group z-[1]"
             >
-              Add {activeAttribute.name}
+              <span className="absolute inset-0 m-auto w-[50px] h-[50px] rounded-[inherit] scale-0 -z-10 bg-[#2563EB] transition-transform duration-[600ms] ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:scale-[10]"></span>
+              <Plus size={20} strokeWidth={2.5} className="z-10" /> 
+              <span className="z-10">Add {activeAttribute.name}</span>
             </button>
           </div>
+        </div>
 
-          {/* Current Values Grid */}
-          <div>
-            <h4 className="font-[900] text-slate-800 mb-4">Current Values</h4>
-            
-            {loading ? (
-              <div className="p-8 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : currentValues.length === 0 ? (
-              <div className="p-8 border-2 border-dashed border-slate-200 rounded-3xl flex items-center justify-center text-slate-400 font-medium">
-                No values added yet.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {currentValues.map((val) => {
-                  const parentName = val.parentId 
-                    ? attributes.find(a => a.id === val.parentId)?.name 
-                    : null;
+        {/* Content Grid */}
+        <div className="px-8 pb-8 flex-1 overflow-y-auto">
+          <h3 className="text-[18px] font-[800] text-[#0F172A] mb-4 tracking-tight">Current Values</h3>
+          
+          {loading ? (
+            <div className="h-[200px] flex items-center justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2563EB]"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
+              
+              {/* Value Cards */}
+              {currentValues.filter(val => val.name.toLowerCase().includes(searchQuery.toLowerCase())).map((val, index) => {
+                const parentName = val.parentId 
+                  ? attributes.find(a => a.id === val.parentId)?.name 
+                  : null;
+                const childText = getChildCountText(val.id, activeAttribute.id);
+                const styles = getInitialsStyles(index);
 
-                  return (
-                    <div key={val.id} className="bg-white border border-slate-200 p-4 rounded-2xl flex items-center justify-between group hover:border-blue-400 hover:shadow-md transition-all hover:-translate-y-0.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center font-bold text-slate-400 uppercase text-xs">
-                          {val.name.substring(0, 2)}
+                return (
+                  <div 
+                    key={val.id} 
+                    className="relative flex flex-col p-5 bg-[#FFFFFF] border border-[#EEF2F7] rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] transition-all duration-300 group hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:border-[#2563EB]/40 min-h-[160px]"
+                  >
+                    {/* Top Row: Icon + Menu */}
+                    <div className="flex justify-between items-start w-full">
+                      <div className="flex gap-4">
+                        <div className={`w-[54px] h-[54px] rounded-full ${styles.bg} ${styles.text} ${styles.shadow} flex items-center justify-center font-[800] text-[18px] tracking-wide`}>
+                          {getInitials(val.name)}
                         </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-800 text-[15px]">{val.name}</span>
+                        <div className="flex flex-col pt-1">
+                          <h3 className="text-[18px] font-[800] text-[#0F172A] leading-tight truncate">
+                            {val.name}
+                          </h3>
                           {parentName && (
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                            <span className="text-[12px] font-[600] text-[#64748B] mt-1">
                               Parent: {parentName}
+                            </span>
+                          )}
+                          {childText && (
+                            <span className="text-[13px] font-[600] text-[#2563EB] mt-1.5">
+                              {childText}
                             </span>
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button className="w-8 h-8 flex items-center justify-center text-[#94A3B8] transition-colors hover:text-[#0F172A]">
+                        <MoreHorizontal size={20} />
+                      </button>
+                    </div>
+
+                    {/* Bottom Row */}
+                    <div className="flex items-end justify-between mt-auto pt-4">
+                      <span className="text-[12px] font-[500] text-[#64748B]">
+                        {getRelativeTime(val.createdAt)}
+                      </span>
+                      
+                      <div className="flex gap-2">
                         <button 
                           onClick={() => setEditingAttr({ id: val.id, name: val.name })}
-                          className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100"
+                          className="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] bg-white text-[#3B82F6] shadow-sm transition-colors border border-[#EEF2F7] hover:border-[#3B82F6] hover:bg-blue-50"
                         >
-                          <Edit2 size={14} />
+                          <Edit2 size={16} />
                         </button>
                         <button 
                           onClick={() => setDeletingId(val.id)}
-                          className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                          className="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] bg-white text-[#EF4444] shadow-sm transition-colors border border-[#EEF2F7] hover:border-[#EF4444] hover:bg-red-50"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  </div>
+                );
+              })}
 
+              {/* "Add New" Empty State Card */}
+              <button 
+                onClick={() => {
+                  setNewValue('');
+                  setEditingAttr({ id: 'NEW', name: '' });
+                }}
+                className="flex flex-col items-center justify-center p-6 bg-transparent border-2 border-dashed border-[#2563EB]/40 rounded-[16px] hover:border-[#2563EB] hover:bg-blue-50/20 transition-all duration-300 group min-h-[160px]"
+              >
+                <div className="w-[42px] h-[42px] rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-[#2563EB] group-hover:scale-110 transition-all duration-300">
+                  <Plus size={22} strokeWidth={2.5} className="text-[#2563EB] group-hover:text-white transition-colors" />
+                </div>
+                <div className="flex flex-col items-center mt-3">
+                  <span className="text-[15px] font-[700] text-[#2563EB]">
+                    Add New {activeAttribute.name}
+                  </span>
+                  <span className="text-[12px] font-[500] text-[#64748B] mt-0.5">
+                    Click to create a new {activeAttribute.name.toLowerCase()}
+                  </span>
+                </div>
+              </button>
+
+            </div>
+          )}
         </div>
       </div>
 
-      {/* MODALS */}
+      {/* ==================== MODALS ==================== */}
       
       {/* Delete Modal */}
       {deletingId && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-[900] text-slate-800 mb-2">Delete Attribute</h3>
-            <p className="text-slate-500 text-sm mb-8 font-medium">Are you sure you want to delete this attribute? This action cannot be undone.</p>
+        <div className="fixed inset-0 bg-[#0F172A]/20 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] p-8 max-w-sm w-full shadow-[0_20px_40px_rgba(0,0,0,0.1)] border border-[#EEF2F7]">
+            <h3 className="text-[20px] font-[700] text-[#0F172A] mb-2">Delete Attribute</h3>
+            <p className="text-[#64748B] text-[14px] mb-8 font-[500] leading-relaxed">
+              Are you sure you want to delete this attribute? This action cannot be undone.
+            </p>
             <div className="flex justify-end gap-3">
               <button 
                 onClick={() => setDeletingId(null)}
-                className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors"
+                className="px-5 py-2.5 rounded-full font-[600] text-[#64748B] hover:bg-slate-100 transition-colors text-[14px]"
               >
                 Cancel
               </button>
               <button 
                 onClick={confirmDelete}
-                className="px-5 py-2.5 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-md shadow-red-500/20 transition-all"
+                className="px-6 py-2.5 rounded-full font-[600] text-white bg-[#EF4444] hover:bg-red-600 transition-all text-[14px]"
               >
                 Delete
               </button>
@@ -284,36 +413,71 @@ export default function AttributesManager() {
         </div>
       )}
 
-      {/* Edit Modal */}
+      {/* Add / Edit Modal */}
       {editingAttr && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-[900] text-slate-800 mb-6">Edit Attribute</h3>
-            <form onSubmit={confirmEdit}>
-              <div className="space-y-2 mb-8">
-                <label className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">Attribute Name</label>
-                <input 
-                  type="text"
-                  value={editingAttr.name}
-                  onChange={(e) => setEditingAttr({ ...editingAttr, name: e.target.value })}
-                  className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  autoFocus
-                />
+        <div className="fixed inset-0 bg-[#0F172A]/20 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] p-8 max-w-md w-full shadow-[0_20px_40px_rgba(0,0,0,0.1)] border border-[#EEF2F7]">
+            <h3 className="text-[20px] font-[700] text-[#0F172A] mb-6">
+              {editingAttr.id === 'NEW' ? `Add New ${activeAttribute.name}` : 'Edit Attribute'}
+            </h3>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (editingAttr.id === 'NEW') {
+                setNewValue(editingAttr.name);
+                handleAdd();
+                setEditingAttr(null);
+              } else {
+                confirmEdit(e);
+              }
+            }}>
+              <div className="space-y-5 mb-8">
+                <div className="space-y-2">
+                  <label className="text-[13px] font-[600] text-[#0F172A] ml-1">Attribute Name</label>
+                  <input 
+                    type="text"
+                    value={editingAttr.name}
+                    onChange={(e) => setEditingAttr({ ...editingAttr, name: e.target.value })}
+                    placeholder={`E.g. ${activeAttribute.name === 'Department' ? 'Computer Science' : 'Physics'}`}
+                    className="w-full h-[52px] px-5 bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all placeholder-[#94A3B8] shadow-sm"
+                    autoFocus
+                  />
+                </div>
+
+                {editingAttr.id === 'NEW' && activeAttribute.childOf && (
+                  <div className="space-y-2">
+                    <label className="text-[13px] font-[600] text-[#0F172A] ml-1">Parent {attributeTypes.find(a => a.id === activeAttribute.childOf)?.name}</label>
+                    <div className="relative">
+                      <select 
+                        value={newParent}
+                        onChange={(e) => setNewParent(e.target.value)}
+                        className="w-full h-[52px] pl-5 pr-12 appearance-none bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer shadow-sm"
+                        required
+                      >
+                        <option value="" disabled>Select parent...</option>
+                        {parentOptions.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={18} className="absolute right-5 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
+                    </div>
+                  </div>
+                )}
               </div>
+              
               <div className="flex justify-end gap-3">
                 <button 
                   type="button"
                   onClick={() => setEditingAttr(null)}
-                  className="px-5 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors"
+                  className="px-6 py-2.5 rounded-full font-[600] text-[#64748B] hover:bg-slate-100 transition-colors text-[14px]"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit"
-                  disabled={!editingAttr.name.trim()}
-                  className="px-5 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20 disabled:bg-slate-300 disabled:shadow-none transition-all"
+                  disabled={!editingAttr.name.trim() || (editingAttr.id === 'NEW' && activeAttribute.childOf && !newParent)}
+                  className="px-7 py-2.5 rounded-full font-[600] text-white bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-slate-300 transition-all text-[14px]"
                 >
-                  Save Changes
+                  {editingAttr.id === 'NEW' ? 'Create' : 'Save Changes'}
                 </button>
               </div>
             </form>
