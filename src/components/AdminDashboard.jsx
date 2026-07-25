@@ -5,7 +5,7 @@ import {
   Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut, 
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, UserCheck, Database, BarChart2, Megaphone, Sparkles,
-  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight
+  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
@@ -18,6 +18,7 @@ import AttributesManager from './admin/AttributesManager';
 import CourseSetup from './admin/CourseSetup';
 import StudentDirectory from './admin/StudentDirectory';
 import TeacherDirectory from './admin/TeacherDirectory';
+import FeesTracker from './admin/FeesTracker';
 
 // Default mock data to populate localStorage if empty
 const defaultStudents = [
@@ -497,6 +498,14 @@ export default function AdminDashboard() {
               >
                 <Users size={20} className="text-[#f97316]" />
                 {!isCollapsed && <span>Students</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('fees')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'fees' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <Wallet size={20} className={activeTab === 'fees' ? 'text-[#eab308]' : 'text-[#eab308]'} />
+                {!isCollapsed && <span>Fees Tracker</span>}
               </button>
 
               <button
@@ -1330,6 +1339,7 @@ export default function AdminDashboard() {
 
         {/* Active Tab: Course Bundles */}
         {activeTab === 'courses' && <CourseSetup />}
+        {activeTab === 'fees' && <FeesTracker />}
 
       </main>
 
