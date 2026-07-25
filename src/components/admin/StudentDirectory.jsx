@@ -13,7 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
-  X
+  X,
+  RotateCcw
 } from 'lucide-react';
 
 const StudentDirectory = ({ 
@@ -62,17 +63,17 @@ const StudentDirectory = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-4">
           <div className="flex bg-white/60 backdrop-blur-md border border-[#EEF2F7] p-1.5 rounded-2xl shadow-sm">
             <button 
               onClick={() => setActiveSubTab('joined')}
-              className={`px-5 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 ${activeSubTab === 'joined' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A]'}`}
+              className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap ${activeSubTab === 'joined' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A]'}`}
             >
               Enrolled Students
             </button>
             <button 
               onClick={() => setActiveSubTab('queries')}
-              className={`px-5 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 ${activeSubTab === 'queries' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A]'}`}
+              className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap ${activeSubTab === 'queries' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A]'}`}
             >
               Support Queries
             </button>
@@ -162,15 +163,15 @@ const StudentDirectory = ({
           </div>
 
           {/* Search & Filter Toolbar */}
-          <div className="flex flex-col xl:flex-row xl:items-center gap-4">
+          <div className="flex flex-col xl:flex-row xl:items-start gap-4">
             <div className="relative group flex-1">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-[#64748B] group-focus-within:text-[#2563EB] transition-colors" size={20} />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] group-focus-within:text-[#2563EB] transition-colors" size={20} />
               <input 
                 type="text" 
                 placeholder="Search students by name, email or ID..."
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                className="w-full h-[58px] pl-14 pr-6 bg-white border border-[#EEF2F7] rounded-[18px] text-[15px] text-[#0F172A] placeholder:text-[#94A3B8] shadow-[0_4px_12px_rgba(15,23,42,0.02)] outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all"
+                className="w-full h-[48px] pl-12 pr-6 bg-white border border-[#EEF2F7] rounded-[14px] text-[14px] text-[#0F172A] placeholder:text-[#94A3B8] shadow-[0_4px_12px_rgba(15,23,42,0.02)] outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all"
               />
             </div>
             
@@ -182,8 +183,8 @@ const StudentDirectory = ({
                   <ChevronDown size={16} className="text-[#94A3B8] ml-1" />
                 </button>
               ))}
-              <button className="h-[48px] px-5 ml-auto font-medium text-[14px] text-[#64748B] hover:text-[#0F172A] transition-colors">
-                Reset
+              <button className="h-[48px] w-[48px] flex items-center justify-center ml-auto text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 rounded-full transition-colors">
+                <RotateCcw size={20} />
               </button>
             </div>
           </div>

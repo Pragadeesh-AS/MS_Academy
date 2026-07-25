@@ -68,17 +68,17 @@ const TeacherDirectory = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-4">
           <div className="flex bg-white/80 backdrop-blur-md border border-[#EEF2F7] p-1.5 rounded-2xl shadow-sm">
             <button 
               onClick={() => setActiveSubTab('faculty')}
-              className={`px-5 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 ${activeSubTab === 'faculty' ? 'bg-gradient-to-r from-[#4F46E5] to-[#2563EB] text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A]'}`}
+              className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap ${activeSubTab === 'faculty' ? 'bg-gradient-to-r from-[#4F46E5] to-[#2563EB] text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A]'}`}
             >
               Active Faculty
             </button>
             <button 
               onClick={() => setActiveSubTab('recruitment')}
-              className={`px-5 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 ${activeSubTab === 'recruitment' ? 'bg-gradient-to-r from-[#4F46E5] to-[#2563EB] text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A]'}`}
+              className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap ${activeSubTab === 'recruitment' ? 'bg-gradient-to-r from-[#4F46E5] to-[#2563EB] text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A]'}`}
             >
               Recruitment
             </button>
