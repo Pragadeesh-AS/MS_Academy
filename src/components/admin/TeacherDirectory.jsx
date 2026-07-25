@@ -14,7 +14,8 @@ import {
   ChevronRight,
   Filter,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  X
 } from 'lucide-react';
 
 const TeacherDirectory = ({ 
@@ -27,6 +28,7 @@ const TeacherDirectory = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedTeacher, setSelectedTeacher] = useState(null);
   const teachersPerPage = 10;
 
   // Enhance existing teachers with mock data for the premium view
@@ -265,7 +267,7 @@ const TeacherDirectory = ({
                         </td>
                         <td className="px-6 text-center relative">
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <button className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
+                            <button onClick={() => setSelectedTeacher(teacher)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
                               <Eye size={18} />
                             </button>
                             <button className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Faculty">
@@ -330,6 +332,59 @@ const TeacherDirectory = ({
       ) : (
         <div className="relative z-10 pt-4">
           {children}
+        </div>
+      )}
+
+      {/* Teacher Details Modal */}
+      {selectedTeacher && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setSelectedTeacher(null)}>
+          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center">
+              <h3 className="text-[20px] font-bold text-[#0F172A]">Teacher Details</h3>
+              <button onClick={() => setSelectedTeacher(null)} className="text-[#64748B] hover:text-[#0F172A] transition-colors bg-slate-100 hover:bg-slate-200 p-2 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-8 space-y-6">
+              <div className="flex items-center gap-5">
+                <div className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-indigo-100 to-indigo-50 text-indigo-700 border border-indigo-100 font-bold text-[28px] flex items-center justify-center shrink-0 shadow-sm">
+                  {selectedTeacher.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="text-[22px] font-bold text-[#0F172A] leading-tight">{selectedTeacher.name}</h4>
+                  <p className="text-[15px] font-medium text-[#64748B] mt-1">{selectedTeacher.email}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#EEF2F7]">
+                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
+                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Department</span>
+                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedTeacher.department}</p>
+                </div>
+                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
+                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Qualification</span>
+                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedTeacher.qualification || 'N/A'}</p>
+                </div>
+                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
+                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Experience</span>
+                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedTeacher.experience}</p>
+                </div>
+                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
+                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Status</span>
+                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold ${selectedTeacher.status === 'Accepted' ? 'bg-emerald-100 text-[#10B981]' : 'bg-amber-100 text-[#F59E0B]'}`}>
+                      {selectedTeacher.status === 'Accepted' ? 'Active' : 'Invited'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 bg-[#F8FAFC] border-t border-[#EEF2F7] flex justify-end">
+              <button onClick={() => setSelectedTeacher(null)} className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm">
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

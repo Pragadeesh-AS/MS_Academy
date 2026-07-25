@@ -4,7 +4,7 @@ import {
   ChevronDown, 
   Eye, 
   Edit, 
-  MoreVertical, 
+  Trash2, 
   Users, 
   UserCheck, 
   Clock, 
@@ -12,7 +12,8 @@ import {
   MailPlus,
   ChevronLeft,
   ChevronRight,
-  Filter
+  Filter,
+  X
 } from 'lucide-react';
 
 const StudentDirectory = ({ 
@@ -25,6 +26,7 @@ const StudentDirectory = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedStudent, setSelectedStudent] = useState(null);
   const studentsPerPage = 10;
 
   // Enhance existing students with mock data for the premium view
@@ -255,7 +257,7 @@ const StudentDirectory = ({
                         </td>
                         <td className="px-6 text-center relative">
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                            <button className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
+                            <button onClick={() => setSelectedStudent(student)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
                               <Eye size={18} />
                             </button>
                             <button className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Student">
@@ -263,9 +265,9 @@ const StudentDirectory = ({
                             </button>
                             <button 
                               onClick={() => setJoinedStudents(joinedStudents.filter(s => s.id !== student.id))}
-                              className="p-2 text-[#64748B] hover:text-red-500 hover:bg-red-50 rounded-[10px] transition-colors" title="Delete Options"
+                              className="p-2 text-[#64748B] hover:text-red-500 hover:bg-red-50 rounded-[10px] transition-colors" title="Delete Student"
                             >
-                              <MoreVertical size={18} />
+                              <Trash2 size={18} />
                             </button>
                           </div>
                         </td>
@@ -320,6 +322,59 @@ const StudentDirectory = ({
       ) : (
         <div className="relative z-10">
           {children}
+        </div>
+      )}
+
+      {/* Student Details Modal */}
+      {selectedStudent && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setSelectedStudent(null)}>
+          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center">
+              <h3 className="text-[20px] font-bold text-[#0F172A]">Student Details</h3>
+              <button onClick={() => setSelectedStudent(null)} className="text-[#64748B] hover:text-[#0F172A] transition-colors bg-slate-100 hover:bg-slate-200 p-2 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-8 space-y-6">
+              <div className="flex items-center gap-5">
+                <div className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-[#2563EB] border border-blue-100 font-bold text-[28px] flex items-center justify-center shrink-0 shadow-sm">
+                  {selectedStudent.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="text-[22px] font-bold text-[#0F172A] leading-tight">{selectedStudent.name}</h4>
+                  <p className="text-[15px] font-medium text-[#64748B] mt-1">{selectedStudent.email}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#EEF2F7]">
+                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
+                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Department</span>
+                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.department}</p>
+                </div>
+                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
+                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Year</span>
+                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.year}</p>
+                </div>
+                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
+                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Status</span>
+                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold ${selectedStudent.status === 'Active' ? 'bg-emerald-100 text-[#10B981]' : 'bg-slate-200 text-[#64748B]'}`}>
+                      {selectedStudent.status}
+                    </span>
+                  </p>
+                </div>
+                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
+                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Joined</span>
+                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.joinedDate}</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 bg-[#F8FAFC] border-t border-[#EEF2F7] flex justify-end">
+              <button onClick={() => setSelectedStudent(null)} className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm">
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
