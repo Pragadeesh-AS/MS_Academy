@@ -4,10 +4,12 @@ import { BookOpen, LogOut, Settings, Users, Video, Calendar } from 'lucide-react
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import LiveClasses from './teacher/LiveClasses';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [teacherName, setTeacherName] = useState('Teacher');
+  const [activeTab, setActiveTab] = useState('courses');
 
   useEffect(() => {
     const role = localStorage.getItem('auth_role');
@@ -66,19 +68,31 @@ export default function TeacherDashboard() {
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-2">
-          <button className="w-full flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-700 rounded-xl font-bold transition-all">
+          <button 
+            onClick={() => setActiveTab('courses')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'courses' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+          >
             <BookOpen size={18} />
             <span>My Courses</span>
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-bold transition-all">
+          <button 
+            onClick={() => setActiveTab('live')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'live' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+          >
             <Video size={18} />
             <span>Live Classes</span>
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-bold transition-all">
+          <button 
+            onClick={() => setActiveTab('students')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'students' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+          >
             <Users size={18} />
             <span>Students</span>
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl font-bold transition-all">
+          <button 
+            onClick={() => setActiveTab('schedule')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'schedule' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+          >
             <Calendar size={18} />
             <span>Schedule</span>
           </button>
@@ -102,15 +116,19 @@ export default function TeacherDashboard() {
           <p className="text-slate-500 font-medium mt-1">Manage your courses, students, and live sessions.</p>
         </header>
 
-        <div className="bg-white rounded-3xl p-12 border border-slate-200 shadow-sm text-center">
-          <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <BookOpen size={32} />
+        {activeTab === 'courses' && (
+          <div className="bg-white rounded-3xl p-12 border border-slate-200 shadow-sm text-center mt-6">
+            <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <BookOpen size={32} />
+            </div>
+            <h2 className="text-2xl font-[900] text-slate-900 mb-2">Your Workspace is Ready</h2>
+            <p className="text-slate-500 max-w-md mx-auto">
+              This is your private faculty dashboard. The administration will assign courses and schedules to your profile shortly.
+            </p>
           </div>
-          <h2 className="text-2xl font-[900] text-slate-900 mb-2">Your Workspace is Ready</h2>
-          <p className="text-slate-500 max-w-md mx-auto">
-            This is your private faculty dashboard. The administration will assign courses and schedules to your profile shortly.
-          </p>
-        </div>
+        )}
+
+        {activeTab === 'live' && <LiveClasses />}
       </main>
     </div>
   );
