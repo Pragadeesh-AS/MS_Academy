@@ -94,6 +94,33 @@ const SYMBOL_PALETTE = {
   "Expressions": ["f(x)", "d/dx", "∫_a^b", "lim_{x→∞}", "lim_{x→0}", "sin(θ)", "cos(θ)", "tan(θ)", "log_{10}(x)", "ln(x)", "e^x", "e^{iπ}", "n!", "P(A∪B)"]
 };
 
+const RichTextEditor = ({ value, onChange, name, className, placeholder }) => {
+  const editorRef = useRef(null);
+
+  useEffect(() => {
+    if (editorRef.current && value !== editorRef.current.innerHTML) {
+      editorRef.current.innerHTML = value || '';
+    }
+  }, [value]);
+
+  const handleInput = (e) => {
+    if (onChange) {
+      onChange({ target: { name, value: e.currentTarget.innerHTML } });
+    }
+  };
+
+  return (
+    <div
+      ref={editorRef}
+      contentEditable
+      onInput={handleInput}
+      className={className + " overflow-y-auto cursor-text empty:before:content-[attr(data-placeholder)] empty:before:text-slate-300"}
+      data-placeholder={placeholder}
+      suppressContentEditableWarning={true}
+    />
+  );
+};
+
 export default function QuestionBank() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +178,8 @@ export default function QuestionBank() {
         activeEl.focus();
         activeEl.selectionStart = activeEl.selectionEnd = start + symbol.length;
       }, 0);
+    } else if (activeEl && activeEl.isContentEditable) {
+      document.execCommand('insertText', false, symbol);
     }
   };
 
@@ -638,8 +667,12 @@ export default function QuestionBank() {
                     </tr>
                   ) : (
                     filteredQuestions.map((q) => (
-                      <tr key={q.id} className="group hover:bg-[#F8FAFF] transition-colors duration-200">
-                        <td className="py-4 px-6 h-[82px] max-w-[400px]">
+                      <React.Fragment key={q.id}>
+                        <tr 
+                          onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}
+                          className="group hover:bg-[#F8FAFF] transition-colors duration-200 cursor-pointer"
+                        >
+                          <td className="py-4 px-6 h-[82px] max-w-[400px]">
                           <div className="flex items-center gap-4">
                             <div className="w-[42px] h-[42px] rounded-[12px] bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
                               <FileText size={20} className="text-[#2563EB]" />
@@ -679,9 +712,6 @@ export default function QuestionBank() {
                         </td>
                         <td className="py-4 px-6 h-[82px] text-right">
                           <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                            <button className="w-[36px] h-[36px] flex items-center justify-center rounded-[10px] bg-white text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition-colors border border-[#EEF2F7]">
-                              <Eye size={16} />
-                            </button>
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleEdit(q); }}
                               className="w-[36px] h-[36px] flex items-center justify-center rounded-[10px] bg-white text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition-colors border border-[#EEF2F7]">
@@ -695,6 +725,35 @@ export default function QuestionBank() {
                           </div>
                         </td>
                       </tr>
+                      {expandedId === q.id && (
+                        <tr className="bg-[#F8FAFF] border-b border-[#EEF2F7]">
+                          <td colSpan="7" className="px-6 py-6">
+                            <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative cursor-default" onClick={(e) => e.stopPropagation()}>
+                              <h4 className="text-[16px] font-bold text-slate-800 mb-4" dangerouslySetInnerHTML={{ __html: q.questionText || 'Untitled Question' }} />
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                                {['A', 'B', 'C', 'D'].map(opt => {
+                                  const text = q[`option${opt}`];
+                                  if (!text) return null;
+                                  const isCorrect = q.questionType === 'Multiple Choice' ? (q.correctAnswers || []).includes(opt) : q.correctAnswer === opt;
+                                  return (
+                                    <div key={opt} className={`p-3 rounded-xl text-[14px] font-medium border flex items-start gap-2 ${isCorrect ? 'bg-green-50 border-green-200 text-green-800 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                                      <span className={`font-bold shrink-0 ${isCorrect ? 'text-green-600' : 'text-slate-400'}`}>{opt}.</span> 
+                                      <span dangerouslySetInnerHTML={{ __html: text }} />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {q.explanation && (
+                                <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 mt-4">
+                                  <span className="text-[12px] font-bold text-blue-600 uppercase tracking-wider mb-1 block">Explanation</span>
+                                  <p className="text-[14px] text-slate-700" dangerouslySetInnerHTML={{ __html: q.explanation }} />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                     ))
                   )}
                 </tbody>
@@ -812,25 +871,24 @@ export default function QuestionBank() {
                   <div className="bg-white border-[1.5px] border-slate-200 rounded-[20px] overflow-hidden flex flex-col shadow-sm">
                     {/* Rich text toolbar */}
                     <div className="h-14 border-b border-slate-100 flex items-center px-4 gap-2">
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><Bold size={16}/></button>
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><Italic size={16}/></button>
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold">x²</button>
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold">x₂</button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('bold', false, null)} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg" title="Bold"><Bold size={16}/></button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('italic', false, null)} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg" title="Italic"><Italic size={16}/></button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertText', false, 'x²')} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold" title="Insert x²">x²</button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertText', false, 'x₂')} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold" title="Insert x₂">x₂</button>
                       <div className="w-px h-5 bg-slate-200 mx-2"></div>
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><List size={16}/></button>
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><ListTodo size={16}/></button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertUnorderedList', false, null)} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg" title="Bullet List"><List size={16}/></button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertOrderedList', false, null)} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg" title="Numbered List"><ListTodo size={16}/></button>
                       <div className="ml-auto flex">
-                         <button type="button" className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg"><Eraser size={16}/></button>
+                         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('removeFormat', false, null)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg" title="Clear Formatting"><Eraser size={16}/></button>
                       </div>
                     </div>
-                    <textarea 
+                    <RichTextEditor 
                       name="questionText"
-                      required
                       value={formData.questionText}
                       onChange={handleInputChange}
-                      className="w-full p-6 h-48 resize-none outline-none text-[16px] font-[500] text-[#111827] placeholder-slate-300"
+                      className="w-full p-6 h-48 outline-none text-[16px] font-[500] text-[#111827]"
                       placeholder="Match the following:"
-                    ></textarea>
+                    />
                   </div>
                 </div>
 
@@ -918,23 +976,23 @@ export default function QuestionBank() {
                   <label className="text-[15px] font-[900] text-[#111827]">Explanation <span className="text-slate-500 text-[14px] font-[700]">(shown after test)</span></label>
                   <div className="bg-white border-[1.5px] border-slate-200 rounded-[20px] overflow-hidden flex flex-col shadow-sm">
                     <div className="h-14 border-b border-slate-100 flex items-center px-4 gap-2">
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><Bold size={16}/></button>
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><Italic size={16}/></button>
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold">x²</button>
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold">x₂</button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('bold', false, null)} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg" title="Bold"><Bold size={16}/></button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('italic', false, null)} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg" title="Italic"><Italic size={16}/></button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertText', false, 'x²')} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold" title="Insert x²">x²</button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertText', false, 'x₂')} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg font-serif text-[15px] font-bold" title="Insert x₂">x₂</button>
                       <div className="w-px h-5 bg-slate-200 mx-2"></div>
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><List size={16}/></button>
-                      <button type="button" className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg"><ListTodo size={16}/></button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertUnorderedList', false, null)} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg" title="Bullet List"><List size={16}/></button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertOrderedList', false, null)} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg" title="Numbered List"><ListTodo size={16}/></button>
                       <div className="ml-auto flex">
-                         <button type="button" className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg"><Eraser size={16}/></button>
+                         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('removeFormat', false, null)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg" title="Clear Formatting"><Eraser size={16}/></button>
                       </div>
                     </div>
-                    <textarea 
+                    <RichTextEditor 
                       name="explanation"
                       value={formData.explanation}
                       onChange={handleInputChange}
-                      className="w-full p-6 h-32 resize-none outline-none text-[16px] font-[500] text-[#111827] placeholder-slate-300"
-                    ></textarea>
+                      className="w-full p-6 h-32 outline-none text-[16px] font-[500] text-[#111827]"
+                    />
                   </div>
                 </div>
 
