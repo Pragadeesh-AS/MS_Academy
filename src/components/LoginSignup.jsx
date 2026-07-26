@@ -7,7 +7,7 @@ import { collection, getDocs, query, where, updateDoc, doc, setDoc } from 'fireb
 import { useNavigate } from 'react-router-dom';
 
 export default function LoginSignup() {
-  const [isLogin, setIsLogin] = useState(false);
+  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -109,7 +109,7 @@ export default function LoginSignup() {
             localStorage.setItem('auth_email', user.email);
             localStorage.setItem('auth_name', userName);
             window.dispatchEvent(new Event('storage'));
-            navigate('/dashboard');
+            navigate('/student');
           }
         }
       } else {
@@ -132,7 +132,7 @@ export default function LoginSignup() {
           localStorage.setItem('auth_email', user.email);
           localStorage.setItem('auth_name', userName);
           window.dispatchEvent(new Event('storage'));
-          navigate('/dashboard');
+          navigate('/student');
         }
       }
     } catch (err) {
@@ -177,7 +177,7 @@ export default function LoginSignup() {
         localStorage.setItem('auth_email', user.email);
         localStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
-        navigate('/dashboard');
+        navigate('/student');
       }
     } catch (err) {
       console.error(err);

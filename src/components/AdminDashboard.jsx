@@ -293,7 +293,7 @@ export default function AdminDashboard() {
 
     try {
       const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID';
-      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_INVITE_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
+      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
       const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
 
       const loginLink = window.location.origin + '/login';
@@ -385,7 +385,7 @@ export default function AdminDashboard() {
 
     try {
       const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID';
-      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_INVITE_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
+      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
       const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
 
       const loginLink = window.location.origin + '/login';
@@ -1525,14 +1525,33 @@ export default function AdminDashboard() {
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Department / Course</label>
-                <input
-                  type="text"
+                <select
                   required
                   value={inviteForm.department}
                   onChange={(e) => setInviteForm({ ...inviteForm, department: e.target.value })}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#1D4ED8] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
-                  placeholder="e.g. Computer Science"
-                />
+                >
+                  <option value="">Select Department...</option>
+                  <option value="Computer Science (CSE)">Computer Science (CSE)</option>
+                  <option value="Electronics (ECE)">Electronics (ECE)</option>
+                  <option value="Mechanical (ME)">Mechanical (ME)</option>
+                  <option value="Civil (CE)">Civil (CE)</option>
+                  <option value="Electrical (EE)">Electrical (EE)</option>
+                  <option value="Data Science & AI (DS)">Data Science & AI (DS)</option>
+                  <option value="Production & Industrial Engg (PI)">Production & Industrial Engg (PI)</option>
+                  <option value="Instrumentation Engg (IN)">Instrumentation Engg (IN)</option>
+                  <option value="Biotechnology (BT)">Biotechnology (BT)</option>
+                  <option value="Chemical Engineering (CH)">Chemical Engineering (CH)</option>
+                  <option value="Biomedical Engineering (BM)">Biomedical Engineering (BM)</option>
+                  <option value="Physics (PH)">Physics (PH)</option>
+                  <option value="Architecture & Planning (AR)">Architecture & Planning (AR)</option>
+                  <option value="Agricultural Engineering (AG)">Agricultural Engineering (AG)</option>
+                  <option value="Metallurgical Engineering (MT)">Metallurgical Engineering (MT)</option>
+                  <option value="Environmental Science (ES)">Environmental Science (ES)</option>
+                  <option value="Life Sciences (XL)">Life Sciences (XL)</option>
+                  <option value="Aerospace Engineering (AE)">Aerospace Engineering (AE)</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
 
               <div>
@@ -1605,14 +1624,33 @@ export default function AdminDashboard() {
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Department</label>
-                <input
-                  type="text"
+                <select
                   required
                   value={teacherInviteForm.department}
                   onChange={(e) => setTeacherInviteForm({ ...teacherInviteForm, department: e.target.value })}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#5b32ea] focus:ring-4 focus:ring-purple-500/10 transition-all font-semibold text-slate-800"
-                  placeholder="e.g. Computer Science"
-                />
+                >
+                  <option value="">Select Department...</option>
+                  <option value="Computer Science (CSE)">Computer Science (CSE)</option>
+                  <option value="Electronics (ECE)">Electronics (ECE)</option>
+                  <option value="Mechanical (ME)">Mechanical (ME)</option>
+                  <option value="Civil (CE)">Civil (CE)</option>
+                  <option value="Electrical (EE)">Electrical (EE)</option>
+                  <option value="Data Science & AI (DS)">Data Science & AI (DS)</option>
+                  <option value="Production & Industrial Engg (PI)">Production & Industrial Engg (PI)</option>
+                  <option value="Instrumentation Engg (IN)">Instrumentation Engg (IN)</option>
+                  <option value="Biotechnology (BT)">Biotechnology (BT)</option>
+                  <option value="Chemical Engineering (CH)">Chemical Engineering (CH)</option>
+                  <option value="Biomedical Engineering (BM)">Biomedical Engineering (BM)</option>
+                  <option value="Physics (PH)">Physics (PH)</option>
+                  <option value="Architecture & Planning (AR)">Architecture & Planning (AR)</option>
+                  <option value="Agricultural Engineering (AG)">Agricultural Engineering (AG)</option>
+                  <option value="Metallurgical Engineering (MT)">Metallurgical Engineering (MT)</option>
+                  <option value="Environmental Science (ES)">Environmental Science (ES)</option>
+                  <option value="Life Sciences (XL)">Life Sciences (XL)</option>
+                  <option value="Aerospace Engineering (AE)">Aerospace Engineering (AE)</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
               
               <div>

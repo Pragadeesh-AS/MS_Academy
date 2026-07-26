@@ -34,6 +34,7 @@ import Careers from './components/Careers';
 import GateCourses from './components/GateCourses';
 import LoginSignup from './components/LoginSignup';
 import Dashboard from './components/Dashboard';
+import StudentProfile from './components/StudentProfile';
 import AdminDashboard from './components/AdminDashboard';
 import MarketingPopup from './components/MarketingPopup';
 
@@ -90,7 +91,7 @@ export default function App() {
   const dynamicLink = getDynamicLink();
 
   return (
-    <div className={`min-h-screen bg-[#fafafa] relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col ${(location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard') ? 'pt-24' : ''}`}>
+    <div className={`min-h-screen bg-[#fafafa] relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col ${(location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && !location.pathname.startsWith('/student')) ? 'pt-24' : ''}`}>
       {/* Background Dotted Pattern */}
       <div className="absolute inset-0 z-[-1] bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white_20%,transparent_90%)] pointer-events-none"></div>
 
@@ -108,7 +109,7 @@ export default function App() {
       </div>
       
       {/* Navbar Container */}
-      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && (
+      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && !location.pathname.startsWith('/student') && (
       <div className="w-full fixed top-2 inset-x-0 z-50">
         <motion.nav 
           initial={false}
@@ -183,7 +184,7 @@ export default function App() {
             {userRole ? (
               <div className="flex items-center gap-3.5">
                 <Link 
-                  to={userRole === 'admin' ? '/admin' : userRole === 'teacher' ? '/teacher-dashboard' : '/dashboard'}
+                  to={userRole === 'admin' ? '/admin' : userRole === 'teacher' ? '/teacher-dashboard' : '/student'}
                   className="text-xs font-bold text-slate-700 hover:text-slate-900 border border-slate-200 bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-xl transition-all shadow-sm"
                 >
                   {userRole === 'admin' ? 'Admin Panel' : userRole === 'teacher' ? 'Faculty Portal' : `Hello, ${userName}`}
@@ -240,15 +241,16 @@ export default function App() {
         <Route path="/programming" element={<ProgrammingCourses />} />
         <Route path="/careers" element={<Careers />} />
         <Route path="/login" element={<LoginSignup />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/student" element={<Dashboard />} />
+        <Route path="/student/profile" element={<StudentProfile />} />
         <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
         <Route path="/admin" element={<AdminDashboard />} />
       </Routes>
 
-      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && <Footer />}
+      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && !location.pathname.startsWith('/student') && <Footer />}
 
       {/* Floating Quote Badge */}
-      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && (
+      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && !location.pathname.startsWith('/student') && (
       <motion.div 
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -266,7 +268,7 @@ export default function App() {
       )}
 
       {/* Global Floating Components */}
-      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && (
+      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && !location.pathname.startsWith('/student') && (
         location.pathname === '/' || location.pathname === '/contact' ? <EnquiryForm /> : <MorphPanel />
       )}
 
