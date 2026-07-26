@@ -80,12 +80,30 @@ export default function LoginSignup() {
 
     try {
       if (isLogin) {
-        // Authenticate all logins using Firebase Authentication
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        let userCredential;
+        const adminEmails = ['msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
+        
+        try {
+          userCredential = await signInWithEmailAndPassword(auth, email, password);
+        } catch (authErr) {
+          if (authErr.code === 'auth/invalid-credential' && adminEmails.includes(email.toLowerCase())) {
+            // Auto-create admin account if it doesn't exist
+            try {
+              userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            } catch (createErr) {
+              if (createErr.code === 'auth/email-already-in-use') {
+                throw new Error("Invalid password for Admin account.");
+              }
+              throw createErr;
+            }
+          } else {
+            throw authErr;
+          }
+        }
+        
         const user = userCredential.user;
 
         // Check if the authenticated user has the registered admin email
-        const adminEmails = ['msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
         if (adminEmails.includes(user.email.toLowerCase())) {
           localStorage.setItem('auth_role', 'admin');
           localStorage.setItem('auth_email', user.email);
