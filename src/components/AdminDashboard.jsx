@@ -14,6 +14,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc 
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
 import Analytics from './admin/Analytics';
+import AIGenerator from './admin/AIGenerator';
 import AttributesManager from './admin/AttributesManager';
 import CourseSetup from './admin/CourseSetup';
 import StudentDirectory from './admin/StudentDirectory';
@@ -310,6 +311,7 @@ export default function AdminDashboard() {
       const newStudent = {
         name: inviteForm.name,
         email: inviteForm.email,
+        department: inviteForm.department,
         joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
         status: "Invited"
       };
@@ -554,8 +556,11 @@ export default function AdminDashboard() {
                 {!isCollapsed && <span>Popup</span>}
               </button>
 
-              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
-                <Sparkles size={20} className="text-[#eab308]" />
+              <button 
+                onClick={() => setActiveTab('ai')}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'ai' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <Sparkles size={20} className={activeTab === 'ai' ? 'text-[#5b32ea]' : 'text-[#eab308]'} />
                 {!isCollapsed && <span>AI Generator</span>}
               </button>
 
@@ -1340,6 +1345,9 @@ export default function AdminDashboard() {
         {/* Active Tab: Course Bundles */}
         {activeTab === 'courses' && <CourseSetup />}
         {activeTab === 'fees' && <FeesTracker />}
+
+        {/* AI Generator Tab */}
+        {activeTab === 'ai' && <AIGenerator />}
 
       </main>
 

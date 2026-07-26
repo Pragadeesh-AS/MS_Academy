@@ -1,7 +1,7 @@
 import { Eye, LayoutList, Bookmark, Clock, AlertCircle, Trophy, Star, Layers } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip, Calculator, Eraser, Tag, Check } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip, Calculator, Eraser, Tag, Check, Sparkles } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
@@ -678,8 +678,9 @@ export default function QuestionBank() {
                               <FileText size={20} className="text-[#2563EB]" />
                             </div>
                             <div className="flex flex-col gap-1 min-w-0">
-                              <span className="text-[15px] font-[600] text-[#0F172A] truncate block" title={q.questionText}>
-                                {q.questionText || 'Untitled Question'}
+                              <span className="text-[15px] font-[600] text-[#0F172A] truncate block flex items-center gap-1.5" title={q.questionText}>
+                                {q.isImported && <Sparkles size={14} className="text-purple-600 flex-shrink-0" title="AI Imported" />}
+                                <span className="truncate">{q.questionText || 'Untitled Question'}</span>
                               </span>
                               <span className="text-[13px] font-[500] text-[#64748B] truncate block">
                                 {q.subject || 'No Subject'}
@@ -729,7 +730,10 @@ export default function QuestionBank() {
                         <tr className="bg-[#F8FAFF] border-b border-[#EEF2F7]">
                           <td colSpan="7" className="px-6 py-6">
                             <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative cursor-default" onClick={(e) => e.stopPropagation()}>
-                              <h4 className="text-[16px] font-bold text-slate-800 mb-4" dangerouslySetInnerHTML={{ __html: q.questionText || 'Untitled Question' }} />
+                              <h4 className="text-[16px] font-bold text-slate-800 mb-4 flex items-start gap-2">
+                                {q.isImported && <Sparkles size={16} className="text-purple-600 mt-1 flex-shrink-0" title="AI Imported" />}
+                                <span dangerouslySetInnerHTML={{ __html: q.questionText || 'Untitled Question' }} />
+                              </h4>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                                 {['A', 'B', 'C', 'D'].map(opt => {
                                   const text = q[`option${opt}`];

@@ -12,6 +12,8 @@ export default function LoginSignup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
+  const [department, setDepartment] = useState('');
+  const [plan, setPlan] = useState('Free');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState('');
   const [resetMessage, setResetMessage] = useState('');
@@ -32,6 +34,8 @@ export default function LoginSignup() {
           id: Date.now(),
           name: name,
           email: email,
+          department: department,
+          plan: plan,
           joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
           status: "Active"
         });
@@ -123,7 +127,7 @@ export default function LoginSignup() {
           navigate('/teacher-dashboard');
         } else {
           // Always student if not an invited teacher
-          await markStudentAsActive(user.email, userName);
+          await markStudentAsActive(user.email, userName, department, plan);
           localStorage.setItem('auth_role', 'student');
           localStorage.setItem('auth_email', user.email);
           localStorage.setItem('auth_name', userName);
@@ -267,6 +271,10 @@ export default function LoginSignup() {
                 />
               </div>
             )}
+
+            {/* Removed Department Dropdown as requested */}
+
+            {/* Removed Plan Dropdown as requested */}
 
             {/* Email Address */}
             <div className="relative mb-3.5">

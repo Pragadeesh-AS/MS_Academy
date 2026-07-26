@@ -9,6 +9,7 @@ import LiveClasses from './teacher/LiveClasses';
 export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [teacherName, setTeacherName] = useState('Teacher');
+  const [teacherDepartment, setTeacherDepartment] = useState('');
   const [activeTab, setActiveTab] = useState('courses');
 
   useEffect(() => {
@@ -24,6 +25,12 @@ export default function TeacherDashboard() {
           const q = query(collection(db, 'invited_teachers'), where('email', '==', email));
           const querySnapshot = await getDocs(q);
           isStillTeacher = !querySnapshot.empty;
+          if (isStillTeacher) {
+            const data = querySnapshot.docs[0].data();
+            if (data.department) {
+              setTeacherDepartment(data.department);
+            }
+          }
         }
       } catch (e) {
         console.error("Failed to verify teacher role from Firestore", e);
@@ -128,7 +135,7 @@ export default function TeacherDashboard() {
           </div>
         )}
 
-        {activeTab === 'live' && <LiveClasses />}
+        {activeTab === 'live' && <LiveClasses department={teacherDepartment} />}
       </main>
     </div>
   );

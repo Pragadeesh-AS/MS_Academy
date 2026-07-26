@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { db } from '../../firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { 
   Video, 
   Calendar, 
@@ -18,16 +20,14 @@ import {
   X,
   Send,
   Check,
-  Search
+  Search,
+  UserPlus
 } from 'lucide-react';
 
 // Mock student list for scheduling
-const MOCK_STUDENTS = [
-  "Sarah Williams", "Alex Johnson", "Kevin Martinez", 
-  "Priya Sharma", "Rahul Verma", "Emily Davis", "Michael Chen"
-];
+const MOCK_STUDENTS = [];
 
-export default function LiveClasses() {
+export default function LiveClasses({ department }) {
   const [isInCall, setIsInCall] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
@@ -39,56 +39,39 @@ export default function LiveClasses() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
-  const [chatLog, setChatLog] = useState([
-    { sender: "Sarah W.", time: "10:02 AM", text: "Good morning sir!" },
-    { sender: "Alex J.", time: "10:03 AM", text: "Can you explain the last step again?" }
-  ]);
+  const [chatLog, setChatLog] = useState([]);
 
   // Schedule Form State
   const [newClass, setNewClass] = useState({ subject: "", topic: "", time: "", selectedStudents: [] });
 
-  const [upcomingClasses, setUpcomingClasses] = useState([
-    {
-      id: 1,
-      subject: "Data Structures & Algorithms",
-      topic: "Dynamic Programming Foundations",
-      time: "Today, 10:00 AM",
-      students: 45,
-      duration: "1h 30m"
-    },
-    {
-      id: 2,
-      subject: "Computer Networks",
-      topic: "TCP/IP Congestion Control",
-      time: "Today, 2:00 PM",
-      students: 32,
-      duration: "1h 00m"
-    }
-  ]);
+  const [upcomingClasses, setUpcomingClasses] = useState([]);
+  const [departmentStudents, setDepartmentStudents] = useState([]);
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      if (!department) return;
+      try {
+        const q = query(
+          collection(db, 'joined_students'), 
+          where('department', '==', department),
+          where('plan', '==', 'Pro')
+        );
+        const snapshot = await getDocs(q);
+        const students = snapshot.docs.map(doc => doc.data().name);
+        setDepartmentStudents(students);
+      } catch (err) {
+        console.error("Error fetching students:", err);
+      }
+    };
+    fetchStudents();
+  }, [department]);
 
   const videoRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const chatEndRef = useRef(null);
   const chatContainerRef = useRef(null);
 
-  const recentRecordings = [
-    {
-      id: 101,
-      subject: "Operating Systems",
-      topic: "Process Synchronization (Semaphores)",
-      date: "Yesterday",
-      duration: "1h 15m",
-      thumbnail: "bg-blue-100"
-    },
-    {
-      id: 102,
-      subject: "Database Management",
-      topic: "B+ Trees and Indexing",
-      date: "Oct 12, 2023",
-      duration: "1h 45m",
-      thumbnail: "bg-purple-100"
-    }
-  ];
+  const recentRecordings = [];
 
   // Auto-scroll chat
   useEffect(() => {
@@ -217,7 +200,7 @@ export default function LiveClasses() {
         subject: newClass.subject || "General Class",
         topic: newClass.topic,
         time: newClass.time,
-        students: newClass.selectedStudents.length || MOCK_STUDENTS.length,
+        students: newClass.selectedStudents.length || departmentStudents.length,
         duration: "1h 00m"
       }
     ]);
@@ -320,21 +303,10 @@ export default function LiveClasses() {
               </div>
             ) : (
               // Student Gallery
-              <>
-                {[1, 2, 3].map((student, i) => (
-                  <div key={i} className="flex-1 bg-[#1F2937] rounded-2xl border border-white/10 relative overflow-hidden flex items-center justify-center shadow-inner">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${['bg-green-500', 'bg-purple-500', 'bg-orange-500'][i]}`}>
-                      {['S', 'A', 'K'][i]}
-                    </div>
-                    <div className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-md px-2 py-1 rounded text-[11px] font-medium border border-white/10 flex items-center gap-1.5">
-                      {['Sarah W.', 'Alex J.', 'Kevin M.'][i]} <MicOff size={10} className="text-red-400" />
-                    </div>
-                  </div>
-                ))}
-                <div className="h-12 bg-white/5 hover:bg-white/10 transition-colors rounded-2xl border border-white/10 flex items-center justify-center cursor-pointer text-sm font-semibold text-slate-300 shrink-0">
-                  39 more...
-                </div>
-              </>
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border border-white/10 border-dashed rounded-2xl bg-white/5">
+                <Users size={32} className="text-slate-500 mb-3" />
+                <p className="text-slate-400 font-medium text-sm">Waiting for students to join...</p>
+              </div>
             )}
           </div>
         </div>
@@ -596,14 +568,18 @@ export default function LiveClasses() {
                 <div>
                   <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Invite Specific Students</label>
                   <div className="border border-slate-200 rounded-xl max-h-48 overflow-y-auto">
-                    {MOCK_STUDENTS.map((student, idx) => (
-                      <label key={idx} className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors last:border-0">
-                        <div className={`w-5 h-5 rounded flex items-center justify-center border ${newClass.selectedStudents.includes(student) ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 bg-white'}`}>
-                          {newClass.selectedStudents.includes(student) && <Check size={14} strokeWidth={3} />}
-                        </div>
-                        <span className="text-[14px] font-medium text-slate-700">{student}</span>
-                      </label>
-                    ))}
+                    {departmentStudents.length === 0 ? (
+                      <p className="p-4 text-sm text-slate-500 text-center">No students found in your department ({department}).</p>
+                    ) : (
+                      departmentStudents.map((student, idx) => (
+                        <label key={idx} onClick={() => toggleStudentSelection(student)} className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors last:border-0">
+                          <div className={`w-5 h-5 rounded flex items-center justify-center border ${newClass.selectedStudents.includes(student) ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 bg-white'}`}>
+                            {newClass.selectedStudents.includes(student) && <Check size={14} strokeWidth={3} />}
+                          </div>
+                          <span className="text-[14px] font-medium text-slate-700">{student}</span>
+                        </label>
+                      ))
+                    )}
                   </div>
                   <p className="text-[12px] text-slate-500 mt-2 flex items-center gap-1">
                     <UserPlus size={14}/> {newClass.selectedStudents.length === 0 ? "All enrolled students will be invited." : `${newClass.selectedStudents.length} student(s) selected.`}
