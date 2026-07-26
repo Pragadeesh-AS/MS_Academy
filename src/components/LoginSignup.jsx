@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Mail, Lock, TrendingUp, BookOpen, Trophy, Quote } from 'lucide-react';
+import { User, Mail, Lock, TrendingUp, BookOpen, Trophy, Quote, Phone } from 'lucide-react';
 import signupImage from '../assets/signup2.png';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
@@ -12,6 +12,7 @@ export default function LoginSignup() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [department, setDepartment] = useState('');
   const [plan, setPlan] = useState('Free');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -34,6 +35,7 @@ export default function LoginSignup() {
           id: Date.now(),
           name: name,
           email: email,
+          whatsappNumber: whatsappNumber,
           department: department,
           plan: plan,
           joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -284,6 +286,24 @@ export default function LoginSignup() {
                   onChange={(e) => setName(e.target.value)}
                   required={!isLogin}
                   placeholder="Full Name"
+                  className="w-full h-[46px] pl-[46px] pr-4 bg-white border border-[#E5E7EB] rounded-[10px] outline-none focus:border-[#2563EB] text-[14px] placeholder:text-[#98A2B3] transition-colors"
+                  style={{ fontFamily: 'Inter, sans-serif' }}
+                />
+              </div>
+            )}
+
+            {/* WhatsApp Number */}
+            {!isLogin && (
+              <div className="relative mb-3.5">
+                <div className="absolute inset-y-0 left-0 pl-[16px] flex items-center pointer-events-none text-[#98A2B3]">
+                  <Phone size={18} />
+                </div>
+                <input 
+                  type="tel" 
+                  value={whatsappNumber}
+                  onChange={(e) => setWhatsappNumber(e.target.value)}
+                  required={!isLogin}
+                  placeholder="WhatsApp Number"
                   className="w-full h-[46px] pl-[46px] pr-4 bg-white border border-[#E5E7EB] rounded-[10px] outline-none focus:border-[#2563EB] text-[14px] placeholder:text-[#98A2B3] transition-colors"
                   style={{ fontFamily: 'Inter, sans-serif' }}
                 />

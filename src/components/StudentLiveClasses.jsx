@@ -74,7 +74,24 @@ export default function StudentLiveClasses({ department }) {
           configOverwrite={{
             startWithAudioMuted: true,
             startWithVideoMuted: true,
-            requireDisplayName: true
+            requireDisplayName: true,
+            disableModeratorIndicator: true,
+            toolbarButtons: [
+              'camera',
+              'chat',
+              'closedcaptions',
+              'filmstrip',
+              'fullscreen',
+              'hangup',
+              'microphone',
+              'participants-pane',
+              'profile',
+              'raisehand',
+              'select-background',
+              'settings',
+              'tileview',
+              'toggle-camera'
+            ]
           }}
           interfaceConfigOverwrite={{
             DISABLE_JOIN_LEAVE_NOTIFICATIONS: true
