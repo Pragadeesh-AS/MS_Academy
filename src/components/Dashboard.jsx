@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, LogOut, Video, PlayCircle, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
@@ -67,14 +68,6 @@ export default function Dashboard() {
     checkOnboarding();
   }, [navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('auth_role');
-    localStorage.removeItem('auth_email');
-    localStorage.removeItem('auth_name');
-    window.dispatchEvent(new Event('storage'));
-    navigate('/');
-  };
-
   const handleOnboardingSubmit = async (e) => {
     e.preventDefault();
     if (!docId) return;
@@ -98,7 +91,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+        <Loader />
       </div>
     );
   }
@@ -258,16 +251,6 @@ export default function Dashboard() {
             <span>Schedule</span>
           </button>
         </nav>
-
-        <div className="p-4 border-t border-slate-100">
-          <button 
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl font-bold transition-all"
-          >
-            <LogOut size={18} />
-            <span>Log Out</span>
-          </button>
-        </div>
       </aside>
 
       {/* Main Content */}

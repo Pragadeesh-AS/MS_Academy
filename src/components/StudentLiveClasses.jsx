@@ -1,17 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Video, 
   Clock, 
-  Users
+  Users,
+  Send,
+  MessageCircle
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { JitsiMeeting } from '@jitsi/react-sdk';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import AgoraUIKit from 'agora-react-uikit';
 
 export default function StudentLiveClasses({ department }) {
   const [isInCall, setIsInCall] = useState(false);
   const [currentSession, setCurrentSession] = useState(null);
   const [activeClasses, setActiveClasses] = useState([]);
+  
+  // Chat State
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+  const chatEndRef = useRef(null);
 
   useEffect(() => {
     if (!department) return;
@@ -43,6 +50,36 @@ export default function StudentLiveClasses({ department }) {
     return () => unsubscribe();
   }, [department]);
 
+  useEffect(() => {
+    if (!isInCall || !currentSession) return;
+    const q = query(collection(db, 'live_chats'), where('sessionId', '==', currentSession.id));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      messages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
+      setChatMessages(messages);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    });
+    return () => unsubscribe();
+  }, [isInCall, currentSession]);
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !currentSession) return;
+    
+    try {
+      await addDoc(collection(db, 'live_chats'), {
+        sessionId: currentSession.id,
+        senderName: localStorage.getItem('auth_name') || 'Student',
+        senderEmail: localStorage.getItem('auth_email') || '',
+        message: newMessage,
+        timestamp: serverTimestamp()
+      });
+      setNewMessage("");
+    } catch (err) {
+      console.error("Error sending message", err);
+    }
+  };
+
   const handleJoinMeet = (cls) => {
     setCurrentSession(cls);
     setIsInCall(true);
@@ -54,62 +91,99 @@ export default function StudentLiveClasses({ department }) {
   };
 
   if (isInCall && currentSession) {
+    const rtcProps = {
+      appId: import.meta.env.VITE_AGORA_APP_ID || '',
+      channel: 'MS_ACADEMY',
+      token: import.meta.env.VITE_AGORA_TEMP_TOKEN || null,
+      role: 'host',
+      layout: 1
+    };
+
+    const callbacks = {
+      EndCall: () => handleLeaveMeet(),
+    };
+
     return (
-      <div className="bg-[#111827] rounded-3xl overflow-hidden shadow-2xl h-[calc(100vh-140px)] w-full relative transition-all duration-300 mt-6 animate-in fade-in zoom-in-95">
+      <div className="fixed inset-0 z-[100] bg-[#111827] w-full h-full flex overflow-hidden">
         
-        {/* Top Header overlay for aesthetics (Jitsi renders below it) */}
-        <div className="absolute top-0 inset-x-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
-          <div className="flex items-center gap-3">
-            <div className="bg-red-500/20 text-red-500 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border border-red-500/30">
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-              LIVE
-            </div>
-            <span className="font-bold text-sm text-slate-200">{currentSession?.subject || "Live Session"} - {currentSession?.topic}</span>
-          </div>
+        {/* Dynamic Watermark Overlay to discourage screenshots/recording */}
+        <div className="absolute inset-0 pointer-events-none z-[100] overflow-hidden flex flex-wrap gap-x-20 gap-y-32 p-10 justify-center items-center opacity-30 mix-blend-overlay">
+           {Array.from({ length: 20 }).map((_, i) => (
+             <div key={i} className="text-white text-lg font-black whitespace-nowrap select-none -rotate-12">
+               {localStorage.getItem('auth_email') || 'student@msacademy.com'}
+             </div>
+           ))}
         </div>
 
-        <JitsiMeeting
-          domain="meet.jit.si"
-          roomName={`MSAcademy_Class_${currentSession.id}`}
-          configOverwrite={{
-            startWithAudioMuted: true,
-            startWithVideoMuted: true,
-            requireDisplayName: true,
-            disableModeratorIndicator: true,
-            toolbarButtons: [
-              'camera',
-              'chat',
-              'closedcaptions',
-              'filmstrip',
-              'fullscreen',
-              'hangup',
-              'microphone',
-              'participants-pane',
-              'profile',
-              'raisehand',
-              'select-background',
-              'settings',
-              'tileview',
-              'toggle-camera'
-            ]
-          }}
-          interfaceConfigOverwrite={{
-            DISABLE_JOIN_LEAVE_NOTIFICATIONS: true
-          }}
-          userInfo={{
-            displayName: localStorage.getItem('auth_name') || 'Student',
-            email: localStorage.getItem('auth_email')
-          }}
-          getIFrameRef={(iframeRef) => { iframeRef.style.height = '100%'; iframeRef.style.width = '100%'; }}
-        />
+        {/* Top Header overlay for aesthetics */}
+        <div className="absolute top-0 inset-x-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+           <div className="flex items-center gap-3">
+             <div className="bg-red-500/20 text-red-500 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border border-red-500/30">
+               <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+               LIVE
+             </div>
+             <span className="font-bold text-sm text-slate-200">{currentSession?.subject || "Live Session"} - {currentSession?.topic}</span>
+           </div>
+        </div>
 
-        {/* Leave Call Button overlay */}
-        <button 
-          onClick={handleLeaveMeet}
-          className="absolute bottom-6 right-6 px-6 h-12 rounded-xl flex items-center justify-center bg-red-600 hover:bg-red-700 text-white font-bold transition-all shadow-[0_4px_14px_rgba(220,38,38,0.4)] hover:shadow-[0_6px_20px_rgba(220,38,38,0.6)] z-50 border border-white/20"
-        >
-          Leave Class
-        </button>
+        {!rtcProps.appId ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-white p-8 text-center z-40">
+            <h3 className="text-2xl font-bold text-red-400 mb-4">Agora App ID Missing</h3>
+            <p className="text-slate-300 max-w-md">The teacher has not configured the live streaming service properly.</p>
+            <button onClick={handleLeaveMeet} className="mt-6 px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors">Go Back</button>
+          </div>
+        ) : (
+          <div className="flex-1 w-full h-full flex overflow-hidden">
+            <div className="flex-1 flex flex-col relative bg-black">
+              <AgoraUIKit 
+                rtcProps={rtcProps} 
+                callbacks={callbacks} 
+                styleProps={{
+                  UIKitContainer: { height: '100%', width: '100%', flex: 1, display: 'flex', minHeight: '0' }
+                }}
+              />
+            </div>
+            
+            {/* CHAT SIDEBAR */}
+            <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col">
+              <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center gap-2">
+                <MessageCircle size={18} className="text-blue-400"/>
+                <h3 className="text-white font-bold text-sm">Live Chat</h3>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {chatMessages.length === 0 ? (
+                  <div className="text-center text-slate-500 text-sm mt-10">No messages yet. Say hi!</div>
+                ) : (
+                  chatMessages.map(msg => (
+                    <div key={msg.id} className="flex flex-col">
+                      <span className="text-[11px] font-bold text-slate-500 mb-1">{msg.senderName}</span>
+                      <div className={`px-3 py-2 rounded-xl text-sm max-w-[90%] break-words ${msg.senderEmail === localStorage.getItem('auth_email') ? 'bg-blue-600 text-white self-end rounded-tr-sm' : 'bg-slate-800 text-slate-200 self-start rounded-tl-sm'}`}>
+                        {msg.message}
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={chatEndRef} />
+              </div>
+              
+              <form onSubmit={sendMessage} className="p-3 border-t border-slate-800 bg-slate-900">
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type a message..."
+                    className="flex-1 bg-slate-800 border-none rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:ring-1 focus:ring-blue-500 outline-none"
+                  />
+                  <button type="submit" disabled={!newMessage.trim()} className="p-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition-colors">
+                    <Send size={16} />
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

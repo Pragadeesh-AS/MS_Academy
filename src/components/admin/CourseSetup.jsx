@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Loader from '../Loader';
 import { createPortal } from 'react-dom';
 import { 
   Package, Plus, Trash2, Edit2, Search, X, CheckCircle2, Image as ImageIcon,
@@ -210,7 +211,7 @@ export default function CourseSetup() {
 
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="w-10 h-10 border-4 border-slate-100 border-t-[#5b32ea] rounded-full animate-spin"></div>
+          <Loader />
         </div>
       ) : filteredBundles.length === 0 ? (
         <div className="bg-white border border-slate-200 border-dashed rounded-3xl py-24 flex flex-col items-center justify-center text-center">

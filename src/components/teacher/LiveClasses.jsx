@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { 
   Video, 
   Calendar, 
@@ -11,13 +11,25 @@ import {
   Users,
   Check,
   UserPlus,
-  X
+  X,
+  Send,
+  MessageCircle
 } from 'lucide-react';
-import { JitsiMeeting } from '@jitsi/react-sdk';
+import AgoraUIKit from 'agora-react-uikit';
 
 export default function LiveClasses({ department }) {
   const [isInCall, setIsInCall] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  
+  // Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  
+  // Chat State
+  const [chatMessages, setChatMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+  const chatEndRef = useRef(null);
   
   // Modals
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -26,6 +38,7 @@ export default function LiveClasses({ department }) {
   const [newClass, setNewClass] = useState({ subject: '', topic: '', time: '', selectedStudents: [] });
   const [startClassData, setStartClassData] = useState({ subject: '', topic: '' });
   
+  const [activeSessions, setActiveSessions] = useState([]);
   const [upcomingClasses, setUpcomingClasses] = useState([]);
   const [departmentStudents, setDepartmentStudents] = useState([]);
 
@@ -46,6 +59,54 @@ export default function LiveClasses({ department }) {
     };
     fetchStudents();
   }, [department]);
+
+  useEffect(() => {
+    const teacherEmail = localStorage.getItem('auth_email');
+    if (!teacherEmail) return;
+
+    const q = query(
+      collection(db, 'live_sessions'),
+      where('teacherEmail', '==', teacherEmail),
+      where('status', '==', 'live')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setActiveSessions(sessions);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!isInCall || !currentSessionId) return;
+    const q = query(collection(db, 'live_chats'), where('sessionId', '==', currentSessionId));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      messages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
+      setChatMessages(messages);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    });
+    return () => unsubscribe();
+  }, [isInCall, currentSessionId]);
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !currentSessionId) return;
+    
+    try {
+      await addDoc(collection(db, 'live_chats'), {
+        sessionId: currentSessionId,
+        senderName: localStorage.getItem('auth_name') || 'Teacher',
+        senderEmail: localStorage.getItem('auth_email') || '',
+        message: newMessage,
+        timestamp: serverTimestamp()
+      });
+      setNewMessage("");
+    } catch (err) {
+      console.error("Error sending message", err);
+    }
+  };
 
   const recentRecordings = [];
 
@@ -75,18 +136,71 @@ export default function LiveClasses({ department }) {
     }
   };
 
-  const handleEndMeet = async () => {
-    setIsInCall(false);
+  const handleEndMeet = async (sessionIdToEnd = currentSessionId) => {
+    if (sessionIdToEnd === currentSessionId) setIsInCall(false);
     
-    if (currentSessionId) {
+    if (sessionIdToEnd) {
       try {
-        await updateDoc(doc(db, 'live_sessions', currentSessionId), {
+        await updateDoc(doc(db, 'live_sessions', sessionIdToEnd), {
           status: 'ended',
           endedAt: serverTimestamp()
         });
-        setCurrentSessionId(null);
+        if (sessionIdToEnd === currentSessionId) setCurrentSessionId(null);
       } catch (e) {
         console.error("Failed to end live session in Firestore", e);
+      }
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      const voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      const tracks = [...displayStream.getTracks(), ...voiceStream.getTracks()];
+      const combinedStream = new MediaStream(tracks);
+      
+      const mediaRecorder = new MediaRecorder(combinedStream);
+      mediaRecorderRef.current = mediaRecorder;
+      recordedChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        document.body.appendChild(a);
+        a.style = 'display: none';
+        a.href = url;
+        a.download = `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}.webm`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        setIsRecording(false);
+      };
+
+      displayStream.getVideoTracks()[0].onended = () => {
+        if (mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Error starting recording:", err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current.stream) {
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       }
     }
   };
@@ -119,36 +233,100 @@ export default function LiveClasses({ department }) {
   };
 
   if (isInCall && currentSessionId) {
+    const rtcProps = {
+      appId: import.meta.env.VITE_AGORA_APP_ID || '',
+      channel: 'MS_ACADEMY',
+      token: import.meta.env.VITE_AGORA_TEMP_TOKEN || null,
+      role: 'host',
+      layout: 1,
+      enableScreensharing: true
+    };
+
+    const callbacks = {
+      EndCall: () => handleEndMeet(),
+    };
+
     return (
-      <div className="bg-[#111827] rounded-3xl overflow-hidden shadow-2xl h-[calc(100vh-140px)] w-full relative transition-all duration-300">
-        <JitsiMeeting
-          domain="meet.jit.si"
-          roomName={`MSAcademy_Class_${currentSessionId}`}
-          configOverwrite={{
-            startWithAudioMuted: false,
-            startWithVideoMuted: false,
-            requireDisplayName: true
-          }}
-          interfaceConfigOverwrite={{
-            DISABLE_JOIN_LEAVE_NOTIFICATIONS: true
-          }}
-          userInfo={{
-            displayName: localStorage.getItem('auth_name') || 'Teacher',
-            email: localStorage.getItem('auth_email')
-          }}
-          onApiReady={(externalApi) => {
-            // Optional: attach listeners if needed
-          }}
-          getIFrameRef={(iframeRef) => { iframeRef.style.height = '100%'; iframeRef.style.width = '100%'; }}
-        />
-        
-        {/* End Call Override Button (to ensure Firestore updates) */}
-        <button 
-          onClick={handleEndMeet}
-          className="absolute bottom-6 right-6 px-6 h-12 rounded-xl flex items-center justify-center bg-red-600 hover:bg-red-700 text-white font-bold transition-all shadow-[0_4px_14px_rgba(220,38,38,0.4)] hover:shadow-[0_6px_20px_rgba(220,38,38,0.6)] z-50 border border-white/20"
-        >
-          End Class (Save to DB)
-        </button>
+      <div className="fixed inset-0 z-[100] bg-[#111827] w-full h-full flex overflow-hidden">
+        {!rtcProps.appId ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-white p-8 text-center">
+            <h3 className="text-2xl font-bold text-red-400 mb-4">Agora App ID Missing</h3>
+            <p className="text-slate-300 max-w-md">Please add your Agora App ID to the <code className="bg-slate-800 px-2 py-1 rounded">.env</code> file as <code className="bg-slate-800 px-2 py-1 rounded">VITE_AGORA_APP_ID</code> and restart the server.</p>
+            <button onClick={handleEndMeet} className="mt-6 px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors">Go Back</button>
+          </div>
+        ) : (
+          <div className="flex-1 w-full h-full flex overflow-hidden">
+            <div className="flex-1 flex flex-col relative bg-black">
+              {/* RECORDING CONTROLS */}
+              <div className="absolute top-4 right-4 z-50 flex gap-2">
+                {!isRecording ? (
+                  <button 
+                    onClick={startRecording}
+                    className="px-4 py-2 bg-slate-800/80 hover:bg-red-600 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors border border-slate-700"
+                  >
+                    <div className="w-2.5 h-2.5 bg-red-500 rounded-full"></div>
+                    Record Session
+                  </button>
+                ) : (
+                  <button 
+                    onClick={stopRecording}
+                    className="px-4 py-2 bg-red-600/90 hover:bg-red-700 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors shadow-[0_0_15px_rgba(220,38,38,0.5)] animate-pulse"
+                  >
+                    <div className="w-2.5 h-2.5 bg-white rounded-full"></div>
+                    Stop Recording
+                  </button>
+                )}
+              </div>
+
+              <AgoraUIKit 
+                rtcProps={rtcProps} 
+                callbacks={callbacks} 
+                styleProps={{
+                  UIKitContainer: { height: '100%', width: '100%', flex: 1, display: 'flex', minHeight: '0' }
+                }}
+              />
+            </div>
+            
+            {/* CHAT SIDEBAR */}
+            <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col">
+              <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center gap-2">
+                <MessageCircle size={18} className="text-blue-400"/>
+                <h3 className="text-white font-bold text-sm">Live Chat</h3>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {chatMessages.length === 0 ? (
+                  <div className="text-center text-slate-500 text-sm mt-10">No messages yet. Say hi!</div>
+                ) : (
+                  chatMessages.map(msg => (
+                    <div key={msg.id} className="flex flex-col">
+                      <span className="text-[11px] font-bold text-slate-500 mb-1">{msg.senderName}</span>
+                      <div className={`px-3 py-2 rounded-xl text-sm max-w-[90%] break-words ${msg.senderEmail === localStorage.getItem('auth_email') ? 'bg-blue-600 text-white self-end rounded-tr-sm' : 'bg-slate-800 text-slate-200 self-start rounded-tl-sm'}`}>
+                        {msg.message}
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={chatEndRef} />
+              </div>
+              
+              <form onSubmit={sendMessage} className="p-3 border-t border-slate-800 bg-slate-900">
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type a message..."
+                    className="flex-1 bg-slate-800 border-none rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:ring-1 focus:ring-blue-500 outline-none"
+                  />
+                  <button type="submit" disabled={!newMessage.trim()} className="p-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition-colors">
+                    <Send size={16} />
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -184,8 +362,53 @@ export default function LiveClasses({ department }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
         
-        {/* Main Section: Upcoming Classes */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* Main Section */}
+        <div className="lg:col-span-2 space-y-8">
+          
+          {/* Active Sessions */}
+          {activeSessions.length > 0 && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
+                <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div> 
+                Active Live Sessions
+              </h3>
+              <div className="space-y-4">
+                {activeSessions.map((session) => (
+                  <div key={session.id} className="p-5 border-2 border-red-200 rounded-2xl bg-red-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-red-500 opacity-5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
+                    <div className="relative z-10">
+                      <div className="text-sm font-bold text-red-600 mb-1 flex items-center gap-2">
+                        LIVE NOW
+                      </div>
+                      <h4 className="text-lg font-[800] text-slate-900 mb-1">{session.topic}</h4>
+                      <p className="text-slate-600 font-medium text-[14px]">{session.subject}</p>
+                    </div>
+                    
+                    <div className="flex flex-row items-center gap-3 relative z-10">
+                      <button 
+                        onClick={() => handleEndMeet(session.id)}
+                        className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                      >
+                        End Class
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setCurrentSessionId(session.id);
+                          setIsInCall(true);
+                        }}
+                        className="px-5 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors flex items-center justify-center gap-2 shadow-md shadow-red-500/20"
+                      >
+                        Re-Join <Video size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Upcoming Classes */}
+          <div className="space-y-6">
           <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
             <Clock className="text-orange-500" size={20} /> Upcoming Sessions
           </h3>
@@ -227,6 +450,7 @@ export default function LiveClasses({ department }) {
               </div>
             )}
           </div>
+        </div>
         </div>
 
         {/* Sidebar Section: Recent Recordings */}

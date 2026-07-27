@@ -1,5 +1,6 @@
 import { Eye, LayoutList, Bookmark, Clock, AlertCircle, Trophy, Star, Layers } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
+import Loader from '../Loader';
 import { createPortal } from 'react-dom';
 import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip, Calculator, Eraser, Tag, Check, Sparkles } from 'lucide-react';
 import { db } from '../../firebase';
@@ -656,7 +657,7 @@ export default function QuestionBank() {
                   {loading ? (
                     <tr>
                       <td colSpan="7" className="py-12 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2563EB] mx-auto"></div>
+                        <Loader />
                       </td>
                     </tr>
                   ) : filteredQuestions.length === 0 ? (
