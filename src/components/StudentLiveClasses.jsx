@@ -7,6 +7,7 @@ import {
   PhoneOff,
   Clock, 
   Users,
+  User,
   Send,
   MessageCircle
 } from 'lucide-react';
@@ -32,20 +33,9 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet }) => {
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
 
-  const { localMicrophoneTrack } = useLocalMicrophoneTrack(true);
-  const { localCameraTrack } = useLocalCameraTrack(true);
-
-  useEffect(() => {
-    if (localMicrophoneTrack) {
-      localMicrophoneTrack.setMuted(!micOn).catch(console.error);
-    }
-  }, [micOn, localMicrophoneTrack]);
-
-  useEffect(() => {
-    if (localCameraTrack) {
-      localCameraTrack.setEnabled(cameraOn).catch(console.error);
-    }
-  }, [cameraOn, localCameraTrack]);
+  // Only request hardware locks if toggled ON
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
+  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
 
   const tracksToPublish = [];
   if (localMicrophoneTrack) tracksToPublish.push(localMicrophoneTrack);
@@ -60,20 +50,38 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet }) => {
   useRemoteVideoTracks(remoteUsers);
   useRemoteAudioTracks(remoteUsers);
 
+  // Dynamic grid based on participant count
+  const totalParticipants = 1 + remoteUsers.length;
+  const gridColsClass = 
+    totalParticipants === 1 ? 'grid-cols-1 md:grid-cols-1' :
+    totalParticipants === 2 ? 'grid-cols-1 md:grid-cols-2' :
+    totalParticipants <= 4 ? 'grid-cols-2 md:grid-cols-2' :
+    'grid-cols-2 md:grid-cols-3';
+
   return (
     <div className="flex-1 flex flex-col relative bg-black">
       {/* Video Grid */}
-      <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr">
+      <div className={`flex-1 p-4 grid ${gridColsClass} gap-4 auto-rows-fr`}>
         <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
           {localCameraTrack && <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />}
           <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md">You (Student)</div>
         </div>
         {remoteUsers.map(user => (
-          <div key={user.uid} className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
-            <div className="absolute inset-0">
-              <RemoteUser user={user} style={remoteUserStyle} />
+          <div key={user.uid} className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group">
+            {user.hasVideo ? (
+              <div className="absolute inset-0">
+                <RemoteUser user={user} style={remoteUserStyle} />
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
+                <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
+                  <User size={48} className="text-slate-400" />
+                </div>
+              </div>
+            )}
+            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10 transition-opacity">
+              Remote User {!user.hasAudio && <MicOff size={14} className="inline ml-1 text-red-400" />}
             </div>
-            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">Remote User</div>
           </div>
         ))}
       </div>
@@ -189,14 +197,17 @@ export default function StudentLiveClasses({ department }) {
     setIsInCall(true);
   };
 
-  const handleLeaveMeet = () => {
+  const handleLeaveMeet = async () => {
+    if (agoraClient) {
+      try {
+        await agoraClient.leave();
+        agoraClient.removeAllListeners();
+      } catch (e) {
+        console.error("Error leaving Agora channel:", e);
+      }
+    }
     setCurrentSession(null);
     setIsInCall(false);
-    
-    // Force release camera/mic hardware locks
-    setTimeout(() => {
-      window.location.reload();
-    }, 100);
   };
 
   if (isInCall && currentSession) {

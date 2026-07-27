@@ -14,6 +14,7 @@ import {
   MoreHorizontal, 
   PlayCircle,
   Users,
+  User,
   Check,
   UserPlus,
   X,
@@ -35,23 +36,45 @@ import AgoraRTC, {
   useLocalScreenTrack
 } from "agora-rtc-react";
 
-// Extracted component to handle screen sharing lifecycle
-const ScreenShareView = ({ onTrackEnded, onTrackReady }) => {
+// Extracted component to handle screen sharing as an independent client
+const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
+  const [screenClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
   const { screenTrack } = useLocalScreenTrack(true, {}, 'disable');
+  const [joined, setJoined] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     if (screenTrack) {
-      onTrackReady(screenTrack);
-      screenTrack.on('track-ended', onTrackEnded);
+      const handleTrackEnded = () => {
+        if (onTrackEnded) onTrackEnded();
+      };
+      screenTrack.on('track-ended', handleTrackEnded);
+      screenClient.join(appId, channel, token, null).then(() => {
+        if (isMounted) {
+          screenClient.publish([screenTrack]);
+          setJoined(true);
+        }
+      }).catch(console.error);
+
       return () => {
-        screenTrack.off('track-ended', onTrackEnded);
+        isMounted = false;
+        screenTrack.off('track-ended', handleTrackEnded);
+        screenClient.leave();
         screenTrack.close();
-        onTrackReady(null);
       };
     }
-  }, [screenTrack, onTrackEnded, onTrackReady]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenTrack, screenClient, appId, channel, token]);
 
-  return null;
+  if (!screenTrack || !joined) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white font-bold animate-pulse">
+        Initializing Screen Share...
+      </div>
+    );
+  }
+
+  return <LocalVideoTrack track={screenTrack} play={true} className="w-full h-full object-cover" />;
 };
 
 // Extracted TeacherCall component for custom Agora rendering
@@ -59,34 +82,16 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
   const [screenShareOn, setScreenShareOn] = useState(false);
-  const [activeScreenTrack, setActiveScreenTrack] = useState(null);
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
 
-  const { localMicrophoneTrack } = useLocalMicrophoneTrack(true);
-  const { localCameraTrack } = useLocalCameraTrack(true);
-
-  useEffect(() => {
-    if (localMicrophoneTrack) {
-      localMicrophoneTrack.setMuted(!micOn).catch(console.error);
-    }
-  }, [micOn, localMicrophoneTrack]);
-
-  useEffect(() => {
-    if (localCameraTrack) {
-      localCameraTrack.setEnabled(cameraOn).catch(console.error);
-    }
-  }, [cameraOn, localCameraTrack]);
+  // Only request hardware locks if toggled ON
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
+  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
 
   const tracksToPublish = [];
   if (localMicrophoneTrack) tracksToPublish.push(localMicrophoneTrack);
-  
-  // If sharing screen, publish the screen track. Otherwise, publish the camera track.
-  if (screenShareOn && activeScreenTrack) {
-    tracksToPublish.push(activeScreenTrack);
-  } else if (!screenShareOn && localCameraTrack) {
-    tracksToPublish.push(localCameraTrack);
-  }
+  if (localCameraTrack) tracksToPublish.push(localCameraTrack);
 
   usePublish(tracksToPublish);
 
@@ -96,6 +101,14 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
   // Actually trigger subscriptions for the remote users
   useRemoteVideoTracks(remoteUsers);
   useRemoteAudioTracks(remoteUsers);
+
+  // Dynamic grid based on participant count
+  const totalParticipants = 1 + remoteUsers.length;
+  const gridColsClass = 
+    totalParticipants === 1 ? 'grid-cols-1 md:grid-cols-1' :
+    totalParticipants === 2 ? 'grid-cols-1 md:grid-cols-2' :
+    totalParticipants <= 4 ? 'grid-cols-2 md:grid-cols-2' :
+    'grid-cols-2 md:grid-cols-3';
 
   return (
     <div className="flex-1 flex flex-col relative bg-black">
@@ -122,33 +135,47 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
       </div>
 
       {/* Video Grid */}
-      <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr">
-        <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
-          {screenShareOn && (
-            <ScreenShareView 
-              onTrackReady={setActiveScreenTrack} 
+      <div className={`flex-1 p-4 grid ${gridColsClass} gap-4 auto-rows-fr`}>
+        {screenShareOn && (
+          <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
+            <ScreenShareClient 
+              appId={appId}
+              channel={channel}
+              token={token}
               onTrackEnded={() => setScreenShareOn(false)} 
             />
-          )}
-          {screenShareOn ? (
-            activeScreenTrack ? (
-              <LocalVideoTrack track={activeScreenTrack} play={true} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white font-bold animate-pulse">
-                Initializing Screen Share...
-              </div>
-            )
+            <div className="absolute bottom-4 left-4 bg-blue-600/90 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">Your Screen</div>
+          </div>
+        )}
+        
+        <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
+          {localCameraTrack ? (
+            <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
           ) : (
-            localCameraTrack && <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
+              <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
+                <User size={48} className="text-slate-400" />
+              </div>
+            </div>
           )}
           <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">You (Teacher)</div>
         </div>
         {remoteUsers.map(user => (
-          <div key={user.uid} className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
-            <div className="absolute inset-0">
-              <RemoteUser user={user} style={remoteUserStyle} />
+          <div key={user.uid} className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group">
+            {user.hasVideo ? (
+              <div className="absolute inset-0">
+                <RemoteUser user={user} style={remoteUserStyle} />
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
+                <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
+                  <User size={48} className="text-slate-400" />
+                </div>
+              </div>
+            )}
+            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10 transition-opacity">
+              Student {user.uid} {!user.hasAudio && <MicOff size={14} className="inline ml-1 text-red-400" />}
             </div>
-            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">Student {user.uid}</div>
           </div>
         ))}
       </div>
@@ -335,11 +362,18 @@ export default function LiveClasses({ department }) {
       }
     }
     
-    // Force release camera/mic hardware locks
+    // Graceful unmount (hooks automatically close tracks on unmount)
     if (sessionIdToEnd === currentSessionId) {
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
+      if (agoraClient) {
+        try {
+          await agoraClient.leave();
+          agoraClient.removeAllListeners();
+        } catch (e) {
+          console.error("Error leaving Agora channel:", e);
+        }
+      }
+      setIsInCall(false);
+      setCurrentSessionId(null);
     }
   };
 
