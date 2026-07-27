@@ -8,9 +8,65 @@ import {
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
-import AgoraUIKit from 'agora-react-uikit';
+import AgoraRTC, { 
+  AgoraRTCProvider, 
+  useRTCClient, 
+  useLocalCameraTrack, 
+  useLocalMicrophoneTrack,
+  usePublish, 
+  useJoin, 
+  useRemoteUsers,
+  RemoteUser,
+  LocalVideoTrack
+} from "agora-rtc-react";
+// Extracted StudentCall component for custom Agora rendering
+const StudentCall = ({ appId, channel, token, handleLeaveMeet }) => {
+  const [micOn, setMicOn] = useState(false);
+  const [cameraOn, setCameraOn] = useState(false);
+
+  useJoin({ appid: appId, channel: channel, token: token, uid: null });
+
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
+  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
+
+  usePublish([localMicrophoneTrack, localCameraTrack]);
+
+  const remoteUsers = useRemoteUsers();
+
+  return (
+    <div className="flex-1 flex flex-col relative bg-black">
+      {/* Video Grid */}
+      <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr">
+        <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
+          <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
+          <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md">You (Student)</div>
+        </div>
+        {remoteUsers.map(user => (
+          <div key={user.uid} className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
+            <RemoteUser user={user} className="w-full h-full object-cover" />
+            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md">Remote User</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Custom Control Bar */}
+      <div className="h-24 bg-slate-900 border-t border-slate-800 flex items-center justify-center gap-6 pb-2">
+        <button onClick={() => setMicOn(!micOn)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${micOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
+          {micOn ? 'Mic On' : 'Mic Off'}
+        </button>
+        <button onClick={() => setCameraOn(!cameraOn)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${cameraOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
+          {cameraOn ? 'Cam On' : 'Cam Off'}
+        </button>
+        <button onClick={handleLeaveMeet} className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-all shadow-[0_0_15px_rgba(220,38,38,0.4)]">
+          Leave
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export default function StudentLiveClasses({ department }) {
+  const [agoraClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
   const [isInCall, setIsInCall] = useState(false);
   const [currentSession, setCurrentSession] = useState(null);
   const [activeClasses, setActiveClasses] = useState([]);
@@ -141,16 +197,14 @@ export default function StudentLiveClasses({ department }) {
         ) : (
           <div className="flex-1 w-full h-full flex overflow-hidden">
             <div className="flex-1 flex flex-col relative bg-black">
-              <AgoraUIKit 
-                rtcProps={rtcProps} 
-                callbacks={callbacks} 
-                styleProps={{
-                  UIKitContainer: { height: '100%', width: '100%', flex: 1, display: 'flex', minHeight: '0' },
-                  localBtnStyles: {
-                    screenshare: { display: 'none' }
-                  }
-                }}
+            <AgoraRTCProvider client={agoraClient}>
+              <StudentCall 
+                appId={rtcProps.appId} 
+                channel={rtcProps.channel} 
+                token={rtcProps.token} 
+                handleLeaveMeet={handleLeaveMeet}
               />
+            </AgoraRTCProvider>
             </div>
             
             {/* CHAT SIDEBAR */}

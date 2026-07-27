@@ -15,9 +15,96 @@ import {
   Send,
   MessageCircle
 } from 'lucide-react';
-import AgoraUIKit from 'agora-react-uikit';
+import AgoraRTC, { 
+  AgoraRTCProvider, 
+  useRTCClient, 
+  useLocalCameraTrack, 
+  useLocalMicrophoneTrack,
+  usePublish, 
+  useJoin, 
+  useRemoteUsers,
+  RemoteUser,
+  LocalVideoTrack,
+  useLocalScreenTrack
+} from "agora-rtc-react";
+
+// Extracted TeacherCall component for custom Agora rendering
+const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, togglePauseRecording, stopRecording, startRecording, isPaused, recordingTime, formatTime }) => {
+  const [micOn, setMicOn] = useState(true);
+  const [cameraOn, setCameraOn] = useState(true);
+  const [screenShareOn, setScreenShareOn] = useState(false);
+
+  useJoin({ appid: appId, channel: channel, token: token, uid: null });
+
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
+  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
+  const { screenTrack } = useLocalScreenTrack(screenShareOn, { withAudio: "auto" }, 'disable');
+
+  // If sharing screen, publish screen track instead of camera track
+  const videoTrackToPublish = screenShareOn ? screenTrack : localCameraTrack;
+  usePublish([localMicrophoneTrack, videoTrackToPublish]);
+
+  const remoteUsers = useRemoteUsers();
+
+  return (
+    <div className="flex-1 flex flex-col relative bg-black">
+      {/* RECORDING CONTROLS */}
+      <div className="absolute top-4 right-4 z-50 flex gap-2">
+        {!isRecording ? (
+          <button onClick={startRecording} className="px-4 py-2 bg-slate-800/80 hover:bg-red-600 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors border border-slate-700">
+            <div className="w-2.5 h-2.5 bg-red-500 rounded-full"></div>Record Session
+          </button>
+        ) : (
+          <>
+            <button onClick={togglePauseRecording} className="px-4 py-2 bg-yellow-500/90 hover:bg-yellow-600 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors shadow-md">
+              {isPaused ? (
+                <><div className="w-0 h-0 border-t-[5px] border-t-transparent border-l-[8px] border-l-white border-b-[5px] border-b-transparent"></div>Resume</>
+              ) : (
+                <><div className="flex gap-1"><div className="w-1 h-3 bg-white rounded-full"></div><div className="w-1 h-3 bg-white rounded-full"></div></div>Pause</>
+              )}
+            </button>
+            <button onClick={stopRecording} className={`px-4 py-2 bg-red-600/90 hover:bg-red-700 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors shadow-[0_0_15px_rgba(220,38,38,0.5)] ${isPaused ? '' : 'animate-pulse'}`}>
+              <div className="w-2.5 h-2.5 bg-white rounded-full"></div>Stop Recording ({formatTime(recordingTime)})
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Video Grid */}
+      <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr">
+        <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
+          <LocalVideoTrack track={videoTrackToPublish} play={true} className="w-full h-full object-cover" />
+          <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md">You (Teacher)</div>
+        </div>
+        {remoteUsers.map(user => (
+          <div key={user.uid} className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
+            <RemoteUser user={user} className="w-full h-full object-cover" />
+            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md">Student {user.uid}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Custom Control Bar */}
+      <div className="h-24 bg-slate-900 border-t border-slate-800 flex items-center justify-center gap-6 pb-2">
+        <button onClick={() => setMicOn(!micOn)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${micOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
+          {micOn ? 'Mic On' : 'Mic Off'}
+        </button>
+        <button onClick={() => setCameraOn(!cameraOn)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${cameraOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
+          {cameraOn ? 'Cam On' : 'Cam Off'}
+        </button>
+        <button onClick={() => setScreenShareOn(!screenShareOn)} className={`px-6 py-4 rounded-full font-bold transition-all ${screenShareOn ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-slate-700 hover:bg-slate-600 text-white'}`}>
+          {screenShareOn ? 'Stop Sharing' : 'Share Screen'}
+        </button>
+        <button onClick={handleEndMeet} className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-all shadow-[0_0_15px_rgba(220,38,38,0.4)]">
+          End
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export default function LiveClasses({ department }) {
+  const [agoraClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
   const [isInCall, setIsInCall] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   
@@ -296,54 +383,21 @@ export default function LiveClasses({ department }) {
           </div>
         ) : (
           <div className="flex-1 w-full h-full flex overflow-hidden">
-            <div className="flex-1 flex flex-col relative bg-black">
-              {/* RECORDING CONTROLS */}
-              <div className="absolute top-4 right-4 z-50 flex gap-2">
-                {!isRecording ? (
-                  <button 
-                    onClick={startRecording}
-                    className="px-4 py-2 bg-slate-800/80 hover:bg-red-600 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors border border-slate-700"
-                  >
-                    <div className="w-2.5 h-2.5 bg-red-500 rounded-full"></div>
-                    Record Session
-                  </button>
-                ) : (
-                  <>
-                    <button 
-                      onClick={togglePauseRecording}
-                      className="px-4 py-2 bg-yellow-500/90 hover:bg-yellow-600 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors shadow-md"
-                    >
-                      {isPaused ? (
-                        <>
-                          <div className="w-0 h-0 border-t-[5px] border-t-transparent border-l-[8px] border-l-white border-b-[5px] border-b-transparent"></div>
-                          Resume
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex gap-1"><div className="w-1 h-3 bg-white rounded-full"></div><div className="w-1 h-3 bg-white rounded-full"></div></div>
-                          Pause
-                        </>
-                      )}
-                    </button>
-                    <button 
-                      onClick={stopRecording}
-                      className={`px-4 py-2 bg-red-600/90 hover:bg-red-700 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors shadow-[0_0_15px_rgba(220,38,38,0.5)] ${isPaused ? '' : 'animate-pulse'}`}
-                    >
-                      <div className="w-2.5 h-2.5 bg-white rounded-full"></div>
-                      Stop Recording ({formatTime(recordingTime)})
-                    </button>
-                  </>
-                )}
-              </div>
-
-              <AgoraUIKit 
-                rtcProps={rtcProps} 
-                callbacks={callbacks} 
-                styleProps={{
-                  UIKitContainer: { height: '100%', width: '100%', flex: 1, display: 'flex', minHeight: '0' }
-                }}
+            <AgoraRTCProvider client={agoraClient}>
+              <TeacherCall 
+                appId={rtcProps.appId} 
+                channel={rtcProps.channel} 
+                token={rtcProps.token} 
+                handleEndMeet={handleEndMeet}
+                isRecording={isRecording}
+                togglePauseRecording={togglePauseRecording}
+                stopRecording={stopRecording}
+                startRecording={startRecording}
+                isPaused={isPaused}
+                recordingTime={recordingTime}
+                formatTime={formatTime}
               />
-            </div>
+            </AgoraRTCProvider>
             
             {/* CHAT SIDEBAR */}
             <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col">
