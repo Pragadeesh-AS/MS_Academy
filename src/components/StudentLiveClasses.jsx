@@ -88,6 +88,11 @@ export default function StudentLiveClasses({ department }) {
   const handleLeaveMeet = () => {
     setCurrentSession(null);
     setIsInCall(false);
+    
+    // Force release camera/mic hardware locks
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
   };
 
   if (isInCall && currentSession) {
@@ -96,7 +101,8 @@ export default function StudentLiveClasses({ department }) {
       channel: 'MS_ACADEMY',
       token: import.meta.env.VITE_AGORA_TEMP_TOKEN || null,
       role: 'host',
-      layout: 1
+      layout: 0,
+      enableScreensharing: true
     };
 
     const callbacks = {

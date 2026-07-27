@@ -23,8 +23,11 @@ export default function LiveClasses({ department }) {
   
   // Recording State
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
+  const timerIntervalRef = useRef(null);
   
   // Chat State
   const [chatMessages, setChatMessages] = useState([]);
@@ -150,6 +153,13 @@ export default function LiveClasses({ department }) {
         console.error("Failed to end live session in Firestore", e);
       }
     }
+    
+    // Force release camera/mic hardware locks
+    if (sessionIdToEnd === currentSessionId) {
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    }
   };
 
   const startRecording = async () => {
@@ -191,18 +201,48 @@ export default function LiveClasses({ department }) {
 
       mediaRecorder.start();
       setIsRecording(true);
+      setIsPaused(false);
+      setRecordingTime(0);
+      
+      timerIntervalRef.current = setInterval(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          setRecordingTime(prev => prev + 1);
+        }
+      }, 1000);
+      
     } catch (err) {
       console.error("Error starting recording:", err);
     }
   };
 
+  const togglePauseRecording = () => {
+    if (mediaRecorderRef.current) {
+      if (mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.pause();
+        setIsPaused(true);
+      } else if (mediaRecorderRef.current.state === 'paused') {
+        mediaRecorderRef.current.resume();
+        setIsPaused(false);
+      }
+    }
+  };
+
   const stopRecording = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       if (mediaRecorderRef.current.stream) {
         mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       }
     }
+  };
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
   };
 
   const handleScheduleSubmit = (e) => {
@@ -238,7 +278,7 @@ export default function LiveClasses({ department }) {
       channel: 'MS_ACADEMY',
       token: import.meta.env.VITE_AGORA_TEMP_TOKEN || null,
       role: 'host',
-      layout: 1,
+      layout: 0,
       enableScreensharing: true
     };
 
@@ -268,13 +308,31 @@ export default function LiveClasses({ department }) {
                     Record Session
                   </button>
                 ) : (
-                  <button 
-                    onClick={stopRecording}
-                    className="px-4 py-2 bg-red-600/90 hover:bg-red-700 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors shadow-[0_0_15px_rgba(220,38,38,0.5)] animate-pulse"
-                  >
-                    <div className="w-2.5 h-2.5 bg-white rounded-full"></div>
-                    Stop Recording
-                  </button>
+                  <>
+                    <button 
+                      onClick={togglePauseRecording}
+                      className="px-4 py-2 bg-yellow-500/90 hover:bg-yellow-600 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors shadow-md"
+                    >
+                      {isPaused ? (
+                        <>
+                          <div className="w-0 h-0 border-t-[5px] border-t-transparent border-l-[8px] border-l-white border-b-[5px] border-b-transparent"></div>
+                          Resume
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex gap-1"><div className="w-1 h-3 bg-white rounded-full"></div><div className="w-1 h-3 bg-white rounded-full"></div></div>
+                          Pause
+                        </>
+                      )}
+                    </button>
+                    <button 
+                      onClick={stopRecording}
+                      className={`px-4 py-2 bg-red-600/90 hover:bg-red-700 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors shadow-[0_0_15px_rgba(220,38,38,0.5)] ${isPaused ? '' : 'animate-pulse'}`}
+                    >
+                      <div className="w-2.5 h-2.5 bg-white rounded-full"></div>
+                      Stop Recording ({formatTime(recordingTime)})
+                    </button>
+                  </>
                 )}
               </div>
 
