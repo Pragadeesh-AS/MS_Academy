@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, setDoc } from 'firebase/firestore';
 import { 
   Video, 
   VideoOff,
@@ -18,8 +18,10 @@ import {
   Check,
   UserPlus,
   X,
-  Send,
-  MessageCircle
+  MessageCircle,
+  Pin,
+  PinOff,
+  Send
 } from 'lucide-react';
 import AgoraRTC, { 
   AgoraRTCProvider, 
@@ -49,7 +51,7 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
         if (onTrackEnded) onTrackEnded();
       };
       screenTrack.on('track-ended', handleTrackEnded);
-      screenClient.join(appId, channel, token, null).then(() => {
+      screenClient.join(appId, channel, token, 999999).then(() => {
         if (isMounted) {
           screenClient.publish([screenTrack]);
           setJoined(true);
@@ -78,10 +80,32 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
 };
 
 // Extracted TeacherCall component for custom Agora rendering
-const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, togglePauseRecording, stopRecording, startRecording, isPaused, recordingTime, formatTime }) => {
+const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecording, togglePauseRecording, stopRecording, startRecording, isPaused, recordingTime, formatTime }) => {
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
   const [screenShareOn, setScreenShareOn] = useState(false);
+  const [pinnedUid, setPinnedUid] = useState(null);
+  const [participantNames, setParticipantNames] = useState({});
+  const client = useRTCClient();
+
+  useEffect(() => {
+    if (client.uid && sessionId) {
+      const userName = localStorage.getItem('auth_name') || 'Teacher';
+      setDoc(doc(db, 'live_sessions', sessionId, 'participants', client.uid.toString()), {
+        name: userName
+      }).catch(console.error);
+    }
+  }, [client.uid, sessionId]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    const unsub = onSnapshot(collection(db, 'live_sessions', sessionId, 'participants'), (snapshot) => {
+      const names = {};
+      snapshot.forEach(d => { names[d.id] = d.data().name; });
+      setParticipantNames(names);
+    });
+    return () => unsub();
+  }, [sessionId]);
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
 
@@ -102,13 +126,87 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
   useRemoteVideoTracks(remoteUsers);
   useRemoteAudioTracks(remoteUsers);
 
+  // Filter out the Screen Share client so it doesn't appear as a remote user
+  const filteredUsers = remoteUsers.filter(u => u.uid !== 999999);
+
   // Dynamic grid based on participant count
-  const totalParticipants = 1 + remoteUsers.length;
+  const totalParticipants = 1 + filteredUsers.length + (screenShareOn ? 1 : 0);
   const gridColsClass = 
     totalParticipants === 1 ? 'grid-cols-1 md:grid-cols-1' :
     totalParticipants === 2 ? 'grid-cols-1 md:grid-cols-2' :
     totalParticipants <= 4 ? 'grid-cols-2 md:grid-cols-2' :
     'grid-cols-2 md:grid-cols-3';
+
+  const togglePin = (id) => {
+    setPinnedUid(prev => prev === id ? null : id);
+  };
+
+  const renderGridTiles = () => {
+    const tiles = [];
+    
+    // 1. Screen Share (Local)
+    if (screenShareOn) {
+      const isPinned = pinnedUid === 'local-screen';
+      tiles.push(
+        <div key="local-screen" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'md:col-span-3 md:row-span-3 h-full min-h-[400px]' : (pinnedUid ? 'h-[200px]' : '')}`}>
+          <ScreenShareClient appId={appId} channel={channel} token={token} onTrackEnded={() => setScreenShareOn(false)} />
+          <div className="absolute bottom-4 left-4 bg-blue-600/90 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">Your Screen</div>
+          <button onClick={() => togglePin('local-screen')} className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-20">
+            {isPinned ? <PinOff size={18} /> : <Pin size={18} />}
+          </button>
+        </div>
+      );
+    }
+    
+    // 2. Local Camera
+    const isLocalPinned = pinnedUid === 'local-camera';
+    tiles.push(
+      <div key="local-camera" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isLocalPinned ? 'md:col-span-3 md:row-span-3 h-full min-h-[400px]' : (pinnedUid ? 'h-[200px]' : '')}`}>
+        {localCameraTrack ? (
+          <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
+            <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
+              <User size={48} className="text-slate-400" />
+            </div>
+          </div>
+        )}
+        <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">You (Teacher)</div>
+        <button onClick={() => togglePin('local-camera')} className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-20">
+            {isLocalPinned ? <PinOff size={18} /> : <Pin size={18} />}
+        </button>
+      </div>
+    );
+    
+    // 3. Remote Users
+    filteredUsers.forEach(user => {
+      const isPinned = pinnedUid === user.uid;
+      const userName = participantNames[user.uid] || `Student ${user.uid}`;
+      tiles.push(
+        <div key={user.uid} className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'md:col-span-3 md:row-span-3 h-full min-h-[400px]' : (pinnedUid ? 'h-[200px]' : '')}`}>
+          {user.hasVideo ? (
+            <div className="absolute inset-0">
+              <RemoteUser user={user} style={remoteUserStyle} />
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
+              <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
+                <User size={48} className="text-slate-400" />
+              </div>
+            </div>
+          )}
+          <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10 transition-opacity">
+            {userName} {!user.hasAudio && <MicOff size={14} className="inline ml-1 text-red-400" />}
+          </div>
+          <button onClick={() => togglePin(user.uid)} className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-20">
+            {isPinned ? <PinOff size={18} /> : <Pin size={18} />}
+          </button>
+        </div>
+      );
+    });
+    
+    return tiles;
+  };
 
   return (
     <div className="flex-1 flex flex-col relative bg-black">
@@ -135,49 +233,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
       </div>
 
       {/* Video Grid */}
-      <div className={`flex-1 p-4 grid ${gridColsClass} gap-4 auto-rows-fr`}>
-        {screenShareOn && (
-          <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
-            <ScreenShareClient 
-              appId={appId}
-              channel={channel}
-              token={token}
-              onTrackEnded={() => setScreenShareOn(false)} 
-            />
-            <div className="absolute bottom-4 left-4 bg-blue-600/90 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">Your Screen</div>
-          </div>
-        )}
-        
-        <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
-          {localCameraTrack ? (
-            <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
-              <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
-                <User size={48} className="text-slate-400" />
-              </div>
-            </div>
-          )}
-          <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">You (Teacher)</div>
-        </div>
-        {remoteUsers.map(user => (
-          <div key={user.uid} className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group">
-            {user.hasVideo ? (
-              <div className="absolute inset-0">
-                <RemoteUser user={user} style={remoteUserStyle} />
-              </div>
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
-                <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
-                  <User size={48} className="text-slate-400" />
-                </div>
-              </div>
-            )}
-            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10 transition-opacity">
-              Student {user.uid} {!user.hasAudio && <MicOff size={14} className="inline ml-1 text-red-400" />}
-            </div>
-          </div>
-        ))}
+      <div className={`flex-1 p-4 grid ${pinnedUid ? 'grid-cols-1 md:grid-cols-4 md:grid-rows-3' : gridColsClass} gap-4 auto-rows-fr`}>
+        {renderGridTiles()}
       </div>
 
       {/* Custom Control Bar (Blue theme with outlined icons) */}
@@ -515,7 +572,8 @@ export default function LiveClasses({ department }) {
               <TeacherCall 
                 appId={rtcProps.appId} 
                 channel={rtcProps.channel} 
-                token={rtcProps.token} 
+                token={rtcProps.token}
+                sessionId={currentSessionId}
                 handleEndMeet={handleEndMeet}
                 isRecording={isRecording}
                 togglePauseRecording={togglePauseRecording}
