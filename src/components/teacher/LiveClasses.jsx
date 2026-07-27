@@ -28,38 +28,30 @@ import AgoraRTC, {
   usePublish, 
   useJoin, 
   useRemoteUsers,
+  useRemoteVideoTracks,
+  useRemoteAudioTracks,
   RemoteUser,
   LocalVideoTrack,
   useLocalScreenTrack
 } from "agora-rtc-react";
 
 // Extracted component to handle screen sharing lifecycle
-const ScreenShareView = ({ onTrackEnded }) => {
+const ScreenShareView = ({ onTrackEnded, onTrackReady }) => {
   const { screenTrack } = useLocalScreenTrack(true, {}, 'disable');
 
   useEffect(() => {
     if (screenTrack) {
+      onTrackReady(screenTrack);
       screenTrack.on('track-ended', onTrackEnded);
       return () => {
         screenTrack.off('track-ended', onTrackEnded);
-        // Explicitly close the track to clear the browser's native "Stop Sharing" UI
         screenTrack.close();
+        onTrackReady(null);
       };
     }
-  }, [screenTrack, onTrackEnded]);
+  }, [screenTrack, onTrackEnded, onTrackReady]);
 
-  const tracks = screenTrack ? [screenTrack] : [];
-  usePublish(tracks);
-
-  if (!screenTrack) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white font-bold animate-pulse">
-        Initializing Screen Share...
-      </div>
-    );
-  }
-
-  return <LocalVideoTrack track={screenTrack} play={true} className="w-full h-full object-cover" />;
+  return null;
 };
 
 // Extracted TeacherCall component for custom Agora rendering
@@ -67,6 +59,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
   const [screenShareOn, setScreenShareOn] = useState(false);
+  const [activeScreenTrack, setActiveScreenTrack] = useState(null);
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
 
@@ -88,14 +81,20 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
   const tracksToPublish = [];
   if (localMicrophoneTrack) tracksToPublish.push(localMicrophoneTrack);
   
-  // If not sharing screen, publish camera. The ScreenShareView handles publishing the screen track.
-  if (!screenShareOn && localCameraTrack) {
+  // If sharing screen, publish the screen track. Otherwise, publish the camera track.
+  if (screenShareOn && activeScreenTrack) {
+    tracksToPublish.push(activeScreenTrack);
+  } else if (!screenShareOn && localCameraTrack) {
     tracksToPublish.push(localCameraTrack);
   }
 
   usePublish(tracksToPublish);
 
   const remoteUsers = useRemoteUsers();
+  
+  // Actually trigger subscriptions for the remote users
+  useRemoteVideoTracks(remoteUsers);
+  useRemoteAudioTracks(remoteUsers);
 
   return (
     <div className="flex-1 flex flex-col relative bg-black">
@@ -124,8 +123,20 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
       {/* Video Grid */}
       <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr">
         <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
+          {screenShareOn && (
+            <ScreenShareView 
+              onTrackReady={setActiveScreenTrack} 
+              onTrackEnded={() => setScreenShareOn(false)} 
+            />
+          )}
           {screenShareOn ? (
-            <ScreenShareView onTrackEnded={() => setScreenShareOn(false)} />
+            activeScreenTrack ? (
+              <LocalVideoTrack track={activeScreenTrack} play={true} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white font-bold animate-pulse">
+                Initializing Screen Share...
+              </div>
+            )
           ) : (
             localCameraTrack && <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
           )}

@@ -20,6 +20,8 @@ import AgoraRTC, {
   usePublish, 
   useJoin, 
   useRemoteUsers,
+  useRemoteVideoTracks,
+  useRemoteAudioTracks,
   RemoteUser,
   LocalVideoTrack
 } from "agora-rtc-react";
@@ -52,6 +54,10 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet }) => {
   usePublish(tracksToPublish);
 
   const remoteUsers = useRemoteUsers();
+  
+  // Actually trigger subscriptions for the remote users
+  useRemoteVideoTracks(remoteUsers);
+  useRemoteAudioTracks(remoteUsers);
 
   return (
     <div className="flex-1 flex flex-col relative bg-black">
