@@ -145,7 +145,10 @@ export default function StudentLiveClasses({ department }) {
                 rtcProps={rtcProps} 
                 callbacks={callbacks} 
                 styleProps={{
-                  UIKitContainer: { height: '100%', width: '100%', flex: 1, display: 'flex', minHeight: '0' }
+                  UIKitContainer: { height: '100%', width: '100%', flex: 1, display: 'flex', minHeight: '0' },
+                  localBtnStyles: {
+                    screenshare: { display: 'none' }
+                  }
                 }}
               />
             </div>
