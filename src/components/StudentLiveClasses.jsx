@@ -54,6 +54,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet }) => {
   usePublish(tracksToPublish);
 
   const remoteUsers = useRemoteUsers();
+  const remoteUserStyle = { width: '100%', height: '100%' };
   
   // Actually trigger subscriptions for the remote users
   useRemoteVideoTracks(remoteUsers);
@@ -69,8 +70,10 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet }) => {
         </div>
         {remoteUsers.map(user => (
           <div key={user.uid} className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
-            <RemoteUser user={user} className="w-full h-full object-cover" />
-            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md">Remote User</div>
+            <div className="absolute inset-0">
+              <RemoteUser user={user} style={remoteUserStyle} />
+            </div>
+            <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">Remote User</div>
           </div>
         ))}
       </div>
