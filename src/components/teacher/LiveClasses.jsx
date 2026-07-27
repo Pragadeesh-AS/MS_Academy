@@ -3,6 +3,11 @@ import { db } from '../../firebase';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { 
   Video, 
+  VideoOff,
+  Mic,
+  MicOff,
+  MonitorUp,
+  PhoneOff,
   Calendar, 
   Plus, 
   Clock, 
@@ -28,6 +33,35 @@ import AgoraRTC, {
   useLocalScreenTrack
 } from "agora-rtc-react";
 
+// Extracted component to handle screen sharing lifecycle
+const ScreenShareView = ({ onTrackEnded }) => {
+  const { screenTrack } = useLocalScreenTrack(true, {}, 'disable');
+
+  useEffect(() => {
+    if (screenTrack) {
+      screenTrack.on('track-ended', onTrackEnded);
+      return () => {
+        screenTrack.off('track-ended', onTrackEnded);
+        // Explicitly close the track to clear the browser's native "Stop Sharing" UI
+        screenTrack.close();
+      };
+    }
+  }, [screenTrack, onTrackEnded]);
+
+  const tracks = screenTrack ? [screenTrack] : [];
+  usePublish(tracks);
+
+  if (!screenTrack) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white font-bold animate-pulse">
+        Initializing Screen Share...
+      </div>
+    );
+  }
+
+  return <LocalVideoTrack track={screenTrack} play={true} className="w-full h-full object-cover" />;
+};
+
 // Extracted TeacherCall component for custom Agora rendering
 const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, togglePauseRecording, stopRecording, startRecording, isPaused, recordingTime, formatTime }) => {
   const [micOn, setMicOn] = useState(true);
@@ -36,13 +70,30 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
 
-  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
-  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
-  const { screenTrack } = useLocalScreenTrack(screenShareOn, { withAudio: "auto" }, 'disable');
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(true);
+  const { localCameraTrack } = useLocalCameraTrack(true);
 
-  // If sharing screen, publish screen track instead of camera track
-  const videoTrackToPublish = screenShareOn ? screenTrack : localCameraTrack;
-  usePublish([localMicrophoneTrack, videoTrackToPublish]);
+  useEffect(() => {
+    if (localMicrophoneTrack) {
+      localMicrophoneTrack.setMuted(!micOn).catch(console.error);
+    }
+  }, [micOn, localMicrophoneTrack]);
+
+  useEffect(() => {
+    if (localCameraTrack) {
+      localCameraTrack.setEnabled(cameraOn).catch(console.error);
+    }
+  }, [cameraOn, localCameraTrack]);
+
+  const tracksToPublish = [];
+  if (localMicrophoneTrack) tracksToPublish.push(localMicrophoneTrack);
+  
+  // If not sharing screen, publish camera. The ScreenShareView handles publishing the screen track.
+  if (!screenShareOn && localCameraTrack) {
+    tracksToPublish.push(localCameraTrack);
+  }
+
+  usePublish(tracksToPublish);
 
   const remoteUsers = useRemoteUsers();
 
@@ -73,8 +124,12 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
       {/* Video Grid */}
       <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr">
         <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
-          <LocalVideoTrack track={videoTrackToPublish} play={true} className="w-full h-full object-cover" />
-          <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md">You (Teacher)</div>
+          {screenShareOn ? (
+            <ScreenShareView onTrackEnded={() => setScreenShareOn(false)} />
+          ) : (
+            localCameraTrack && <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
+          )}
+          <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">You (Teacher)</div>
         </div>
         {remoteUsers.map(user => (
           <div key={user.uid} className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
@@ -84,19 +139,44 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, isRecording, toggle
         ))}
       </div>
 
-      {/* Custom Control Bar */}
-      <div className="h-24 bg-slate-900 border-t border-slate-800 flex items-center justify-center gap-6 pb-2">
-        <button onClick={() => setMicOn(!micOn)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${micOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
-          {micOn ? 'Mic On' : 'Mic Off'}
-        </button>
-        <button onClick={() => setCameraOn(!cameraOn)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${cameraOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
-          {cameraOn ? 'Cam On' : 'Cam Off'}
-        </button>
-        <button onClick={() => setScreenShareOn(!screenShareOn)} className={`px-6 py-4 rounded-full font-bold transition-all ${screenShareOn ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-slate-700 hover:bg-slate-600 text-white'}`}>
-          {screenShareOn ? 'Stop Sharing' : 'Share Screen'}
-        </button>
-        <button onClick={handleEndMeet} className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-all shadow-[0_0_15px_rgba(220,38,38,0.4)]">
-          End
+      {/* Custom Control Bar (Blue theme with outlined icons) */}
+      <div className="h-20 bg-[#0078FF] flex items-center justify-around px-8 shadow-[0_-4px_20px_rgba(0,120,255,0.3)]">
+        <div className="flex items-center gap-12">
+          {/* Camera Button */}
+          <button 
+            onClick={() => setCameraOn(!cameraOn)} 
+            className="w-12 h-12 rounded-full border-[1.5px] border-white flex items-center justify-center text-white hover:bg-white/20 transition-all"
+            title={cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
+          >
+            {cameraOn ? <Video size={22} strokeWidth={1.5} /> : <VideoOff size={22} strokeWidth={1.5} />}
+          </button>
+          
+          {/* Mic Button */}
+          <button 
+            onClick={() => setMicOn(!micOn)} 
+            className="w-12 h-12 rounded-full border-[1.5px] border-white flex items-center justify-center text-white hover:bg-white/20 transition-all"
+            title={micOn ? 'Mute' : 'Unmute'}
+          >
+            {micOn ? <Mic size={22} strokeWidth={1.5} /> : <MicOff size={22} strokeWidth={1.5} />}
+          </button>
+
+          {/* Screen Share Button */}
+          <button 
+            onClick={() => setScreenShareOn(!screenShareOn)} 
+            className={`w-12 h-12 rounded-full border-[1.5px] flex items-center justify-center transition-all ${screenShareOn ? 'border-transparent bg-white text-[#0078FF] shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'border-white text-white hover:bg-white/20'}`}
+            title={screenShareOn ? 'Stop Sharing' : 'Share Screen'}
+          >
+            <MonitorUp size={22} strokeWidth={1.5} />
+          </button>
+        </div>
+        
+        {/* End Call Button */}
+        <button 
+          onClick={() => handleEndMeet()} 
+          className="w-12 h-12 rounded-full bg-[#FF3B30] text-white flex items-center justify-center transition-all hover:bg-red-600 shadow-[0_0_15px_rgba(255,59,48,0.4)]"
+          title="End Call"
+        >
+          <PhoneOff size={22} strokeWidth={1.5} />
         </button>
       </div>
     </div>

@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Video, 
+  VideoOff,
+  Mic,
+  MicOff,
+  PhoneOff,
   Clock, 
   Users,
   Send,
@@ -26,10 +30,26 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet }) => {
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
 
-  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
-  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(true);
+  const { localCameraTrack } = useLocalCameraTrack(true);
 
-  usePublish([localMicrophoneTrack, localCameraTrack]);
+  useEffect(() => {
+    if (localMicrophoneTrack) {
+      localMicrophoneTrack.setMuted(!micOn).catch(console.error);
+    }
+  }, [micOn, localMicrophoneTrack]);
+
+  useEffect(() => {
+    if (localCameraTrack) {
+      localCameraTrack.setEnabled(cameraOn).catch(console.error);
+    }
+  }, [cameraOn, localCameraTrack]);
+
+  const tracksToPublish = [];
+  if (localMicrophoneTrack) tracksToPublish.push(localMicrophoneTrack);
+  if (localCameraTrack) tracksToPublish.push(localCameraTrack);
+
+  usePublish(tracksToPublish);
 
   const remoteUsers = useRemoteUsers();
 
@@ -38,7 +58,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet }) => {
       {/* Video Grid */}
       <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr">
         <div className="relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800">
-          <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
+          {localCameraTrack && <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />}
           <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md">You (Student)</div>
         </div>
         {remoteUsers.map(user => (
@@ -49,16 +69,35 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet }) => {
         ))}
       </div>
 
-      {/* Custom Control Bar */}
-      <div className="h-24 bg-slate-900 border-t border-slate-800 flex items-center justify-center gap-6 pb-2">
-        <button onClick={() => setMicOn(!micOn)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${micOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
-          {micOn ? 'Mic On' : 'Mic Off'}
-        </button>
-        <button onClick={() => setCameraOn(!cameraOn)} className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${cameraOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
-          {cameraOn ? 'Cam On' : 'Cam Off'}
-        </button>
-        <button onClick={handleLeaveMeet} className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-all shadow-[0_0_15px_rgba(220,38,38,0.4)]">
-          Leave
+      {/* Custom Control Bar (Blue theme with outlined icons) */}
+      <div className="h-20 bg-[#0078FF] flex items-center justify-around px-8 shadow-[0_-4px_20px_rgba(0,120,255,0.3)]">
+        <div className="flex items-center gap-12">
+          {/* Camera Button */}
+          <button 
+            onClick={() => setCameraOn(!cameraOn)} 
+            className="w-12 h-12 rounded-full border-[1.5px] border-white flex items-center justify-center text-white hover:bg-white/20 transition-all"
+            title={cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
+          >
+            {cameraOn ? <Video size={22} strokeWidth={1.5} /> : <VideoOff size={22} strokeWidth={1.5} />}
+          </button>
+          
+          {/* Mic Button */}
+          <button 
+            onClick={() => setMicOn(!micOn)} 
+            className="w-12 h-12 rounded-full border-[1.5px] border-white flex items-center justify-center text-white hover:bg-white/20 transition-all"
+            title={micOn ? 'Mute' : 'Unmute'}
+          >
+            {micOn ? <Mic size={22} strokeWidth={1.5} /> : <MicOff size={22} strokeWidth={1.5} />}
+          </button>
+        </div>
+        
+        {/* End Call Button */}
+        <button 
+          onClick={() => handleLeaveMeet()} 
+          className="w-12 h-12 rounded-full bg-[#FF3B30] text-white flex items-center justify-center transition-all hover:bg-red-600 shadow-[0_0_15px_rgba(255,59,48,0.4)]"
+          title="Leave Call"
+        >
+          <PhoneOff size={22} strokeWidth={1.5} />
         </button>
       </div>
     </div>
