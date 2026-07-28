@@ -11,7 +11,8 @@ import {
   Send,
   MessageCircle,
   Pin,
-  PinOff
+  PinOff,
+  X
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, setDoc, doc } from 'firebase/firestore';
@@ -29,7 +30,7 @@ import AgoraRTC, {
   LocalVideoTrack
 } from "agora-rtc-react";
 // Extracted StudentCall component for custom Agora rendering
-const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId }) => {
+const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast }) => {
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [pinnedUid, setPinnedUid] = useState(null);
@@ -57,9 +58,52 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId }) => {
     return () => unsub();
   }, [sessionId]);
 
-  // Only request hardware locks if toggled ON
   const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
   const { localCameraTrack } = useLocalCameraTrack(cameraOn);
+
+  // Store a ref to the latest tracks to forcefully close them on component unmount (End Call) or toggle off
+  const tracksRef = useRef({ cam: null, mic: null });
+  useEffect(() => {
+    if (localCameraTrack) tracksRef.current.cam = localCameraTrack;
+    if (localMicrophoneTrack) tracksRef.current.mic = localMicrophoneTrack;
+  }, [localCameraTrack, localMicrophoneTrack]);
+
+  // Force hardware release when toggled off
+  useEffect(() => {
+    if (!cameraOn && tracksRef.current.cam) {
+      try {
+        tracksRef.current.cam.setEnabled(false);
+        tracksRef.current.cam.stop();
+        tracksRef.current.cam.close();
+      } catch (e) {}
+      tracksRef.current.cam = null;
+    }
+    if (!micOn && tracksRef.current.mic) {
+      try {
+        tracksRef.current.mic.setEnabled(false);
+        tracksRef.current.mic.stop();
+        tracksRef.current.mic.close();
+      } catch (e) {}
+      tracksRef.current.mic = null;
+    }
+  }, [cameraOn, micOn]);
+
+  useEffect(() => {
+    return () => {
+      if (tracksRef.current.cam) {
+        try {
+          tracksRef.current.cam.stop();
+          tracksRef.current.cam.close();
+        } catch (e) {}
+      }
+      if (tracksRef.current.mic) {
+        try {
+          tracksRef.current.mic.stop();
+          tracksRef.current.mic.close();
+        } catch (e) {}
+      }
+    };
+  }, []);
 
   const tracksToPublish = [];
   if (localMicrophoneTrack) tracksToPublish.push(localMicrophoneTrack);
@@ -86,28 +130,42 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId }) => {
     setPinnedUid(prev => prev === id ? null : id);
   };
 
+  // Auto-pin screen share (UID 999999)
+  useEffect(() => {
+    const hasScreenShare = remoteUsers.some(u => u.uid === 999999);
+    if (hasScreenShare && pinnedUid !== 999999) {
+      setPinnedUid(999999);
+    } else if (!hasScreenShare && pinnedUid === 999999) {
+      setPinnedUid(null); // Unpin when screen share stops
+    }
+  }, [remoteUsers, pinnedUid]);
+
   const renderGridTiles = () => {
-    const tiles = [];
+    const pinnedTiles = [];
+    const unpinnedTiles = [];
     
     // 1. Local Camera
     const isLocalPinned = pinnedUid === 'local-camera';
-    tiles.push(
-      <div key="local-camera" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isLocalPinned ? 'md:col-span-3 md:row-span-3 h-full min-h-[400px]' : (pinnedUid ? 'h-[200px]' : '')}`}>
+    const localTile = (
+      <div key="local-camera" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isLocalPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
         {localCameraTrack ? (
           <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
-            <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
-              <User size={48} className="text-slate-400" />
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-800 z-10">
+            <div className="w-16 h-16 md:w-24 md:h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
+              <User size={32} className="text-slate-400" />
             </div>
           </div>
         )}
-        <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">You (Student)</div>
-        <button onClick={() => togglePin('local-camera')} className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-20">
-            {isLocalPinned ? <PinOff size={18} /> : <Pin size={18} />}
+        <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-black/70 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isLocalPinned ? 'scale-75 origin-top-left' : ''}`}>You (Student)</div>
+        <button onClick={() => togglePin('local-camera')} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
+            {isLocalPinned ? <PinOff size={16} /> : <Pin size={16} />}
         </button>
       </div>
     );
+    
+    if (isLocalPinned) pinnedTiles.push(localTile);
+    else unpinnedTiles.push(localTile);
     
     // 2. Remote Users
     remoteUsers.forEach(user => {
@@ -119,46 +177,71 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId }) => {
         userName = "Teacher's Screen";
       }
 
-      tiles.push(
-        <div key={user.uid} className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'md:col-span-3 md:row-span-3 h-full min-h-[400px]' : (pinnedUid ? 'h-[200px]' : '')}`}>
-          {user.hasVideo ? (
-            <div className="absolute inset-0">
-              <RemoteUser user={user} style={remoteUserStyle} />
-            </div>
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
-              <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
-                <User size={48} className="text-slate-400" />
+      const remoteTile = (
+        <div key={user.uid} className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
+          <div className="absolute inset-0">
+            <RemoteUser user={user} style={remoteUserStyle} />
+          </div>
+          {!user.hasVideo && (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-800 z-10">
+              <div className="w-16 h-16 md:w-24 md:h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
+                <User size={32} className="text-slate-400" />
               </div>
             </div>
           )}
-          <div className={`absolute bottom-4 left-4 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10 transition-opacity ${user.uid === 999999 ? 'bg-blue-600/90' : 'bg-black/70'}`}>
-            {userName} {!user.hasAudio && user.uid !== 999999 && <MicOff size={14} className="inline ml-1 text-red-400" />}
+          <div className={`absolute top-2 left-2 md:top-4 md:left-4 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 transition-opacity ${user.uid === 999999 ? 'bg-blue-600/90' : 'bg-black/70'} ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>
+            {userName} {!user.hasAudio && user.uid !== 999999 && <MicOff size={12} className="inline ml-1 text-red-400" />}
           </div>
-          <button onClick={() => togglePin(user.uid)} className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-20">
-            {isPinned ? <PinOff size={18} /> : <Pin size={18} />}
+          <button onClick={() => togglePin(user.uid)} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
+            {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
           </button>
         </div>
       );
+      
+      if (isPinned) pinnedTiles.push(remoteTile);
+      else unpinnedTiles.push(remoteTile);
     });
     
-    return tiles;
+    return { pinnedTiles, unpinnedTiles };
   };
+
+  const { pinnedTiles, unpinnedTiles } = renderGridTiles();
+  const isScreenSharePinned = pinnedUid === 999999 || pinnedUid === 'local-screen';
 
   return (
     <div className="flex-1 flex flex-col relative bg-black">
       {/* Video Grid */}
-      <div className={`flex-1 p-4 grid ${pinnedUid ? 'grid-cols-1 md:grid-cols-4 md:grid-rows-3' : gridColsClass} gap-4 auto-rows-fr`}>
-        {renderGridTiles()}
+      <div className={`flex-1 relative ${pinnedUid ? 'overflow-hidden' : `p-4 grid ${gridColsClass} gap-4 auto-rows-fr`}`}>
+        {pinnedUid ? (
+          <>
+            {/* The single pinned video taking the full background */}
+            {pinnedTiles}
+            
+            {/* Small floating PIP videos container (Vertical Stack) */}
+            <div className={`absolute bottom-28 ${isScreenSharePinned ? 'right-6' : 'left-6'} z-[90] flex flex-col gap-3 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 custom-scrollbar`}>
+              {unpinnedTiles}
+            </div>
+          </>
+        ) : (
+          unpinnedTiles
+        )}
       </div>
 
-      {/* Custom Control Bar (Blue theme with outlined icons) */}
-      <div className="h-20 bg-[#0078FF] flex items-center justify-around px-8 shadow-[0_-4px_20px_rgba(0,120,255,0.3)]">
-        <div className="flex items-center gap-12">
+      {/* Custom Control Bar (Glassmorphic Theme mimicking Navbar) */}
+      <div 
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 rounded-full z-[100] transition-all duration-500 hover:scale-[1.02]"
+        style={{
+          backgroundColor: "rgba(255, 255, 255, 0.15)",
+          backdropFilter: "blur(24px) saturate(180%)",
+          WebkitBackdropFilter: "blur(24px) saturate(180%)",
+          boxShadow: "rgba(0, 0, 0, 0.3) 0px 20px 40px -10px, inset 0px 1px 1px rgba(255, 255, 255, 0.4), inset 0px 0px 0px 1px rgba(255, 255, 255, 0.15)"
+        }}
+      >
+        <div className="flex items-center gap-6 pr-6 border-r border-white/20">
           {/* Camera Button */}
           <button 
             onClick={() => setCameraOn(!cameraOn)} 
-            className="w-12 h-12 rounded-full border-[1.5px] border-white flex items-center justify-center text-white hover:bg-white/20 transition-all"
+            className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${cameraOn ? 'control-btn' : 'control-btn off'}`}
             title={cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
           >
             {cameraOn ? <Video size={22} strokeWidth={1.5} /> : <VideoOff size={22} strokeWidth={1.5} />}
@@ -167,21 +250,32 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId }) => {
           {/* Mic Button */}
           <button 
             onClick={() => setMicOn(!micOn)} 
-            className="w-12 h-12 rounded-full border-[1.5px] border-white flex items-center justify-center text-white hover:bg-white/20 transition-all"
+            className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${micOn ? 'control-btn' : 'control-btn off'}`}
             title={micOn ? 'Mute' : 'Unmute'}
           >
             {micOn ? <Mic size={22} strokeWidth={1.5} /> : <MicOff size={22} strokeWidth={1.5} />}
           </button>
         </div>
         
-        {/* End Call Button */}
-        <button 
-          onClick={() => handleLeaveMeet()} 
-          className="w-12 h-12 rounded-full bg-[#FF3B30] text-white flex items-center justify-center transition-all hover:bg-red-600 shadow-[0_0_15px_rgba(255,59,48,0.4)]"
-          title="Leave Call"
-        >
-          <PhoneOff size={22} strokeWidth={1.5} />
-        </button>
+        <div className="flex items-center gap-4">
+          {/* Chat Button */}
+          <button 
+            onClick={toggleChat} 
+            className={`w-12 h-12 rounded-full flex items-center justify-center relative text-white ${isChatOpen ? 'control-btn' : 'control-btn off'}`}
+            title={isChatOpen ? 'Close Chat' : 'Open Chat'}
+          >
+            <MessageCircle size={22} strokeWidth={1.5} />
+          </button>
+          
+          {/* End Call Button */}
+          <button 
+            onClick={() => handleLeaveMeet()} 
+            className="w-12 h-12 rounded-full text-white flex items-center justify-center control-btn-danger"
+            title="Leave Class"
+          >
+            <PhoneOff size={22} strokeWidth={1.5} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -197,6 +291,9 @@ export default function StudentLiveClasses({ department }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const chatEndRef = useRef(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatToast, setChatToast] = useState({ show: false, sender: '', message: '' });
+  const prevMessagesLength = useRef(0);
 
   useEffect(() => {
     if (!department) return;
@@ -213,7 +310,6 @@ export default function StudentLiveClasses({ department }) {
         const data = doc.data();
         sessions.push({
           id: doc.id,
-          subject: data.subject || 'General Class',
           topic: data.topic || 'Live Session',
           teacher: data.teacherName || 'Teacher',
           time: 'Started recently',
@@ -234,6 +330,16 @@ export default function StudentLiveClasses({ department }) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       messages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
+      
+      if (prevMessagesLength.current > 0 && messages.length > prevMessagesLength.current && !isChatOpen) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg.senderEmail !== localStorage.getItem('auth_email')) {
+          setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.message });
+          setTimeout(() => setChatToast(prev => ({ ...prev, show: false })), 5000);
+        }
+      }
+      prevMessagesLength.current = messages.length;
+      
       setChatMessages(messages);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
@@ -293,14 +399,7 @@ export default function StudentLiveClasses({ department }) {
     return (
       <div className="fixed inset-0 z-[100] bg-[#111827] w-full h-full flex overflow-hidden">
         
-        {/* Dynamic Watermark Overlay to discourage screenshots/recording */}
-        <div className="absolute inset-0 pointer-events-none z-[100] overflow-hidden flex flex-wrap gap-x-20 gap-y-32 p-10 justify-center items-center opacity-30 mix-blend-overlay">
-           {Array.from({ length: 20 }).map((_, i) => (
-             <div key={i} className="text-white text-lg font-black whitespace-nowrap select-none -rotate-12">
-               {localStorage.getItem('auth_email') || 'student@msacademy.com'}
-             </div>
-           ))}
-        </div>
+
 
         {/* Top Header overlay for aesthetics */}
         <div className="absolute top-0 inset-x-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
@@ -309,7 +408,7 @@ export default function StudentLiveClasses({ department }) {
                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
                LIVE
              </div>
-             <span className="font-bold text-sm text-slate-200">{currentSession?.subject || "Live Session"} - {currentSession?.topic}</span>
+             <span className="font-bold text-sm text-slate-200">{currentSession?.topic} - Live Session</span>
            </div>
         </div>
 
@@ -320,7 +419,18 @@ export default function StudentLiveClasses({ department }) {
             <button onClick={handleLeaveMeet} className="mt-6 px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors">Go Back</button>
           </div>
         ) : (
-          <div className="flex-1 w-full h-full flex overflow-hidden">
+          <div className="absolute inset-0 z-50 flex flex-col bg-slate-900">
+          {chatToast.show && (
+            <div className="absolute top-6 right-6 bg-slate-800 border border-slate-700 text-white p-4 rounded-xl shadow-2xl z-50 flex flex-col gap-1 min-w-[280px] animate-in slide-in-from-top-4 duration-300">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-blue-400 text-sm">{chatToast.sender}</span>
+                <button onClick={() => setChatToast({ show: false })}><X size={14} className="text-slate-400 hover:text-white"/></button>
+              </div>
+              <p className="text-sm text-slate-300 truncate max-w-[240px]">{chatToast.message}</p>
+              <button onClick={() => { setChatToast({ show: false }); setIsChatOpen(true); }} className="text-xs text-blue-400 font-bold mt-2 text-left hover:text-blue-300 transition-colors uppercase tracking-wider">Reply</button>
+            </div>
+          )}
+          <div className="flex-1 flex overflow-hidden">
             <div className="flex-1 flex flex-col relative bg-black">
             <AgoraRTCProvider client={agoraClient}>
               <StudentCall 
@@ -329,15 +439,25 @@ export default function StudentLiveClasses({ department }) {
                 token={rtcProps.token}
                 sessionId={currentSession.id}
                 handleLeaveMeet={handleLeaveMeet}
+                isChatOpen={isChatOpen}
+                toggleChat={() => setIsChatOpen(!isChatOpen)}
+                chatToast={chatToast}
+                setChatToast={setChatToast}
               />
             </AgoraRTCProvider>
             </div>
             
             {/* CHAT SIDEBAR */}
-            <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col">
-              <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center gap-2">
-                <MessageCircle size={18} className="text-blue-400"/>
-                <h3 className="text-white font-bold text-sm">Live Chat</h3>
+            {isChatOpen && (
+            <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300">
+              <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <MessageCircle size={18} className="text-blue-400"/>
+                  <h3 className="text-white font-bold text-sm">Live Chat</h3>
+                </div>
+                <button onClick={() => setIsChatOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                  <X size={18} />
+                </button>
               </div>
               
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -371,6 +491,8 @@ export default function StudentLiveClasses({ department }) {
                 </div>
               </form>
             </div>
+            )}
+          </div>
           </div>
         )}
       </div>
@@ -403,7 +525,7 @@ export default function StudentLiveClasses({ department }) {
                 </div>
                 
                 <h4 className="text-lg font-[800] text-slate-900 mb-1">{cls.topic}</h4>
-                <p className="text-slate-500 font-medium text-[14px]">{cls.subject} • by {cls.teacher}</p>
+                <p className="text-slate-500 font-medium text-[14px]">by {cls.teacher}</p>
                 
                 <div className="flex items-center gap-4 mt-4 text-[13px] font-semibold text-slate-400">
                   <span className="flex items-center gap-1.5"><Users size={14}/> Live</span>

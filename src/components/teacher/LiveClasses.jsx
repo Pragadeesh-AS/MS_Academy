@@ -80,7 +80,7 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
 };
 
 // Extracted TeacherCall component for custom Agora rendering
-const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecording, togglePauseRecording, stopRecording, startRecording, isPaused, recordingTime, formatTime }) => {
+const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecording, togglePauseRecording, stopRecording, startRecording, isPaused, recordingTime, formatTime, isChatOpen, toggleChat, chatToast, setChatToast }) => {
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
   const [screenShareOn, setScreenShareOn] = useState(false);
@@ -109,9 +109,52 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
 
-  // Only request hardware locks if toggled ON
   const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
   const { localCameraTrack } = useLocalCameraTrack(cameraOn);
+
+  // Store a ref to the latest tracks to forcefully close them on component unmount (End Call) or toggle off
+  const tracksRef = useRef({ cam: null, mic: null });
+  useEffect(() => {
+    if (localCameraTrack) tracksRef.current.cam = localCameraTrack;
+    if (localMicrophoneTrack) tracksRef.current.mic = localMicrophoneTrack;
+  }, [localCameraTrack, localMicrophoneTrack]);
+
+  // Force hardware release when toggled off
+  useEffect(() => {
+    if (!cameraOn && tracksRef.current.cam) {
+      try {
+        tracksRef.current.cam.setEnabled(false);
+        tracksRef.current.cam.stop();
+        tracksRef.current.cam.close();
+      } catch (e) {}
+      tracksRef.current.cam = null;
+    }
+    if (!micOn && tracksRef.current.mic) {
+      try {
+        tracksRef.current.mic.setEnabled(false);
+        tracksRef.current.mic.stop();
+        tracksRef.current.mic.close();
+      } catch (e) {}
+      tracksRef.current.mic = null;
+    }
+  }, [cameraOn, micOn]);
+
+  useEffect(() => {
+    return () => {
+      if (tracksRef.current.cam) {
+        try {
+          tracksRef.current.cam.stop();
+          tracksRef.current.cam.close();
+        } catch (e) {}
+      }
+      if (tracksRef.current.mic) {
+        try {
+          tracksRef.current.mic.stop();
+          tracksRef.current.mic.close();
+        } catch (e) {}
+      }
+    };
+  }, []);
 
   const tracksToPublish = [];
   if (localMicrophoneTrack) tracksToPublish.push(localMicrophoneTrack);
@@ -142,78 +185,97 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
   };
 
   const renderGridTiles = () => {
-    const tiles = [];
+    const pinnedTiles = [];
+    const unpinnedTiles = [];
     
     // 1. Screen Share (Local)
-    if (screenShareOn) {
-      const isPinned = pinnedUid === 'local-screen';
-      tiles.push(
-        <div key="local-screen" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'md:col-span-3 md:row-span-3 h-full min-h-[400px]' : (pinnedUid ? 'h-[200px]' : '')}`}>
-          <ScreenShareClient appId={appId} channel={channel} token={token} onTrackEnded={() => setScreenShareOn(false)} />
-          <div className="absolute bottom-4 left-4 bg-blue-600/90 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">Your Screen</div>
-          <button onClick={() => togglePin('local-screen')} className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-20">
-            {isPinned ? <PinOff size={18} /> : <Pin size={18} />}
-          </button>
-        </div>
-      );
-    }
+      if (screenShareOn) {
+        const isPinned = pinnedUid === 'local-screen';
+        const screenTile = (
+          <div key="local-screen" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
+            <ScreenShareClient appId={appId} channel={channel} token={token} onTrackEnded={() => setScreenShareOn(false)} />
+            <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-blue-600/90 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>Your Screen</div>
+            <button onClick={() => togglePin('local-screen')} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
+              {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
+            </button>
+          </div>
+        );
+        if (isPinned) pinnedTiles.push(screenTile);
+        else unpinnedTiles.push(screenTile);
+      }
     
     // 2. Local Camera
     const isLocalPinned = pinnedUid === 'local-camera';
-    tiles.push(
-      <div key="local-camera" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isLocalPinned ? 'md:col-span-3 md:row-span-3 h-full min-h-[400px]' : (pinnedUid ? 'h-[200px]' : '')}`}>
+    const localTile = (
+      <div key="local-camera" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isLocalPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
         {localCameraTrack ? (
           <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
-            <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
-              <User size={48} className="text-slate-400" />
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-800 z-10">
+            <div className="w-16 h-16 md:w-24 md:h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
+              <User size={32} className="text-slate-400" />
             </div>
           </div>
         )}
-        <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10">You (Teacher)</div>
-        <button onClick={() => togglePin('local-camera')} className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-20">
-            {isLocalPinned ? <PinOff size={18} /> : <Pin size={18} />}
+        <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-black/70 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isLocalPinned ? 'scale-75 origin-top-left' : ''}`}>You (Teacher)</div>
+        <button onClick={() => togglePin('local-camera')} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
+            {isLocalPinned ? <PinOff size={16} /> : <Pin size={16} />}
         </button>
       </div>
     );
+    if (isLocalPinned) pinnedTiles.push(localTile);
+    else unpinnedTiles.push(localTile);
     
     // 3. Remote Users
     filteredUsers.forEach(user => {
       const isPinned = pinnedUid === user.uid;
       const userName = participantNames[user.uid] || `Student ${user.uid}`;
-      tiles.push(
-        <div key={user.uid} className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'md:col-span-3 md:row-span-3 h-full min-h-[400px]' : (pinnedUid ? 'h-[200px]' : '')}`}>
-          {user.hasVideo ? (
-            <div className="absolute inset-0">
-              <RemoteUser user={user} style={remoteUserStyle} />
-            </div>
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
-              <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
-                <User size={48} className="text-slate-400" />
+      const remoteTile = (
+        <div key={user.uid} className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
+          <div className="absolute inset-0">
+            <RemoteUser user={user} style={remoteUserStyle} />
+          </div>
+          {!user.hasVideo && (
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-800 z-10">
+              <div className="w-16 h-16 md:w-24 md:h-24 bg-slate-700 rounded-full flex items-center justify-center shadow-inner">
+                <User size={32} className="text-slate-400" />
               </div>
             </div>
           )}
-          <div className="absolute bottom-4 left-4 bg-black/70 px-3 py-1 rounded-lg text-white text-sm font-bold shadow-md z-10 transition-opacity">
-            {userName} {!user.hasAudio && <MicOff size={14} className="inline ml-1 text-red-400" />}
+          <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-black/70 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 transition-opacity ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>
+            {userName} {!user.hasAudio && <MicOff size={12} className="inline ml-1 text-red-400" />}
           </div>
-          <button onClick={() => togglePin(user.uid)} className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-20">
-            {isPinned ? <PinOff size={18} /> : <Pin size={18} />}
+          <button onClick={() => togglePin(user.uid)} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
+            {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
           </button>
         </div>
       );
+      if (isPinned) pinnedTiles.push(remoteTile);
+      else unpinnedTiles.push(remoteTile);
     });
     
-    return tiles;
+    return { pinnedTiles, unpinnedTiles };
   };
+
+  const { pinnedTiles, unpinnedTiles } = renderGridTiles();
+  const isScreenSharePinned = pinnedUid === 'local-screen' || pinnedUid === 999999;
 
   return (
     <div className="flex-1 flex flex-col relative bg-black">
       {/* RECORDING CONTROLS */}
       <div className="absolute top-4 right-4 z-50 flex gap-2">
+        {chatToast.show && (
+          <div className="absolute top-12 right-0 bg-slate-800 border border-slate-700 text-white p-4 rounded-xl shadow-2xl z-50 flex flex-col gap-1 min-w-[280px] animate-in slide-in-from-top-4 duration-300">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-blue-400 text-sm">{chatToast.sender}</span>
+              <button onClick={() => setChatToast({ show: false })}><X size={14} className="text-slate-400 hover:text-white"/></button>
+            </div>
+            <p className="text-sm text-slate-300 truncate max-w-[240px]">{chatToast.message}</p>
+            <button onClick={() => { setChatToast({ show: false }); setIsChatOpen(true); }} className="text-xs text-blue-400 font-bold mt-2 text-left hover:text-blue-300 transition-colors uppercase tracking-wider">Reply</button>
+          </div>
+        )}
         {!isRecording ? (
-          <button onClick={startRecording} className="px-4 py-2 bg-slate-800/80 hover:bg-red-600 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors border border-slate-700">
+          <button onClick={() => startRecording(localMicrophoneTrack)} className="px-4 py-2 bg-slate-800/80 hover:bg-red-600 backdrop-blur text-white text-sm font-bold rounded-lg flex items-center gap-2 transition-colors border border-slate-700">
             <div className="w-2.5 h-2.5 bg-red-500 rounded-full"></div>Record Session
           </button>
         ) : (
@@ -233,17 +295,37 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
       </div>
 
       {/* Video Grid */}
-      <div className={`flex-1 p-4 grid ${pinnedUid ? 'grid-cols-1 md:grid-cols-4 md:grid-rows-3' : gridColsClass} gap-4 auto-rows-fr`}>
-        {renderGridTiles()}
+      <div className={`flex-1 relative ${pinnedUid ? 'overflow-hidden' : `p-4 grid ${gridColsClass} gap-4 auto-rows-fr`}`}>
+        {pinnedUid ? (
+          <>
+            {/* The single pinned video taking the full background */}
+            {pinnedTiles}
+            
+            {/* Small floating PIP videos container (Vertical Stack) */}
+            <div className={`absolute bottom-28 ${isScreenSharePinned ? 'right-6' : 'left-6'} z-[90] flex flex-col gap-3 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 custom-scrollbar`}>
+              {unpinnedTiles}
+            </div>
+          </>
+        ) : (
+          unpinnedTiles
+        )}
       </div>
 
-      {/* Custom Control Bar (Blue theme with outlined icons) */}
-      <div className="h-20 bg-[#0078FF] flex items-center justify-around px-8 shadow-[0_-4px_20px_rgba(0,120,255,0.3)]">
-        <div className="flex items-center gap-12">
+      {/* Custom Control Bar (Glassmorphic Theme mimicking Navbar) */}
+      <div 
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 rounded-full z-[100] transition-all duration-500 hover:scale-[1.02]"
+        style={{
+          backgroundColor: "rgba(255, 255, 255, 0.15)",
+          backdropFilter: "blur(24px) saturate(180%)",
+          WebkitBackdropFilter: "blur(24px) saturate(180%)",
+          boxShadow: "rgba(0, 0, 0, 0.3) 0px 20px 40px -10px, inset 0px 1px 1px rgba(255, 255, 255, 0.4), inset 0px 0px 0px 1px rgba(255, 255, 255, 0.15)"
+        }}
+      >
+        <div className="flex items-center gap-6 pr-6 border-r border-white/20">
           {/* Camera Button */}
           <button 
             onClick={() => setCameraOn(!cameraOn)} 
-            className="w-12 h-12 rounded-full border-[1.5px] border-white flex items-center justify-center text-white hover:bg-white/20 transition-all"
+            className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${cameraOn ? 'control-btn' : 'control-btn off'}`}
             title={cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
           >
             {cameraOn ? <Video size={22} strokeWidth={1.5} /> : <VideoOff size={22} strokeWidth={1.5} />}
@@ -252,7 +334,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
           {/* Mic Button */}
           <button 
             onClick={() => setMicOn(!micOn)} 
-            className="w-12 h-12 rounded-full border-[1.5px] border-white flex items-center justify-center text-white hover:bg-white/20 transition-all"
+            className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${micOn ? 'control-btn' : 'control-btn off'}`}
             title={micOn ? 'Mute' : 'Unmute'}
           >
             {micOn ? <Mic size={22} strokeWidth={1.5} /> : <MicOff size={22} strokeWidth={1.5} />}
@@ -266,16 +348,28 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
           >
             <MonitorUp size={22} strokeWidth={1.5} />
           </button>
+
         </div>
         
-        {/* End Call Button */}
-        <button 
-          onClick={() => handleEndMeet()} 
-          className="w-12 h-12 rounded-full bg-[#FF3B30] text-white flex items-center justify-center transition-all hover:bg-red-600 shadow-[0_0_15px_rgba(255,59,48,0.4)]"
-          title="End Call"
-        >
-          <PhoneOff size={22} strokeWidth={1.5} />
-        </button>
+        <div className="flex items-center gap-4">
+          {/* Chat Button */}
+          <button 
+            onClick={toggleChat} 
+            className={`w-12 h-12 rounded-full flex items-center justify-center relative text-white ${isChatOpen ? 'control-btn' : 'control-btn off'}`}
+            title={isChatOpen ? 'Close Chat' : 'Open Chat'}
+          >
+            <MessageCircle size={22} strokeWidth={1.5} />
+          </button>
+          
+          {/* End Call Button */}
+          <button 
+            onClick={() => handleEndMeet()} 
+            className="w-12 h-12 rounded-full text-white flex items-center justify-center control-btn-danger"
+            title="End Call"
+          >
+            <PhoneOff size={22} strokeWidth={1.5} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -298,13 +392,16 @@ export default function LiveClasses({ department }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const chatEndRef = useRef(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatToast, setChatToast] = useState({ show: false, sender: '', message: '' });
+  const prevMessagesLength = useRef(0);
   
   // Modals
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
   
-  const [newClass, setNewClass] = useState({ subject: '', topic: '', time: '', selectedStudents: [] });
-  const [startClassData, setStartClassData] = useState({ subject: '', topic: '' });
+  const [newClass, setNewClass] = useState({ topic: '', time: '', selectedStudents: [] });
+  const [startClassData, setStartClassData] = useState({ topic: '' });
   
   const [activeSessions, setActiveSessions] = useState([]);
   const [upcomingClasses, setUpcomingClasses] = useState([]);
@@ -352,6 +449,16 @@ export default function LiveClasses({ department }) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       messages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
+      
+      if (prevMessagesLength.current > 0 && messages.length > prevMessagesLength.current && !isChatOpen) {
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg.senderEmail !== localStorage.getItem('auth_email')) {
+          setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.message });
+          setTimeout(() => setChatToast(prev => ({ ...prev, show: false })), 5000);
+        }
+      }
+      prevMessagesLength.current = messages.length;
+      
       setChatMessages(messages);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
@@ -391,7 +498,6 @@ export default function LiveClasses({ department }) {
         teacherName,
         teacherEmail,
         department: department || 'General',
-        subject: startClassData.subject || "General Class",
         topic: startClassData.topic || "Instant Live Session",
         status: 'live',
         startedAt: serverTimestamp()
@@ -434,12 +540,22 @@ export default function LiveClasses({ department }) {
     }
   };
 
-  const startRecording = async () => {
+  const startRecording = async (localMicTrack) => {
     try {
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      const voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({ 
+        video: { displaySurface: "browser" }, 
+        audio: true,
+        preferCurrentTab: true,
+        systemAudio: "exclude"
+      });
       
-      const tracks = [...displayStream.getTracks(), ...voiceStream.getTracks()];
+      const tracks = [...displayStream.getTracks()];
+      
+      // Reuse the existing noise-cancelled Agora mic track instead of requesting a new raw one
+      if (localMicTrack) {
+        tracks.push(localMicTrack.getMediaStreamTrack());
+      }
+      
       const combinedStream = new MediaStream(tracks);
       
       const mediaRecorder = new MediaRecorder(combinedStream);
@@ -525,7 +641,6 @@ export default function LiveClasses({ department }) {
       ...upcomingClasses, 
       {
         id: Date.now(),
-        subject: newClass.subject || "General Class",
         topic: newClass.topic,
         time: newClass.time,
         students: newClass.selectedStudents.length || departmentStudents.length,
@@ -533,7 +648,7 @@ export default function LiveClasses({ department }) {
       }
     ]);
     setIsScheduleModalOpen(false);
-    setNewClass({ subject: "", topic: "", time: "", selectedStudents: [] });
+    setNewClass({ topic: "", time: "", selectedStudents: [] });
   };
 
   const toggleStudentSelection = (studentName) => {
@@ -582,15 +697,25 @@ export default function LiveClasses({ department }) {
                 isPaused={isPaused}
                 recordingTime={recordingTime}
                 formatTime={formatTime}
+                isChatOpen={isChatOpen}
+                toggleChat={() => setIsChatOpen(!isChatOpen)}
+                chatToast={chatToast}
+                setChatToast={setChatToast}
               />
             </AgoraRTCProvider>
             
             {/* CHAT SIDEBAR */}
-            <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col">
-              <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center gap-2">
-                <MessageCircle size={18} className="text-blue-400"/>
-                <h3 className="text-white font-bold text-sm">Live Chat</h3>
-              </div>
+            {isChatOpen && (
+              <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300">
+                <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <MessageCircle size={18} className="text-blue-400"/>
+                    <h3 className="text-white font-bold text-sm">Live Chat</h3>
+                  </div>
+                  <button onClick={() => setIsChatOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                    <X size={18} />
+                  </button>
+                </div>
               
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {chatMessages.length === 0 ? (
@@ -623,6 +748,7 @@ export default function LiveClasses({ department }) {
                 </div>
               </form>
             </div>
+            )}
           </div>
         )}
       </div>
@@ -679,7 +805,7 @@ export default function LiveClasses({ department }) {
                         LIVE NOW
                       </div>
                       <h4 className="text-lg font-[800] text-slate-900 mb-1">{session.topic}</h4>
-                      <p className="text-slate-600 font-medium text-[14px]">{session.subject}</p>
+                      <p className="text-slate-600 font-medium text-[14px]">by {session.teacherName}</p>
                     </div>
                     
                     <div className="flex flex-row items-center gap-3 relative z-10">
@@ -717,7 +843,6 @@ export default function LiveClasses({ department }) {
                 <div>
                   <div className="text-sm font-bold text-blue-600 mb-1">{cls.time}</div>
                   <h4 className="text-lg font-[800] text-slate-900 mb-1">{cls.topic}</h4>
-                  <p className="text-slate-500 font-medium text-[14px]">{cls.subject}</p>
                   
                   <div className="flex items-center gap-4 mt-4 text-[13px] font-semibold text-slate-400">
                     <span className="flex items-center gap-1.5"><Users size={14}/> {cls.students} Enrolled</span>
@@ -728,7 +853,7 @@ export default function LiveClasses({ department }) {
                 <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2 mt-2 sm:mt-0">
                   <button 
                     onClick={() => {
-                      setStartClassData({ subject: cls.subject, topic: cls.topic });
+                      setStartClassData({ topic: cls.topic });
                       setIsStartModalOpen(true);
                     }}
                     className="w-full sm:w-auto px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center gap-2"
@@ -783,20 +908,6 @@ export default function LiveClasses({ department }) {
             
             <div className="p-6">
               <form id="start-form" onSubmit={handleConfirmStartMeet} className="space-y-5">
-                <div>
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Subject Category</label>
-                  <select 
-                    required
-                    value={startClassData.subject}
-                    onChange={(e) => setStartClassData({...startClassData, subject: e.target.value})}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
-                  >
-                    <option value="">Select a Subject...</option>
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="Mathematics">Mathematics</option>
-                    <option value="General Aptitude">General Aptitude</option>
-                  </select>
-                </div>
                 <div>
                   <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Class Topic / Title</label>
                   <input 
@@ -866,19 +977,6 @@ export default function LiveClasses({ department }) {
                       placeholder="e.g. Tomorrow, 4:00 PM"
                       className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Subject Category</label>
-                    <select 
-                      value={newClass.subject}
-                      onChange={(e) => setNewClass({...newClass, subject: e.target.value})}
-                      className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
-                    >
-                      <option value="">Select a Subject...</option>
-                      <option value="Computer Science">Computer Science</option>
-                      <option value="Mathematics">Mathematics</option>
-                      <option value="General Aptitude">General Aptitude</option>
-                    </select>
                   </div>
                 </div>
 

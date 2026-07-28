@@ -5,6 +5,7 @@ import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import LiveClasses from './teacher/LiveClasses';
+import TeacherQuestionBank from './teacher/TeacherQuestionBank';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
@@ -97,6 +98,13 @@ export default function TeacherDashboard() {
             <span>Students</span>
           </button>
           <button 
+            onClick={() => setActiveTab('questions')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'questions' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+          >
+            <BookOpen size={18} />
+            <span>Question Bank</span>
+          </button>
+          <button 
             onClick={() => setActiveTab('schedule')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'schedule' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
           >
@@ -136,6 +144,7 @@ export default function TeacherDashboard() {
         )}
 
         {activeTab === 'live' && <LiveClasses department={teacherDepartment} />}
+        {activeTab === 'questions' && <TeacherQuestionBank department={teacherDepartment} />}
       </main>
     </div>
   );

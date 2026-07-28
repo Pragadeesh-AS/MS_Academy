@@ -258,7 +258,15 @@ export default function QuestionBank() {
     ? attributes.find(a => a.type === 'subject' && a.name === filterSubject) 
     : null;
 
-  const departments = attributes.filter(a => a.type === 'department').map(a => a.name);
+  const departments = [
+    'Computer Science (CSE)',
+    'Electronics (ECE)',
+    'Mechanical (ME)',
+    'Civil (CE)',
+    'Electrical (EE)',
+    'Data Science (DS)',
+    'All Departments'
+  ];
   
   const subjects = attributes
     .filter(a => a.type === 'subject' && (!selectedDeptObj || a.parentId === selectedDeptObj.id))
@@ -644,6 +652,7 @@ export default function QuestionBank() {
               <table className="w-full text-left border-collapse min-w-[1000px]">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
+                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[100px]">ID</th>
                     <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider">Question</th>
                     <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[140px]">Type</th>
                     <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[120px]">Marks</th>
@@ -656,23 +665,28 @@ export default function QuestionBank() {
                 <tbody className="divide-y divide-[#EEF2F7]">
                   {loading ? (
                     <tr>
-                      <td colSpan="7" className="py-12 text-center">
+                      <td colSpan="8" className="py-12 text-center">
                         <Loader />
                       </td>
                     </tr>
                   ) : filteredQuestions.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
+                      <td colSpan="8" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
                         No questions found matching your criteria.
                       </td>
                     </tr>
                   ) : (
-                    filteredQuestions.map((q) => (
+                    filteredQuestions.map((q, index) => (
                       <React.Fragment key={q.id}>
                         <tr 
                           onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}
                           className="group hover:bg-[#F8FAFF] transition-colors duration-200 cursor-pointer"
                         >
+                          <td className="py-4 px-6 h-[82px]">
+                            <span className="text-[13px] font-[700] text-[#64748B] bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm inline-flex items-center justify-center min-w-[28px]">
+                              {index + 1}
+                            </span>
+                          </td>
                           <td className="py-4 px-6 h-[82px] max-w-[400px]">
                           <div className="flex items-center gap-4">
                             <div className="w-[42px] h-[42px] rounded-[12px] bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
@@ -729,7 +743,7 @@ export default function QuestionBank() {
                       </tr>
                       {expandedId === q.id && (
                         <tr className="bg-[#F8FAFF] border-b border-[#EEF2F7]">
-                          <td colSpan="7" className="px-6 py-6">
+                          <td colSpan="8" className="px-6 py-6">
                             <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative cursor-default" onClick={(e) => e.stopPropagation()}>
                               <h4 className="text-[16px] font-bold text-slate-800 mb-4 flex items-start gap-2">
                                 {q.isImported && <Sparkles size={16} className="text-purple-600 mt-1 flex-shrink-0" title="AI Imported" />}

@@ -16,3 +16,53 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+@layer components {
+  .control-btn {
+    border: none;
+    color: #fff;
+    background-image: linear-gradient(30deg, #0400ff, #4ce3f7);
+    background-size: 100% auto;
+    transition: all 0.3s ease-in-out;
+  }
+  
+  .control-btn:hover {
+    background-position: right center;
+    background-size: 200% auto;
+    animation: pulse512 1.5s infinite;
+  }
+
+  .control-btn.off {
+    background-image: linear-gradient(30deg, #334155, #64748b);
+  }
+  
+  .control-btn.off:hover {
+    animation: none;
+  }
+
+  .control-btn-danger {
+    border: none;
+    color: #fff;
+    background-image: linear-gradient(30deg, #ff0000, #ff7b00);
+    background-size: 100% auto;
+    transition: all 0.3s ease-in-out;
+  }
+  
+  .control-btn-danger:hover {
+    background-position: right center;
+    background-size: 200% auto;
+    animation: pulseRed 1.5s infinite;
+  }
+}
+
+@keyframes pulse512 {
+  0% { box-shadow: 0 0 0 0 #05bada66; }
+  70% { box-shadow: 0 0 0 10px rgba(5, 186, 218, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(5, 186, 218, 0); }
+}
+
+@keyframes pulseRed {
+  0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+}
