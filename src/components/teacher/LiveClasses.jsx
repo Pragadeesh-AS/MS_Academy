@@ -262,7 +262,15 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
     } else if (!activeQuestionState?.isActive && pinnedUid === 'question-bank') {
       setPinnedUid(null);
     }
-  }, [activeQuestionState?.isActive]);
+
+    if (!whiteboardOn && pinnedUid === 'local-whiteboard') {
+      setPinnedUid(null);
+    }
+
+    if (!screenShareOn && pinnedUid === 'local-screen') {
+      setPinnedUid(null);
+    }
+  }, [activeQuestionState?.isActive, whiteboardOn, screenShareOn, pinnedUid]);
 
   const handleStartQB = async () => {
     if (!qbRangeInput.trim() || !departmentQuestions) return;
