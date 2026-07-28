@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Video, 
   VideoOff,
@@ -12,23 +12,23 @@ import {
   MessageCircle,
   Pin,
   PinOff,
-  X
+  X,
+  CheckCircle2
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, setDoc, doc } from 'firebase/firestore';
 import AgoraRTC, { 
   AgoraRTCProvider, 
   useRTCClient, 
-  useLocalCameraTrack, 
-  useLocalMicrophoneTrack,
-  usePublish, 
   useJoin, 
   useRemoteUsers,
   useRemoteVideoTracks,
   useRemoteAudioTracks,
+  LocalVideoTrack,
   RemoteUser,
-  LocalVideoTrack
+  useConnectionState
 } from "agora-rtc-react";
+
 // Extracted StudentCall component for custom Agora rendering
 const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast }) => {
   const [micOn, setMicOn] = useState(false);
@@ -38,6 +38,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
   const client = useRTCClient();
+  const connectionState = useConnectionState();
 
   useEffect(() => {
     if (client.uid && sessionId) {
@@ -48,68 +49,104 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     }
   }, [client.uid, sessionId]);
 
+  const [activeQuestionState, setActiveQuestionState] = useState(null);
+  const [studentGuess, setStudentGuess] = useState(null); // The option the student guessed
+
   useEffect(() => {
     if (!sessionId) return;
-    const unsub = onSnapshot(collection(db, 'live_sessions', sessionId, 'participants'), (snapshot) => {
+    
+    // Listen to participant names
+    const unsubParticipants = onSnapshot(collection(db, 'live_sessions', sessionId, 'participants'), (snapshot) => {
       const names = {};
       snapshot.forEach(d => { names[d.id] = d.data().name; });
       setParticipantNames(names);
     });
-    return () => unsub();
+
+    // Listen for session state (Question Bank sync)
+    const unsubSession = onSnapshot(doc(db, 'live_sessions', sessionId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.activeQuestionState) {
+          // If the question changed, reset the student's guess
+          setActiveQuestionState(prevState => {
+            if (prevState && data.activeQuestionState && prevState.currentIndex !== data.activeQuestionState.currentIndex) {
+              setStudentGuess(null);
+            }
+            return data.activeQuestionState;
+          });
+        } else {
+          setActiveQuestionState(null);
+          setStudentGuess(null);
+        }
+      }
+    });
+
+    return () => {
+      unsubParticipants();
+      unsubSession();
+    };
   }, [sessionId]);
 
-  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
-  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
+  const [localMicrophoneTrack, setLocalMicrophoneTrack] = useState(null);
+  const [localCameraTrack, setLocalCameraTrack] = useState(null);
 
-  // Store a ref to the latest tracks to forcefully close them on component unmount (End Call) or toggle off
-  const tracksRef = useRef({ cam: null, mic: null });
+  // 1. Hardware Management
   useEffect(() => {
-    if (localCameraTrack) tracksRef.current.cam = localCameraTrack;
-    if (localMicrophoneTrack) tracksRef.current.mic = localMicrophoneTrack;
-  }, [localCameraTrack, localMicrophoneTrack]);
-
-  // Force hardware release when toggled off
-  useEffect(() => {
-    if (!cameraOn && tracksRef.current.cam) {
-      try {
-        tracksRef.current.cam.setEnabled(false);
-        tracksRef.current.cam.stop();
-        tracksRef.current.cam.close();
-      } catch (e) {}
-      tracksRef.current.cam = null;
+    let track = null;
+    if (micOn) {
+      AgoraRTC.createMicrophoneAudioTrack().then(t => {
+        setLocalMicrophoneTrack(t);
+        track = t;
+      }).catch(console.error);
     }
-    if (!micOn && tracksRef.current.mic) {
-      try {
-        tracksRef.current.mic.setEnabled(false);
-        tracksRef.current.mic.stop();
-        tracksRef.current.mic.close();
-      } catch (e) {}
-      tracksRef.current.mic = null;
-    }
-  }, [cameraOn, micOn]);
-
-  useEffect(() => {
     return () => {
-      if (tracksRef.current.cam) {
-        try {
-          tracksRef.current.cam.stop();
-          tracksRef.current.cam.close();
-        } catch (e) {}
+      if (track) {
+        track.stop();
+        track.close();
       }
-      if (tracksRef.current.mic) {
-        try {
-          tracksRef.current.mic.stop();
-          tracksRef.current.mic.close();
-        } catch (e) {}
-      }
+      setLocalMicrophoneTrack(null);
     };
-  }, []);
+  }, [micOn]);
 
-  const tracksToPublish = [];
-  if (localMicrophoneTrack) tracksToPublish.push(localMicrophoneTrack);
-  if (localCameraTrack) tracksToPublish.push(localCameraTrack);
+  useEffect(() => {
+    let track = null;
+    if (cameraOn) {
+      AgoraRTC.createCameraVideoTrack().then(t => {
+        setLocalCameraTrack(t);
+        track = t;
+      }).catch(console.error);
+    }
+    return () => {
+      if (track) {
+        track.stop();
+        track.close();
+      }
+      setLocalCameraTrack(null);
+    };
+  }, [cameraOn]);
 
-  usePublish(tracksToPublish);
+  // 2. Network Publishing
+  useEffect(() => {
+    if (connectionState === 'CONNECTED' && localMicrophoneTrack) {
+      client.publish(localMicrophoneTrack).catch(console.error);
+      return () => {
+        if (client.connectionState === 'CONNECTED') {
+          client.unpublish(localMicrophoneTrack).catch(e => {});
+        }
+      };
+    }
+  }, [connectionState, localMicrophoneTrack, client]);
+
+  useEffect(() => {
+    if (connectionState === 'CONNECTED' && localCameraTrack) {
+      client.publish(localCameraTrack).catch(console.error);
+      return () => {
+        if (client.connectionState === 'CONNECTED') {
+          client.unpublish(localCameraTrack).catch(e => {});
+        }
+      };
+    }
+  }, [connectionState, localCameraTrack, client]);
 
   const remoteUsers = useRemoteUsers();
   const remoteUserStyle = { width: '100%', height: '100%' };
@@ -119,7 +156,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   useRemoteAudioTracks(remoteUsers);
 
   // Dynamic grid based on participant count
-  const totalParticipants = 1 + remoteUsers.length;
+  const totalParticipants = 1 + remoteUsers.length + (activeQuestionState?.isActive ? 1 : 0);
   const gridColsClass = 
     totalParticipants === 1 ? 'grid-cols-1 md:grid-cols-1' :
     totalParticipants === 2 ? 'grid-cols-1 md:grid-cols-2' :
@@ -130,20 +167,104 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     setPinnedUid(prev => prev === id ? null : id);
   };
 
-  // Auto-pin screen share (UID 999999)
+  // Auto-pin screen share (UID 999999) or whiteboard (UID 999998) or Question Bank
   useEffect(() => {
     const hasScreenShare = remoteUsers.some(u => u.uid === 999999);
-    if (hasScreenShare && pinnedUid !== 999999) {
+    const hasWhiteboard = remoteUsers.some(u => u.uid === 999998);
+    const hasQuestionBank = activeQuestionState?.isActive;
+    
+    if (hasQuestionBank && pinnedUid !== 'question-bank') {
+      setPinnedUid('question-bank');
+    } else if (hasScreenShare && pinnedUid !== 999999 && !hasQuestionBank) {
       setPinnedUid(999999);
-    } else if (!hasScreenShare && pinnedUid === 999999) {
-      setPinnedUid(null); // Unpin when screen share stops
+    } else if (hasWhiteboard && pinnedUid !== 999998 && !hasQuestionBank && !hasScreenShare) {
+      setPinnedUid(999998);
+    } else if (!hasScreenShare && !hasWhiteboard && !hasQuestionBank && (pinnedUid === 999999 || pinnedUid === 999998 || pinnedUid === 'question-bank')) {
+      setPinnedUid(null); // Unpin when all stop
     }
-  }, [remoteUsers, pinnedUid]);
+  }, [remoteUsers, pinnedUid, activeQuestionState?.isActive]);
 
   const renderGridTiles = () => {
     const pinnedTiles = [];
     const unpinnedTiles = [];
     
+    const whiteboardUser = remoteUsers.find(u => u.uid === 999998);
+    const hasWhiteboard = !!whiteboardUser;
+    
+    // -1. Question Bank Overlay
+    if (activeQuestionState?.isActive && activeQuestionState.questions) {
+      const isPinned = pinnedUid === 'question-bank';
+      const qbTile = (
+        <div key="question-bank" className={`relative overflow-hidden bg-white shadow-xl group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 h-full w-full' : 'w-48 h-32 shrink-0 z-50 rounded-2xl pointer-events-none p-4'}`}>
+          
+          {/* Base Layer: Question Content */}
+          <div className={`absolute inset-0 w-full h-full flex flex-col max-w-6xl mx-auto ${isPinned ? 'p-8 md:p-12 pt-28' : 'pt-12'} z-10 pointer-events-none`}>
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
+              <h2 className={`${isPinned ? 'text-2xl md:text-4xl leading-snug mb-10' : 'text-sm mb-2'} font-bold text-slate-900 whitespace-normal break-words`}>
+                <span className="text-slate-500 mr-3 md:mr-4">Q.{activeQuestionState.currentIndex + 1}</span>
+                <span dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
+              </h2>
+              
+              {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
+                <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[40vh] mb-10' : 'max-h-16 mb-2'} object-contain`} />
+              )}
+              
+              <div className="flex flex-col gap-4 md:gap-6 pl-4 md:pl-8">
+                {['A', 'B', 'C', 'D'].map(opt => {
+                  const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
+                  if (!text) return null;
+                  const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
+                  const isRevealed = activeQuestionState.isAnswerRevealed;
+                  
+                  // Student guessing logic
+                  const isGuessed = studentGuess === opt;
+                  let bgClass = "text-slate-800 hover:bg-slate-100 cursor-pointer p-4 rounded-xl inline-block w-max transition-colors";
+                  
+                  if (isRevealed) {
+                    bgClass = isCorrect ? "text-green-600 bg-green-50 p-4 rounded-xl inline-block w-max cursor-default" : (isGuessed ? "text-red-600 bg-red-50 p-4 rounded-xl inline-block w-max cursor-default" : "text-slate-400 p-4 rounded-xl inline-block w-max cursor-default");
+                  } else if (isGuessed) {
+                    bgClass = "text-indigo-600 bg-indigo-50 p-4 rounded-xl inline-block w-max cursor-pointer border border-indigo-200";
+                  }
+                  
+                  return (
+                    <div 
+                      key={opt} 
+                      onClick={() => !isRevealed && setStudentGuess(opt)}
+                      className={`flex items-center text-xl md:text-2xl font-semibold transition-all ${bgClass} pointer-events-auto`}
+                    >
+                      <span className="mr-4 font-bold">( {opt} )</span> 
+                      <span dangerouslySetInnerHTML={{ __html: text }} />
+                      {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500" />}
+                      {isRevealed && isGuessed && !isCorrect && <X size={24} className="inline ml-4 text-red-500" />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Middle Layer: Whiteboard Overlay */}
+          {hasWhiteboard && whiteboardUser && isPinned && (
+            <div className="absolute inset-0 z-20 mix-blend-multiply pointer-events-none">
+              <RemoteUser user={whiteboardUser} playVideo={true} playAudio={false} />
+            </div>
+          )}
+
+          {/* Top Layer: Header */}
+          {isPinned && (
+            <div className={`absolute inset-x-0 top-0 w-full max-w-6xl mx-auto p-8 md:p-12 z-30 pointer-events-none flex justify-between items-start`}>
+            </div>
+          )}
+          
+          <button onClick={() => togglePin('question-bank')} className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-[70] pointer-events-auto">
+            {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
+          </button>
+        </div>
+      );
+      if (isPinned) pinnedTiles.push(qbTile);
+      else unpinnedTiles.push(qbTile);
+    }
+
     // 1. Local Camera
     const isLocalPinned = pinnedUid === 'local-camera';
     const localTile = (
@@ -169,12 +290,18 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     
     // 2. Remote Users
     remoteUsers.forEach(user => {
+      // Hide standalone Whiteboard tile if Question Bank is active (since it's used as an overlay)
+      const hasQuestionBank = activeQuestionState?.isActive && activeQuestionState.questions;
+      if (hasQuestionBank && user.uid === 999998) return;
+
       const isPinned = pinnedUid === user.uid;
       let userName = participantNames[user.uid] || `Remote User`;
       
       // If it's the Teacher's Screen Share Client (UID 999999), hardcode the label and icon
       if (user.uid === 999999) {
         userName = "Teacher's Screen";
+      } else if (user.uid === 999998) {
+        userName = "Teacher's Whiteboard";
       }
 
       const remoteTile = (
@@ -189,8 +316,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
               </div>
             </div>
           )}
-          <div className={`absolute top-2 left-2 md:top-4 md:left-4 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 transition-opacity ${user.uid === 999999 ? 'bg-blue-600/90' : 'bg-black/70'} ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>
-            {userName} {!user.hasAudio && user.uid !== 999999 && <MicOff size={12} className="inline ml-1 text-red-400" />}
+          <div className={`absolute top-2 left-2 md:top-4 md:left-4 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 transition-opacity ${(user.uid === 999999 || user.uid === 999998) ? 'bg-blue-600/90' : 'bg-black/70'} ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>
+            {userName} {!user.hasAudio && user.uid !== 999999 && user.uid !== 999998 && <MicOff size={12} className="inline ml-1 text-red-400" />}
           </div>
           <button onClick={() => togglePin(user.uid)} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
             {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
@@ -218,7 +345,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
             {pinnedTiles}
             
             {/* Small floating PIP videos container (Vertical Stack) */}
-            <div className={`absolute bottom-28 ${isScreenSharePinned ? 'right-6' : 'left-6'} z-[90] flex flex-col gap-3 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 custom-scrollbar`}>
+            <div className="absolute bottom-28 right-6 z-[90] flex flex-col gap-3 max-h-[calc(100vh-250px)] overflow-y-auto pl-2 custom-scrollbar">
               {unpinnedTiles}
             </div>
           </>
@@ -277,6 +404,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
           </button>
         </div>
       </div>
+
     </div>
   );
 };
