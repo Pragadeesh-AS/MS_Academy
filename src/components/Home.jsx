@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Carousel_003 } from "./ui/swiper-carousel";
 import { ShinyButton } from "./ui/shiny-button";
-import { BookOpen, Target, Users } from 'lucide-react';
+import { BookOpen, Target, Users, Star, Quote } from 'lucide-react';
 import homeImg from '../assets/home.jpeg';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import SocialCard from './SocialCard';
 
 const courses = [
@@ -117,7 +117,116 @@ const courses = [
   }
 ];
 
+const testimonials = [
+  {
+    name: "Rithikaa Kannan",
+    role: "GATE Aspirant",
+    discipline: "GATE Coaching",
+    quote: "I am truly grateful to be a part of this academy. The GATE coaching is excellent, with well-structured classes and experienced faculty who explain every concept clearly. The teachers and staff are very kind, supportive, and always willing to interact with students and clear our doubts. The academy’s sir is also very humble, caring, and encourages every student to do their best. I feel truly blessed to have joined this academy, and I highly recommend it to anyone preparing for GATE. Thank you for your continuous support and guidance!",
+    rating: 5,
+    initials: "RK",
+    bgGradient: "from-blue-500 to-indigo-600"
+  },
+  {
+    name: "Priya",
+    role: "GATE Aspirant",
+    discipline: "One-to-One Online Classes",
+    quote: "The teaching faculty is excellent and has a very friendly approach. The one to one online classes are highly effective and help me gain indepth knowledge. One of the special features of this academy is the constant support provided to students by its founder, Muthusamy Sir. When it comes to competitive exams, everyone needs someone who believes in them and supports them throughout the journey. Muthusamy Sir is truly a gem who supports me in every possible way. Apart from academics, he also takes care of the mental well-being of students, which is very important during exam preparation. I am grateful to be a part of this academy and for the guidance and support I receive every day. The encouragement and personal attention given to each student make a real difference and all this is possible because, here, passion has truly becomes a profession. As a aspirant i highly recommend this academy to anyone preparing for competitive exams like gate and other exams.",
+    rating: 5,
+    initials: "P",
+    bgGradient: "from-purple-500 to-pink-600"
+  },
+  {
+    name: "Kiruthika Krishnakumar",
+    role: "GATE Aspirant",
+    discipline: "GATE Preparation",
+    quote: "The teaching at this GATE academy is excellent. Every concept is explained clearly and in a simple way, making even tough topics easy to understand. What I love most is that the classes feel more like a friendly conversation than a lecture. The faculty are very approachable and always ready to help with doubts. Highly recommended for anyone preparing for GATE.",
+    rating: 5,
+    initials: "KK",
+    bgGradient: "from-emerald-500 to-teal-600"
+  }
+];
+
+function TestimonialCard({ testimonial, onReadMore }) {
+  const isLong = testimonial.quote.length > 200;
+  const displayQuote = isLong ? testimonial.quote.slice(0, 185) + "..." : testimonial.quote;
+
+  return (
+    <motion.div
+      whileHover={{ 
+        y: -10, 
+        rotateX: 4, 
+        rotateY: -4, 
+        scale: 1.025,
+        z: 15
+      }}
+      style={{ transformStyle: "preserve-3d" }}
+      transition={{ type: "spring", stiffness: 260, damping: 20 }}
+      className="group w-full bg-gradient-to-br from-white/80 via-white/70 to-slate-50/50 backdrop-blur-xl border border-white/60 rounded-[32px] p-7 shadow-[0_10px_35px_rgba(0,0,0,0.02)] hover:shadow-[0_30px_60px_rgba(37,99,235,0.08)] hover:border-blue-200/50 transition-all duration-300 flex flex-col justify-between min-h-[320px] h-full relative overflow-hidden"
+    >
+      {/* Laser neon line shine effects on hover */}
+      <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-blue-500/80 to-transparent transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-center pointer-events-none"></div>
+      <div className="absolute inset-x-0 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-purple-500/80 to-transparent transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-center pointer-events-none"></div>
+
+      {/* Floating back-glow particles */}
+      <div className="absolute -right-8 -bottom-8 w-24 h-24 rounded-full bg-gradient-to-br from-blue-400/20 to-purple-400/20 blur-xl group-hover:scale-150 transition-transform duration-700 pointer-events-none"></div>
+      <div className="absolute -left-8 -top-8 w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-400/10 to-pink-400/10 blur-xl group-hover:scale-150 transition-transform duration-700 pointer-events-none"></div>
+
+      {/* Floating Quote Icon Bubble */}
+      <div 
+        style={{ transform: "translateZ(30px)" }}
+        className="absolute right-6 top-6 w-9 h-9 rounded-full bg-white/90 border border-slate-100/50 flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.02)] group-hover:shadow-[0_4px_12px_rgba(37,99,235,0.08)] group-hover:bg-blue-50 group-hover:border-blue-100 transition-all duration-300 pointer-events-none"
+      >
+        <Quote size={15} className="text-slate-400 group-hover:text-blue-500 transition-colors duration-300" />
+      </div>
+
+      <div>
+        {/* Header: Profile & Stars */}
+        <div className="flex items-start gap-4 mb-5">
+          {/* Avatar with spinning neon ring */}
+          <div className="relative shrink-0" style={{ transform: "translateZ(20px)" }}>
+            <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-tr from-blue-500 via-indigo-500 to-purple-500 opacity-20 group-hover:opacity-100 group-hover:rotate-180 transition-all duration-700 blur-[1px]"></div>
+            <div className={`relative w-12 h-12 rounded-2xl bg-gradient-to-br ${testimonial.bgGradient} flex items-center justify-center text-white font-bold text-lg shadow-inner`}>
+              {testimonial.initials}
+            </div>
+          </div>
+          <div style={{ transform: "translateZ(15px)" }} className="flex-1 min-w-0">
+            <h4 className="text-[15px] font-bold text-slate-900 truncate mb-0.5 group-hover:text-blue-600 transition-colors duration-300">{testimonial.name}</h4>
+            <p className="text-[12px] font-bold text-[#1d4ed8] uppercase tracking-wider mb-0.5">{testimonial.role}</p>
+            <p className="text-[11px] font-semibold text-slate-400 truncate">{testimonial.discipline}</p>
+          </div>
+        </div>
+
+        {/* Rating */}
+        <div style={{ transform: "translateZ(10px)" }} className="flex items-center gap-0.5 mb-4">
+          {[...Array(testimonial.rating)].map((_, i) => (
+            <Star key={i} size={14} className="fill-amber-400 text-amber-400" />
+          ))}
+        </div>
+
+        {/* Quote Content */}
+        <p style={{ transform: "translateZ(10px)" }} className="text-slate-600 text-sm font-medium leading-relaxed italic relative z-10">
+          "{displayQuote}"
+        </p>
+      </div>
+
+      {/* Modern Capsule Action Button */}
+      {isLong && (
+        <button
+          onClick={() => onReadMore(testimonial)}
+          style={{ transform: "translateZ(25px)" }}
+          className="text-xs font-bold text-[#1d4ed8] bg-blue-50/50 hover:bg-[#1d4ed8] hover:text-white px-4 py-2 rounded-full border border-blue-100/50 hover:border-transparent transition-all duration-300 mt-6 self-start flex items-center gap-1.5 group/btn cursor-pointer shadow-sm hover:shadow-[0_4px_15px_rgba(29,78,216,0.12)]"
+        >
+          Read full review
+          <span className="transform group-hover/btn:translate-x-0.5 transition-transform duration-300">→</span>
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
 export default function Home() {
+  const [activeTestimonial, setActiveTestimonial] = useState(null);
   const swiperImages = courses.map(course => ({
     src: course.src,
     alt: course.title,
@@ -225,6 +334,62 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Student Reviews Section */}
+      <section className="relative z-10 w-full max-w-[1200px] mx-auto px-6 py-16">
+        {/* Decorative background glow for the section */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] h-[70%] bg-gradient-to-tr from-blue-50/50 via-indigo-50/20 to-purple-50/50 blur-[100px] -z-10 rounded-full opacity-60 pointer-events-none"></div>
+
+        <div className="text-center mb-12 relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-[#1d4ed8] font-bold text-sm mb-4"
+          >
+            <Star size={16} className="fill-[#1d4ed8]" />
+            <span>Student Success Stories</span>
+          </motion.div>
+          <motion.h2 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-4xl font-extrabold text-slate-900 tracking-tight mb-4"
+          >
+            What Our Students Say
+          </motion.h2>
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-slate-500 font-semibold max-w-xl mx-auto"
+          >
+            Hear from our alumni who achieved their dream GATE scores and PSU placements under the guidance of Dr. M. Muthu Samy.
+          </motion.p>
+        </div>
+
+        <div 
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10 items-stretch"
+          style={{ perspective: "1000px" }}
+        >
+          {testimonials.map((testimonial, idx) => (
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-40px" }}
+              transition={{ duration: 0.5, delay: idx * 0.1, ease: "easeOut" }}
+              className="flex"
+            >
+              <TestimonialCard testimonial={testimonial} onReadMore={setActiveTestimonial} />
+            </motion.div>
+          ))}
+        </div>
+
+      </section>
+
       {/* Courses Carousel Section */}
       <section className="w-full relative z-10 py-12 flex-1 overflow-hidden">
         <div className="max-w-[1400px] mx-auto px-8 mb-4">
@@ -235,6 +400,59 @@ export default function Home() {
           <Carousel_003 images={swiperImages} showPagination={true} autoplay={true} loop={true} showNavigation={true} />
         </div>
       </section>
+
+      {/* Modal for full review */}
+      <AnimatePresence>
+        {activeTestimonial && (
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActiveTestimonial(null)}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-md cursor-pointer"
+            />
+
+            {/* Modal Content */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.5 }}
+              className="bg-white rounded-[32px] p-8 max-w-lg w-full shadow-[0_24px_70px_rgba(0,0,0,0.15)] border border-slate-100 relative z-[1000] max-h-[85vh] overflow-y-auto"
+            >
+              <button
+                onClick={() => setActiveTestimonial(null)}
+                className="absolute right-6 top-6 w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors font-bold text-lg cursor-pointer"
+              >
+                ×
+              </button>
+
+              <div className="flex items-center gap-4 mb-6">
+                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${activeTestimonial.bgGradient} flex items-center justify-center text-white font-bold text-xl shadow-md`}>
+                  {activeTestimonial.initials}
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-slate-900 leading-tight mb-1">{activeTestimonial.name}</h4>
+                  <p className="text-sm font-semibold text-[#1d4ed8]">{activeTestimonial.role}</p>
+                  <p className="text-xs font-semibold text-slate-400">{activeTestimonial.discipline}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 mb-6">
+                {[...Array(activeTestimonial.rating)].map((_, i) => (
+                  <Star key={i} size={16} className="fill-amber-400 text-amber-400" />
+                ))}
+              </div>
+
+              <p className="text-slate-600 font-medium leading-relaxed italic text-[15px] whitespace-pre-line">
+                "{activeTestimonial.quote}"
+              </p>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
