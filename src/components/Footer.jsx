@@ -29,6 +29,10 @@ export default function Footer() {
             <p className="text-slate-600 text-sm leading-relaxed">
               Empowering engineers to achieve their dreams with top-tier coaching for GATE and programming excellence. Your success is our mission.
             </p>
+            <div className="flex flex-col gap-1 bg-blue-50/50 border border-blue-100/50 rounded-2xl p-4 w-fit">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none mb-1">UDYAM STARTUP REGISTRATION</span>
+              <span className="text-[13px] font-black text-[#1d4ed8] leading-none">UDYAM-TN-03-0337502</span>
+            </div>
             <div className="flex gap-4">
               <a href="#" className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-[#1d4ed8] hover:text-white transition-all duration-300 shadow-sm hover:shadow-[0_0_15px_rgba(243,107,43,0.3)]">
                 <Globe size={18} />

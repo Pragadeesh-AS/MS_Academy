@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, Mail, MapPin, Send } from 'lucide-react';
+import { Phone, Mail, MapPin, Send, Award } from 'lucide-react';
 import { ShinyButton } from "./ui/shiny-button";
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import SocialCard from './SocialCard';
@@ -58,6 +58,19 @@ export default function Contact() {
                 <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider mb-2">Address</span>
                 <span className="text-[20px] md:text-[22px] font-medium text-slate-700 leading-relaxed max-w-[400px]">
                   9 Vinayagar Koil Street, RC Nagar, Othakkalmandapam (P.O), Coimbatore - 641032
+                </span>
+              </div>
+            </div>
+
+            {/* Startup Registration */}
+            <div className="flex items-start gap-6 group">
+              <div className="w-16 h-16 rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-slate-100">
+                <Award size={30} strokeWidth={1.5} />
+              </div>
+              <div className="flex flex-col justify-center">
+                <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider mb-2">Startup Registration</span>
+                <span className="text-[20px] md:text-[22px] font-medium text-slate-700 leading-relaxed">
+                  UDYAM-TN-03-0337502
                 </span>
               </div>
             </div>

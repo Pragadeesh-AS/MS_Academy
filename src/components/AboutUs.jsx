@@ -147,6 +147,16 @@ export default function AboutUs() {
                 </div>
               ))}
             </div>
+
+            <div className="mt-6 p-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/30 border border-blue-100/50 rounded-2xl flex items-center gap-4 shadow-[0_4px_20px_rgba(0,0,0,0.01)] w-fit">
+              <div className="w-12 h-12 rounded-xl bg-blue-50 text-[#1d4ed8] flex items-center justify-center flex-shrink-0 border border-blue-100/50">
+                <Award size={22} />
+              </div>
+              <div>
+                <p className="text-[10px] font-extrabold text-[#1d4ed8] uppercase tracking-widest leading-none mb-1.5">UDYAM Startup Registration</p>
+                <p className="text-[15px] font-black text-slate-800 leading-none">UDYAM-TN-03-0337502</p>
+              </div>
+            </div>
           </motion.div>
         </div>
       </section>
