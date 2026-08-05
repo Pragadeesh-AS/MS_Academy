@@ -29,6 +29,7 @@ import MorphPanel from './components/ui/ai-input';
 import EnquiryForm from './components/ui/EnquiryForm';
 import ProgrammingCourses from './components/ProgrammingCourses';
 import TeacherDashboard from './components/TeacherDashboard';
+import TypistDashboard from './components/TypistDashboard';
 import Footer from './components/Footer';
 import Careers from './components/Careers';
 import GateCourses from './components/GateCourses';
@@ -91,7 +92,7 @@ export default function App() {
   const dynamicLink = getDynamicLink();
 
   return (
-    <div className={`min-h-screen bg-[#fafafa] relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col ${(location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && !location.pathname.startsWith('/student')) ? 'pt-24' : ''}`}>
+    <div className={`min-h-screen bg-[#fafafa] relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col ${(location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student')) ? 'pt-24' : ''}`}>
       {/* Background Dotted Pattern */}
       <div className="absolute inset-0 z-[-1] bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white_20%,transparent_90%)] pointer-events-none"></div>
 
@@ -108,8 +109,8 @@ export default function App() {
         />
       </div>
       
-      {/* Navbar Container */}
-      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && !location.pathname.startsWith('/student') && (
+      {/* Navigation Bar - Hide on Login, Admin, Teacher Dashboard, Typist Dashboard, and Student Portal */}
+      {(location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student')) && (
       <div className="w-full fixed top-2 inset-x-0 z-50">
         <motion.nav 
           initial={false}
@@ -184,10 +185,10 @@ export default function App() {
             {userRole ? (
               <div className="flex items-center gap-3.5">
                 <Link 
-                  to={userRole === 'admin' ? '/admin' : userRole === 'teacher' ? '/teacher-dashboard' : '/student'}
+                  to={userRole === 'admin' ? '/admin' : userRole === 'teacher' ? '/teacher-dashboard' : userRole === 'typist' ? '/typist-dashboard' : '/student'}
                   className="text-xs font-bold text-slate-700 hover:text-slate-900 border border-slate-200 bg-slate-50 hover:bg-slate-100 px-4 py-2 rounded-xl transition-all shadow-sm"
                 >
-                  {userRole === 'admin' ? 'Admin Panel' : userRole === 'teacher' ? 'Faculty Portal' : `Hello, ${userName}`}
+                  {userRole === 'admin' ? 'Admin Panel' : userRole === 'teacher' ? 'Faculty Portal' : userRole === 'typist' ? 'Typist Portal' : `Hello, ${userName}`}
                 </Link>
                 <button
                   onClick={() => {
@@ -244,13 +245,14 @@ export default function App() {
         <Route path="/student" element={<Dashboard />} />
         <Route path="/student/profile" element={<StudentProfile />} />
         <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
+        <Route path="/typist-dashboard" element={<TypistDashboard />} />
         <Route path="/admin" element={<AdminDashboard />} />
       </Routes>
 
-      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && !location.pathname.startsWith('/student') && <Footer />}
+      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student') && <Footer />}
 
       {/* Floating Quote Badge */}
-      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && !location.pathname.startsWith('/student') && (
+      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student') && (
       <motion.div 
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -268,7 +270,7 @@ export default function App() {
       )}
 
       {/* Global Floating Components */}
-      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && !location.pathname.startsWith('/student') && (
+      {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student') && (
         location.pathname === '/' || location.pathname === '/contact' ? <EnquiryForm /> : <MorphPanel />
       )}
 

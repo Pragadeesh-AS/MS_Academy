@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { db } from '../../firebase';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, setDoc } from 'firebase/firestore';
-import { 
-  Video, 
+import {
+  Video,
   VideoOff,
   Mic,
   MicOff,
   MonitorUp,
   PhoneOff,
-  Calendar, 
-  Plus, 
-  Clock, 
-  MoreHorizontal, 
+  Calendar,
+  Plus,
+  Clock,
+  MoreHorizontal,
   PlayCircle,
   Users,
   User,
@@ -27,13 +27,13 @@ import {
   ChevronRight,
   CheckCircle2
 } from 'lucide-react';
-import AgoraRTC, { 
-  AgoraRTCProvider, 
-  useRTCClient, 
-  useLocalCameraTrack, 
+import AgoraRTC, {
+  AgoraRTCProvider,
+  useRTCClient,
+  useLocalCameraTrack,
   useLocalMicrophoneTrack,
-  usePublish, 
-  useJoin, 
+  usePublish,
+  useJoin,
   useRemoteUsers,
   useRemoteVideoTracks,
   useRemoteAudioTracks,
@@ -51,13 +51,13 @@ const WhiteboardShareClient = ({ appId, channel, token, stream }) => {
   useEffect(() => {
     let isMounted = true;
     let track = null;
-    
+
     if (stream && stream.getVideoTracks().length > 0) {
       try {
         track = AgoraRTC.createCustomVideoTrack({
           mediaStreamTrack: stream.getVideoTracks()[0]
         });
-        
+
         wbClient.join(appId, channel, token, 999998).then(() => {
           if (isMounted) {
             wbClient.publish([track]);
@@ -147,7 +147,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
 
   useEffect(() => {
     if (!sessionId) return;
-    
+
     // Listen for participant names
     const unsubParticipants = onSnapshot(collection(db, 'live_sessions', sessionId, 'participants'), (snapshot) => {
       const names = {};
@@ -212,31 +212,15 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
     };
   }, [cameraOn]);
 
-  useEffect(() => {
-    if (connectionState === 'CONNECTED' && localMicrophoneTrack) {
-      client.publish(localMicrophoneTrack).catch(console.error);
-      return () => {
-        if (client.connectionState === 'CONNECTED') {
-          client.unpublish(localMicrophoneTrack).catch(e => {});
-        }
-      };
-    }
-  }, [connectionState, localMicrophoneTrack, client]);
-
-  useEffect(() => {
-    if (connectionState === 'CONNECTED' && localCameraTrack) {
-      client.publish(localCameraTrack).catch(console.error);
-      return () => {
-        if (client.connectionState === 'CONNECTED') {
-          client.unpublish(localCameraTrack).catch(e => {});
-        }
-      };
-    }
-  }, [connectionState, localCameraTrack, client]);
+  const localTracks = useMemo(
+    () => [localMicrophoneTrack, localCameraTrack].filter(Boolean),
+    [localMicrophoneTrack, localCameraTrack]
+  );
+  usePublish(localTracks);
 
   const remoteUsers = useRemoteUsers();
   const remoteUserStyle = { width: '100%', height: '100%' };
-  
+
   // Actually trigger subscriptions for the remote users
   useRemoteVideoTracks(remoteUsers);
   useRemoteAudioTracks(remoteUsers);
@@ -246,11 +230,11 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
 
   // Dynamic grid based on participant count
   const totalParticipants = 1 + filteredUsers.length + (screenShareOn ? 1 : 0) + (whiteboardOn ? 1 : 0) + (activeQuestionState?.isActive ? 1 : 0);
-  const gridColsClass = 
+  const gridColsClass =
     totalParticipants === 1 ? 'grid-cols-1 md:grid-cols-1' :
-    totalParticipants === 2 ? 'grid-cols-1 md:grid-cols-2' :
-    totalParticipants <= 4 ? 'grid-cols-2 md:grid-cols-2' :
-    'grid-cols-2 md:grid-cols-3';
+      totalParticipants === 2 ? 'grid-cols-1 md:grid-cols-2' :
+        totalParticipants <= 4 ? 'grid-cols-2 md:grid-cols-2' :
+          'grid-cols-2 md:grid-cols-3';
 
   const togglePin = (id) => {
     setPinnedUid(prev => prev === id ? null : id);
@@ -274,12 +258,12 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
 
   const handleStartQB = async () => {
     if (!qbRangeInput.trim() || !departmentQuestions) return;
-    
+
     // Parse range, e.g., "1-5" or just "1"
     const parts = qbRangeInput.split('-').map(p => parseInt(p.trim()));
     let startIdx = 0;
     let endIdx = 0;
-    
+
     if (parts.length === 1 && !isNaN(parts[0])) {
       startIdx = parts[0] - 1;
       endIdx = parts[0] - 1;
@@ -290,7 +274,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
       alert("Invalid range format. Use e.g. 1-5");
       return;
     }
-    
+
     if (startIdx < 0) startIdx = 0;
     if (endIdx >= departmentQuestions.length) endIdx = departmentQuestions.length - 1;
     if (startIdx > endIdx) {
@@ -299,16 +283,16 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
     }
 
     const selectedQList = departmentQuestions.slice(startIdx, endIdx + 1);
-    
+
     if (selectedQList.length === 0) {
       alert("No questions found in that range.");
       return;
     }
-    
+
     setIsQBModalOpen(false);
     setQbRangeInput("");
     setWhiteboardOn(true);
-    
+
     await updateDoc(doc(db, 'live_sessions', sessionId), {
       activeQuestionState: {
         isActive: true,
@@ -321,7 +305,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
 
   const handleNextQB = async () => {
     if (!activeQuestionState) return;
-    
+
     if (!activeQuestionState.isAnswerRevealed) {
       await updateDoc(doc(db, 'live_sessions', sessionId), {
         'activeQuestionState.isAnswerRevealed': true
@@ -351,14 +335,14 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
   const renderGridTiles = () => {
     const pinnedTiles = [];
     const unpinnedTiles = [];
-    
+
     // -1. Question Bank Overlay
     // -1. Question Bank Overlay
     if (activeQuestionState?.isActive && activeQuestionState.questions) {
       const isPinned = pinnedUid === 'question-bank';
       const qbTile = (
         <div key="question-bank" className={`relative overflow-hidden bg-white shadow-xl group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 h-full w-full' : 'w-48 h-32 shrink-0 z-50 rounded-2xl pointer-events-none p-4'}`}>
-          
+
           {/* Base Layer: Question Content */}
           <div className={`absolute inset-0 w-full h-full flex flex-col max-w-6xl mx-auto ${isPinned ? 'p-8 md:p-12 pt-28' : 'pt-12'} z-10 pointer-events-none`}>
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
@@ -366,21 +350,21 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
                 <span className="text-slate-500 mr-3 md:mr-4">Q.{activeQuestionState.currentIndex + 1}</span>
                 <span dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
               </h2>
-              
+
               {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
                 <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[40vh] mb-10' : 'max-h-16 mb-2'} object-contain`} />
               )}
-              
+
               <div className="flex flex-col gap-4 md:gap-6 pl-4 md:pl-8">
                 {['A', 'B', 'C', 'D'].map(opt => {
                   const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
                   if (!text) return null;
                   const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
                   const isRevealed = activeQuestionState.isAnswerRevealed;
-                  
+
                   return (
                     <div key={opt} className={`flex items-center text-xl md:text-2xl font-semibold transition-all ${isRevealed && isCorrect ? 'text-green-600 bg-green-50 p-4 rounded-xl inline-block w-max' : 'text-slate-800'}`}>
-                      <span className="mr-4 font-bold">( {opt} )</span> 
+                      <span className="mr-4 font-bold">( {opt} )</span>
                       <span dangerouslySetInnerHTML={{ __html: text }} />
                       {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500" />}
                     </div>
@@ -401,15 +385,15 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
           {/* Top Layer: Controls */}
           {isPinned && (
             <div className={`absolute inset-x-0 top-0 w-full max-w-6xl mx-auto p-8 md:p-12 z-30 pointer-events-none flex justify-end items-start`}>
-                <div className="flex gap-4 items-center pointer-events-auto">
-                  <button onClick={handleNextQB} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full font-bold shadow-md transition-transform hover:scale-105" title={activeQuestionState.isAnswerRevealed ? "Next Question" : "Reveal Answer"}>
-                    {activeQuestionState.isAnswerRevealed ? "Next" : "Reveal"}
-                  </button>
-                  <button onClick={handleCloseQB} className="text-slate-400 hover:text-slate-600 bg-slate-100 p-2 rounded-full"><X size={20}/></button>
-                </div>
+              <div className="flex gap-4 items-center pointer-events-auto">
+                <button onClick={handleNextQB} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full font-bold shadow-md transition-transform hover:scale-105" title={activeQuestionState.isAnswerRevealed ? "Next Question" : "Reveal Answer"}>
+                  {activeQuestionState.isAnswerRevealed ? "Next" : "Reveal"}
+                </button>
+                <button onClick={handleCloseQB} className="text-slate-400 hover:text-slate-600 bg-slate-100 p-2 rounded-full"><X size={20} /></button>
+              </div>
             </div>
           )}
-          
+
           <button onClick={() => togglePin('question-bank')} className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-[70] pointer-events-auto">
             {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
           </button>
@@ -442,21 +426,21 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
     }
 
     // 1. Screen Share (Local)
-      if (screenShareOn) {
-        const isPinned = pinnedUid === 'local-screen';
-        const screenTile = (
-          <div key="local-screen" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
-            <ScreenShareClient appId={appId} channel={channel} token={token} onTrackEnded={() => setScreenShareOn(false)} />
-            <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-blue-600/90 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>Your Screen</div>
-            <button onClick={() => togglePin('local-screen')} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
-              {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
-            </button>
-          </div>
-        );
-        if (isPinned) pinnedTiles.push(screenTile);
-        else unpinnedTiles.push(screenTile);
-      }
-    
+    if (screenShareOn) {
+      const isPinned = pinnedUid === 'local-screen';
+      const screenTile = (
+        <div key="local-screen" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
+          <ScreenShareClient appId={appId} channel={channel} token={token} onTrackEnded={() => setScreenShareOn(false)} />
+          <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-blue-600/90 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>Your Screen</div>
+          <button onClick={() => togglePin('local-screen')} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
+            {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
+          </button>
+        </div>
+      );
+      if (isPinned) pinnedTiles.push(screenTile);
+      else unpinnedTiles.push(screenTile);
+    }
+
     // 2. Local Camera
     const isLocalPinned = pinnedUid === 'local-camera';
     const localTile = (
@@ -472,13 +456,13 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
         )}
         <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-black/70 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isLocalPinned ? 'scale-75 origin-top-left' : ''}`}>You (Teacher)</div>
         <button onClick={() => togglePin('local-camera')} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
-            {isLocalPinned ? <PinOff size={16} /> : <Pin size={16} />}
+          {isLocalPinned ? <PinOff size={16} /> : <Pin size={16} />}
         </button>
       </div>
     );
     if (isLocalPinned) pinnedTiles.push(localTile);
     else unpinnedTiles.push(localTile);
-    
+
     // 3. Remote Users
     filteredUsers.forEach(user => {
       const isPinned = pinnedUid === user.uid;
@@ -506,7 +490,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
       if (isPinned) pinnedTiles.push(remoteTile);
       else unpinnedTiles.push(remoteTile);
     });
-    
+
     return { pinnedTiles, unpinnedTiles };
   };
 
@@ -520,7 +504,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
           <div className="absolute top-12 right-0 bg-slate-800 border border-slate-700 text-white p-4 rounded-xl shadow-2xl z-50 flex flex-col gap-1 min-w-[280px] animate-in slide-in-from-top-4 duration-300">
             <div className="flex items-center justify-between">
               <span className="font-bold text-blue-400 text-sm">{chatToast.sender}</span>
-              <button onClick={() => setChatToast({ show: false })}><X size={14} className="text-slate-400 hover:text-white"/></button>
+              <button onClick={() => setChatToast({ show: false })}><X size={14} className="text-slate-400 hover:text-white" /></button>
             </div>
             <p className="text-sm text-slate-300 truncate max-w-[240px]">{chatToast.message}</p>
             <button onClick={() => { setChatToast({ show: false }); setIsChatOpen(true); }} className="text-xs text-blue-400 font-bold mt-2 text-left hover:text-blue-300 transition-colors uppercase tracking-wider">Reply</button>
@@ -534,7 +518,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
           <>
             {/* The single pinned video taking the full background */}
             {pinnedTiles}
-            
+
             {/* Small floating PIP videos container (Vertical Stack) */}
             <div className="absolute bottom-28 right-6 z-[90] flex flex-col gap-3 max-h-[calc(100vh-250px)] overflow-y-auto pl-2 custom-scrollbar">
               {unpinnedTiles}
@@ -546,7 +530,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
       </div>
 
       {/* Custom Control Bar (Glassmorphic Theme mimicking Navbar) */}
-      <div 
+      <div
         className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 rounded-full z-[100] transition-all duration-500 hover:scale-[1.02]"
         style={{
           backgroundColor: "rgba(255, 255, 255, 0.15)",
@@ -556,11 +540,11 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
         }}
       >
         <div className="flex items-center gap-6 pr-6 border-r border-white/20">
-          
+
           {/* Record Button */}
           {!isRecording ? (
-            <button 
-              onClick={() => startRecording(localMicrophoneTrack)} 
+            <button
+              onClick={() => startRecording(localMicrophoneTrack)}
               className="w-12 h-12 rounded-full flex items-center justify-center text-white bg-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all"
               title="Record Session"
             >
@@ -582,17 +566,17 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
           )}
 
           {/* Camera Button */}
-          <button 
-            onClick={() => setCameraOn(!cameraOn)} 
+          <button
+            onClick={() => setCameraOn(!cameraOn)}
             className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${cameraOn ? 'control-btn' : 'control-btn off'}`}
             title={cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
           >
             {cameraOn ? <Video size={22} strokeWidth={1.5} /> : <VideoOff size={22} strokeWidth={1.5} />}
           </button>
-          
+
           {/* Mic Button */}
-          <button 
-            onClick={() => setMicOn(!micOn)} 
+          <button
+            onClick={() => setMicOn(!micOn)}
             className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${micOn ? 'control-btn' : 'control-btn off'}`}
             title={micOn ? 'Mute' : 'Unmute'}
           >
@@ -616,9 +600,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
           >
             <PenTool size={20} className="md:w-6 md:h-6" />
           </button>
-          
-          <button 
-            onClick={() => setScreenShareOn(!screenShareOn)} 
+
+          <button
+            onClick={() => setScreenShareOn(!screenShareOn)}
             className={`w-12 h-12 rounded-full border-[1.5px] flex items-center justify-center transition-all ${screenShareOn ? 'border-transparent bg-white text-[#0078FF] shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'border-white text-white hover:bg-white/20'}`}
             title={screenShareOn ? 'Stop Sharing' : 'Share Screen'}
           >
@@ -626,20 +610,20 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
           </button>
 
         </div>
-        
+
         <div className="flex items-center gap-4">
           {/* Chat Button */}
-          <button 
-            onClick={toggleChat} 
+          <button
+            onClick={toggleChat}
             className={`w-12 h-12 rounded-full flex items-center justify-center relative text-white ${isChatOpen ? 'control-btn' : 'control-btn off'}`}
             title={isChatOpen ? 'Close Chat' : 'Open Chat'}
           >
             <MessageCircle size={22} strokeWidth={1.5} />
           </button>
-          
+
           {/* End Call Button */}
-          <button 
-            onClick={() => handleEndMeet()} 
+          <button
+            onClick={() => handleEndMeet()}
             className="w-12 h-12 rounded-full text-white flex items-center justify-center control-btn-danger"
             title="End Call"
           >
@@ -652,21 +636,21 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
       {isQBModalOpen && (
         <div className="absolute inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200">
-            <button onClick={() => setIsQBModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            <h3 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2"><BookOpen className="text-indigo-600"/> Question Bank</h3>
+            <button onClick={() => setIsQBModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+            <h3 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2"><BookOpen className="text-indigo-600" /> Question Bank</h3>
             <p className="text-slate-500 text-sm mb-6">Enter the question number range you'd like to present to the class.</p>
-            
+
             <div className="mb-6">
               <label className="block text-sm font-bold text-slate-700 mb-2">Question Range (e.g. 1-5)</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={qbRangeInput}
                 onChange={(e) => setQbRangeInput(e.target.value)}
                 placeholder="1-5"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-            
+
             <button onClick={handleStartQB} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-colors">
               Start Presentation
             </button>
@@ -682,7 +666,7 @@ export default function LiveClasses({ department }) {
   const [agoraClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
   const [isInCall, setIsInCall] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
-  
+
   // Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -690,7 +674,7 @@ export default function LiveClasses({ department }) {
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const timerIntervalRef = useRef(null);
-  
+
   // Chat State
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
@@ -698,14 +682,14 @@ export default function LiveClasses({ department }) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatToast, setChatToast] = useState({ show: false, sender: '', message: '' });
   const prevMessagesLength = useRef(0);
-  
+
   // Modals
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
-  
+
   const [newClass, setNewClass] = useState({ topic: '', time: '', selectedStudents: [] });
   const [startClassData, setStartClassData] = useState({ topic: '' });
-  
+
   const [activeSessions, setActiveSessions] = useState([]);
   const [upcomingClasses, setUpcomingClasses] = useState([]);
   const [departmentStudents, setDepartmentStudents] = useState([]);
@@ -729,13 +713,13 @@ export default function LiveClasses({ department }) {
   }, [department]);
 
   const [departmentQuestions, setDepartmentQuestions] = useState([]);
-  
+
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
         const qSnapshot = await getDocs(collection(db, 'question_bank'));
         const qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
+
         const departmentMapping = {
           'CSE': 'Computer Science (CSE)',
           'ECE': 'Electronics (ECE)',
@@ -745,12 +729,12 @@ export default function LiveClasses({ department }) {
           'DS': 'Data Science (DS)'
         };
         const teacherFullDept = departmentMapping[department] || department || 'All Departments';
-        
+
         const filtered = qData.filter(q => {
           if (teacherFullDept === 'All Departments') return true;
           return q.department === teacherFullDept || q.department === 'All Departments' || q.department === 'ALL' || !q.department;
         });
-        
+
         setDepartmentQuestions(filtered);
       } catch (e) {
         console.error("Failed to fetch questions for live classes", e);
@@ -783,7 +767,7 @@ export default function LiveClasses({ department }) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       messages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
-      
+
       if (prevMessagesLength.current > 0 && messages.length > prevMessagesLength.current && !isChatOpen) {
         const lastMsg = messages[messages.length - 1];
         if (lastMsg.senderEmail !== localStorage.getItem('auth_email')) {
@@ -792,7 +776,7 @@ export default function LiveClasses({ department }) {
         }
       }
       prevMessagesLength.current = messages.length;
-      
+
       setChatMessages(messages);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
@@ -802,7 +786,7 @@ export default function LiveClasses({ department }) {
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !currentSessionId) return;
-    
+
     try {
       await addDoc(collection(db, 'live_chats'), {
         sessionId: currentSessionId,
@@ -823,11 +807,11 @@ export default function LiveClasses({ department }) {
     if (e) e.preventDefault();
     setIsStartModalOpen(false);
     setIsInCall(true);
-    
+
     try {
       const teacherName = localStorage.getItem('auth_name') || 'Teacher';
       const teacherEmail = localStorage.getItem('auth_email') || '';
-      
+
       const sessionData = {
         teacherName,
         teacherEmail,
@@ -836,7 +820,7 @@ export default function LiveClasses({ department }) {
         status: 'live',
         startedAt: serverTimestamp()
       };
-      
+
       const docRef = await addDoc(collection(db, 'live_sessions'), sessionData);
       setCurrentSessionId(docRef.id);
     } catch (e) {
@@ -846,7 +830,7 @@ export default function LiveClasses({ department }) {
 
   const handleEndMeet = async (sessionIdToEnd = currentSessionId) => {
     if (sessionIdToEnd === currentSessionId) setIsInCall(false);
-    
+
     if (sessionIdToEnd) {
       try {
         await updateDoc(doc(db, 'live_sessions', sessionIdToEnd), {
@@ -858,7 +842,7 @@ export default function LiveClasses({ department }) {
         console.error("Failed to end live session in Firestore", e);
       }
     }
-    
+
     // Graceful unmount (hooks automatically close tracks on unmount)
     if (sessionIdToEnd === currentSessionId) {
       if (agoraClient) {
@@ -876,22 +860,22 @@ export default function LiveClasses({ department }) {
 
   const startRecording = async (localMicTrack) => {
     try {
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({ 
-        video: { displaySurface: "browser" }, 
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: "browser" },
         audio: true,
         preferCurrentTab: true,
         systemAudio: "exclude"
       });
-      
+
       const tracks = [...displayStream.getTracks()];
-      
+
       // Reuse the existing noise-cancelled Agora mic track instead of requesting a new raw one
       if (localMicTrack) {
         tracks.push(localMicTrack.getMediaStreamTrack());
       }
-      
+
       const combinedStream = new MediaStream(tracks);
-      
+
       const mediaRecorder = new MediaRecorder(combinedStream);
       mediaRecorderRef.current = mediaRecorder;
       recordedChunksRef.current = [];
@@ -925,13 +909,13 @@ export default function LiveClasses({ department }) {
       setIsRecording(true);
       setIsPaused(false);
       setRecordingTime(0);
-      
+
       timerIntervalRef.current = setInterval(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           setRecordingTime(prev => prev + 1);
         }
       }, 1000);
-      
+
     } catch (err) {
       console.error("Error starting recording:", err);
     }
@@ -970,9 +954,9 @@ export default function LiveClasses({ department }) {
   const handleScheduleSubmit = (e) => {
     e.preventDefault();
     if (!newClass.topic || !newClass.time) return;
-    
+
     setUpcomingClasses([
-      ...upcomingClasses, 
+      ...upcomingClasses,
       {
         id: Date.now(),
         topic: newClass.topic,
@@ -1018,9 +1002,9 @@ export default function LiveClasses({ department }) {
         ) : (
           <div className="flex-1 w-full h-full flex overflow-hidden">
             <AgoraRTCProvider client={agoraClient}>
-              <TeacherCall 
-                appId={rtcProps.appId} 
-                channel={rtcProps.channel} 
+              <TeacherCall
+                appId={rtcProps.appId}
+                channel={rtcProps.channel}
                 token={rtcProps.token}
                 sessionId={currentSessionId}
                 handleEndMeet={handleEndMeet}
@@ -1038,51 +1022,51 @@ export default function LiveClasses({ department }) {
                 departmentQuestions={departmentQuestions}
               />
             </AgoraRTCProvider>
-            
+
             {/* CHAT SIDEBAR */}
             {isChatOpen && (
               <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300">
                 <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <MessageCircle size={18} className="text-blue-400"/>
+                    <MessageCircle size={18} className="text-blue-400" />
                     <h3 className="text-white font-bold text-sm">Live Chat</h3>
                   </div>
                   <button onClick={() => setIsChatOpen(false)} className="text-slate-400 hover:text-white transition-colors">
                     <X size={18} />
                   </button>
                 </div>
-              
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {chatMessages.length === 0 ? (
-                  <div className="text-center text-slate-500 text-sm mt-10">No messages yet. Say hi!</div>
-                ) : (
-                  chatMessages.map(msg => (
-                    <div key={msg.id} className="flex flex-col">
-                      <span className="text-[11px] font-bold text-slate-500 mb-1">{msg.senderName}</span>
-                      <div className={`px-3 py-2 rounded-xl text-sm max-w-[90%] break-words ${msg.senderEmail === localStorage.getItem('auth_email') ? 'bg-blue-600 text-white self-end rounded-tr-sm' : 'bg-slate-800 text-slate-200 self-start rounded-tl-sm'}`}>
-                        {msg.message}
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {chatMessages.length === 0 ? (
+                    <div className="text-center text-slate-500 text-sm mt-10">No messages yet. Say hi!</div>
+                  ) : (
+                    chatMessages.map(msg => (
+                      <div key={msg.id} className="flex flex-col">
+                        <span className="text-[11px] font-bold text-slate-500 mb-1">{msg.senderName}</span>
+                        <div className={`px-3 py-2 rounded-xl text-sm max-w-[90%] break-words ${msg.senderEmail === localStorage.getItem('auth_email') ? 'bg-blue-600 text-white self-end rounded-tr-sm' : 'bg-slate-800 text-slate-200 self-start rounded-tl-sm'}`}>
+                          {msg.message}
+                        </div>
                       </div>
-                    </div>
-                  ))
-                )}
-                <div ref={chatEndRef} />
-              </div>
-              
-              <form onSubmit={sendMessage} className="p-3 border-t border-slate-800 bg-slate-900">
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type a message..."
-                    className="flex-1 bg-slate-800 border-none rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:ring-1 focus:ring-blue-500 outline-none"
-                  />
-                  <button type="submit" disabled={!newMessage.trim()} className="p-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition-colors">
-                    <Send size={16} />
-                  </button>
+                    ))
+                  )}
+                  <div ref={chatEndRef} />
                 </div>
-              </form>
-            </div>
+
+                <form onSubmit={sendMessage} className="p-3 border-t border-slate-800 bg-slate-900">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      placeholder="Type a message..."
+                      className="flex-1 bg-slate-800 border-none rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:ring-1 focus:ring-blue-500 outline-none"
+                    />
+                    <button type="submit" disabled={!newMessage.trim()} className="p-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition-colors">
+                      <Send size={16} />
+                    </button>
+                  </div>
+                </form>
+              </div>
             )}
           </div>
         )}
@@ -1093,7 +1077,7 @@ export default function LiveClasses({ department }) {
   // Regular Dashboard View
   return (
     <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm min-h-[calc(100vh-140px)] flex flex-col relative">
-      
+
       {/* Header & Quick Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
         <div>
@@ -1104,13 +1088,13 @@ export default function LiveClasses({ department }) {
           <p className="text-slate-500 font-medium mt-1">Manage your virtual classrooms and recordings.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => setIsScheduleModalOpen(true)}
             className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors flex items-center gap-2"
           >
             <Calendar size={18} /> Schedule Class
           </button>
-          <button 
+          <button
             onClick={() => setIsStartModalOpen(true)}
             className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] flex items-center gap-2"
           >
@@ -1120,15 +1104,15 @@ export default function LiveClasses({ department }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
-        
+
         {/* Main Section */}
         <div className="lg:col-span-2 space-y-8">
-          
+
           {/* Active Sessions */}
           {activeSessions.length > 0 && (
             <div className="space-y-6">
               <h3 className="text-lg font-bold text-red-600 flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div> 
+                <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></div>
                 Active Live Sessions
               </h3>
               <div className="space-y-4">
@@ -1142,15 +1126,15 @@ export default function LiveClasses({ department }) {
                       <h4 className="text-lg font-[800] text-slate-900 mb-1">{session.topic}</h4>
                       <p className="text-slate-600 font-medium text-[14px]">by {session.teacherName}</p>
                     </div>
-                    
+
                     <div className="flex flex-row items-center gap-3 relative z-10">
-                      <button 
+                      <button
                         onClick={() => handleEndMeet(session.id)}
                         className="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
                       >
                         End Class
                       </button>
-                      <button 
+                      <button
                         onClick={() => {
                           setCurrentSessionId(session.id);
                           setIsInCall(true);
@@ -1168,47 +1152,47 @@ export default function LiveClasses({ department }) {
 
           {/* Upcoming Classes */}
           <div className="space-y-6">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Clock className="text-orange-500" size={20} /> Upcoming Sessions
-          </h3>
-          
-          <div className="space-y-4">
-            {upcomingClasses.map((cls) => (
-              <div key={cls.id} className="p-5 border border-slate-200 rounded-2xl hover:border-blue-300 hover:shadow-md transition-all group bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <div className="text-sm font-bold text-blue-600 mb-1">{cls.time}</div>
-                  <h4 className="text-lg font-[800] text-slate-900 mb-1">{cls.topic}</h4>
-                  
-                  <div className="flex items-center gap-4 mt-4 text-[13px] font-semibold text-slate-400">
-                    <span className="flex items-center gap-1.5"><Users size={14}/> {cls.students} Enrolled</span>
-                    <span className="flex items-center gap-1.5"><Clock size={14}/> {cls.duration}</span>
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <Clock className="text-orange-500" size={20} /> Upcoming Sessions
+            </h3>
+
+            <div className="space-y-4">
+              {upcomingClasses.map((cls) => (
+                <div key={cls.id} className="p-5 border border-slate-200 rounded-2xl hover:border-blue-300 hover:shadow-md transition-all group bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-bold text-blue-600 mb-1">{cls.time}</div>
+                    <h4 className="text-lg font-[800] text-slate-900 mb-1">{cls.topic}</h4>
+
+                    <div className="flex items-center gap-4 mt-4 text-[13px] font-semibold text-slate-400">
+                      <span className="flex items-center gap-1.5"><Users size={14} /> {cls.students} Enrolled</span>
+                      <span className="flex items-center gap-1.5"><Clock size={14} /> {cls.duration}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2 mt-2 sm:mt-0">
+                    <button
+                      onClick={() => {
+                        setStartClassData({ topic: cls.topic });
+                        setIsStartModalOpen(true);
+                      }}
+                      className="w-full sm:w-auto px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center gap-2"
+                    >
+                      Start Class <Video size={16} />
+                    </button>
+                    <button className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors">
+                      <MoreHorizontal size={18} />
+                    </button>
                   </div>
                 </div>
-                
-                <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2 mt-2 sm:mt-0">
-                  <button 
-                    onClick={() => {
-                      setStartClassData({ topic: cls.topic });
-                      setIsStartModalOpen(true);
-                    }}
-                    className="w-full sm:w-auto px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center gap-2"
-                  >
-                    Start Class <Video size={16} />
-                  </button>
-                  <button className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors">
-                    <MoreHorizontal size={18} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
 
-            {upcomingClasses.length === 0 && (
-              <div className="text-center p-10 border border-dashed border-slate-300 rounded-2xl bg-slate-50">
-                <p className="text-slate-500 font-medium">No upcoming classes scheduled.</p>
-              </div>
-            )}
+              {upcomingClasses.length === 0 && (
+                <div className="text-center p-10 border border-dashed border-slate-300 rounded-2xl bg-slate-50">
+                  <p className="text-slate-500 font-medium">No upcoming classes scheduled.</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         </div>
 
         {/* Sidebar Section: Recent Recordings */}
@@ -1216,13 +1200,13 @@ export default function LiveClasses({ department }) {
           <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
             <PlayCircle className="text-purple-500" size={20} /> Recent Recordings
           </h3>
-          
+
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-4">
             {recentRecordings.length === 0 && (
               <p className="text-slate-400 text-sm font-medium text-center py-4">No recordings yet.</p>
             )}
           </div>
-          
+
           <button className="w-full py-2.5 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-100">
             View All Recordings
           </button>
@@ -1240,16 +1224,16 @@ export default function LiveClasses({ department }) {
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="p-6">
               <form id="start-form" onSubmit={handleConfirmStartMeet} className="space-y-5">
                 <div>
                   <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Class Topic / Title</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     required
                     value={startClassData.topic}
-                    onChange={(e) => setStartClassData({...startClassData, topic: e.target.value})}
+                    onChange={(e) => setStartClassData({ ...startClassData, topic: e.target.value })}
                     placeholder="e.g. Advanced Database Optimization"
                     className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                   />
@@ -1258,13 +1242,13 @@ export default function LiveClasses({ department }) {
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setIsStartModalOpen(false)}
                 className="px-5 py-2.5 font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 form="start-form"
                 type="submit"
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md flex items-center gap-2"
@@ -1286,29 +1270,29 @@ export default function LiveClasses({ department }) {
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto">
               <form id="schedule-form" onSubmit={handleScheduleSubmit} className="space-y-6">
                 <div>
                   <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Class Topic</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     required
                     value={newClass.topic}
-                    onChange={(e) => setNewClass({...newClass, topic: e.target.value})}
+                    onChange={(e) => setNewClass({ ...newClass, topic: e.target.value })}
                     placeholder="e.g. Advanced Database Optimization"
                     className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Date & Time</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       required
                       value={newClass.time}
-                      onChange={(e) => setNewClass({...newClass, time: e.target.value})}
+                      onChange={(e) => setNewClass({ ...newClass, time: e.target.value })}
                       placeholder="e.g. Tomorrow, 4:00 PM"
                       className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                     />
@@ -1332,20 +1316,20 @@ export default function LiveClasses({ department }) {
                     )}
                   </div>
                   <p className="text-[12px] text-slate-500 mt-2 flex items-center gap-1">
-                    <UserPlus size={14}/> {newClass.selectedStudents.length === 0 ? "All enrolled students will be invited." : `${newClass.selectedStudents.length} student(s) selected.`}
+                    <UserPlus size={14} /> {newClass.selectedStudents.length === 0 ? "All enrolled students will be invited." : `${newClass.selectedStudents.length} student(s) selected.`}
                   </p>
                 </div>
               </form>
             </div>
 
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setIsScheduleModalOpen(false)}
                 className="px-5 py-2.5 font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 form="schedule-form"
                 type="submit"
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md"

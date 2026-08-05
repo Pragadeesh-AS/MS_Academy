@@ -39,15 +39,16 @@ export default function AttributesManager() {
   useEffect(() => {
     fetchAttributes();
   }, []);
-
-  const handleAdd = async () => {
-    if (!newValue.trim()) return;
+  const handleAdd = async (customName = null, customParent = null) => {
+    const nameToAdd = (customName !== null ? customName : newValue).trim();
+    const parentToAdd = customParent !== null ? customParent : newParent;
+    if (!nameToAdd) return;
     
     try {
       await addDoc(collection(db, 'question_attributes'), {
         type: activeTab,
-        name: newValue.trim(),
-        parentId: newParent || null,
+        name: nameToAdd,
+        parentId: parentToAdd || null,
         createdAt: new Date().toISOString()
       });
       setNewValue('');
@@ -57,7 +58,6 @@ export default function AttributesManager() {
       console.error("Error adding attribute:", error);
     }
   };
-
   const confirmDelete = async () => {
     if (!deletingId) return;
     try {
@@ -424,8 +424,7 @@ export default function AttributesManager() {
             <form onSubmit={(e) => {
               e.preventDefault();
               if (editingAttr.id === 'NEW') {
-                setNewValue(editingAttr.name);
-                handleAdd();
+                handleAdd(editingAttr.name, newParent);
                 setEditingAttr(null);
               } else {
                 confirmEdit(e);

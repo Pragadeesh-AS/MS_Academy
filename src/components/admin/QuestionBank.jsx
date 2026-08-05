@@ -2,7 +2,7 @@ import { Eye, LayoutList, Bookmark, Clock, AlertCircle, Trophy, Star, Layers } f
 import React, { useState, useEffect, useRef } from 'react';
 import Loader from '../Loader';
 import { createPortal } from 'react-dom';
-import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip, Calculator, Eraser, Tag, Check, Sparkles } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip, Calculator, Eraser, Tag, Check, Sparkles, Circle } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
@@ -122,7 +122,10 @@ const RichTextEditor = ({ value, onChange, name, className, placeholder }) => {
   );
 };
 
-export default function QuestionBank() {
+export default function QuestionBank({ externalFilter = null, isPremiumView = false }) {
+  const userRole = localStorage.getItem('auth_role') || 'admin';
+  const pairRole = localStorage.getItem('pair_role') || null;
+  const pairId = localStorage.getItem('pair_id') || null;
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
@@ -196,6 +199,13 @@ export default function QuestionBank() {
   const [filterYear, setFilterYear] = useState('All');
   const [filterMark, setFilterMark] = useState('All');
   const [filterDifficulty, setFilterDifficulty] = useState('All');
+  const [filterStatus, setFilterStatus] = useState(externalFilter || 'Approved');
+
+  useEffect(() => {
+    if (externalFilter !== null) {
+      setFilterStatus(externalFilter);
+    }
+  }, [externalFilter]);
 
   const [formData, setFormData] = useState({
     questionType: 'Single Choice',
@@ -224,7 +234,10 @@ export default function QuestionBank() {
     topic: '',
     year: '',
     mark: '1 Mark (-0.33)',
-    difficultyLevel: ''
+    difficultyLevel: '',
+    status: 'Approved', // Default for Admin/Teacher. Typists will override this.
+    typedBy: '',
+    reviewedBy: ''
   });
 
   const [attributes, setAttributes] = useState([]);
@@ -349,9 +362,15 @@ export default function QuestionBank() {
     setFormData(prev => ({ ...prev, [field]: '' }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, forcedStatus = null) => {
     e.preventDefault();
-    const payload = { ...formData, createdAt: new Date().toISOString() };
+    const finalStatus = forcedStatus || formData.status || 'Approved';
+    const authName = localStorage.getItem('auth_name') || 'Unknown';
+    let payload = { ...formData, status: finalStatus, createdAt: formData.createdAt || new Date().toISOString() };
+    
+    if (!isEditing) payload.typedBy = authName;
+    if (finalStatus === 'Approved' && (!formData.reviewedBy || formData.status !== 'Approved')) payload.reviewedBy = authName;
+    if (pairId) payload.pairId = pairId;
     
     // Optimistic UI Update & close instantly
     setIsCreatorOpen(false);
@@ -379,7 +398,7 @@ export default function QuestionBank() {
     }
   };
 
-  const handleSaveAndNext = async (e) => {
+  const handleSaveAndNext = async (e, forcedStatus = null) => {
     e.preventDefault();
     const form = e.target.closest('form');
     if (form && !form.checkValidity()) {
@@ -387,7 +406,13 @@ export default function QuestionBank() {
       return;
     }
     
-    const payload = { ...formData, createdAt: new Date().toISOString() };
+    const finalStatus = forcedStatus || formData.status || 'Approved';
+    const authName = localStorage.getItem('auth_name') || 'Unknown';
+    let payload = { ...formData, status: finalStatus, createdAt: formData.createdAt || new Date().toISOString() };
+    
+    if (!isEditing) payload.typedBy = authName;
+    if (finalStatus === 'Approved' && (!formData.reviewedBy || formData.status !== 'Approved')) payload.reviewedBy = authName;
+    if (pairId) payload.pairId = pairId;
     
     // Reset form instantly
     openAddCreator();
@@ -443,7 +468,10 @@ export default function QuestionBank() {
       topic: q.topic || '',
       year: q.year || '',
       mark: q.mark || '1 Mark (-0.33)',
-      difficultyLevel: q.difficultyLevel || ''
+      difficultyLevel: q.difficultyLevel || '',
+      status: q.status || 'Approved',
+      typedBy: q.typedBy || '',
+      reviewedBy: q.reviewedBy || ''
     });
     setCurrentId(q.id);
     setIsEditing(true);
@@ -495,7 +523,8 @@ export default function QuestionBank() {
       topic: '',
       year: '',
       mark: '1 Mark (-0.33)',
-      difficultyLevel: ''
+      difficultyLevel: '',
+      isPremium: false
     });
     setIsEditing(false);
     setIsCreatorOpen(true);
@@ -509,8 +538,21 @@ export default function QuestionBank() {
     const matchesYear = filterYear === 'All' || q.year === filterYear;
     const matchesMark = filterMark === 'All' || q.mark === filterMark;
     const matchesDifficulty = filterDifficulty === 'All' || q.difficultyLevel === filterDifficulty;
+    const matchesStatus = filterStatus === 'All' || q.status === filterStatus;
     
-    return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty;
+    // Default Role Filtering Logic
+    let roleMatches = true;
+    if (userRole === 'typist') {
+      roleMatches = q.pairId === pairId;
+    }
+
+    // Premium View Filtering
+    let premiumMatches = true;
+    if (isPremiumView) {
+      premiumMatches = q.isPremium === true;
+    }
+
+    return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && roleMatches && premiumMatches;
   });
 
 
@@ -613,6 +655,7 @@ export default function QuestionBank() {
           {/* FILTERS */}
           <div className="flex flex-wrap items-center gap-3">
             {[
+              { label: 'Status', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: ['Draft', 'In Review', 'Approved'] },
               { label: 'Department', val: filterDept, setter: setFilterDept, icon: Layers, opts: departments },
               { label: 'Subject', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
               { label: 'Topic', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
@@ -638,7 +681,7 @@ export default function QuestionBank() {
             
             <button 
               onClick={() => {
-                setSearch(''); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All');
+                setSearch(''); setFilterStatus('All'); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All');
               }}
               className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2"
             >
@@ -655,6 +698,7 @@ export default function QuestionBank() {
                     <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[100px]">ID</th>
                     <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider">Question</th>
                     <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[140px]">Type</th>
+                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[120px]">Status</th>
                     <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[120px]">Marks</th>
                     <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[120px]">Difficulty</th>
                     <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[160px]">Department</th>
@@ -665,13 +709,13 @@ export default function QuestionBank() {
                 <tbody className="divide-y divide-[#EEF2F7]">
                   {loading ? (
                     <tr>
-                      <td colSpan="8" className="py-12 text-center">
+                      <td colSpan="9" className="py-12 text-center">
                         <Loader />
                       </td>
                     </tr>
                   ) : filteredQuestions.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
+                      <td colSpan="9" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
                         No questions found matching your criteria.
                       </td>
                     </tr>
@@ -695,6 +739,11 @@ export default function QuestionBank() {
                             <div className="flex flex-col gap-1 min-w-0">
                               <span className="text-[15px] font-[600] text-[#0F172A] truncate block flex items-center gap-1.5" title={q.questionText}>
                                 {q.isImported && <Sparkles size={14} className="text-purple-600 flex-shrink-0" title="AI Imported" />}
+                                {(userRole === 'admin' || userRole === 'typist') && q.isPremium && (
+                                  <span className="shrink-0 flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                    <span className="text-amber-500">★</span> Premium
+                                  </span>
+                                )}
                                 <span className="truncate">{q.questionText || 'Untitled Question'}</span>
                               </span>
                               <span className="text-[13px] font-[500] text-[#64748B] truncate block">
@@ -706,6 +755,15 @@ export default function QuestionBank() {
                         <td className="py-4 px-6 h-[82px]">
                           <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-50 text-purple-600 border border-purple-100 text-[12px] font-[700] whitespace-nowrap">
                             {q.questionType}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 h-[82px]">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full border text-[11px] font-[800] ${
+                            q.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                            q.status === 'In Review' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                            'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {q.status || 'Draft'}
                           </span>
                         </td>
                         <td className="py-4 px-6 h-[82px]">
@@ -743,7 +801,7 @@ export default function QuestionBank() {
                       </tr>
                       {expandedId === q.id && (
                         <tr className="bg-[#F8FAFF] border-b border-[#EEF2F7]">
-                          <td colSpan="8" className="px-6 py-6">
+                          <td colSpan="9" className="px-6 py-6">
                             <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative cursor-default" onClick={(e) => e.stopPropagation()}>
                               <h4 className="text-[16px] font-bold text-slate-800 mb-4 flex items-start gap-2">
                                 {q.isImported && <Sparkles size={16} className="text-purple-600 mt-1 flex-shrink-0" title="AI Imported" />}
@@ -859,19 +917,34 @@ export default function QuestionBank() {
                 
                 {/* Header info */}
                 <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-100">
-                  <div className="relative">
-                    <select 
-                      name="questionType"
-                      value={formData.questionType}
-                      onChange={handleInputChange}
-                      className="appearance-none bg-white border-[1.5px] border-slate-200 text-[#111827] font-[900] text-[13px] rounded-full pl-5 pr-10 py-2.5 outline-none shadow-sm cursor-pointer hover:border-slate-300"
-                    >
-                      <option value="Single Choice">Single Choice</option>
-                      <option value="Multiple Choice">Multiple Choice</option>
-                      <option value="Fill in Blanks">Fill in Blanks</option>
-                      <option value="Match">Match (Column 1 ≤ Column 2)</option>
-                    </select>
-                    <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <select 
+                        name="questionType"
+                        value={formData.questionType}
+                        onChange={handleInputChange}
+                        className="appearance-none bg-white border-[1.5px] border-slate-200 text-[#111827] font-[900] text-[13px] rounded-full pl-5 pr-10 py-2.5 outline-none shadow-sm cursor-pointer hover:border-slate-300"
+                      >
+                        <option value="Single Choice">Single Choice</option>
+                        <option value="Multiple Choice">Multiple Choice</option>
+                        <option value="Fill in Blanks">Fill in Blanks</option>
+                        <option value="Match">Match (Column 1 ≤ Column 2)</option>
+                      </select>
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    {(userRole === 'admin' || userRole === 'typist') && (
+                      <label className="flex items-center gap-2 cursor-pointer bg-amber-50/50 hover:bg-amber-50 border border-amber-200/50 px-3 py-1.5 rounded-full transition-colors">
+                        <div className="relative">
+                          <input type="checkbox" name="isPremium" checked={formData.isPremium || false} onChange={(e) => setFormData({...formData, isPremium: e.target.checked})} className="sr-only" />
+                          <div className={`block w-8 h-4.5 rounded-full transition-colors ${formData.isPremium ? 'bg-amber-500' : 'bg-slate-300'}`}></div>
+                          <div className={`absolute left-0.5 top-0.5 bg-white w-3.5 h-3.5 rounded-full transition-transform ${formData.isPremium ? 'transform translate-x-3.5' : ''}`}></div>
+                        </div>
+                        <span className="text-[12px] font-[800] text-amber-700 flex items-center gap-1">
+                          <span className="text-amber-500 text-[14px]">★</span> Premium
+                        </span>
+                      </label>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 sm:gap-4">
@@ -883,6 +956,22 @@ export default function QuestionBank() {
                     </span>
                   </div>
                 </div>
+
+                {/* Meta info (Typed By / Reviewed By) */}
+                {(formData.typedBy || formData.reviewedBy) && (
+                  <div className="flex flex-wrap gap-4 px-1 pt-2">
+                    {formData.typedBy && (
+                      <div className="text-[12px] font-[700] text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                        <span className="text-slate-400">Typed by:</span> <span className="text-slate-700">{formData.typedBy}</span>
+                      </div>
+                    )}
+                    {formData.reviewedBy && (
+                      <div className="text-[12px] font-[700] text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-emerald-100">
+                        <span className="text-emerald-500/70">Reviewed by:</span> <span className="text-emerald-700">{formData.reviewedBy}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Question Text Editor */}
                 <div className="flex flex-col gap-3">
@@ -1272,19 +1361,68 @@ export default function QuestionBank() {
 
               {/* Action Buttons */}
               <div className="p-6 bg-[#f8fafc] space-y-4">
-                <button 
-                  type="button"
-                  onClick={handleSaveAndNext}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-white border border-slate-200 text-[#111827] font-[800] text-[13px] hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
-                >
-                  <ChevronRight size={16} /> Save & Next
-                </button>
-                <button 
-                  type="submit"
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-[#059669] hover:bg-emerald-700 text-white font-[800] text-[13px] transition-colors shadow-md shadow-emerald-500/20"
-                >
-                  <Check size={16} /> Save & Close
-                </button>
+                {userRole === 'typist' ? (
+                  pairRole === 'reviewer' ? (
+                    <>
+                      <button 
+                        type="button"
+                        onClick={(e) => handleSubmit(e, 'Approved')}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-[#10B981] hover:bg-[#059669] text-white font-[800] text-[13px] transition-colors shadow-md shadow-emerald-500/20"
+                      >
+                        <CheckCircle2 size={16} /> Approve Question
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={(e) => handleSubmit(e, 'Draft')}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-red-500 hover:bg-red-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-red-500/20"
+                      >
+                        <X size={16} /> Reject (Send to Draft)
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button 
+                        type="button"
+                        onClick={(e) => handleSaveAndNext(e, 'In Review')}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-white border border-slate-200 text-[#111827] font-[800] text-[13px] hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
+                      >
+                        <ChevronRight size={16} /> Save & Next
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={(e) => handleSubmit(e, 'In Review')}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-[#3b82f6] hover:bg-blue-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-blue-500/20"
+                      >
+                        <Check size={16} /> Save & Close (Send to Review)
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={(e) => handleSaveAndNext(e, 'Draft')}
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-[800] text-[13px] transition-colors shadow-sm"
+                      >
+                        <Save size={16} /> Save to Draft
+                      </button>
+                    </>
+                  )
+                ) : (
+                  <>
+                    <button 
+                      type="button"
+                      onClick={(e) => handleSaveAndNext(e, 'Approved')}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-white border border-slate-200 text-[#111827] font-[800] text-[13px] hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
+                    >
+                      <ChevronRight size={16} /> Save & Next
+                    </button>
+                    <button 
+                      type="submit"
+                      onClick={(e) => handleSubmit(e, 'Approved')}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-[#059669] hover:bg-emerald-700 text-white font-[800] text-[13px] transition-colors shadow-md shadow-emerald-500/20"
+                    >
+                      <Check size={16} /> Save & Close
+                    </button>
+                  </>
+                )}
+                
                 <button 
                   type="button"
                   onClick={() => setIsCreatorOpen(false)}

@@ -63,6 +63,31 @@ export default function LoginSignup() {
     return false;
   };
 
+  const checkTypistRole = async (email) => {
+    try {
+      let q = query(collection(db, 'invited_typists'), where('typistEmail', '==', email));
+      let querySnapshot = await getDocs(q);
+      let pairRole = 'typist';
+      
+      if (querySnapshot.empty) {
+        q = query(collection(db, 'invited_typists'), where('reviewerEmail', '==', email));
+        querySnapshot = await getDocs(q);
+        pairRole = 'reviewer';
+      }
+      
+      if (!querySnapshot.empty) {
+        const docId = querySnapshot.docs[0].id;
+        await updateDoc(doc(db, 'invited_typists', docId), { status: 'Accepted' });
+        localStorage.setItem('pair_id', docId);
+        localStorage.setItem('pair_role', pairRole);
+        return true;
+      }
+    } catch (e) {
+      console.error("Failed to check typist database in Firestore:", e);
+    }
+    return false;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -115,6 +140,7 @@ export default function LoginSignup() {
         } else {
           const userName = user.displayName || user.email.split('@')[0];
           const isTeacher = await checkTeacherRole(user.email);
+          const isTypist = await checkTypistRole(user.email);
           
           if (isTeacher) {
             localStorage.setItem('auth_role', 'teacher');
@@ -122,6 +148,12 @@ export default function LoginSignup() {
             localStorage.setItem('auth_name', userName);
             window.dispatchEvent(new Event('storage'));
             navigate('/teacher-dashboard');
+          } else if (isTypist) {
+            localStorage.setItem('auth_role', 'typist');
+            localStorage.setItem('auth_email', user.email);
+            localStorage.setItem('auth_name', userName);
+            window.dispatchEvent(new Event('storage'));
+            navigate('/typist-dashboard');
           } else {
             // Regular student auth
             await markStudentAsActive(user.email, userName);
@@ -139,12 +171,20 @@ export default function LoginSignup() {
         const userName = name || user.email.split('@')[0];
         
         const isTeacher = await checkTeacherRole(user.email);
+        const isTypist = await checkTypistRole(user.email);
+        
         if (isTeacher) {
           localStorage.setItem('auth_role', 'teacher');
           localStorage.setItem('auth_email', user.email);
           localStorage.setItem('auth_name', userName);
           window.dispatchEvent(new Event('storage'));
           navigate('/teacher-dashboard');
+        } else if (isTypist) {
+          localStorage.setItem('auth_role', 'typist');
+          localStorage.setItem('auth_email', user.email);
+          localStorage.setItem('auth_name', userName);
+          window.dispatchEvent(new Event('storage'));
+          navigate('/typist-dashboard');
         } else {
           // Always student if not an invited teacher
           await markStudentAsActive(user.email, userName, department, plan);
@@ -184,6 +224,7 @@ export default function LoginSignup() {
 
       const userName = user.displayName || user.email.split('@')[0];
       const isTeacher = await checkTeacherRole(user.email);
+      const isTypist = await checkTypistRole(user.email);
       
       if (isTeacher) {
         localStorage.setItem('auth_role', 'teacher');
@@ -191,6 +232,12 @@ export default function LoginSignup() {
         localStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
         navigate('/teacher-dashboard');
+      } else if (isTypist) {
+        localStorage.setItem('auth_role', 'typist');
+        localStorage.setItem('auth_email', user.email);
+        localStorage.setItem('auth_name', userName);
+        window.dispatchEvent(new Event('storage'));
+        navigate('/typist-dashboard');
       } else {
         await markStudentAsActive(user.email, userName);
         localStorage.setItem('auth_role', 'student');

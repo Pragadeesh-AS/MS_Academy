@@ -21,6 +21,7 @@ import AgoraRTC, {
   AgoraRTCProvider, 
   useRTCClient, 
   useJoin, 
+  usePublish,
   useRemoteUsers,
   useRemoteVideoTracks,
   useRemoteAudioTracks,
@@ -126,27 +127,11 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   }, [cameraOn]);
 
   // 2. Network Publishing
-  useEffect(() => {
-    if (connectionState === 'CONNECTED' && localMicrophoneTrack) {
-      client.publish(localMicrophoneTrack).catch(console.error);
-      return () => {
-        if (client.connectionState === 'CONNECTED') {
-          client.unpublish(localMicrophoneTrack).catch(e => {});
-        }
-      };
-    }
-  }, [connectionState, localMicrophoneTrack, client]);
-
-  useEffect(() => {
-    if (connectionState === 'CONNECTED' && localCameraTrack) {
-      client.publish(localCameraTrack).catch(console.error);
-      return () => {
-        if (client.connectionState === 'CONNECTED') {
-          client.unpublish(localCameraTrack).catch(e => {});
-        }
-      };
-    }
-  }, [connectionState, localCameraTrack, client]);
+  const localTracks = useMemo(
+    () => [localMicrophoneTrack, localCameraTrack].filter(Boolean),
+    [localMicrophoneTrack, localCameraTrack]
+  );
+  usePublish(localTracks);
 
   const remoteUsers = useRemoteUsers();
   const remoteUserStyle = { width: '100%', height: '100%' };

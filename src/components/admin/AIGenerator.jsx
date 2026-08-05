@@ -212,7 +212,7 @@ export default function AIGenerator() {
     setStatus('saving');
     try {
       for (const question of extractedQuestions) {
-        await addDoc(collection(db, 'question_bank'), question);
+        await addDoc(collection(db, 'question_bank'), { ...question, status: 'Approved' });
       }
       setStatus('success');
       setTimeout(() => {

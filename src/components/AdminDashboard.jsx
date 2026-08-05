@@ -17,6 +17,7 @@ import Analytics from './admin/Analytics';
 import AIGenerator from './admin/AIGenerator';
 import AttributesManager from './admin/AttributesManager';
 import CourseSetup from './admin/CourseSetup';
+import TypistDirectory from './admin/TypistDirectory';
 import StudentDirectory from './admin/StudentDirectory';
 import TeacherDirectory from './admin/TeacherDirectory';
 import FeesTracker from './admin/FeesTracker';
@@ -129,6 +130,12 @@ export default function AdminDashboard() {
   const [teacherInviteForm, setTeacherInviteForm] = useState({ name: '', department: '', qualification: '', email: '' });
   const [isTeacherInviting, setIsTeacherInviting] = useState(false);
 
+  // Invited typists dataset
+  const [invitedTypists, setInvitedTypists] = useState([]);
+  const [isTypistInviteModalOpen, setIsTypistInviteModalOpen] = useState(false);
+  const [typistInviteForm, setTypistInviteForm] = useState({ typistName: '', typistEmail: '', reviewerName: '', reviewerEmail: '' });
+  const [isTypistInviting, setIsTypistInviting] = useState(false);
+
   // Search & Filter states
   const [appSearch, setAppSearch] = useState('');
   const [appFilter, setAppFilter] = useState('All');
@@ -195,6 +202,11 @@ export default function AdminDashboard() {
         const teachersSnapshot = await getDocs(collection(db, 'invited_teachers'));
         const fetchedTeachers = teachersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setInvitedTeachers(fetchedTeachers);
+
+        // 4.5. Fetch Invited Typists
+        const typistsSnapshot = await getDocs(collection(db, 'invited_typists'));
+        const fetchedTypists = typistsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setInvitedTypists(fetchedTypists);
 
         // 5. Keep courses config in localStorage for now since it's just settings
         const savedCourses = localStorage.getItem('gate_courses_config');
@@ -495,6 +507,14 @@ export default function AdminDashboard() {
               </button>
 
               <button
+                onClick={() => setActiveTab('typists')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'typists' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <Book size={20} className={activeTab === 'typists' ? 'text-[#3b82f6]' : 'text-[#3b82f6]'} />
+                {!isCollapsed && <span>Data Entry Pairs</span>}
+              </button>
+
+              <button
                 onClick={() => setActiveTab('queries')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'queries' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
               >
@@ -539,8 +559,19 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('questions')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'questions' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
               >
-                <Book size={20} className="text-[#0ea5e9]" />
+                <Database size={20} className={activeTab === 'questions' ? 'text-[#eab308]' : 'text-[#eab308]'} />
                 {!isCollapsed && <span>Question Bank</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('premium_questions')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'premium_questions' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <div className="relative">
+                  <Database size={20} className={activeTab === 'premium_questions' ? 'text-amber-500' : 'text-amber-500'} />
+                  <span className="absolute -top-1.5 -right-1.5 text-amber-500 text-[12px]">★</span>
+                </div>
+                {!isCollapsed && <span>Premium Questions</span>}
               </button>
 
               <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
@@ -1007,147 +1038,34 @@ export default function AdminDashboard() {
 
         {/* Active Tab: Teachers (Faculty & Recruitment) */}
         {activeTab === 'teachers' && (
-          <TeacherDirectory
+          <TeacherDirectory 
             invitedTeachers={invitedTeachers}
             deleteTeacher={deleteTeacher}
             onInvite={() => setIsTeacherInviteModalOpen(true)}
             activeSubTab={teacherSubTab}
-            setActiveSubTab={setTeacherSubTab}
-          >
-            {teacherSubTab === 'recruitment' ? (
-              <>
-                <div className="flex flex-col sm:flex-row justify-end gap-4">
-                  {/* Reset seed button */}
-                  <button 
-                    onClick={() => {
-                      localStorage.removeItem('career_applications');
-                      localStorage.setItem('career_applications', JSON.stringify(defaultApplications));
-                      setApplications(defaultApplications);
-                    }}
-                    className="w-fit self-end px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
-                  >
-                    <RefreshCw size={12} />
-                    <span>Reset Seed Data</span>
-                  </button>
-                </div>
-
-                {/* Filter controls */}
-            <div className="bg-white border border-slate-100 p-4 rounded-3xl flex flex-col md:flex-row items-center gap-4">
-              <div className="relative w-full md:flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                <input
-                  type="text"
-                  placeholder="Search by candidate name, email, specialty..."
-                  value={appSearch}
-                  onChange={(e) => setAppSearch(e.target.value)}
-                  className="w-full pl-11 pr-4 py-2.5 border border-slate-200 rounded-2xl text-[14px] focus:outline-none focus:border-[#1d4ed8] focus:ring-1 focus:ring-[#1d4ed8] transition-all text-slate-800"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 w-full md:w-auto">
-                <Filter className="text-slate-400 flex-shrink-0" size={16} />
-                <select
-                  value={appFilter}
-                  onChange={(e) => setAppFilter(e.target.value)}
-                  className="w-full md:w-56 px-4 py-2.5 border border-slate-200 rounded-2xl text-[14px] bg-white focus:outline-none text-slate-700 font-medium"
-                >
-                  <option value="All">All Job Positions</option>
-                  <option value="GATE Coaching Teacher">GATE Coaching Teacher</option>
-                  <option value="School Teachers (6th – 12th)">School Teachers</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Applicants Table */}
-            <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      <th className="py-4 px-6">Candidate Name</th>
-                      <th className="py-4 px-6">Position</th>
-                      <th className="py-4 px-6">Specialization</th>
-                      <th className="py-4 px-6">Experience</th>
-                      <th className="py-4 px-6 text-center">Status</th>
-                      <th className="py-4 px-6 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100/60 text-slate-700 text-sm">
-                    {filteredApps.length === 0 ? (
-                      <tr>
-                        <td colSpan="6" className="py-12 text-center text-slate-400 font-semibold bg-white">
-                          No applicants found matching filters.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredApps.map((app) => (
-                        <tr key={app.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 px-6">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-slate-900 text-sm">{app.fullName}</span>
-                              <span className="text-[11px] text-slate-400 font-medium">{app.email} • {app.phone}</span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className="px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold whitespace-nowrap">
-                              {app.role === 'GATE Coaching Teacher' ? 'GATE Coach' : 'School Coach'}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 font-semibold text-slate-800 text-[13px]">{app.specialization}</td>
-                          <td className="py-4 px-6 text-slate-500 font-medium text-[13px]">{app.experience}</td>
-                          <td className="py-4 px-6 text-center">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
-                              app.status === 'Shortlisted' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                              app.status === 'Rejected' ? 'bg-red-50 text-red-600 border border-red-100' :
-                              'bg-amber-50 text-amber-600 border border-amber-100'
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                app.status === 'Shortlisted' ? 'bg-emerald-500' :
-                                app.status === 'Rejected' ? 'bg-red-500' : 'bg-amber-500'
-                              }`} />
-                              {app.status}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={() => setSelectedApp(app)}
-                                className="p-2 hover:bg-blue-50 text-blue-600 rounded-xl transition-colors border border-transparent hover:border-blue-100/50"
-                                title="View Details"
-                              >
-                                <Eye size={16} />
-                              </button>
-                              <button
-                                onClick={() => updateAppStatus(app.id, 'Shortlisted')}
-                                className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-colors border border-transparent hover:border-emerald-100/50 disabled:opacity-30"
-                                disabled={app.status === 'Shortlisted'}
-                                title="Shortlist Candidate"
-                              >
-                                <Check size={16} />
-                              </button>
-                              <button
-                                onClick={() => updateAppStatus(app.id, 'Rejected')}
-                                className="p-2 hover:bg-red-50 text-red-600 rounded-xl transition-colors border border-transparent hover:border-red-100/50 disabled:opacity-30"
-                                disabled={app.status === 'Rejected'}
-                                title="Reject Candidate"
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              </div>
-              </>
-            ) : null}
-          </TeacherDirectory>
+            onTabChange={setTeacherSubTab}
+          />
+        )}
+        
+        {activeTab === 'typists' && (
+          <TypistDirectory 
+            invitedTypists={invitedTypists}
+            deleteTypist={async (typistId) => {
+              if (window.confirm('Are you sure you want to remove this pair?')) {
+                setInvitedTypists(prev => prev.filter(t => t.id !== typistId));
+                try {
+                  await deleteDoc(doc(db, 'invited_typists', typistId));
+                } catch (e) {
+                  console.error("Failed to delete pair", e);
+                }
+              }
+            }}
+            onInvite={() => setIsTypistInviteModalOpen(true)}
+          />
         )}
 
         {/* Active Tab: Contact Queries / Joined Students */}
+
         {activeTab === 'queries' && (
           <StudentDirectory
             joinedStudents={joinedStudents}
@@ -1209,7 +1127,7 @@ export default function AdminDashboard() {
                           <span className="text-xs text-slate-400 font-medium">{q.email} • {q.phone}</span>
                         </div>
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                          q.status === 'Resolved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100 animate-pulse'
+                          q.status === 'Resolved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100 animate-pulse'
                         }`}>
                           {q.status}
                         </span>
@@ -1250,6 +1168,13 @@ export default function AdminDashboard() {
         {activeTab === 'questions' && (
           <div className="h-full">
             <QuestionBank />
+          </div>
+        )}
+
+        {/* Premium Question Bank Tab */}
+        {activeTab === 'premium_questions' && (
+          <div className="h-full">
+            <QuestionBank isPremiumView={true} />
           </div>
         )}
         
@@ -1697,6 +1622,78 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Typist Invite Modal */}
+      {isTypistInviteModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 relative">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-[24px] font-[800] text-slate-800 tracking-tight flex items-center gap-2">
+                  <MailPlus size={24} className="text-blue-600" />
+                  Invite Data Entry Pair
+                </h3>
+                <button 
+                  onClick={() => setIsTypistInviteModalOpen(false)} 
+                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:bg-slate-100 rounded-2xl transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                setIsTypistInviting(true);
+                try {
+                  const newPair = {
+                    ...typistInviteForm,
+                    status: 'Pending',
+                    invitedAt: new Date().toISOString()
+                  };
+                  const docRef = await addDoc(collection(db, 'invited_typists'), newPair);
+                  setInvitedTypists(prev => [{ id: docRef.id, ...newPair }, ...prev]);
+                  setIsTypistInviteModalOpen(false);
+                  setTypistInviteForm({ typistName: '', typistEmail: '', reviewerName: '', reviewerEmail: '' });
+                } catch (err) {
+                  console.error("Failed to invite pair", err);
+                }
+                setIsTypistInviting(false);
+              }} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[13px] font-bold text-slate-700 mb-2">Typist Name</label>
+                    <input type="text" required value={typistInviteForm.typistName} onChange={(e) => setTypistInviteForm({...typistInviteForm, typistName: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="e.g. John Doe" />
+                  </div>
+                  <div>
+                    <label className="block text-[13px] font-bold text-slate-700 mb-2">Typist Email</label>
+                    <input type="email" required value={typistInviteForm.typistEmail} onChange={(e) => setTypistInviteForm({...typistInviteForm, typistEmail: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="e.g. john@example.com" />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="block text-[13px] font-bold text-slate-700 mb-2">Reviewer Name</label>
+                    <input type="text" required value={typistInviteForm.reviewerName} onChange={(e) => setTypistInviteForm({...typistInviteForm, reviewerName: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="e.g. Jane Smith" />
+                  </div>
+                  <div>
+                    <label className="block text-[13px] font-bold text-slate-700 mb-2">Reviewer Email</label>
+                    <input type="email" required value={typistInviteForm.reviewerEmail} onChange={(e) => setTypistInviteForm({...typistInviteForm, reviewerEmail: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="e.g. jane@example.com" />
+                  </div>
+                </div>
+
+                <div className="pt-4 mt-6 border-t border-slate-100 flex gap-3">
+                  <button type="button" onClick={() => setIsTypistInviteModalOpen(false)} className="flex-1 h-[48px] bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-[14px] transition-all">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={isTypistInviting} className="flex-[2] h-[48px] bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-[14px] transition-all flex items-center justify-center shadow-lg shadow-blue-500/20 disabled:opacity-70">
+                    {isTypistInviting ? 'Sending Invite...' : 'Send Pair Invitation'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

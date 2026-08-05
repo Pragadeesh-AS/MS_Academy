@@ -6,6 +6,7 @@ import { db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import LiveClasses from './teacher/LiveClasses';
 import TeacherQuestionBank from './teacher/TeacherQuestionBank';
+import TestsManager from './TestsManager';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
@@ -105,11 +106,11 @@ export default function TeacherDashboard() {
             <span>Question Bank</span>
           </button>
           <button 
-            onClick={() => setActiveTab('schedule')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'schedule' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            onClick={() => setActiveTab('tests')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'tests' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
           >
             <Calendar size={18} />
-            <span>Schedule</span>
+            <span>Test Modules</span>
           </button>
         </nav>
 
@@ -145,6 +146,7 @@ export default function TeacherDashboard() {
 
         {activeTab === 'live' && <LiveClasses department={teacherDepartment} />}
         {activeTab === 'questions' && <TeacherQuestionBank department={teacherDepartment} />}
+        {activeTab === 'tests' && <TestsManager department={teacherDepartment} isTeacher={true} />}
       </main>
     </div>
   );

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download, Trophy } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import StudentLiveClasses from './StudentLiveClasses';
+import StudentTests from './StudentTests';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -250,6 +251,13 @@ export default function Dashboard() {
             <Calendar size={18} />
             <span>Schedule</span>
           </button>
+          <button 
+            onClick={() => setActiveTab('tests')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'tests' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+          >
+            <Trophy size={18} />
+            <span>Practice Tests</span>
+          </button>
         </nav>
       </aside>
 
@@ -433,6 +441,10 @@ export default function Dashboard() {
               No upcoming tests or classes are scheduled in the next 7 days.
             </p>
           </div>
+        )}
+
+        {activeTab === 'tests' && (
+          <StudentTests department={studentDepartment} />
         )}
       </main>
     </div>

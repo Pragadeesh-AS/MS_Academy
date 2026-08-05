@@ -1,10 +1,10 @@
 import React from 'react';
 import styled from 'styled-components';
 
-const Button = () => {
+const Button = ({ onClick }) => {
   return (
     <StyledWrapper>
-      <button className="pb-ai-button">
+      <button onClick={onClick} className="pb-ai-button">
         <span>Create Test Module</span>
         <span className="pb-ai-sparkle">✦</span>
       </button>
