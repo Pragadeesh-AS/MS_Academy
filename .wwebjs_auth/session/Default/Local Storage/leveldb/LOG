@@ -1,0 +1,4 @@
+2026/07/29-10:53:18.300 1aac Creating DB D:\MS_Academy\.wwebjs_auth\session\Default\Local Storage\leveldb since it was missing.
+2026/07/29-10:53:18.329 1aac Reusing MANIFEST D:\MS_Academy\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
+2026/07/29-10:53:18.331 1aac Recovering log #3
+2026/07/29-10:53:18.334 1aac Reusing old log D:\MS_Academy\.wwebjs_auth\session\Default\Local Storage\leveldb/000003.log 

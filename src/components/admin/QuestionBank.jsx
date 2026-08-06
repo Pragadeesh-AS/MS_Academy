@@ -807,23 +807,35 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                                 {q.isImported && <Sparkles size={16} className="text-purple-600 mt-1 flex-shrink-0" title="AI Imported" />}
                                 <span dangerouslySetInnerHTML={{ __html: q.questionText || 'Untitled Question' }} />
                               </h4>
+                              {q.questionImageUrl && (
+                                <div className="mb-4">
+                                  <img src={q.questionImageUrl} alt="Question" className="max-h-40 rounded-xl border border-slate-200 shadow-sm" />
+                                </div>
+                              )}
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                                 {['A', 'B', 'C', 'D'].map(opt => {
                                   const text = q[`option${opt}`];
-                                  if (!text) return null;
+                                  const image = q[`option${opt}Image`];
+                                  if (!text && !image) return null;
                                   const isCorrect = q.questionType === 'Multiple Choice' ? (q.correctAnswers || []).includes(opt) : q.correctAnswer === opt;
                                   return (
                                     <div key={opt} className={`p-3 rounded-xl text-[14px] font-medium border flex items-start gap-2 ${isCorrect ? 'bg-green-50 border-green-200 text-green-800 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
                                       <span className={`font-bold shrink-0 ${isCorrect ? 'text-green-600' : 'text-slate-400'}`}>{opt}.</span> 
-                                      <span dangerouslySetInnerHTML={{ __html: text }} />
+                                      <div className="flex flex-col gap-2">
+                                        {text && <span dangerouslySetInnerHTML={{ __html: text }} />}
+                                        {image && <img src={image} alt={`Option ${opt}`} className="max-h-20 rounded-lg border border-slate-200 shadow-sm" />}
+                                      </div>
                                     </div>
                                   );
                                 })}
                               </div>
-                              {q.explanation && (
+                              {(q.explanation || q.explanationImageUrl) && (
                                 <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 mt-4">
-                                  <span className="text-[12px] font-bold text-blue-600 uppercase tracking-wider mb-1 block">Explanation</span>
-                                  <p className="text-[14px] text-slate-700" dangerouslySetInnerHTML={{ __html: q.explanation }} />
+                                  <span className="text-[12px] font-bold text-blue-600 uppercase tracking-wider mb-2 block">Explanation</span>
+                                  {q.explanation && <p className="text-[14px] text-slate-700 mb-2" dangerouslySetInnerHTML={{ __html: q.explanation }} />}
+                                  {q.explanationImageUrl && (
+                                    <img src={q.explanationImageUrl} alt="Explanation" className="max-h-40 rounded-xl border border-blue-200 shadow-sm mt-2" />
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1102,6 +1114,20 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       className="w-full p-6 h-32 outline-none text-[16px] font-[500] text-[#111827]"
                     />
                   </div>
+                  {formData.explanationImageUrl ? (
+                    <div className="relative group mt-3">
+                      <img src={formData.explanationImageUrl} alt="Explanation" className="max-h-60 rounded-xl border border-slate-200 shadow-sm" />
+                      <button type="button" onClick={() => setFormData({...formData, explanationImageUrl: ''})} className="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="border-[1.5px] border-dashed border-slate-300 hover:border-blue-400 bg-white rounded-xl py-3 mt-3 flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-sm group">
+                      <ImageIcon size={16} className="text-[#111827]" />
+                      <span className="text-[13px] font-[900] text-[#111827]">Add Explanation Image</span>
+                      <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUpload(e, 'explanationImageUrl')} />
+                    </label>
+                  )}
                 </div>
 
               </div>

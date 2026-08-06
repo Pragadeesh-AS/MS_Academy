@@ -1,0 +1,4 @@
+2026/07/29-10:53:18.361 1aac Creating DB D:\MS_Academy\.wwebjs_auth\session\Default\Session Storage since it was missing.
+2026/07/29-10:53:18.390 1aac Reusing MANIFEST D:\MS_Academy\.wwebjs_auth\session\Default\Session Storage/MANIFEST-000001
+2026/07/29-10:53:18.394 1aac Recovering log #3
+2026/07/29-10:53:18.401 1aac Reusing old log D:\MS_Academy\.wwebjs_auth\session\Default\Session Storage/000003.log 

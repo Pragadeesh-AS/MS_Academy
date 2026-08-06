@@ -1,0 +1,4 @@
+2026/07/29-10:53:18.203 904 Creating DB D:\MS_Academy\.wwebjs_auth\session\Default\Site Characteristics Database since it was missing.
+2026/07/29-10:53:18.226 904 Reusing MANIFEST D:\MS_Academy\.wwebjs_auth\session\Default\Site Characteristics Database/MANIFEST-000001
+2026/07/29-10:53:18.227 904 Recovering log #3
+2026/07/29-10:53:18.227 904 Reusing old log D:\MS_Academy\.wwebjs_auth\session\Default\Site Characteristics Database/000003.log 

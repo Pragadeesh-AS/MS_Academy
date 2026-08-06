@@ -1,0 +1,4 @@
+2026/07/29-10:53:18.216 32d0 Creating DB D:\MS_Academy\.wwebjs_auth\session\Default\shared_proto_db\metadata since it was missing.
+2026/07/29-10:53:18.230 32d0 Reusing MANIFEST D:\MS_Academy\.wwebjs_auth\session\Default\shared_proto_db\metadata/MANIFEST-000001
+2026/07/29-10:53:18.231 32d0 Recovering log #3
+2026/07/29-10:53:18.231 32d0 Reusing old log D:\MS_Academy\.wwebjs_auth\session\Default\shared_proto_db\metadata/000003.log 
