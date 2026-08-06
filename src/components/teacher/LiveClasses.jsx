@@ -84,8 +84,12 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
   const [screenTrack, setScreenTrack] = useState(null);
   const [screenAudioTrack, setScreenAudioTrack] = useState(null);
   const [joined, setJoined] = useState(false);
+  const initStarted = useRef(false);
 
   useEffect(() => {
+    if (initStarted.current) return;
+    initStarted.current = true;
+
     let isMounted = true;
     let localVidTrack = null;
     let localAudTrack = null;
