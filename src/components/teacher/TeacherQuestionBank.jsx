@@ -49,7 +49,7 @@ export default function TeacherQuestionBank({ department }) {
         // Filter questions by teacher's department or 'All Departments'
         const filtered = qData.filter(q => {
           if (teacherFullDept === 'All Departments') return true;
-          return q.department === teacherFullDept || q.department === 'All Departments' || q.department === 'ALL' || !q.department;
+          return q.department === teacherFullDept || q.department === 'All Departments' || q.department === 'ALL';
         });
         
         setQuestions(filtered);

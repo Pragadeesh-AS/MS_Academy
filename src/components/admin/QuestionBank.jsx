@@ -246,7 +246,40 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setLoading(true);
     try {
       const qSnapshot = await getDocs(collection(db, 'question_bank'));
-      const qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Deduplication Logic
+      const seen = new Set();
+      const duplicateIds = [];
+      qData.forEach(q => {
+        // Create a unique hash for the question based on text and image
+        // We use both to ensure we don't accidentally match empty text questions if they have different images
+        const hash = `${q.questionText || ''}_${q.questionImageUrl || ''}`.trim();
+        
+        // If hash is just '_', it means both text and image are empty. 
+        // We might not want to deduplicate completely empty shells aggressively unless they are truly duplicates.
+        // But let's include them in deduplication if there are multiple empty ones.
+        if (seen.has(hash)) {
+          duplicateIds.push(q.id);
+        } else {
+          seen.add(hash);
+        }
+      });
+
+      if (duplicateIds.length > 0) {
+        console.log(`Found ${duplicateIds.length} duplicate questions. Deleting...`);
+        // Delete duplicates from Firestore
+        for (const id of duplicateIds) {
+          try {
+            await deleteDoc(doc(db, 'question_bank', id));
+          } catch (err) {
+            console.error("Failed to delete duplicate doc", id, err);
+          }
+        }
+        // Remove duplicates from local state
+        qData = qData.filter(q => !duplicateIds.includes(q.id));
+      }
+
       setQuestions(qData);
       
       const attrSnapshot = await getDocs(collection(db, 'question_attributes'));
@@ -364,6 +397,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   const handleSubmit = async (e, forcedStatus = null) => {
     e.preventDefault();
+    const form = e.target.closest('form');
+    if (form && !form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+    
     const finalStatus = forcedStatus || formData.status || 'Approved';
     const authName = localStorage.getItem('auth_name') || 'Unknown';
     let payload = { ...formData, status: finalStatus, createdAt: formData.createdAt || new Date().toISOString() };
@@ -1320,10 +1359,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               <div className="flex-1 overflow-y-auto p-6 space-y-5">
                 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-[800] text-[#111827]">Department</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Department <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="department" value={formData.department} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
-                      <option value="">-- No Department --</option>
+                    <select name="department" required value={formData.department} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                      <option value="">-- Select Department --</option>
                       {departments.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -1331,10 +1370,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-[800] text-[#111827]">Subject</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Subject <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="subject" value={formData.subject} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
-                      <option value="">-- No Subject --</option>
+                    <select name="subject" required value={formData.subject} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                      <option value="">-- Select Subject --</option>
                       {subjects.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -1342,10 +1381,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-[800] text-[#111827]">Topic</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Topic <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="topic" value={formData.topic} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
-                      <option value="">-- No Topic --</option>
+                    <select name="topic" required value={formData.topic} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                      <option value="">-- Select Topic --</option>
                       {topics.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -1353,10 +1392,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-[800] text-[#111827]">Year</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Year <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="year" value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
-                      <option value="">-- No Year --</option>
+                    <select name="year" required value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                      <option value="">-- Select Year --</option>
                       {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -1364,9 +1403,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-[800] text-[#111827]">Mark</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Mark <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="mark" value={formData.mark} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                    <select name="mark" required value={formData.mark} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                      <option value="">-- Select Mark --</option>
                       {marks.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
@@ -1374,10 +1414,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-[800] text-[#111827]">Difficulty Level</label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Difficulty Level <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="difficultyLevel" value={formData.difficultyLevel} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
-                      <option value="">-- No Difficulty Level --</option>
+                    <select name="difficultyLevel" required value={formData.difficultyLevel} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                      <option value="">-- Select Difficulty --</option>
                       {difficulties.map(df => <option key={df} value={df}>{df}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
