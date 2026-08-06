@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import pkg from 'agora-access-token';
 const { RtcTokenBuilder, RtcRole } = pkg;
 
@@ -9,8 +11,8 @@ const channelName = "MS_ACADEMY";
 const uid = 0;
 const role = RtcRole.PUBLISHER;
 
-// Set expiration to 10 years in the future (virtually permanent for development)
-const expirationTimeInSeconds = 3600 * 24 * 365 * 10; 
+// Set expiration to 24 hours
+const expirationTimeInSeconds = 3600 * 24; 
 const currentTimestamp = Math.floor(Date.now() / 1000);
 const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
 
@@ -21,6 +23,17 @@ if (appCertificate === "PASTE_YOUR_APP_CERTIFICATE_HERE") {
 
 const token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channelName, uid, role, privilegeExpiredTs);
 
-console.log("\n✅ SUCCESS! Here is your 10-year permanent token:\n");
-console.log(token);
-console.log("\n👉 Copy the above token and paste it into your .env file as VITE_AGORA_TEMP_TOKEN\n");
+// Automatically update the .env file
+const envPath = path.resolve('.env');
+if (fs.existsSync(envPath)) {
+    let envContent = fs.readFileSync(envPath, 'utf8');
+    if (envContent.includes('VITE_AGORA_TEMP_TOKEN=')) {
+        envContent = envContent.replace(/VITE_AGORA_TEMP_TOKEN=.*/g, `VITE_AGORA_TEMP_TOKEN=${token}`);
+    } else {
+        envContent += `\nVITE_AGORA_TEMP_TOKEN=${token}\n`;
+    }
+    fs.writeFileSync(envPath, envContent);
+    console.log("\n✅ SUCCESS! New 24-hour Agora token generated and injected directly into your .env file!\n");
+} else {
+    console.error("\n❌ ERROR: .env file not found! Please create one first.\n");
+}

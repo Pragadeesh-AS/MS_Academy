@@ -630,6 +630,12 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
             <PhoneOff size={22} strokeWidth={1.5} />
           </button>
         </div>
+
+        {/* Connection Status Indicator */}
+        <div className="absolute -top-10 right-4 text-xs font-bold px-3 py-1 rounded-full shadow-md bg-black/50 text-white backdrop-blur-md border border-white/10 flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${connectionState === 'CONNECTED' ? 'bg-green-500' : connectionState === 'CONNECTING' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`}></div>
+          {connectionState || 'DISCONNECTED'}
+        </div>
       </div>
 
       {/* Question Bank Modal */}
