@@ -12,21 +12,9 @@ import {
   Plus,
   Clock,
   MoreHorizontal,
-  PlayCircle,
-  Users,
-  User,
-  Check,
-  UserPlus,
-  X,
-  MessageCircle,
-  Pin,
-  PinOff,
-  Send,
-  PenTool,
-  BookOpen,
-  ChevronRight,
-  CheckCircle2
+  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import AgoraRTC, {
   AgoraRTCProvider,
   useRTCClient,
@@ -185,21 +173,347 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
 };
 
 // Extracted TeacherCall component for custom Agora rendering
-const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecording, togglePauseRecording, stopRecording, startRecording, isPaused, recordingTime, formatTime, isChatOpen, toggleChat, chatToast, setChatToast, departmentQuestions }) => {
+const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, departmentQuestions }) => {
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [screenShareOn, setScreenShareOn] = useState(false);
   const [whiteboardOn, setWhiteboardOn] = useState(false);
   const [whiteboardStream, setWhiteboardStream] = useState(null);
+  const whiteboardOnRef = useRef(whiteboardOn);
+  useEffect(() => { whiteboardOnRef.current = whiteboardOn; }, [whiteboardOn]);
   const [pinnedUid, setPinnedUid] = useState(null);
   const [participantNames, setParticipantNames] = useState({});
   const client = useRTCClient();
   const connectionState = useConnectionState();
 
+  // --- RECORDING STATE & LOGIC ---
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const timerIntervalRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const audioDestRef = useRef(null);
+  const mediaStreamSourcesRef = useRef(new Map());
+  const compositeCanvasRef = useRef(null);
+  const animFrameRef = useRef(null);
+
+  const startRecording = async () => {
+    try {
+      // --- UNIFIED CANVAS COMPOSITOR LOGIC ---
+      // We always render to the hidden composite canvas. 
+      // If whiteboard is on, we copy the whiteboard canvas to it.
+      // If whiteboard is off, we render the video grid to it.
+      const canvas = compositeCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      
+      const drawCompositor = () => {
+        const wbCanvas = document.getElementById('whiteboard-canvas');
+        if (wbCanvas && (canvas.width !== wbCanvas.width || canvas.height !== wbCanvas.height)) {
+          canvas.width = wbCanvas.width;
+          canvas.height = wbCanvas.height;
+        }
+
+        ctx.fillStyle = '#0f172a'; // slate-900 background
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        if (whiteboardOnRef.current) {
+          const qState = activeQuestionStateRef.current;
+          if (qState?.isActive && qState?.questions && qState.questions[qState.currentIndex]) {
+            const q = qState.questions[qState.currentIndex];
+            
+            const wbCanvas = document.getElementById('whiteboard-canvas');
+            const domW = wbCanvas ? wbCanvas.width : 1280;
+            const domH = wbCanvas ? wbCanvas.height : 720;
+            
+            ctx.save();
+            ctx.scale(canvas.width / domW, canvas.height / domH);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, domW, domH);
+            
+            const stripHtml = (html) => html ? html.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ') : '';
+            const wrapText = (context, text, x, y, maxWidth, lineHeight) => {
+              const words = text.split(' ');
+              let line = '';
+              for(let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = context.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                  context.fillText(line, x, y);
+                  line = words[n] + ' ';
+                  y += lineHeight;
+                } else {
+                  line = testLine;
+                }
+              }
+              context.fillText(line, x, y);
+              return y + lineHeight;
+            };
+
+            ctx.textBaseline = 'top';
+            const isMd = domW >= 768;
+            
+            const containerEl = document.getElementById('qb-content');
+            if (containerEl) {
+              const cRect = containerEl.getBoundingClientRect();
+              
+              const qNumEl = document.getElementById('qb-qnum');
+              if (qNumEl) {
+                const rect = qNumEl.getBoundingClientRect();
+                ctx.font = `bold ${isMd ? '36px' : '24px'} system-ui, -apple-system, sans-serif`;
+                ctx.fillStyle = '#64748b'; 
+                ctx.fillText(`Q.${qState.currentIndex + 1}`, rect.x - cRect.x, rect.y - cRect.y);
+              }
+              
+              const qTextEl = document.getElementById('qb-qtext');
+              if (qTextEl) {
+                const rect = qTextEl.getBoundingClientRect();
+                ctx.font = `bold ${isMd ? '36px' : '24px'} system-ui, -apple-system, sans-serif`;
+                ctx.fillStyle = '#0f172a';
+                const cleanQ = stripHtml(q.questionText);
+                wrapText(ctx, cleanQ, rect.x - cRect.x, rect.y - cRect.y, rect.width, isMd ? 48 : 34);
+              }
+            
+            const options = ['A', 'B', 'C', 'D'];
+            options.forEach(opt => {
+              const text = q[`option${opt}`];
+              if (text) {
+                const cleanOpt = stripHtml(text);
+                const isCorrect = q.correctAnswer === opt;
+                const isRevealed = qState.isAnswerRevealed;
+                
+                  const containerOptEl = document.getElementById(`qb-opt-container-${opt}`);
+                  const prefixOptEl = document.getElementById(`qb-opt-prefix-${opt}`);
+                  const textOptEl = document.getElementById(`qb-opt-text-${opt}`);
+                  
+                  if (containerOptEl && prefixOptEl && textOptEl) {
+                    const cOptRect = containerOptEl.getBoundingClientRect();
+                    const pRect = prefixOptEl.getBoundingClientRect();
+                    const tRect = textOptEl.getBoundingClientRect();
+                    
+                    const optFontSize = isMd ? 24 : 20;
+                    ctx.font = `600 ${optFontSize}px system-ui, -apple-system, sans-serif`;
+                    
+                    if (isRevealed && isCorrect) {
+                       ctx.fillStyle = '#f0fdf4';
+                       ctx.fillRect(cOptRect.x - cRect.x, cOptRect.y - cRect.y, cOptRect.width, cOptRect.height); 
+                       ctx.fillStyle = '#16a34a';
+                    } else {
+                       ctx.fillStyle = '#1e293b';
+                    }
+                    
+                    ctx.fillText(`( ${opt} )`, pRect.x - cRect.x, pRect.y - cRect.y);
+                    wrapText(ctx, cleanOpt, tRect.x - cRect.x, tRect.y - cRect.y, tRect.width, isMd ? 32 : 28);
+                  }
+                }
+              });
+            }
+            ctx.restore();
+          }
+
+          // Draw the whiteboard canvas directly
+          const wbCanvas = document.getElementById('whiteboard-canvas');
+          if (wbCanvas) {
+            ctx.drawImage(wbCanvas, 0, 0, canvas.width, canvas.height);
+          }
+        } else {
+          // Draw the active video grid
+          const videos = Array.from(document.querySelectorAll('video')).filter(v => v.readyState >= 2 && !v.paused);
+          
+          if (videos.length > 0) {
+            let cols = 1, rows = 1;
+            const n = videos.length;
+            if (n === 2) { cols = 2; rows = 1; }
+            else if (n <= 4) { cols = 2; rows = 2; }
+            else if (n <= 6) { cols = 3; rows = 2; }
+            else if (n <= 9) { cols = 3; rows = 3; }
+            else { cols = 4; rows = Math.ceil(n / 4); }
+            
+            const w = canvas.width / cols;
+            const h = canvas.height / rows;
+            
+            videos.forEach((video, i) => {
+              const col = i % cols;
+              const row = Math.floor(i / cols);
+              const x = col * w;
+              const y = row * h;
+              
+              const vw = video.videoWidth;
+              const vh = video.videoHeight;
+              if (vw > 0 && vh > 0) {
+                const scale = Math.max(w / vw, h / vh);
+                const drawW = vw * scale;
+                const drawH = vh * scale;
+                const drawX = x + (w - drawW) / 2;
+                const drawY = y + (h - drawH) / 2;
+                
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x, y, w, h);
+                ctx.clip();
+                ctx.drawImage(video, drawX, drawY, drawW, drawH);
+                ctx.restore();
+              }
+            });
+          }
+        }
+        
+        animFrameRef.current = requestAnimationFrame(drawCompositor);
+      };
+      
+      animFrameRef.current = requestAnimationFrame(drawCompositor);
+      const videoStream = canvas.captureStream(30);
+
+      const tracks = [...videoStream.getVideoTracks()];
+
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContext();
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume(); 
+      }
+      const dest = audioCtx.createMediaStreamDestination();
+      
+      // CRITICAL HACK: Force the audio stream to stay "active" by playing a completely silent sound.
+      // If an audio stream goes completely dead, MediaRecorder stops writing video frames to the file!
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      gainNode.gain.value = 0; // 0 volume = completely silent
+      oscillator.connect(gainNode);
+      gainNode.connect(dest);
+      oscillator.start();
+
+      audioContextRef.current = audioCtx;
+      audioDestRef.current = dest;
+
+      tracks.push(...dest.stream.getAudioTracks());
+
+      const combinedStream = new MediaStream(tracks);
+      
+      const types = [
+        'video/webm;codecs=h264,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4'
+      ];
+      
+      let options = {};
+      for (const type of types) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          options = { mimeType: type };
+          break;
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(combinedStream, options);
+      mediaRecorderRef.current = mediaRecorder;
+      recordedChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onerror = (e) => {
+        console.error("MediaRecorder error:", e);
+      };
+
+      mediaRecorder.onstop = () => {
+        const type = mediaRecorder.mimeType || 'video/webm';
+        const blob = new Blob(recordedChunksRef.current, { type });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        document.body.appendChild(a);
+        a.style = 'display: none';
+        a.href = url;
+        
+        let ext = 'webm';
+        if (type.includes('mp4')) ext = 'mp4';
+        else if (type.includes('matroska')) ext = 'mkv';
+        
+        a.download = `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}.${ext}`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        setIsRecording(false);
+        setIsPaused(false);
+        setRecordingTime(0);
+        oscillator.stop();
+        if (animFrameRef.current) {
+          cancelAnimationFrame(animFrameRef.current);
+          animFrameRef.current = null;
+        }
+      };
+
+      videoStream.getVideoTracks()[0].onended = () => {
+        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      };
+
+      mediaRecorder.start(1000); 
+      setIsRecording(true);
+      setIsPaused(false);
+      setRecordingTime(0);
+
+      timerIntervalRef.current = setInterval(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          setRecordingTime(prev => prev + 1);
+          try {
+            // Force flush chunks
+            mediaRecorderRef.current.requestData();
+          } catch (e) {}
+        }
+      }, 1000);
+
+    } catch (err) {
+      console.error("Error starting recording:", err);
+    }
+  };
+
+  const togglePauseRecording = () => {
+    if (mediaRecorderRef.current) {
+      if (mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.pause();
+        setIsPaused(true);
+      } else if (mediaRecorderRef.current.state === 'paused') {
+        mediaRecorderRef.current.resume();
+        setIsPaused(false);
+      }
+    }
+  };
+
+  const stopRecording = () => {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current.stream) {
+        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+      }
+    }
+    
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+      audioDestRef.current = null;
+      mediaStreamSourcesRef.current.clear();
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+  // --- END RECORDING LOGIC ---
+
+
   // Question Bank State
   const [isQBModalOpen, setIsQBModalOpen] = useState(false);
   const [qbRangeInput, setQbRangeInput] = useState("");
   const [activeQuestionState, setActiveQuestionState] = useState(null);
+  const activeQuestionStateRef = useRef(null);
+  
+  useEffect(() => {
+    activeQuestionStateRef.current = activeQuestionState;
+  }, [activeQuestionState]);
 
   useEffect(() => {
     if (client.uid && sessionId) {
@@ -322,6 +636,52 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
   }, [client.connectionState, localMicrophoneTrack, localCameraTrack, client]);
 
   const remoteUsers = useRemoteUsers();
+
+  // --- WEB AUDIO MIXING ---
+  useEffect(() => {
+    if (!isRecording || !audioContextRef.current || !audioDestRef.current) return;
+
+    const audioCtx = audioContextRef.current;
+    const dest = audioDestRef.current;
+    const sourcesMap = mediaStreamSourcesRef.current;
+    const currentTrackIds = new Set();
+
+    const addTrack = (track) => {
+      if (!track) return;
+      const nativeTrack = track.getMediaStreamTrack ? track.getMediaStreamTrack() : track;
+      if (!nativeTrack) return;
+      
+      const id = nativeTrack.id;
+      currentTrackIds.add(id);
+
+      if (!sourcesMap.has(id)) {
+        try {
+          const stream = new MediaStream([nativeTrack]);
+          const source = audioCtx.createMediaStreamSource(stream);
+          source.connect(dest);
+          sourcesMap.set(id, source);
+        } catch (e) {
+          console.error("Error connecting track to mix", e);
+        }
+      }
+    };
+
+    if (localMicrophoneTrack) addTrack(localMicrophoneTrack);
+    
+    remoteUsers.forEach(user => {
+      if (user.audioTrack) addTrack(user.audioTrack);
+    });
+
+    for (const [id, source] of sourcesMap.entries()) {
+      if (!currentTrackIds.has(id)) {
+        source.disconnect();
+        sourcesMap.delete(id);
+      }
+    }
+
+  }, [isRecording, localMicrophoneTrack, remoteUsers]);
+  // --- END WEB AUDIO MIXING ---
+
   const remoteUserStyle = { width: '100%', height: '100%' };
 
   // Actually trigger subscriptions for the remote users
@@ -447,18 +807,20 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
         <div key="question-bank" className={`relative overflow-hidden bg-white shadow-xl group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 h-full w-full' : 'w-48 h-32 shrink-0 z-50 rounded-2xl pointer-events-none p-4'}`}>
 
           {/* Base Layer: Question Content */}
-          <div className={`absolute inset-0 w-full h-full flex flex-col max-w-6xl mx-auto ${isPinned ? 'p-8 md:p-12 pt-28' : 'pt-12'} z-10 pointer-events-none`}>
+          <div id="qb-content" className={`absolute inset-0 w-full h-full flex flex-col max-w-6xl mx-auto ${isPinned ? 'p-8 md:p-12 pt-28' : 'pt-12'} z-10 pointer-events-none bg-white`}>
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
-              <h2 className={`${isPinned ? 'text-2xl md:text-4xl leading-snug mb-10' : 'text-sm mb-2'} font-bold text-slate-900 whitespace-normal break-words`}>
-                <span className="text-slate-500 mr-3 md:mr-4">Q.{activeQuestionState.currentIndex + 1}</span>
-                <span dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
-              </h2>
+              <div className={`${isPinned ? 'text-2xl md:text-4xl leading-snug mb-10' : 'text-sm mb-4'} font-bold text-slate-900 flex`}>
+                <div id="qb-qnum" className={`text-slate-500 shrink-0 ${isPinned ? 'w-16 md:w-24' : 'w-10'}`}>Q.{activeQuestionState.currentIndex + 1}</div>
+                <div id="qb-qtext" className="flex-1" dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
+              </div>
 
               {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
-                <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[40vh] mb-10' : 'max-h-16 mb-2'} object-contain`} />
+                <div className={`${isPinned ? 'ml-16 md:ml-24' : 'ml-10'}`}>
+                  <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[40vh] mb-10' : 'max-h-16 mb-2'} object-contain`} />
+                </div>
               )}
 
-              <div className="flex flex-col gap-4 md:gap-6 pl-4 md:pl-8">
+              <div className={`flex flex-col gap-4 md:gap-6 ${isPinned ? 'ml-16 md:ml-24' : 'ml-10'}`}>
                 {['A', 'B', 'C', 'D'].map(opt => {
                   const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
                   if (!text) return null;
@@ -466,9 +828,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
                   const isRevealed = activeQuestionState.isAnswerRevealed;
 
                   return (
-                    <div key={opt} className={`flex items-center text-xl md:text-2xl font-semibold transition-all ${isRevealed && isCorrect ? 'text-green-600 bg-green-50 p-4 rounded-xl inline-block w-max' : 'text-slate-800'}`}>
-                      <span className="mr-4 font-bold">( {opt} )</span>
-                      <span dangerouslySetInnerHTML={{ __html: text }} />
+                    <div id={`qb-opt-container-${opt}`} key={opt} className={`flex items-center text-xl md:text-2xl font-semibold transition-all ${isRevealed && isCorrect ? 'text-green-600 bg-green-50 p-4 rounded-xl inline-block w-max' : 'text-slate-800'}`}>
+                      <span id={`qb-opt-prefix-${opt}`} className="mr-4 font-bold">( {opt} )</span>
+                      <span id={`qb-opt-text-${opt}`} dangerouslySetInnerHTML={{ __html: text }} />
                       {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500" />}
                     </div>
                   );
@@ -602,6 +964,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
 
   return (
     <div className="flex-1 flex flex-col relative bg-black">
+      {/* Hidden Composite Canvas for clean Recording */}
+      <canvas ref={compositeCanvasRef} width={1280} height={720} style={{ display: 'none' }} />
+
       <div className="absolute top-4 right-4 z-50 flex gap-2">
         {chatToast.show && (
           <div className="absolute top-12 right-0 bg-slate-800 border border-slate-700 text-white p-4 rounded-xl shadow-2xl z-50 flex flex-col gap-1 min-w-[280px] animate-in slide-in-from-top-4 duration-300">
@@ -647,7 +1012,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isRecord
           {/* Record Button */}
           {!isRecording ? (
             <button
-              onClick={() => startRecording(localMicrophoneTrack)}
+              onClick={startRecording}
               className="w-12 h-12 rounded-full flex items-center justify-center text-white bg-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all"
               title="Record Session"
             >
@@ -775,14 +1140,6 @@ export default function LiveClasses({ department }) {
   const [agoraClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
   const [isInCall, setIsInCall] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
-
-  // Recording State
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef(null);
-  const recordedChunksRef = useRef([]);
-  const timerIntervalRef = useRef(null);
 
   // Chat State
   const [chatMessages, setChatMessages] = useState([]);
@@ -967,99 +1324,6 @@ export default function LiveClasses({ department }) {
     }
   };
 
-  const startRecording = async (localMicTrack) => {
-    try {
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: "browser" },
-        audio: true,
-        preferCurrentTab: true,
-        systemAudio: "exclude"
-      });
-
-      const tracks = [...displayStream.getTracks()];
-
-      // Reuse the existing noise-cancelled Agora mic track instead of requesting a new raw one
-      if (localMicTrack) {
-        tracks.push(localMicTrack.getMediaStreamTrack());
-      }
-
-      const combinedStream = new MediaStream(tracks);
-
-      const mediaRecorder = new MediaRecorder(combinedStream);
-      mediaRecorderRef.current = mediaRecorder;
-      recordedChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          recordedChunksRef.current.push(e.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        document.body.appendChild(a);
-        a.style = 'display: none';
-        a.href = url;
-        a.download = `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}.webm`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-        setIsRecording(false);
-      };
-
-      displayStream.getVideoTracks()[0].onended = () => {
-        if (mediaRecorder.state !== 'inactive') {
-          mediaRecorder.stop();
-        }
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-      setIsPaused(false);
-      setRecordingTime(0);
-
-      timerIntervalRef.current = setInterval(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-          setRecordingTime(prev => prev + 1);
-        }
-      }, 1000);
-
-    } catch (err) {
-      console.error("Error starting recording:", err);
-    }
-  };
-
-  const togglePauseRecording = () => {
-    if (mediaRecorderRef.current) {
-      if (mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.pause();
-        setIsPaused(true);
-      } else if (mediaRecorderRef.current.state === 'paused') {
-        mediaRecorderRef.current.resume();
-        setIsPaused(false);
-      }
-    }
-  };
-
-  const stopRecording = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-      if (mediaRecorderRef.current.stream) {
-        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      }
-    }
-  };
-
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
-
   const handleScheduleSubmit = (e) => {
     e.preventDefault();
     if (!newClass.topic || !newClass.time) return;
@@ -1117,13 +1381,6 @@ export default function LiveClasses({ department }) {
                 token={rtcProps.token}
                 sessionId={currentSessionId}
                 handleEndMeet={handleEndMeet}
-                isRecording={isRecording}
-                togglePauseRecording={togglePauseRecording}
-                stopRecording={stopRecording}
-                startRecording={startRecording}
-                isPaused={isPaused}
-                recordingTime={recordingTime}
-                formatTime={formatTime}
                 isChatOpen={isChatOpen}
                 toggleChat={() => setIsChatOpen(!isChatOpen)}
                 chatToast={chatToast}
