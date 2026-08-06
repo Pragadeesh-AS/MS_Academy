@@ -6,6 +6,12 @@ import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageI
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
+const stripHtmlAndNormalize = (html) => {
+  if (!html) return '';
+  // Strip HTML tags and replace multiple spaces/newlines with a single space
+  return html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+};
+
 // Searchable Select Component
 const SearchableSelect = ({ label, options, value, onChange, placeholder = "Select..." }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -251,10 +257,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       // Deduplication Logic
       const seen = new Set();
       const duplicateIds = [];
+
       qData.forEach(q => {
-        // Create a unique hash for the question based on text and image
-        // We use both to ensure we don't accidentally match empty text questions if they have different images
-        const hash = `${q.questionText || ''}_${q.questionImageUrl || ''}`.trim();
+        // Create a unique hash for the question based on text and image, ignoring HTML and whitespace differences
+        const hash = `${stripHtmlAndNormalize(q.questionText)}_${q.questionImageUrl || ''}`;
         
         // If hash is just '_', it means both text and image are empty. 
         // We might not want to deduplicate completely empty shells aggressively unless they are truly duplicates.
@@ -403,6 +409,20 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       return;
     }
     
+    // Duplicate Check
+    const payloadHash = `${stripHtmlAndNormalize(formData.questionText)}_${formData.questionImageUrl || ''}`;
+    if (payloadHash !== '_') {
+      const isDuplicate = questions.some(q => {
+        if (isEditing && q.id === currentId) return false;
+        const qHash = `${stripHtmlAndNormalize(q.questionText)}_${q.questionImageUrl || ''}`;
+        return qHash === payloadHash;
+      });
+      if (isDuplicate) {
+        showToast("Duplicate Entry: This question already exists in the question bank.", "error");
+        return;
+      }
+    }
+    
     const finalStatus = forcedStatus || formData.status || 'Approved';
     const authName = localStorage.getItem('auth_name') || 'Unknown';
     let payload = { ...formData, status: finalStatus, createdAt: formData.createdAt || new Date().toISOString() };
@@ -443,6 +463,20 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     if (form && !form.checkValidity()) {
       form.reportValidity();
       return;
+    }
+    
+    // Duplicate Check
+    const payloadHash = `${stripHtmlAndNormalize(formData.questionText)}_${formData.questionImageUrl || ''}`;
+    if (payloadHash !== '_') {
+      const isDuplicate = questions.some(q => {
+        if (isEditing && q.id === currentId) return false;
+        const qHash = `${stripHtmlAndNormalize(q.questionText)}_${q.questionImageUrl || ''}`;
+        return qHash === payloadHash;
+      });
+      if (isDuplicate) {
+        showToast("Duplicate Entry: This question already exists in the question bank.", "error");
+        return;
+      }
     }
     
     const finalStatus = forcedStatus || formData.status || 'Approved';
