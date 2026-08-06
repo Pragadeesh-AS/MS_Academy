@@ -81,32 +81,77 @@ const WhiteboardShareClient = ({ appId, channel, token, stream }) => {
 // Extracted component to handle screen sharing as an independent client
 const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
   const [screenClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
-  const { screenTrack } = useLocalScreenTrack(true, {}, 'disable');
+  const [screenTrack, setScreenTrack] = useState(null);
+  const [screenAudioTrack, setScreenAudioTrack] = useState(null);
   const [joined, setJoined] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    if (screenTrack) {
-      const handleTrackEnded = () => {
-        if (onTrackEnded) onTrackEnded();
-      };
-      screenTrack.on('track-ended', handleTrackEnded);
-      screenClient.join(appId, channel, token, 999999).then(() => {
-        if (isMounted) {
-          screenClient.publish([screenTrack]);
-          setJoined(true);
-        }
-      }).catch(console.error);
+    let localVidTrack = null;
+    let localAudTrack = null;
 
-      return () => {
-        isMounted = false;
-        screenTrack.off('track-ended', handleTrackEnded);
-        screenClient.leave();
-        screenTrack.close();
-      };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screenTrack, screenClient, appId, channel, token]);
+    const initScreenShare = async () => {
+      try {
+        // "enable" tells the browser to capture system audio if the user allows it
+        const tracks = await AgoraRTC.createScreenVideoTrack({}, "enable");
+        
+        if (!isMounted) {
+          if (Array.isArray(tracks)) {
+            tracks.forEach(t => t.close());
+          } else {
+            tracks.close();
+          }
+          return;
+        }
+
+        // It can return an array [videoTrack, audioTrack] or just a videoTrack
+        if (Array.isArray(tracks)) {
+          localVidTrack = tracks[0];
+          localAudTrack = tracks[1];
+        } else {
+          localVidTrack = tracks;
+        }
+
+        setScreenTrack(localVidTrack);
+        if (localAudTrack) setScreenAudioTrack(localAudTrack);
+
+        const handleTrackEnded = () => {
+          if (onTrackEnded) onTrackEnded();
+        };
+        localVidTrack.on('track-ended', handleTrackEnded);
+
+        await screenClient.join(appId, channel, token, 999999);
+        
+        if (isMounted) {
+          const tracksToPublish = [localVidTrack];
+          if (localAudTrack) tracksToPublish.push(localAudTrack);
+          await screenClient.publish(tracksToPublish);
+          setJoined(true);
+        } else {
+          screenClient.leave();
+        }
+      } catch (error) {
+        console.error("Failed to start screen share:", error);
+        if (onTrackEnded) onTrackEnded();
+      }
+    };
+
+    initScreenShare();
+
+    return () => {
+      isMounted = false;
+      if (localVidTrack) {
+        localVidTrack.removeAllListeners();
+        localVidTrack.stop();
+        localVidTrack.close();
+      }
+      if (localAudTrack) {
+        localAudTrack.stop();
+        localAudTrack.close();
+      }
+      screenClient.leave();
+    };
+  }, [screenClient, appId, channel, token, onTrackEnded]);
 
   if (!screenTrack || !joined) {
     return (
@@ -116,7 +161,17 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
     );
   }
 
-  return <LocalVideoTrack track={screenTrack} play={true} className="w-full h-full object-cover" />;
+  return (
+    <div className="w-full h-full relative">
+      <LocalVideoTrack track={screenTrack} play={true} className="w-full h-full object-cover" />
+      {screenAudioTrack && (
+        <div className="absolute top-4 left-4 bg-black/70 px-3 py-1 rounded-full text-white text-xs font-bold shadow-md z-30 flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+          Audio Shared
+        </div>
+      )}
+    </div>
+  );
 };
 
 // Extracted TeacherCall component for custom Agora rendering
