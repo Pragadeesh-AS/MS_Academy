@@ -9,6 +9,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [attributes, setAttributes] = useState([]);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   // Wizard Step State
   const [step, setStep] = useState(1); // 1: Specs, 2: Hierarchy, 3: Allocations
@@ -205,13 +206,18 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this test?")) return;
+    setDeleteConfirmId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmId) return;
     try {
-      await deleteDoc(doc(db, 'tests', id));
+      await deleteDoc(doc(db, 'tests', deleteConfirmId));
       fetchTests();
     } catch (err) {
       console.error("Failed to delete test:", err);
     }
+    setDeleteConfirmId(null);
   };
 
   const handleSubmit = async (e) => {
@@ -777,6 +783,23 @@ export default function TestsManager({ department = '', isTeacher = false }) {
 
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center font-sans text-black">
+          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Delete Test</div>
+            <div className="p-6">
+              <p className="text-gray-800 text-base mb-6">Are you sure you want to delete this test? This action cannot be undone.</p>
+              
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setDeleteConfirmId(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
+                <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Delete</button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
