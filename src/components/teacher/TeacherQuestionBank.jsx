@@ -191,12 +191,16 @@ export default function TeacherQuestionBank({ department }) {
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                                 {['A', 'B', 'C', 'D'].map(opt => {
                                   const text = q[`option${opt}`];
-                                  if (!text) return null;
+                                  const image = q[`option${opt}Image`];
+                                  if (!text && !image) return null;
                                   const isCorrect = q.correctAnswer === opt;
                                   return (
                                     <div key={opt} className={`p-3 rounded-xl text-[14px] font-medium border flex items-start gap-2 ${isCorrect ? 'bg-green-50 border-green-200 text-green-800 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
                                       <span className={`font-bold shrink-0 ${isCorrect ? 'text-green-600' : 'text-slate-400'}`}>{opt}.</span> 
-                                      <span dangerouslySetInnerHTML={{ __html: text }} />
+                                      <div className="flex flex-col gap-2">
+                                        {text && <span dangerouslySetInnerHTML={{ __html: text }} />}
+                                        {image && <img src={image} alt={`Option ${opt}`} className="max-h-20 rounded-lg border border-slate-200 shadow-sm" />}
+                                      </div>
                                     </div>
                                   );
                                 })}
@@ -206,12 +210,16 @@ export default function TeacherQuestionBank({ department }) {
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                                 {['A', 'B', 'C', 'D'].map(opt => {
                                   const text = q[`option${opt}`];
-                                  if (!text) return null;
+                                  const image = q[`option${opt}Image`];
+                                  if (!text && !image) return null;
                                   const isCorrect = (q.correctAnswers || []).includes(opt);
                                   return (
                                     <div key={opt} className={`p-3 rounded-xl text-[14px] font-medium border flex items-start gap-2 ${isCorrect ? 'bg-green-50 border-green-200 text-green-800 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
                                       <span className={`font-bold shrink-0 ${isCorrect ? 'text-green-600' : 'text-slate-400'}`}>{opt}.</span> 
-                                      <span dangerouslySetInnerHTML={{ __html: text }} />
+                                      <div className="flex flex-col gap-2">
+                                        {text && <span dangerouslySetInnerHTML={{ __html: text }} />}
+                                        {image && <img src={image} alt={`Option ${opt}`} className="max-h-20 rounded-lg border border-slate-200 shadow-sm" />}
+                                      </div>
                                     </div>
                                   );
                                 })}

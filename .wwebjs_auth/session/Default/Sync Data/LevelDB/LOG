@@ -1,0 +1,4 @@
+2026/07/29-10:53:18.188 acc Creating DB D:\MS_Academy\.wwebjs_auth\session\Default\Sync Data\LevelDB since it was missing.
+2026/07/29-10:53:18.226 acc Reusing MANIFEST D:\MS_Academy\.wwebjs_auth\session\Default\Sync Data\LevelDB/MANIFEST-000001
+2026/07/29-10:53:18.226 acc Recovering log #3
+2026/07/29-10:53:18.227 acc Reusing old log D:\MS_Academy\.wwebjs_auth\session\Default\Sync Data\LevelDB/000003.log 
