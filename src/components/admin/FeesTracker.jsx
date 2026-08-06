@@ -81,12 +81,51 @@ export default function FeesTracker() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedStudent, setSelectedStudent] = useState(null);
   
+  const [feesData, setFeesData] = useState(MOCK_FEES_DATA);
+  const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
+  const [newStudent, setNewStudent] = useState({
+    name: '',
+    course: '',
+    totalFee: '',
+    paid: 0,
+    status: 'Pending'
+  });
+  
+  const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
+  const [paymentData, setPaymentData] = useState({ amount: '', date: new Date().toISOString().split('T')[0], method: 'Cash' });
+
+  const handleRecordPayment = () => {
+    if (!paymentData.amount || !selectedStudent) return;
+    const amount = Number(paymentData.amount);
+    
+    setFeesData(prev => prev.map(student => {
+      if (student.id === selectedStudent.id) {
+        const newPaid = student.paid + amount;
+        const newStatus = newPaid >= student.totalFee ? 'Fully Paid' : 'Partial';
+        const newHistory = [{
+          id: Date.now(),
+          amount: amount,
+          date: paymentData.date,
+          method: paymentData.method
+        }, ...student.history];
+        
+        const updatedStudent = { ...student, paid: newPaid, status: newStatus, history: newHistory };
+        setSelectedStudent(updatedStudent);
+        return updatedStudent;
+      }
+      return student;
+    }));
+    
+    setIsRecordPaymentOpen(false);
+    setPaymentData({ amount: '', date: new Date().toISOString().split('T')[0], method: 'Cash' });
+  };
+
   // Calculate KPIs
-  const totalExpected = MOCK_FEES_DATA.reduce((acc, curr) => acc + curr.totalFee, 0);
-  const totalCollected = MOCK_FEES_DATA.reduce((acc, curr) => acc + curr.paid, 0);
+  const totalExpected = feesData.reduce((acc, curr) => acc + curr.totalFee, 0);
+  const totalCollected = feesData.reduce((acc, curr) => acc + curr.paid, 0);
   const totalPending = totalExpected - totalCollected;
 
-  const filteredData = MOCK_FEES_DATA.filter(student => {
+  const filteredData = feesData.filter(student => {
     const matchesSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           student.course.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'All' || student.status === statusFilter;
@@ -184,6 +223,12 @@ export default function FeesTracker() {
                   <option value="Pending">Pending</option>
                 </select>
               </div>
+              <button 
+                onClick={() => setIsAddStudentOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-[14px] font-bold shadow-sm transition-colors flex items-center gap-2"
+              >
+                <Plus size={16} strokeWidth={3}/> Add Student
+              </button>
             </div>
           </div>
 
@@ -349,9 +394,93 @@ export default function FeesTracker() {
 
             {/* Modal Footer */}
             <div className="p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl flex justify-end">
-              <button className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded-xl text-[14px] font-bold shadow-[0_4px_14px_rgba(15,23,42,0.25)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.3)] hover:-translate-y-0.5 transition-all flex items-center gap-2">
+              <button 
+                onClick={() => setIsRecordPaymentOpen(true)}
+                className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded-xl text-[14px] font-bold shadow-[0_4px_14px_rgba(15,23,42,0.25)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.3)] hover:-translate-y-0.5 transition-all flex items-center gap-2">
                 <Plus size={18} strokeWidth={2.5}/> Record Custom Payment
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Add Student Modal */}
+      {isAddStudentOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsAddStudentOpen(false)}></div>
+          <div className="bg-white rounded-3xl w-full max-w-md relative z-10 shadow-2xl flex flex-col">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-3xl">
+              <h2 className="text-[20px] font-bold text-slate-800">Add New Student</h2>
+              <button 
+                onClick={() => setIsAddStudentOpen(false)}
+                className="p-2 text-slate-400 hover:bg-white hover:text-slate-700 rounded-full transition-colors shadow-sm bg-slate-100/50 border border-slate-200/50"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-[13px] font-bold text-slate-700 mb-1">Student Name</label>
+                <input type="text" value={newStudent.name} onChange={e => setNewStudent({...newStudent, name: e.target.value})} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[14px] font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="Enter student name"/>
+              </div>
+              <div>
+                <label className="block text-[13px] font-bold text-slate-700 mb-1">Course</label>
+                <input type="text" value={newStudent.course} onChange={e => setNewStudent({...newStudent, course: e.target.value})} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[14px] font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="Enter course name"/>
+              </div>
+              <div>
+                <label className="block text-[13px] font-bold text-slate-700 mb-1">Total Fee (₹)</label>
+                <input type="number" value={newStudent.totalFee} onChange={e => setNewStudent({...newStudent, totalFee: e.target.value})} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[14px] font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="e.g. 50000"/>
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl flex justify-end gap-3">
+              <button onClick={() => setIsAddStudentOpen(false)} className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+              <button onClick={() => {
+                if(newStudent.name && newStudent.course && newStudent.totalFee) {
+                  setFeesData([{...newStudent, id: Date.now(), totalFee: Number(newStudent.totalFee), paid: 0, status: 'Pending', history: [], installments: []}, ...feesData]);
+                  setIsAddStudentOpen(false);
+                  setNewStudent({name: '', course: '', totalFee: '', paid: 0, status: 'Pending'});
+                }
+              }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-[14px] font-bold shadow-sm transition-colors">Add Student</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Record Payment Modal */}
+      {isRecordPaymentOpen && selectedStudent && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsRecordPaymentOpen(false)}></div>
+          <div className="bg-white rounded-3xl w-full max-w-sm relative z-10 shadow-2xl flex flex-col">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-3xl">
+              <h2 className="text-[18px] font-bold text-slate-800">Record Payment</h2>
+              <button 
+                onClick={() => setIsRecordPaymentOpen(false)}
+                className="p-2 text-slate-400 hover:bg-white hover:text-slate-700 rounded-full transition-colors shadow-sm bg-slate-100/50 border border-slate-200/50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-[13px] font-bold text-slate-700 mb-1">Amount (₹)</label>
+                <input type="number" value={paymentData.amount} onChange={e => setPaymentData({...paymentData, amount: e.target.value})} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[14px] font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="e.g. 5000"/>
+              </div>
+              <div>
+                <label className="block text-[13px] font-bold text-slate-700 mb-1">Date</label>
+                <input type="date" value={paymentData.date} onChange={e => setPaymentData({...paymentData, date: e.target.value})} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[14px] font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"/>
+              </div>
+              <div>
+                <label className="block text-[13px] font-bold text-slate-700 mb-1">Payment Method</label>
+                <select value={paymentData.method} onChange={e => setPaymentData({...paymentData, method: e.target.value})} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[14px] font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all">
+                  <option value="Cash">Cash</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="UPI">UPI</option>
+                  <option value="Credit Card">Credit Card</option>
+                </select>
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl flex justify-end gap-3">
+              <button onClick={() => setIsRecordPaymentOpen(false)} className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors text-[14px]">Cancel</button>
+              <button onClick={handleRecordPayment} className="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2.5 rounded-xl text-[14px] font-bold shadow-sm transition-colors">Save Payment</button>
             </div>
           </div>
         </div>
