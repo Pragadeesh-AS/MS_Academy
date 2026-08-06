@@ -27,7 +27,9 @@ import AgoraRTC, {
   useRemoteAudioTracks,
   LocalVideoTrack,
   RemoteUser,
-  useConnectionState
+  useConnectionState,
+  useLocalMicrophoneTrack,
+  useLocalCameraTrack
 } from "agora-rtc-react";
 
 // Extracted StudentCall component for custom Agora rendering
@@ -91,47 +93,83 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   const [localMicrophoneTrack, setLocalMicrophoneTrack] = useState(null);
   const [localCameraTrack, setLocalCameraTrack] = useState(null);
 
-  // 1. Hardware Management
+  // Microphone Lifecycle
   useEffect(() => {
     let track = null;
+    let isCancelled = false;
+
     if (micOn) {
-      AgoraRTC.createMicrophoneAudioTrack().then(t => {
-        setLocalMicrophoneTrack(t);
+      AgoraRTC.createMicrophoneAudioTrack().then(async (t) => {
+        if (isCancelled) { t.close(); return; }
         track = t;
+        setLocalMicrophoneTrack(t);
+        if (client.connectionState === 'CONNECTED') {
+          await client.publish(t);
+        }
       }).catch(console.error);
     }
+
     return () => {
+      isCancelled = true;
       if (track) {
-        track.stop();
-        track.close();
+        if (client.localTracks.includes(track)) {
+          client.unpublish(track).finally(() => {
+            track.stop();
+            track.close();
+          });
+        } else {
+          track.stop();
+          track.close();
+        }
       }
       setLocalMicrophoneTrack(null);
     };
-  }, [micOn]);
+  }, [micOn, client, client.connectionState]);
 
+  // Camera Lifecycle
   useEffect(() => {
     let track = null;
+    let isCancelled = false;
+
     if (cameraOn) {
-      AgoraRTC.createCameraVideoTrack().then(t => {
-        setLocalCameraTrack(t);
+      AgoraRTC.createCameraVideoTrack().then(async (t) => {
+        if (isCancelled) { t.close(); return; }
         track = t;
+        setLocalCameraTrack(t);
+        if (client.connectionState === 'CONNECTED') {
+          await client.publish(t);
+        }
       }).catch(console.error);
     }
+
     return () => {
+      isCancelled = true;
       if (track) {
-        track.stop();
-        track.close();
+        if (client.localTracks.includes(track)) {
+          client.unpublish(track).finally(() => {
+            track.stop();
+            track.close();
+          });
+        } else {
+          track.stop();
+          track.close();
+        }
       }
       setLocalCameraTrack(null);
     };
-  }, [cameraOn]);
+  }, [cameraOn, client, client.connectionState]);
 
-  // 2. Network Publishing
-  const localTracks = useMemo(
-    () => [localMicrophoneTrack, localCameraTrack].filter(Boolean),
-    [localMicrophoneTrack, localCameraTrack]
-  );
-  usePublish(localTracks);
+  // Publish tracks if connection happens after creation
+  useEffect(() => {
+    if (client.connectionState === 'CONNECTED') {
+      if (localMicrophoneTrack && !client.localTracks.includes(localMicrophoneTrack)) {
+        client.publish(localMicrophoneTrack).catch(console.error);
+      }
+      if (localCameraTrack && !client.localTracks.includes(localCameraTrack)) {
+        client.publish(localCameraTrack).catch(console.error);
+      }
+    }
+  }, [client.connectionState, localMicrophoneTrack, localCameraTrack, client]);
 
   const remoteUsers = useRemoteUsers();
   const remoteUserStyle = { width: '100%', height: '100%' };
@@ -254,7 +292,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     const isLocalPinned = pinnedUid === 'local-camera';
     const localTile = (
       <div key="local-camera" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isLocalPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
-        {localCameraTrack ? (
+        {localCameraTrack && cameraOn ? (
           <LocalVideoTrack track={localCameraTrack} play={true} className="w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-800 z-10">
