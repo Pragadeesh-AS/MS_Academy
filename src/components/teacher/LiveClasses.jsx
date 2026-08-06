@@ -85,6 +85,12 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
   const [screenAudioTrack, setScreenAudioTrack] = useState(null);
   const [joined, setJoined] = useState(false);
   const initStarted = useRef(false);
+  
+  // Keep latest onTrackEnded without triggering effect
+  const onTrackEndedRef = useRef(onTrackEnded);
+  useEffect(() => {
+    onTrackEndedRef.current = onTrackEnded;
+  }, [onTrackEnded]);
 
   useEffect(() => {
     if (initStarted.current) return;
@@ -120,7 +126,7 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
         if (localAudTrack) setScreenAudioTrack(localAudTrack);
 
         const handleTrackEnded = () => {
-          if (onTrackEnded) onTrackEnded();
+          if (onTrackEndedRef.current) onTrackEndedRef.current();
         };
         localVidTrack.on('track-ended', handleTrackEnded);
 
@@ -136,7 +142,7 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
         }
       } catch (error) {
         console.error("Failed to start screen share:", error);
-        if (onTrackEnded) onTrackEnded();
+        if (onTrackEndedRef.current) onTrackEndedRef.current();
       }
     };
 
@@ -155,7 +161,7 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
       }
       screenClient.leave();
     };
-  }, [screenClient, appId, channel, token, onTrackEnded]);
+  }, [screenClient, appId, channel, token]);
 
   if (!screenTrack || !joined) {
     return (
