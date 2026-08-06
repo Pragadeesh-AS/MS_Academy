@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, LogOut } from 'lucide-react';
+import { BookOpen, FileEdit, ClipboardCheck, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -11,6 +11,7 @@ export default function TypistDashboard() {
   const [typistName, setTypistName] = useState('Typist');
   const pairRole = localStorage.getItem('pair_role') || 'typist';
   const [activeTab, setActiveTab] = useState(pairRole === 'reviewer' ? 'review' : 'all');
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     const role = localStorage.getItem('auth_role');
@@ -63,15 +64,25 @@ export default function TypistDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex">
-        <div className="p-6 flex items-center gap-3">
-          <div className="w-10 h-10 bg-pink-50 rounded-xl flex items-center justify-center p-1 border border-pink-100">
+      <aside className={`transition-all duration-300 flex-shrink-0 relative z-20 ${isCollapsed ? 'w-[88px]' : 'w-64'} bg-white border-r border-slate-200 flex flex-col hidden md:flex`}>
+        {/* Collapse Button */}
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="absolute -right-3 top-6 bg-white border border-slate-200 rounded-full p-1.5 text-slate-400 hover:text-[#1D4ED8] hover:border-[#1D4ED8] shadow-sm z-50 transition-colors"
+        >
+          {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+        
+        <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3'}`}>
+          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100 flex-shrink-0">
             <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
           </div>
-          <div>
-            <h2 className="font-[900] text-pink-700 text-lg leading-tight">MS Academy</h2>
-            <p className="text-xs font-bold text-slate-400">Typist Portal</p>
-          </div>
+          {!isCollapsed && (
+            <div>
+              <h2 className="font-[900] text-blue-700 text-lg leading-tight whitespace-nowrap">MS Academy</h2>
+              <p className="text-xs font-bold text-slate-400 whitespace-nowrap">{pairRole === 'reviewer' ? 'Reviewer Portal' : 'Typist Portal'}</p>
+            </div>
+          )}
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-2">
@@ -79,18 +90,18 @@ export default function TypistDashboard() {
             <>
               <button 
                 onClick={() => setActiveTab('all')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'all' ? 'bg-pink-50 text-pink-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'all' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
               >
                 <BookOpen size={18} />
-                <span>Question Bank</span>
+                {!isCollapsed && <span>Question Bank</span>}
               </button>
               
               <button 
                 onClick={() => setActiveTab('draft')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'draft' ? 'bg-slate-100 text-slate-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'draft' ? 'bg-slate-100 text-slate-700' : 'text-slate-500 hover:bg-slate-50'}`}
               >
-                <BookOpen size={18} />
-                <span>Drafts</span>
+                <FileEdit size={18} />
+                {!isCollapsed && <span>Drafts</span>}
               </button>
             </>
           )}
@@ -98,21 +109,21 @@ export default function TypistDashboard() {
           {pairRole === 'reviewer' && (
             <button 
               onClick={() => setActiveTab('review')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'review' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'review' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
             >
-              <BookOpen size={18} />
-              <span>Review</span>
+              <ClipboardCheck size={18} />
+              {!isCollapsed && <span>Pending Review</span>}
             </button>
           )}
         </nav>
 
-        <div className="p-4 border-t border-slate-100">
+        <div className={`p-4 border-t border-slate-100 ${isCollapsed ? 'px-2' : ''}`}>
           <button 
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl font-bold transition-all"
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 text-red-500 hover:bg-red-50 rounded-xl font-bold transition-all`}
           >
             <LogOut size={18} />
-            <span>Log Out</span>
+            {!isCollapsed && <span>Log Out</span>}
           </button>
         </div>
       </aside>

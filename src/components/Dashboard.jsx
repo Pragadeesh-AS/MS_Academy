@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download, Trophy } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download, Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [studentName, setStudentName] = useState('Student');
   const [studentDepartment, setStudentDepartment] = useState('');
   const [activeTab, setActiveTab] = useState('learning');
+  const [isCollapsed, setIsCollapsed] = useState(false);
   
   // Onboarding State
   const [loading, setLoading] = useState(true);
@@ -211,52 +212,62 @@ export default function Dashboard() {
       )}
 
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col hidden md:flex z-10">
-        <div className="p-6 flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100">
+      <aside className={`transition-all duration-300 flex-shrink-0 relative z-20 ${isCollapsed ? 'w-[88px]' : 'w-64'} bg-white border-r border-slate-200 flex flex-col hidden md:flex`}>
+        {/* Collapse Button */}
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="absolute -right-3 top-6 bg-white border border-slate-200 rounded-full p-1.5 text-slate-400 hover:text-[#1D4ED8] hover:border-[#1D4ED8] shadow-sm z-50 transition-colors"
+        >
+          {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+
+        <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3'}`}>
+          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100 flex-shrink-0">
             <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
           </div>
-          <div>
-            <h2 className="font-[900] text-blue-700 text-lg leading-tight">MS Academy</h2>
-            <p className="text-xs font-bold text-slate-400">Student Portal</p>
-          </div>
+          {!isCollapsed && (
+            <div>
+              <h2 className="font-[900] text-blue-700 text-lg leading-tight whitespace-nowrap">MS Academy</h2>
+              <p className="text-xs font-bold text-slate-400 whitespace-nowrap">Student Portal</p>
+            </div>
+          )}
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-2">
           <button 
             onClick={() => setActiveTab('learning')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'learning' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'learning' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
           >
             <BookOpen size={18} />
-            <span>My Learning</span>
+            {!isCollapsed && <span>My Learning</span>}
           </button>
           <button 
             onClick={() => setActiveTab('live')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'live' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'live' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
           >
             <Video size={18} />
-            <span>Live Sessions</span>
+            {!isCollapsed && <span>Live Sessions</span>}
           </button>
           <button 
             onClick={() => setActiveTab('recordings')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'recordings' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'recordings' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
           >
             <PlayCircle size={18} />
-            <span>Recordings</span>
+            {!isCollapsed && <span>Recordings</span>}
           </button>
           <button 
             onClick={() => setActiveTab('schedule')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'schedule' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'schedule' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
           >
             <Calendar size={18} />
-            <span>Schedule</span>
+            {!isCollapsed && <span>Schedule</span>}
           </button>
           <button 
             onClick={() => setActiveTab('tests')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'tests' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'tests' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
           >
             <Trophy size={18} />
-            <span>Practice Tests</span>
+            {!isCollapsed && <span>Practice Tests</span>}
           </button>
         </nav>
       </aside>

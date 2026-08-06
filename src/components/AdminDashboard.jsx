@@ -135,6 +135,8 @@ export default function AdminDashboard() {
   const [isTypistInviteModalOpen, setIsTypistInviteModalOpen] = useState(false);
   const [typistInviteForm, setTypistInviteForm] = useState({ typistName: '', typistEmail: '', reviewerName: '', reviewerEmail: '' });
   const [isTypistInviting, setIsTypistInviting] = useState(false);
+  
+  const [confirmDeleteObj, setConfirmDeleteObj] = useState(null);
 
   // Search & Filter states
   const [appSearch, setAppSearch] = useState('');
@@ -439,15 +441,34 @@ export default function AdminDashboard() {
   };
 
   const deleteTeacher = async (teacherId) => {
-    if (window.confirm('Are you sure you want to remove this teacher? They will lose access to the Faculty portal.')) {
-      const updatedTeachers = invitedTeachers.filter(t => t.id !== teacherId);
+    setConfirmDeleteObj({
+      type: 'teacher',
+      id: teacherId,
+      message: 'Are you sure you want to remove this teacher? They will lose access to the Faculty portal.'
+    });
+  };
+
+  const confirmDeleteAction = async () => {
+    if (!confirmDeleteObj) return;
+    const { type, id } = confirmDeleteObj;
+    
+    if (type === 'teacher') {
+      const updatedTeachers = invitedTeachers.filter(t => t.id !== id);
       setInvitedTeachers(updatedTeachers);
       try {
-        await deleteDoc(doc(db, 'invited_teachers', teacherId));
+        await deleteDoc(doc(db, 'invited_teachers', id));
       } catch (e) {
         console.error("Failed to delete teacher", e);
       }
+    } else if (type === 'typist') {
+      setInvitedTypists(prev => prev.filter(t => t.id !== id));
+      try {
+        await deleteDoc(doc(db, 'invited_typists', id));
+      } catch (e) {
+        console.error("Failed to delete pair", e);
+      }
     }
+    setConfirmDeleteObj(null);
   };
 
   // Filter lists
@@ -965,7 +986,7 @@ export default function AdminDashboard() {
                                   
                                   {/* Tooltip */}
                                   <div className="absolute bottom-[140%] opacity-0 group-hover/cell:opacity-100 pointer-events-none transition-all duration-200 w-max bg-[#0F172A] text-white text-[11px] rounded-[8px] px-3 py-2 shadow-xl z-[100] translate-y-1 group-hover/cell:-translate-y-1">
-                                    <div className="font-bold text-[#93C5FD] mb-0.5">Week ${weekIdx + 1}, Day ${dayIdx + 1}</div>
+                                    <div className="font-bold text-[#93C5FD] mb-0.5">Week {weekIdx + 1}, Day {dayIdx + 1}</div>
                                     <div><span className="font-[900] text-white text-[13px]">{count}</span> active</div>
                                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-[#0F172A]"></div>
                                   </div>
@@ -1051,14 +1072,11 @@ export default function AdminDashboard() {
           <TypistDirectory 
             invitedTypists={invitedTypists}
             deleteTypist={async (typistId) => {
-              if (window.confirm('Are you sure you want to remove this pair?')) {
-                setInvitedTypists(prev => prev.filter(t => t.id !== typistId));
-                try {
-                  await deleteDoc(doc(db, 'invited_typists', typistId));
-                } catch (e) {
-                  console.error("Failed to delete pair", e);
-                }
-              }
+              setConfirmDeleteObj({
+                type: 'typist',
+                id: typistId,
+                message: 'Are you sure you want to remove this pair?'
+              });
             }}
             onInvite={() => setIsTypistInviteModalOpen(true)}
           />
@@ -1693,6 +1711,23 @@ export default function AdminDashboard() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generic Confirmation Modal */}
+      {confirmDeleteObj && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center font-sans text-black">
+          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Deletion</div>
+            <div className="p-6">
+              <p className="text-gray-800 text-base mb-6">{confirmDeleteObj.message}</p>
+              
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setConfirmDeleteObj(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
+                <button onClick={confirmDeleteAction} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Remove</button>
+              </div>
             </div>
           </div>
         </div>

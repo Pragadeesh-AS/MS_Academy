@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { db, auth } from '../firebase';
 import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert } from 'lucide-react';
+import GateTestInterface from './student/GateTestInterface';
 import logoImg from '../assets/msgate_logo.png';
 
 export default function StudentTests({ department }) {
@@ -19,6 +20,7 @@ export default function StudentTests({ department }) {
   const [timeRemaining, setTimeRemaining] = useState(0); // in seconds
   const [testMode, setTestMode] = useState('list'); // 'list' | 'taking' | 'result'
   const [activeAttempt, setActiveAttempt] = useState(null);
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
 
   const timerRef = useRef(null);
 
@@ -29,8 +31,10 @@ export default function StudentTests({ department }) {
   const fetchTestsAndAttempts = async () => {
     setLoading(true);
     try {
-      const email = auth.currentUser?.email || '';
-      if (!email) return;
+      const email = auth.currentUser?.email || localStorage.getItem('auth_email') || '';
+      if (!email) {
+        console.warn('No email found for student');
+      }
 
       // Fetch all tests
       const testsSnapshot = await getDocs(collection(db, 'tests'));
@@ -44,14 +48,16 @@ export default function StudentTests({ department }) {
       );
       setTests(studentTests);
 
-      // Fetch student attempts
-      const attemptsQuery = query(
-        collection(db, 'test_attempts'),
-        where('studentEmail', '==', email)
-      );
-      const attemptsSnapshot = await getDocs(attemptsQuery);
-      const allAttempts = attemptsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAttempts(allAttempts);
+      if (email) {
+        // Fetch student attempts
+        const attemptsQuery = query(
+          collection(db, 'test_attempts'),
+          where('studentEmail', '==', email)
+        );
+        const attemptsSnapshot = await getDocs(attemptsQuery);
+        const allAttempts = attemptsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAttempts(allAttempts);
+      }
     } catch (err) {
       console.error("Error fetching tests/attempts:", err);
     } finally {
@@ -66,7 +72,8 @@ export default function StudentTests({ department }) {
       const qSnapshot = await getDocs(collection(db, 'question_bank'));
       const allQuestions = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(q => q.status === 'Approved' || !q.status);
       
-      const matchedQuestions = test.questions.map(qId => {
+      const qList = Array.isArray(test.questions) ? test.questions : [];
+      const matchedQuestions = qList.map(qId => {
         return allQuestions.find(q => q.id === qId) || {
           id: qId,
           questionText: "Question content not found in database.",
@@ -77,26 +84,7 @@ export default function StudentTests({ department }) {
 
       setTestQuestions(matchedQuestions);
       setActiveTest(test);
-      setSelectedAnswers({});
-      setFlagged([]);
-      setTimeRemaining(test.duration * 60);
-      setCurrentIdx(0);
       setTestMode('taking');
-
-      // Start countdown
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(() => {
-        setTimeRemaining(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            // Auto submit
-            handleSubmitTest(matchedQuestions, test, {});
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
     } catch (err) {
       console.error("Error loading test questions:", err);
       alert("Failed to start test. Please try again.");
@@ -126,12 +114,13 @@ export default function StudentTests({ department }) {
   };
 
   const submitTestWithConfirmation = () => {
-    const answeredCount = Object.keys(selectedAnswers).length;
-    const totalCount = testQuestions.length;
-    if (window.confirm(`You have answered ${answeredCount} of ${totalCount} questions. Are you sure you want to submit and complete the test?`)) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      handleSubmitTest(testQuestions, activeTest, selectedAnswers);
-    }
+    setShowConfirmSubmit(true);
+  };
+
+  const confirmSubmitAction = () => {
+    setShowConfirmSubmit(false);
+    if (timerRef.current) clearInterval(timerRef.current);
+    handleSubmitTest(testQuestions, activeTest, selectedAnswers);
   };
 
   const handleSubmitTest = async (questionsList, test, answers) => {
@@ -164,7 +153,7 @@ export default function StudentTests({ department }) {
     const attemptPayload = {
       testId: test.id,
       testTitle: test.title,
-      studentEmail: auth.currentUser?.email || '',
+      studentEmail: auth.currentUser?.email || localStorage.getItem('auth_email') || '',
       studentName: localStorage.getItem('auth_name') || 'Student',
       score: correctCount,
       totalQuestions: questionsList.length,
@@ -223,203 +212,14 @@ export default function StudentTests({ department }) {
   };
 
   if (testMode === 'taking' && activeTest) {
-    const currentQ = testQuestions[currentIdx];
-    return createPortal(
-      <div className="fixed inset-0 z-50 bg-slate-900 text-white flex flex-col font-sans overflow-hidden">
-        {/* Tiled Watermark Grid */}
-        <div className="absolute inset-0 pointer-events-none select-none overflow-hidden z-0 opacity-[0.03] flex flex-col justify-around">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex justify-around whitespace-nowrap transform -rotate-12 translate-x-[-5%]">
-              {Array.from({ length: 6 }).map((_, j) => (
-                <div key={j} className="flex items-center gap-2 font-black text-4xl tracking-widest text-slate-105">
-                  <img src={logoImg} alt="" className="w-8 h-8 object-contain" />
-                  <span>MS ACADEMY</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-
-        {/* Top Header */}
-        <header className="px-6 py-4 bg-slate-800 border-b border-slate-700 flex items-center justify-between relative z-10">
-          <div>
-            <h3 className="font-bold text-lg text-slate-100">{activeTest.title}</h3>
-            <p className="text-xs text-slate-400 font-semibold mt-0.5">{activeTest.subject} • {activeTest.topic}</p>
-          </div>
-          
-          <div className="flex items-center gap-6">
-            {/* Countdown timer */}
-            <div className={`px-4 py-2 rounded-xl flex items-center gap-2 font-mono font-bold text-sm ${timeRemaining < 120 ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-slate-700 text-blue-400'}`}>
-              <Clock size={16} />
-              {formatTimer(timeRemaining)}
-            </div>
-
-            <button 
-              onClick={submitTestWithConfirmation}
-              className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-green-900/20 text-sm"
-            >
-              Submit Exam
-            </button>
-          </div>
-        </header>
-
-        {/* Main Workspace */}
-        <div className="flex-1 flex overflow-hidden relative z-10">
-          
-          {/* Question Display (Left Side) */}
-          <div className="flex-1 p-8 overflow-y-auto space-y-6 flex flex-col justify-between">
-            {currentQ && (
-              <div className="space-y-6 flex-1 max-w-3xl mx-auto w-full">
-                
-                {/* Question Info Header */}
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                  <span className="px-3 py-1 bg-slate-800 rounded-lg text-xs font-bold text-slate-300">
-                    Question {currentIdx + 1} of {testQuestions.length}
-                  </span>
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                    <span>{currentQ.difficultyLevel || 'Medium'}</span>
-                    <span>•</span>
-                    <span>{currentQ.mark || '1 Mark'}</span>
-                  </div>
-                </div>
-
-                {/* Question Content */}
-                <div className="space-y-4">
-                  <p className="text-lg font-bold text-slate-100 leading-relaxed whitespace-pre-wrap">{currentQ.questionText}</p>
-                  {currentQ.questionImageUrl && (
-                    <div className="max-w-md bg-slate-800 rounded-2xl p-2 border border-slate-700 overflow-hidden">
-                      <img src={currentQ.questionImageUrl} alt="Question Graphic" className="w-full object-contain max-h-60" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Answers Options */}
-                {currentQ.questionType === 'Fill in the Blank' ? (
-                  <div className="space-y-2 max-w-md pt-4">
-                    <label className="block text-sm font-bold text-slate-400 mb-1">Your Answer:</label>
-                    <input 
-                      type="text" 
-                      value={selectedAnswers[currentQ.id] || ''}
-                      onChange={(e) => handleSelectOption(currentQ.id, e.target.value)}
-                      placeholder="Type your answer here..."
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-900 transition-all font-mono"
-                    />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-3.5 pt-4">
-                    {['A', 'B', 'C', 'D'].map((opt) => {
-                      const optionText = currentQ[`option${opt}`];
-                      const optionImg = currentQ[`option${opt}Image`];
-                      const isSelected = selectedAnswers[currentQ.id] === opt;
-                      if (!optionText && !optionImg) return null;
-
-                      return (
-                        <div 
-                          key={opt}
-                          onClick={() => handleSelectOption(currentQ.id, opt)}
-                          className={`p-4 rounded-xl border flex items-center gap-4 cursor-pointer transition-all ${isSelected ? 'bg-blue-600/20 border-blue-500 text-white' : 'bg-slate-800/50 border-slate-700 hover:bg-slate-800 text-slate-300'}`}
-                        >
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center border font-bold text-xs shrink-0 ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-600 text-slate-400'}`}>
-                            {opt}
-                          </div>
-                          <div className="flex-1 text-sm font-bold leading-normal">
-                            {optionText}
-                            {optionImg && <img src={optionImg} alt={`Option ${opt}`} className="mt-2 max-h-20 object-contain rounded" />}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Bottom Actions Bar */}
-            <div className="border-t border-slate-800 pt-6 flex items-center justify-between max-w-3xl mx-auto w-full mt-6">
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => handleToggleFlag(currentQ.id)}
-                  className={`px-4 py-2.5 rounded-xl border font-bold text-xs transition-all ${flagged.includes(currentQ.id) ? 'bg-orange-500/20 border-orange-500 text-orange-400' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
-                >
-                  Mark for Review
-                </button>
-                <button 
-                  onClick={() => handleClearAnswer(currentQ.id)}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-400 border border-slate-700 font-bold text-xs rounded-xl transition-all"
-                >
-                  Clear Response
-                </button>
-              </div>
-
-              <div className="flex gap-3">
-                <button 
-                  disabled={currentIdx === 0}
-                  onClick={() => setCurrentIdx(prev => prev - 1)}
-                  className="p-2.5 bg-slate-800 hover:bg-slate-750 disabled:opacity-30 border border-slate-700 rounded-xl transition-all text-slate-300 flex items-center justify-center"
-                >
-                  <ArrowLeft size={16} />
-                </button>
-                <button 
-                  disabled={currentIdx === testQuestions.length - 1}
-                  onClick={() => setCurrentIdx(prev => prev + 1)}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
-                >
-                  Save & Next <ArrowRight size={14} />
-                </button>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Right Navigation Panel */}
-          <aside className="w-80 bg-slate-850 border-l border-slate-800 p-6 flex flex-col justify-between overflow-y-auto">
-            <div className="space-y-6">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Question Grid</h4>
-              
-              <div className="grid grid-cols-4 gap-2.5">
-                {testQuestions.map((q, idx) => {
-                  const isCurrent = currentIdx === idx;
-                  const isAnswered = !!selectedAnswers[q.id];
-                  const isFlagged = flagged.includes(q.id);
-
-                  let btnClass = 'bg-slate-800 border-slate-700 text-slate-400';
-                  if (isCurrent) btnClass = 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20';
-                  else if (isFlagged) btnClass = 'bg-orange-500 border-orange-500 text-white';
-                  else if (isAnswered) btnClass = 'bg-green-600 border-green-500 text-white';
-
-                  return (
-                    <button 
-                      key={q.id}
-                      onClick={() => setCurrentIdx(idx)}
-                      className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold font-mono text-sm transition-all hover:scale-105 ${btnClass}`}
-                    >
-                      {idx + 1}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Legend info */}
-            <div className="border-t border-slate-800 pt-6 space-y-3 text-xs font-semibold text-slate-400">
-              <div className="flex items-center gap-3">
-                <span className="w-4 h-4 rounded bg-green-600"></span>
-                <span>Answered</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="w-4 h-4 rounded bg-orange-500"></span>
-                <span>Marked for Review</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="w-4 h-4 rounded bg-slate-800 border border-slate-700"></span>
-                <span>Unvisited / Unanswered</span>
-              </div>
-            </div>
-          </aside>
-
-        </div>
-      </div>,
-      document.body
+    return (
+      <GateTestInterface 
+        test={activeTest}
+        testQuestions={testQuestions}
+        studentName={localStorage.getItem('auth_name') || 'Student'}
+        onSubmit={(answers) => handleSubmitTest(testQuestions, activeTest, answers)}
+        onCancel={() => setTestMode('list')}
+      />
     );
   }
 
@@ -648,6 +448,25 @@ export default function StudentTests({ department }) {
         </div>
       )}
 
+      {/* Custom Confirmation Modal */}
+      {showConfirmSubmit && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+          <div className="bg-white rounded-md shadow-xl w-full max-w-md overflow-hidden">
+            <div className="bg-blue-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Submission</div>
+            <div className="p-6">
+              <p className="text-gray-800 text-base mb-2">
+                You have answered {Object.keys(selectedAnswers).length} of {testQuestions.length} questions.
+              </p>
+              <p className="font-bold text-gray-900 mb-6">Are you sure you want to submit and complete the test?</p>
+              
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setShowConfirmSubmit(false)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
+                <button onClick={confirmSubmitAction} className="px-4 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition">Yes, Submit Exam</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
