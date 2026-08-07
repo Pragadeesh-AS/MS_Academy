@@ -214,10 +214,10 @@ export default function AIGenerator() {
       }
 
       if (questionType !== 'Fill in the Blanks') {
-        const aMatch = beforeConcept.match(/(?:\(A\)|A\.)\s*(.*?)(?=\(B\)|B\.|(?:\(C\)|C\.)|$)/is);
-        const bMatch = beforeConcept.match(/(?:\(B\)|B\.)\s*(.*?)(?=\(C\)|C\.|(?:\(D\)|D\.)|$)/is);
-        const cMatch = beforeConcept.match(/(?:\(C\)|C\.)\s*(.*?)(?=\(D\)|D\.|(?:\(A\)|A\.)|$)/is);
-        const dMatch = beforeConcept.match(/(?:\(D\)|D\.)\s*(.*?)$/is);
+        const aMatch = beforeConcept.match(/(?:\(A\)|A\.)\s*(.*?)(?=\(B\)|B\.|(?:\(C\)|C\.)|(?:\(D\)|D\.)|$)/is);
+        const bMatch = beforeConcept.match(/(?:\(B\)|B\.)\s*(.*?)(?=\(A\)|A\.|(?:\(C\)|C\.)|(?:\(D\)|D\.)|$)/is);
+        const cMatch = beforeConcept.match(/(?:\(C\)|C\.)\s*(.*?)(?=\(A\)|A\.|(?:\(B\)|B\.)|(?:\(D\)|D\.)|$)/is);
+        const dMatch = beforeConcept.match(/(?:\(D\)|D\.)\s*(.*?)(?=\(A\)|A\.|(?:\(B\)|B\.)|(?:\(C\)|C\.)|$)/is);
         
         if (aMatch) optA = aMatch[1].trim();
         if (bMatch) optB = bMatch[1].trim();
