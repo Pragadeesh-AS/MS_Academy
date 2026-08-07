@@ -6,10 +6,11 @@ import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageI
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
-const stripHtmlAndNormalize = (html) => {
-  if (!html) return '';
-  // Strip HTML tags and replace multiple spaces/newlines with a single space
-  return html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+export const stripHtmlAndNormalize = (htmlString) => {
+  if (!htmlString) return '';
+  // Replace <br/> with a space to prevent words from joining, then strip all tags
+  const withSpaces = htmlString.replace(/<br\s*\/?>/gi, ' ').replace(/&nbsp;/g, ' ');
+  return withSpaces.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
 };
 
 // Searchable Select Component

@@ -66,15 +66,32 @@ export default function AIGenerator() {
             
             let pageText = '';
             let lastY = null;
+            let lastX = null;
+            let minX = Infinity;
+            
+            for (const item of textContent.items) {
+               if (item.str.trim().length > 0 && item.transform[4] < minX) {
+                  minX = item.transform[4];
+               }
+            }
+            if (minX === Infinity) minX = 0;
             
             for (const item of textContent.items) {
               if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
                 pageText += '\n';
+                const indent = Math.max(0, Math.floor((item.transform[4] - minX) / 5)); 
+                if (indent > 0) pageText += ' '.repeat(indent);
               } else if (lastY !== null && !pageText.endsWith(' ') && !item.str.startsWith(' ')) {
-                pageText += ' ';
+                const gap = item.transform[4] - (lastX || item.transform[4]);
+                if (gap > 8) {
+                    pageText += ' '.repeat(Math.floor(gap / 4));
+                } else {
+                    pageText += ' ';
+                }
               }
               pageText += item.str;
               lastY = item.transform[5];
+              lastX = item.transform[4] + (item.width || 0);
             }
             fullText += pageText + '\n\n';
           }
@@ -251,8 +268,20 @@ export default function AIGenerator() {
       }
       
       // Fix newline formatting
-      qText = qText.replace(/\n/g, '<br/>');
-      explanation = explanation.replace(/\n/g, '<br/>');
+      const preserveWhitespace = (text) => {
+         return text.split('\n').map(line => {
+             let newLine = line;
+             const leadingSpaces = newLine.match(/^ +/);
+             if (leadingSpaces) {
+                 newLine = '&nbsp;'.repeat(leadingSpaces[0].length) + newLine.trimStart();
+             }
+             newLine = newLine.replace(/ {2,}/g, match => '&nbsp;'.repeat(match.length));
+             return newLine;
+         }).join('<br/>');
+      };
+      
+      qText = preserveWhitespace(qText);
+      explanation = preserveWhitespace(explanation);
       
       questions.push({
         questionType: questionType,
