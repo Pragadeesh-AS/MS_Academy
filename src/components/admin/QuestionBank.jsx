@@ -657,7 +657,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         `}
       </style>
       
-      <div className="qb-canvas relative flex flex-col xl:flex-row gap-8 w-full h-full min-h-[900px] p-8 overflow-hidden z-0">
+      <div className="qb-canvas relative flex flex-col xl:flex-row gap-8 w-full h-full min-h-[900px] p-8 overflow-x-hidden overflow-y-auto z-0">
         
         {/* Soft Radial Gradients */}
         <div className="absolute top-[-10%] left-[-5%] w-[600px] h-[600px] bg-blue-200/40 rounded-full blur-[100px] pointer-events-none -z-10"></div>
@@ -763,20 +763,20 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           </div>
 
           {/* QUESTION TABLE */}
-          <div className="bg-white border border-[#EEF2F7] rounded-[24px] shadow-[0_10px_28px_rgba(15,23,42,0.05)] flex flex-col overflow-hidden mb-8">
-            <div className="w-full overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[1000px]">
+          <div className="bg-white border border-[#EEF2F7] rounded-[24px] shadow-[0_10px_28px_rgba(15,23,42,0.05)] flex flex-col mb-8">
+            <div className="w-full">
+              <table className="w-full text-left border-collapse table-fixed">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
-                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[100px]">ID</th>
-                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider">Question</th>
-                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[140px]">Type</th>
-                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[120px]">Status</th>
-                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[120px]">Marks</th>
-                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[120px]">Difficulty</th>
-                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[160px]">Department</th>
-                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[140px]">Updated</th>
-                    <th className="py-5 px-6 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[140px] text-right">Actions</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[5%]">ID</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[25%]">Question</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[12%]">Type</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[10%]">Status</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[10%]">Marks</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[10%]">Difficulty</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[12%]">Dept</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[8%]">Date</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[8%] text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]">
@@ -799,25 +799,25 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                           onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}
                           className="group hover:bg-[#F8FAFF] transition-colors duration-200 cursor-pointer"
                         >
-                          <td className="py-4 px-6 h-[82px]">
+                          <td className="py-4 px-4 h-[82px]">
                             <span className="text-[13px] font-[700] text-[#64748B] bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm inline-flex items-center justify-center min-w-[28px]">
                               {index + 1}
                             </span>
                           </td>
-                          <td className="py-4 px-6 h-[82px] max-w-[400px]">
+                          <td className="py-4 px-4 h-[82px] max-w-0">
                           <div className="flex items-center gap-4">
                             <div className="w-[42px] h-[42px] rounded-[12px] bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
                               <FileText size={20} className="text-[#2563EB]" />
                             </div>
-                            <div className="flex flex-col gap-1 min-w-0">
-                              <span className="text-[15px] font-[600] text-[#0F172A] truncate block flex items-center gap-1.5" title={q.questionText}>
-                                {q.isImported && <Sparkles size={14} className="text-purple-600 flex-shrink-0" title="AI Imported" />}
+                            <div className="flex flex-col gap-1 w-full max-w-full overflow-hidden">
+                              <span className="text-[15px] font-[600] text-[#0F172A] truncate block flex items-center gap-1.5" title={stripHtmlAndNormalize(q.questionText)}>
+                                {q.isImported && <Sparkles size={14} className="text-purple-500 shrink-0" />}
                                 {(userRole === 'admin' || userRole === 'typist') && q.isPremium && (
                                   <span className="shrink-0 flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                                     <span className="text-amber-500">★</span> Premium
                                   </span>
                                 )}
-                                <span className="truncate">{q.questionText || 'Untitled Question'}</span>
+                                <span className="truncate">{stripHtmlAndNormalize(q.questionText) || 'Untitled Question'}</span>
                               </span>
                               <span className="text-[13px] font-[500] text-[#64748B] truncate block">
                                 {q.subject || 'No Subject'}
@@ -825,12 +825,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                             </div>
                           </div>
                         </td>
-                        <td className="py-4 px-6 h-[82px]">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-50 text-purple-600 border border-purple-100 text-[12px] font-[700] whitespace-nowrap">
+                        <td className="py-4 px-4 h-[82px] max-w-0 overflow-hidden">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full bg-purple-50 text-purple-600 border border-purple-100 text-[11px] font-[700] truncate max-w-full" title={q.questionType}>
                             {q.questionType}
                           </span>
                         </td>
-                        <td className="py-4 px-6 h-[82px]">
+                        <td className="py-4 px-4 h-[82px]">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full border text-[11px] font-[800] ${
                             q.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                             q.status === 'In Review' ? 'bg-amber-50 text-amber-600 border-amber-100' :
@@ -839,10 +839,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                             {q.status || 'Draft'}
                           </span>
                         </td>
-                        <td className="py-4 px-6 h-[82px]">
+                        <td className="py-4 px-4 h-[82px]">
                           <span className="text-[14px] font-[600] text-[#0F172A]">{q.mark?.split(' ')[0] || '1'} Mark</span>
                         </td>
-                        <td className="py-4 px-6 h-[82px]">
+                        <td className="py-4 px-4 h-[82px]">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full border text-[12px] font-[700] ${
                             q.difficultyLevel === 'Hard' ? 'bg-red-50 text-red-600 border-red-100' :
                             q.difficultyLevel === 'Medium' ? 'bg-orange-50 text-orange-600 border-orange-100' :
@@ -851,13 +851,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                             {q.difficultyLevel || 'Easy'}
                           </span>
                         </td>
-                        <td className="py-4 px-6 h-[82px]">
-                          <span className="text-[14px] font-[500] text-[#0F172A]">{q.department || 'All'}</span>
+                        <td className="py-4 px-4 h-[82px] truncate">
+                          <span className="text-[14px] font-[500] text-[#0F172A] truncate block" title={q.department || 'All'}>{q.department || 'All'}</span>
                         </td>
-                        <td className="py-4 px-6 h-[82px]">
+                        <td className="py-4 px-4 h-[82px]">
                           <span className="text-[13px] font-[500] text-[#64748B]">{relativeTime(q.createdAt)}</span>
                         </td>
-                        <td className="py-4 px-6 h-[82px] text-right">
+                        <td className="py-4 px-4 h-[82px] text-right">
                           <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleEdit(q); }}
@@ -874,7 +874,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       </tr>
                       {expandedId === q.id && (
                         <tr className="bg-[#F8FAFF] border-b border-[#EEF2F7]">
-                          <td colSpan="9" className="px-6 py-6">
+                          <td colSpan="9" className="px-4 py-6">
                             <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative cursor-default" onClick={(e) => e.stopPropagation()}>
                               <h4 className="text-[16px] font-bold text-slate-800 mb-4 flex items-start gap-2">
                                 {q.isImported && <Sparkles size={16} className="text-purple-600 mt-1 flex-shrink-0" title="AI Imported" />}
@@ -952,7 +952,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         <div className="fixed inset-0 bg-[#f4f7fb] z-[99999] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
           
           {/* TOP BAR */}
-          <div className="h-[60px] bg-white px-6 flex items-center justify-between shrink-0">
+          <div className="h-[60px] bg-white px-4 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-lg">
                 <BookOpen size={16} className="text-indigo-600" />
@@ -982,7 +982,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           </div>
 
           {/* SECOND TOOLBAR */}
-          <div className="h-[60px] bg-white border-b border-slate-100 px-6 flex items-center justify-between shrink-0">
+          <div className="h-[60px] bg-white border-b border-slate-100 px-4 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               <span className="text-[13px] font-[900] text-[#111827]">Questions:</span>
               <div className="w-7 h-7 rounded-full bg-[#059669] text-white flex items-center justify-center font-[800] text-[13px] shadow-sm">1</div>
