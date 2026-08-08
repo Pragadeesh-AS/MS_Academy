@@ -33,7 +33,7 @@ import AgoraRTC, {
 import Whiteboard from './Whiteboard';
 
 // Extracted component to handle whiteboard sharing as an independent client
-const WhiteboardShareClient = ({ appId, channel, token, stream }) => {
+const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) => {
   const [wbClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
 
   useEffect(() => {
@@ -46,7 +46,7 @@ const WhiteboardShareClient = ({ appId, channel, token, stream }) => {
           mediaStreamTrack: stream.getVideoTracks()[0]
         });
 
-        wbClient.join(appId, channel, token, 999998).then(() => {
+        wbClient.join(appId, channel, token, uid).then(() => {
           if (isMounted) {
             wbClient.publish([track]);
           }
@@ -179,6 +179,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [screenShareOn, setScreenShareOn] = useState(false);
   const [whiteboardOn, setWhiteboardOn] = useState(false);
   const [whiteboardStream, setWhiteboardStream] = useState(null);
+  const [qbWhiteboardStream, setQbWhiteboardStream] = useState(null);
   const whiteboardOnRef = useRef(whiteboardOn);
   useEffect(() => { whiteboardOnRef.current = whiteboardOn; }, [whiteboardOn]);
   const [pinnedUid, setPinnedUid] = useState(null);
@@ -209,21 +210,30 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       const ctx = canvas.getContext('2d');
       
       const drawCompositor = () => {
-        const wbCanvas = document.getElementById('whiteboard-canvas');
-        if (wbCanvas && (canvas.width !== wbCanvas.width || canvas.height !== wbCanvas.height)) {
-          canvas.width = wbCanvas.width;
-          canvas.height = wbCanvas.height;
+        const qState = activeQuestionStateRef.current;
+        const qbActive = qState?.isActive && qState?.questions;
+        
+        let targetWbCanvas = document.getElementById('whiteboard-canvas'); // Default to main WB
+        if (qbActive) {
+          targetWbCanvas = document.getElementById('qb-whiteboard-canvas');
+        } else if (whiteboardOnRef.current) {
+          targetWbCanvas = document.getElementById('main-whiteboard-canvas');
+        }
+
+        if (targetWbCanvas && (canvas.width !== targetWbCanvas.width || canvas.height !== targetWbCanvas.height)) {
+          canvas.width = targetWbCanvas.width;
+          canvas.height = targetWbCanvas.height;
         }
 
         ctx.fillStyle = '#0f172a'; // slate-900 background
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        if (whiteboardOnRef.current) {
+        if (qbActive) {
           const qState = activeQuestionStateRef.current;
           if (qState?.isActive && qState?.questions && qState.questions[qState.currentIndex]) {
             const q = qState.questions[qState.currentIndex];
             
-            const wbCanvas = document.getElementById('whiteboard-canvas');
+            const wbCanvas = document.getElementById('qb-whiteboard-canvas');
             const domW = wbCanvas ? wbCanvas.width : 1280;
             const domH = wbCanvas ? wbCanvas.height : 720;
             
@@ -257,7 +267,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
             
             const containerEl = document.getElementById('qb-content');
             if (containerEl) {
-              const cRect = containerEl.getBoundingClientRect();
+              const wbCanvasDom = document.getElementById('qb-whiteboard-canvas');
+              const cRect = wbCanvasDom ? wbCanvasDom.getBoundingClientRect() : containerEl.getBoundingClientRect();
               
               const qNumEl = document.getElementById('qb-qnum');
               if (qNumEl) {
@@ -314,7 +325,12 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           }
 
           // Draw the whiteboard canvas directly
-          const wbCanvas = document.getElementById('whiteboard-canvas');
+          const wbCanvas = document.getElementById('qb-whiteboard-canvas');
+          if (wbCanvas) {
+            ctx.drawImage(wbCanvas, 0, 0, canvas.width, canvas.height);
+          }
+        } else if (whiteboardOnRef.current) {
+          const wbCanvas = document.getElementById('main-whiteboard-canvas');
           if (wbCanvas) {
             ctx.drawImage(wbCanvas, 0, 0, canvas.width, canvas.height);
           }
@@ -688,8 +704,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   useRemoteVideoTracks(remoteUsers);
   useRemoteAudioTracks(remoteUsers);
 
-  // Filter out the Screen Share client and Whiteboard client so they don't appear as remote users
-  const filteredUsers = remoteUsers.filter(u => u.uid !== 999999 && u.uid !== 999998);
+  // Filter out the Screen Share client and Whiteboard clients so they don't appear as remote users
+  const filteredUsers = remoteUsers.filter(u => u.uid !== 999999 && u.uid !== 999998 && u.uid !== 999997);
 
   // Dynamic grid based on participant count
   const totalParticipants = 1 + filteredUsers.length + (screenShareOn ? 1 : 0) + (whiteboardOn ? 1 : 0) + (activeQuestionState?.isActive ? 1 : 0);
@@ -704,17 +720,15 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   };
 
   useEffect(() => {
-    if (activeQuestionState?.isActive && pinnedUid !== 'question-bank') {
+    const hasQuestionBank = activeQuestionState?.isActive;
+
+    if (hasQuestionBank && pinnedUid !== 'question-bank') {
       setPinnedUid('question-bank');
-    } else if (!activeQuestionState?.isActive && pinnedUid === 'question-bank') {
-      setPinnedUid(null);
-    }
-
-    if (!whiteboardOn && pinnedUid === 'local-whiteboard') {
-      setPinnedUid(null);
-    }
-
-    if (!screenShareOn && pinnedUid === 'local-screen') {
+    } else if (screenShareOn && pinnedUid !== 'local-screen' && !hasQuestionBank) {
+      setPinnedUid('local-screen');
+    } else if (whiteboardOn && pinnedUid !== 'local-whiteboard' && !hasQuestionBank && !screenShareOn) {
+      setPinnedUid('local-whiteboard');
+    } else if (!hasQuestionBank && !whiteboardOn && !screenShareOn && (pinnedUid === 'question-bank' || pinnedUid === 'local-whiteboard' || pinnedUid === 'local-screen')) {
       setPinnedUid(null);
     }
   }, [activeQuestionState?.isActive, whiteboardOn, screenShareOn, pinnedUid]);
@@ -754,7 +768,6 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
 
     setIsQBModalOpen(false);
     setQbRangeInput("");
-    setWhiteboardOn(true);
 
     await updateDoc(doc(db, 'live_sessions', sessionId), {
       activeQuestionState: {
@@ -780,7 +793,6 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           'activeQuestionState.currentIndex': activeQuestionState.currentIndex + 1
         });
       } else {
-        setWhiteboardOn(false);
         await updateDoc(doc(db, 'live_sessions', sessionId), {
           activeQuestionState: null
         });
@@ -789,7 +801,6 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   };
 
   const handleCloseQB = async () => {
-    setWhiteboardOn(false);
     await updateDoc(doc(db, 'live_sessions', sessionId), {
       activeQuestionState: null
     });
@@ -807,7 +818,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
         <div key="question-bank" className={`relative overflow-hidden bg-white shadow-xl group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 h-full w-full' : 'w-48 h-32 shrink-0 z-50 rounded-2xl pointer-events-none p-4'}`}>
 
           {/* Base Layer: Question Content */}
-          <div id="qb-content" className={`absolute inset-0 w-full h-full flex flex-col max-w-6xl mx-auto ${isPinned ? 'p-8 md:p-12 pt-28' : 'pt-12'} z-10 pointer-events-none bg-white`}>
+          <div id="qb-content" className={`absolute inset-0 w-full h-full flex flex-col max-w-6xl mx-auto ${isPinned ? 'p-8 md:p-12 pt-8 md:pt-12' : 'pt-12'} z-10 pointer-events-none bg-white`}>
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
               <div className={`${isPinned ? 'text-2xl md:text-4xl leading-snug mb-10' : 'text-sm mb-4'} font-bold text-slate-900 flex`}>
                 <div id="qb-qnum" className={`text-slate-500 shrink-0 ${isPinned ? 'w-16 md:w-24' : 'w-10'}`}>Q.{activeQuestionState.currentIndex + 1}</div>
@@ -840,10 +851,10 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           </div>
 
           {/* Middle Layer: Whiteboard Overlay */}
-          {whiteboardOn && isPinned && (
+          {isPinned && (
             <div className="absolute inset-0 z-20 mix-blend-multiply pointer-events-auto">
-              <Whiteboard onStreamReady={setWhiteboardStream} isOverlay={true} />
-              <WhiteboardShareClient appId={appId} channel={channel} token={token} stream={whiteboardStream} />
+              <Whiteboard canvasId="qb-whiteboard-canvas" onStreamReady={setQbWhiteboardStream} isOverlay={true} />
+              <WhiteboardShareClient appId={appId} channel={channel} token={token} stream={qbWhiteboardStream} uid={999997} />
             </div>
           )}
 
@@ -869,16 +880,15 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     }
 
     // 0. Whiteboard (Local)
-    const isQuestionBankActive = activeQuestionState?.isActive && activeQuestionState.questions;
-    if (whiteboardOn && !isQuestionBankActive) {
+    if (whiteboardOn) {
       const isPinned = pinnedUid === 'local-whiteboard';
       const wbTile = (
         <div key="local-whiteboard" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50 pointer-events-none' : 'h-full w-full')}`}>
           <div className="absolute inset-0 z-10 pointer-events-auto">
-            <Whiteboard onStreamReady={setWhiteboardStream} />
+            <Whiteboard canvasId="main-whiteboard-canvas" onStreamReady={setWhiteboardStream} />
           </div>
           {whiteboardStream && (
-            <WhiteboardShareClient appId={appId} channel={channel} token={token} stream={whiteboardStream} />
+            <WhiteboardShareClient appId={appId} channel={channel} token={token} stream={whiteboardStream} uid={999998} />
           )}
           <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-purple-600/90 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 pointer-events-none ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>Whiteboard</div>
           <button onClick={() => togglePin('local-whiteboard')} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">

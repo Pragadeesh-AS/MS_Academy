@@ -211,8 +211,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     const pinnedTiles = [];
     const unpinnedTiles = [];
     
-    const whiteboardUser = remoteUsers.find(u => u.uid === 999998);
-    const hasWhiteboard = !!whiteboardUser;
+    const qbWhiteboardUser = remoteUsers.find(u => u.uid === 999997);
+    const hasQbWhiteboard = !!qbWhiteboardUser;
     
     // -1. Question Bank Overlay
     if (activeQuestionState?.isActive && activeQuestionState.questions) {
@@ -221,7 +221,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
         <div key="question-bank" className={`relative overflow-hidden bg-white shadow-xl group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 h-full w-full' : 'w-48 h-32 shrink-0 z-50 rounded-2xl pointer-events-none p-4'}`}>
           
           {/* Base Layer: Question Content */}
-          <div className={`absolute inset-0 w-full h-full flex flex-col max-w-6xl mx-auto ${isPinned ? 'p-8 md:p-12 pt-28' : 'pt-12'} z-10 pointer-events-none`}>
+          <div className={`absolute inset-0 w-full h-full flex flex-col max-w-6xl mx-auto ${isPinned ? 'p-8 md:p-12 pt-8 md:pt-12' : 'pt-12'} z-10 pointer-events-none`}>
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
               <h2 className={`${isPinned ? 'text-2xl md:text-4xl leading-snug mb-10' : 'text-sm mb-2'} font-bold text-slate-900 whitespace-normal break-words`}>
                 <span className="text-slate-500 mr-3 md:mr-4">Q.{activeQuestionState.currentIndex + 1}</span>
@@ -267,9 +267,9 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
           </div>
 
           {/* Middle Layer: Whiteboard Overlay */}
-          {hasWhiteboard && whiteboardUser && isPinned && (
+          {hasQbWhiteboard && qbWhiteboardUser && isPinned && (
             <div className="absolute inset-0 z-20 mix-blend-multiply pointer-events-none">
-              <RemoteUser user={whiteboardUser} playVideo={true} playAudio={false} />
+              <RemoteUser user={qbWhiteboardUser} playVideo={true} playAudio={false} />
             </div>
           )}
 
@@ -313,9 +313,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     
     // 2. Remote Users
     remoteUsers.forEach(user => {
-      // Hide standalone Whiteboard tile if Question Bank is active (since it's used as an overlay)
-      const hasQuestionBank = activeQuestionState?.isActive && activeQuestionState.questions;
-      if (hasQuestionBank && user.uid === 999998) return;
+      // Hide QB whiteboard stream from standalone tiles
+      if (user.uid === 999997) return;
 
       const isPinned = pinnedUid === user.uid;
       let userName = participantNames[user.uid] || `Remote User`;
