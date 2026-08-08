@@ -385,9 +385,10 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
       } else if (!pinnedUid || isTeacher) {
         unpinnedTiles.push(remoteTile);
       } else {
-        // Render hidden to maintain audio playback when PIP is restricted
+        // Render visually hidden to maintain audio playback when PIP is restricted.
+        // display: none causes some browsers or intersection observers to pause media.
         unpinnedTiles.push(
-          <div key={user.uid} className="hidden">
+          <div key={user.uid} className="absolute opacity-0 pointer-events-none w-1 h-1 overflow-hidden">
             <RemoteUser user={user} />
           </div>
         );
