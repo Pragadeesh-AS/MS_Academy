@@ -629,6 +629,13 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
         pinnedTiles.push(remoteTile);
       } else if (!pinnedUid) {
         unpinnedTiles.push(remoteTile);
+      } else {
+        // Render hidden to maintain audio playback when PIP is restricted
+        unpinnedTiles.push(
+          <div key={user.uid} className="hidden">
+            <RemoteUser user={user} />
+          </div>
+        );
       }
     });
 

@@ -384,6 +384,13 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
         pinnedTiles.push(remoteTile);
       } else if (!pinnedUid || isTeacher) {
         unpinnedTiles.push(remoteTile);
+      } else {
+        // Render hidden to maintain audio playback when PIP is restricted
+        unpinnedTiles.push(
+          <div key={user.uid} className="hidden">
+            <RemoteUser user={user} />
+          </div>
+        );
       }
     });
     
