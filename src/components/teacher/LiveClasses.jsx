@@ -98,8 +98,18 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded, onAudioTrackRe
 
     const initScreenShare = async () => {
       try {
-        // "enable" tells the browser to capture system audio if the user allows it
-        const tracks = await AgoraRTC.createScreenVideoTrack({}, "enable");
+        let tracks;
+        try {
+          // "auto" tells the browser to capture system audio if the user allows it
+          tracks = await AgoraRTC.createScreenVideoTrack({}, "auto");
+        } catch (err) {
+          if (err.code === 'NOT_SUPPORTED' || err.message?.includes('not support')) {
+            console.warn("Screen audio not supported on this platform, falling back to video-only");
+            tracks = await AgoraRTC.createScreenVideoTrack({}, "disable");
+          } else {
+            throw err;
+          }
+        }
         
         if (!isMounted) {
           if (Array.isArray(tracks)) {
@@ -209,7 +219,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     if (client.uid && sessionId) {
       const userName = localStorage.getItem('auth_name') || 'Teacher';
       setDoc(doc(db, 'live_sessions', sessionId, 'participants', client.uid.toString()), {
-        name: userName
+        name: userName,
+        role: 'teacher'
       }).catch(console.error);
     }
   }, [client.uid, sessionId]);
@@ -584,8 +595,11 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
         </button>
       </div>
     );
-    if (isLocalPinned) pinnedTiles.push(localTile);
-    else unpinnedTiles.push(localTile);
+    if (isLocalPinned) {
+      pinnedTiles.push(localTile);
+    } else if (!pinnedUid || pinnedUid === 'local-screen' || pinnedUid === 'local-whiteboard' || pinnedUid === 'question-bank') {
+      unpinnedTiles.push(localTile);
+    }
 
     // 3. Remote Users
     filteredUsers.forEach(user => {
@@ -611,8 +625,11 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           </button>
         </div>
       );
-      if (isPinned) pinnedTiles.push(remoteTile);
-      else unpinnedTiles.push(remoteTile);
+      if (isPinned) {
+        pinnedTiles.push(remoteTile);
+      } else if (!pinnedUid) {
+        unpinnedTiles.push(remoteTile);
+      }
     });
 
     return { pinnedTiles, unpinnedTiles };
@@ -688,17 +705,22 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
               <div className="w-3 h-3 bg-white rounded-full"></div>
             </button>
           ) : (
-            <div className="flex gap-2 bg-red-600/20 rounded-full p-1 border border-red-500/30 shadow-[0_0_15px_rgba(220,38,38,0.2)]">
-              <button onClick={togglePauseRecording} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isPaused ? 'bg-yellow-500' : 'bg-slate-700 hover:bg-slate-600'}`} title={isPaused ? "Resume" : "Pause"}>
-                {isPaused ? (
-                  <div className="w-0 h-0 border-t-[4px] border-t-transparent border-l-[6px] border-l-white border-b-[4px] border-b-transparent"></div>
-                ) : (
-                  <div className="flex gap-[3px]"><div className="w-1 h-3 bg-white rounded-full"></div><div className="w-1 h-3 bg-white rounded-full"></div></div>
-                )}
-              </button>
-              <button onClick={stopRecording} className={`w-10 h-10 rounded-full flex items-center justify-center text-white bg-red-600 hover:bg-red-700 ${isPaused ? '' : 'animate-pulse'}`} title="Stop Recording">
-                <div className="w-2.5 h-2.5 bg-white rounded-sm"></div>
-              </button>
+            <div className="flex items-center gap-2 bg-red-600/20 rounded-full p-1 pr-4 border border-red-500/30 shadow-[0_0_15px_rgba(220,38,38,0.2)]">
+              <div className="flex gap-1">
+                <button onClick={togglePauseRecording} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isPaused ? 'bg-yellow-500' : 'bg-slate-700 hover:bg-slate-600'}`} title={isPaused ? "Resume" : "Pause"}>
+                  {isPaused ? (
+                    <div className="w-0 h-0 border-t-[4px] border-t-transparent border-l-[6px] border-l-white border-b-[4px] border-b-transparent"></div>
+                  ) : (
+                    <div className="flex gap-[3px]"><div className="w-1 h-3 bg-white rounded-full"></div><div className="w-1 h-3 bg-white rounded-full"></div></div>
+                  )}
+                </button>
+                <button onClick={stopRecording} className={`w-10 h-10 rounded-full flex items-center justify-center text-white bg-red-600 hover:bg-red-700 ${isPaused ? '' : 'animate-pulse'}`} title="Stop Recording">
+                  <div className="w-2.5 h-2.5 bg-white rounded-sm"></div>
+                </button>
+              </div>
+              <div className={`font-mono font-bold text-sm tracking-wider ${!isPaused ? 'text-red-400 animate-pulse' : 'text-yellow-500'}`}>
+                {formatTime(recordingTime)}
+              </div>
             </div>
           )}
 

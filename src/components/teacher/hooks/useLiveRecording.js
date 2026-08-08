@@ -21,6 +21,15 @@ export const useLiveRecording = ({
   const compositeCanvasRef = useRef(null);
   const animFrameRef = useRef(null);
   const cachedQbImageRef = useRef(null);
+  const mousePosRef = useRef({ x: -100, y: -100 });
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      mousePosRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
 
   // React Effect for HTML-to-Image serialization
   useEffect(() => {
@@ -113,31 +122,52 @@ export const useLiveRecording = ({
            ctx.fillText('Loading Question Bank UI...', 50, 100);
         }
 
-        // 3. Draw All Visible Videos (Grid / PIP / Screen Share)
-        const videos = Array.from(presentationLayer.querySelectorAll('video')).filter(v => v.readyState >= 2 && !v.paused);
-        videos.forEach(video => {
-           const vRect = video.getBoundingClientRect();
-           const x = vRect.x - rect.x;
-           const y = vRect.y - rect.y;
-           
-           ctx.save();
-           // Clip to exact DOM size to perfectly mirror CSS sizing (object-cover is drawn fully inside the clipped area by the browser)
-           ctx.beginPath();
-           ctx.rect(x, y, vRect.width, vRect.height);
-           ctx.clip();
-           ctx.drawImage(video, x, y, vRect.width, vRect.height);
-           ctx.restore();
+        // 3 & 4. Draw All Visible Videos and Whiteboards in exact DOM order to preserve layering
+        // This prevents the Whiteboard canvas from incorrectly covering PIP videos!
+        const mediaElements = Array.from(presentationLayer.querySelectorAll('video, canvas'));
+        mediaElements.forEach(el => {
+           if (el.tagName.toLowerCase() === 'canvas') {
+               if (el === canvas) return; // Skip our own composite canvas
+               const wbRect = el.getBoundingClientRect();
+               const x = wbRect.x - rect.x;
+               const y = wbRect.y - rect.y;
+               ctx.drawImage(el, x, y, wbRect.width, wbRect.height);
+           } else if (el.tagName.toLowerCase() === 'video') {
+               if (el.readyState < 2 || el.paused) return;
+               const vRect = el.getBoundingClientRect();
+               const x = vRect.x - rect.x;
+               const y = vRect.y - rect.y;
+               
+               ctx.save();
+               ctx.beginPath();
+               // Slight border radius clipping for PIP aesthetics
+               ctx.roundRect(x, y, vRect.width, vRect.height, 16); 
+               ctx.clip();
+               ctx.drawImage(el, x, y, vRect.width, vRect.height);
+               ctx.restore();
+           }
         });
 
-        // 4. Draw All Visible Whiteboards
-        const wbs = Array.from(presentationLayer.querySelectorAll('canvas'));
-        wbs.forEach(wb => {
-           if (wb === canvas) return; // Skip our own composite canvas
-           const wbRect = wb.getBoundingClientRect();
-           const x = wbRect.x - rect.x;
-           const y = wbRect.y - rect.y;
-           ctx.drawImage(wb, x, y, wbRect.width, wbRect.height);
-        });
+        // 5. Draw Mouse Cursor
+        if (mousePosRef.current.x >= 0 && mousePosRef.current.y >= 0) {
+           const mx = mousePosRef.current.x - rect.x;
+           const my = mousePosRef.current.y - rect.y;
+           if (mx >= 0 && my >= 0 && mx <= canvas.width && my <= canvas.height) {
+             ctx.save();
+             ctx.beginPath();
+             ctx.moveTo(mx, my);
+             ctx.lineTo(mx + 12, my + 12);
+             ctx.lineTo(mx + 5, my + 12);
+             ctx.lineTo(mx, my + 20);
+             ctx.closePath();
+             ctx.fillStyle = '#ffffff';
+             ctx.fill();
+             ctx.lineWidth = 1;
+             ctx.strokeStyle = '#000000';
+             ctx.stroke();
+             ctx.restore();
+           }
+        }
 
         animFrameRef.current = requestAnimationFrame(drawCompositor);
       };
@@ -297,7 +327,7 @@ export const useLiveRecording = ({
           const stream = new MediaStream([nativeTrack]);
           const source = audioCtx.createMediaStreamSource(stream);
           source.connect(dest);
-          sourcesMap.set(id, source);
+          sourcesMap.set(id, { source, stream });
         } catch (e) {
           console.error("Error connecting track to mix", e);
         }
@@ -314,9 +344,12 @@ export const useLiveRecording = ({
       }
     });
 
-    for (const [id, source] of sourcesMap.entries()) {
+    for (const [id] of sourcesMap.entries()) {
       if (!currentTrackIds.has(id)) {
-        source.disconnect();
+        const entry = sourcesMap.get(id);
+        if (entry && entry.source) {
+           entry.source.disconnect();
+        }
         sourcesMap.delete(id);
       }
     }

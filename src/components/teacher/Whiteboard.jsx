@@ -95,7 +95,36 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       try {
         // Find the actual canvas element fabric is rendering to (lower-canvas)
         const activeCanvasEl = fCanvas.lowerCanvasEl || canvasEl;
-        const stream = activeCanvasEl.captureStream(30);
+        
+        let streamTargetCanvas = activeCanvasEl;
+        let mixCanvasInterval = null;
+
+        // If it's an overlay, WebRTC will turn transparent pixels black.
+        // We mix it down to a white canvas before capturing the stream.
+        if (isOverlay) {
+          const mixCanvas = document.createElement('canvas');
+          mixCanvas.width = activeCanvasEl.width;
+          mixCanvas.height = activeCanvasEl.height;
+          const mixCtx = mixCanvas.getContext('2d');
+          
+          const drawMixFrame = () => {
+            if (mixCanvas.width !== activeCanvasEl.width || mixCanvas.height !== activeCanvasEl.height) {
+              mixCanvas.width = activeCanvasEl.width;
+              mixCanvas.height = activeCanvasEl.height;
+            }
+            mixCtx.fillStyle = '#ffffff';
+            mixCtx.fillRect(0, 0, mixCanvas.width, mixCanvas.height);
+            mixCtx.drawImage(activeCanvasEl, 0, 0);
+          };
+          
+          // Draw initially and then every frame
+          drawMixFrame();
+          mixCanvasInterval = setInterval(drawMixFrame, 1000 / 30); // 30fps
+          
+          streamTargetCanvas = mixCanvas;
+        }
+
+        const stream = streamTargetCanvas.captureStream(30);
         
         const keepAliveInterval = setInterval(() => {
           if (!fabricRef.current) return;
@@ -105,6 +134,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         if (onStreamReady) onStreamReady(stream);
         
         activeCanvasEl.keepAlive = keepAliveInterval;
+        if (mixCanvasInterval) activeCanvasEl.mixCanvasInterval = mixCanvasInterval;
       } catch (e) {
         console.error('Canvas captureStream not supported', e);
       }
@@ -124,10 +154,9 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       window.removeEventListener('resize', resizeCanvas);
       clearTimeout(timeout);
       
-      const activeCanvasEl = fCanvas.lowerCanvasEl || canvasEl;
-      if (activeCanvasEl && activeCanvasEl.keepAlive) {
-         clearInterval(activeCanvasEl.keepAlive);
-      }
+      const activeCanvasEl = fCanvas?.lowerCanvasEl || canvasEl;
+      if (activeCanvasEl.keepAlive) clearInterval(activeCanvasEl.keepAlive);
+      if (activeCanvasEl.mixCanvasInterval) clearInterval(activeCanvasEl.mixCanvasInterval);
 
       if (fabricRef.current) {
         fabricRef.current.dispose();

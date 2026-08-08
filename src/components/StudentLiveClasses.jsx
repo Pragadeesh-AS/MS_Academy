@@ -38,6 +38,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   const [cameraOn, setCameraOn] = useState(false);
   const [pinnedUid, setPinnedUid] = useState(null);
   const [participantNames, setParticipantNames] = useState({});
+  const [participantRoles, setParticipantRoles] = useState({});
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
   const client = useRTCClient();
@@ -47,7 +48,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     if (client.uid && sessionId) {
       const userName = localStorage.getItem('auth_name') || 'Student';
       setDoc(doc(db, 'live_sessions', sessionId, 'participants', client.uid.toString()), {
-        name: userName
+        name: userName,
+        role: 'student'
       }).catch(console.error);
     }
   }, [client.uid, sessionId]);
@@ -58,11 +60,16 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   useEffect(() => {
     if (!sessionId) return;
     
-    // Listen to participant names
+    // Listen to participant names and roles
     const unsubParticipants = onSnapshot(collection(db, 'live_sessions', sessionId, 'participants'), (snapshot) => {
       const names = {};
-      snapshot.forEach(d => { names[d.id] = d.data().name; });
+      const roles = {};
+      snapshot.forEach(d => { 
+        names[d.id] = d.data().name; 
+        roles[d.id] = d.data().role;
+      });
       setParticipantNames(names);
+      setParticipantRoles(roles);
     });
 
     // Listen for session state (Question Bank sync)
@@ -207,12 +214,26 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     }
   }, [remoteUsers, pinnedUid, activeQuestionState?.isActive]);
 
+  const qbWhiteboardUser = remoteUsers.find(u => u.uid === 999997);
+  const hasQbWhiteboard = !!qbWhiteboardUser;
+
+  const whiteboardOverlayNode = useMemo(() => {
+    if (hasQbWhiteboard && qbWhiteboardUser && pinnedUid === 'question-bank') {
+      return (
+        <div className="absolute inset-0 z-20 pointer-events-none mix-blend-multiply">
+          <RemoteUser user={qbWhiteboardUser} playVideo={true} playAudio={false} style={{ objectFit: 'none', objectPosition: 'top left' }} />
+        </div>
+      );
+    }
+    return null;
+  }, [hasQbWhiteboard, qbWhiteboardUser?.uid, pinnedUid]);
+
   const renderGridTiles = () => {
     const pinnedTiles = [];
     const unpinnedTiles = [];
     
-    const qbWhiteboardUser = remoteUsers.find(u => u.uid === 999997);
-    const hasQbWhiteboard = !!qbWhiteboardUser;
+    const qbWhiteboardUserLocal = remoteUsers.find(u => u.uid === 999997);
+    const hasQbWhiteboardLocal = !!qbWhiteboardUserLocal;
     
     // -1. Question Bank Overlay
     if (activeQuestionState?.isActive && activeQuestionState.questions) {
@@ -273,19 +294,13 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
               </div>
             </div>
           </div>
-
-          {/* Middle Layer: Whiteboard Overlay (Covers Entire Screen) */}
-          {hasQbWhiteboard && qbWhiteboardUser && isPinned && (
-            <div className="absolute inset-0 z-20 pointer-events-none">
-              <RemoteUser user={qbWhiteboardUser} playVideo={true} playAudio={false} style={{ objectFit: 'none', objectPosition: 'top left' }} />
-            </div>
-          )}
         </>
       );
 
       const qbTile = (
         <div key="question-bank" className={`relative overflow-hidden bg-white shadow-xl group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 h-full w-full' : 'w-48 h-32 shrink-0 z-50 rounded-2xl pointer-events-none p-4'}`}>
           {qbContentNode}
+          {whiteboardOverlayNode}
           {/* Top Layer: Header */}
           {isPinned && (
             <div className={`absolute inset-x-0 top-0 w-full max-w-6xl mx-auto p-8 md:p-12 z-30 pointer-events-none flex justify-between items-start`}>
@@ -321,8 +336,11 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
       </div>
     );
     
-    if (isLocalPinned) pinnedTiles.push(localTile);
-    else unpinnedTiles.push(localTile);
+    if (isLocalPinned) {
+      pinnedTiles.push(localTile);
+    } else if (!pinnedUid) {
+      unpinnedTiles.push(localTile);
+    }
     
     // 2. Remote Users
     remoteUsers.forEach(user => {
@@ -360,8 +378,13 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
         </div>
       );
       
-      if (isPinned) pinnedTiles.push(remoteTile);
-      else unpinnedTiles.push(remoteTile);
+      const isTeacher = participantRoles[user.uid] === 'teacher' || participantNames[user.uid]?.toLowerCase().includes('teacher') || user.uid === 999999 || user.uid === 999998;
+
+      if (isPinned) {
+        pinnedTiles.push(remoteTile);
+      } else if (!pinnedUid || isTeacher) {
+        unpinnedTiles.push(remoteTile);
+      }
     });
     
     return { pinnedTiles, unpinnedTiles };
