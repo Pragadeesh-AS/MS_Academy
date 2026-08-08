@@ -1,8 +1,10 @@
 import React, { useRef, useState, useEffect } from 'react';
+import * as fabric from 'fabric';
 import { PenTool, Eraser, Trash2, Highlighter, Plus, MousePointer2, Palette, X, Shapes, Square, Circle, Triangle, Minus, ArrowRight, Hexagon, Diamond, Pentagon, Octagon, Star } from 'lucide-react';
 
 export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId = 'whiteboard-canvas' }) {
   const canvasRef = useRef(null);
+  const fabricRef = useRef(null);
   const containerRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   
@@ -18,6 +20,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
   const [showShapeOptions, setShowShapeOptions] = useState(false);
   const snapshotRef = useRef(null);
   const startPosRef = useRef({ x: 0, y: 0 });
+  const lastPosRef = useRef({ x: 0, y: 0 });
   
   const boardBgColors = [
     { name: 'White', value: '#FFFFFF' },
@@ -63,61 +66,288 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     }
   };
   
-  // Initialize canvas and stream
+
+  // Initialize Fabric Canvas
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const parent = containerRef.current;
+    if (!parent) return;
+
+    // Dynamically create the canvas to prevent React DOM mismatch when Fabric wraps it
+    const canvasEl = document.createElement('canvas');
+    canvasEl.id = canvasId;
+    parent.appendChild(canvasEl);
+
+    const { width, height } = parent.getBoundingClientRect();
+
+    const fCanvas = new fabric.Canvas(canvasEl, {
+      width: width || 1280,
+      height: height || 720,
+      isDrawingMode: false,
+      backgroundColor: isOverlay ? 'transparent' : boardColor,
+      selection: true
+    });
     
-    // Set internal resolution based on CSS size for crisp drawing
-    const resizeCanvas = () => {
-      const parent = containerRef.current;
-      if (parent) {
-        const { width, height } = parent.getBoundingClientRect();
-        canvas.width = width || 1280;
-        canvas.height = height || 720;
-        
-        // Fill white background initially if not overlay
-        const ctx = canvas.getContext('2d');
-        if (!isOverlay) {
-          ctx.fillStyle = boardColor;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        } else {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-      }
-    };
-    
-    resizeCanvas();
-    
-    // Delay captureStream slightly to ensure the canvas has been painted
+    fabricRef.current = fCanvas;
+    fCanvas.renderAll();
+
+    // Start capture stream for recording
     const timeout = setTimeout(() => {
       try {
-        const stream = canvas.captureStream(30); // 30 FPS
+        // Find the actual canvas element fabric is rendering to (lower-canvas)
+        const activeCanvasEl = fCanvas.lowerCanvasEl || canvasEl;
+        const stream = activeCanvasEl.captureStream(30);
         
-        // Force a frame update every second to keep the WebRTC stream alive if static
         const keepAliveInterval = setInterval(() => {
-          const ctx = canvas.getContext('2d');
-          // Draw a completely invisible dot in the corner
-          ctx.fillStyle = 'rgba(255,255,255,0.01)';
-          ctx.fillRect(0, 0, 1, 1);
+          if (!fabricRef.current) return;
+          fabricRef.current.renderAll();
         }, 1000);
         
         if (onStreamReady) onStreamReady(stream);
         
-        // Cleanup interval on unmount
-        canvas.keepAlive = keepAliveInterval;
+        activeCanvasEl.keepAlive = keepAliveInterval;
       } catch (e) {
-        console.error("Canvas captureStream not supported", e);
+        console.error('Canvas captureStream not supported', e);
       }
     }, 500);
-    
+
+    const resizeCanvas = () => {
+      if (parent && fabricRef.current) {
+        const rect = parent.getBoundingClientRect();
+        fabricRef.current.setWidth(rect.width);
+        fabricRef.current.setHeight(rect.height);
+        fabricRef.current.renderAll();
+      }
+    };
     window.addEventListener('resize', resizeCanvas);
+
     return () => {
       window.removeEventListener('resize', resizeCanvas);
       clearTimeout(timeout);
-      if (canvas.keepAlive) clearInterval(canvas.keepAlive);
+      
+      const activeCanvasEl = fCanvas.lowerCanvasEl || canvasEl;
+      if (activeCanvasEl && activeCanvasEl.keepAlive) {
+         clearInterval(activeCanvasEl.keepAlive);
+      }
+
+      if (fabricRef.current) {
+        fabricRef.current.dispose();
+        fabricRef.current = null;
+      }
+      
+      // Remove the canvas element from DOM
+      if (parent.contains(canvasEl)) {
+        parent.removeChild(canvasEl);
+      }
     };
-  }, [onStreamReady, isOverlay, boardColor]);
+  }, [onStreamReady, isOverlay, canvasId]);
+
+  // Handle Board Color changes
+  useEffect(() => {
+    if (fabricRef.current && !isOverlay) {
+      fabricRef.current.backgroundColor = boardColor;
+      fabricRef.current.renderAll();
+    }
+  }, [boardColor, isOverlay]);
+
+  // Handle Tool Changes
+  useEffect(() => {
+    const fCanvas = fabricRef.current;
+    if (!fCanvas) return;
+
+    // Reset interactions
+    fCanvas.isDrawingMode = false;
+    fCanvas.selection = false;
+    fCanvas.forEachObject(obj => {
+      obj.selectable = false;
+      obj.evented = false;
+    });
+
+    if (activeTool === 'select') {
+      fCanvas.selection = true;
+      fCanvas.forEachObject(obj => {
+        obj.selectable = true;
+        obj.evented = true;
+      });
+    } else if (activeTool === 'pen' || activeTool === 'highlighter' || activeTool === 'eraser') {
+      fCanvas.isDrawingMode = true;
+      let brush = new fabric.PencilBrush(fCanvas);
+      
+      if (activeTool === 'eraser') {
+         brush.color = isOverlay ? 'transparent' : boardColor;
+         brush.width = eraserSize;
+         // In a real app with transparent overlays, eraser is tricky. For solid backgrounds, matching bg color works perfectly.
+      } else if (activeTool === 'highlighter') {
+         // Create a translucent color
+         let r = 0, g = 0, b = 0;
+         if (activeColor.startsWith('#')) {
+            const hex = activeColor.replace('#', '');
+            if (hex.length === 6) {
+              r = parseInt(hex.substring(0,2), 16);
+              g = parseInt(hex.substring(2,4), 16);
+              b = parseInt(hex.substring(4,6), 16);
+            }
+         }
+         brush.color = `rgba(${r},${g},${b},0.3)`;
+         brush.width = 30;
+      } else {
+         brush.color = activeColor;
+         brush.width = penSize;
+      }
+      
+      fCanvas.freeDrawingBrush = brush;
+    }
+  }, [activeTool, activeColor, penSize, eraserSize, isOverlay, boardColor]);
+
+  // Handle dynamically drawn paths to ensure they are selectable ONLY in select mode
+  useEffect(() => {
+    const fCanvas = fabricRef.current;
+    if (!fCanvas) return;
+    
+    const onPathCreated = (e) => {
+      const path = e.path || e.object;
+      if (path) {
+        path.selectable = (activeTool === 'select');
+        path.evented = (activeTool === 'select');
+      }
+    };
+    
+    fCanvas.on('path:created', onPathCreated);
+    return () => fCanvas.off('path:created', onPathCreated);
+  }, [activeTool]);
+
+  // Handle Shapes Drawing Logic
+  useEffect(() => {
+    const fCanvas = fabricRef.current;
+    if (!fCanvas) return;
+
+    let isDrawingShape = false;
+    let shape = null;
+    let startX = 0;
+    let startY = 0;
+
+    const onMouseDown = (o) => {
+      if (activeTool !== 'shapes') return;
+      isDrawingShape = true;
+      const pointer = o.scenePoint || o.pointer || { x: o.e.clientX, y: o.e.clientY };
+      startX = pointer.x;
+      startY = pointer.y;
+
+      const shapeProps = {
+        left: startX,
+        top: startY,
+        fill: 'transparent',
+        stroke: activeColor,
+        strokeWidth: penSize,
+        selectable: false, // only selectable when tool switches to select
+        evented: false,
+      };
+
+      if (activeShape === 'rectangle') {
+        shape = new fabric.Rect({ ...shapeProps, width: 0, height: 0 });
+      } else if (activeShape === 'circle') {
+        shape = new fabric.Circle({ ...shapeProps, radius: 0, originX: 'center', originY: 'center' });
+      } else if (activeShape === 'triangle') {
+        shape = new fabric.Triangle({ ...shapeProps, width: 0, height: 0 });
+      } else if (activeShape === 'line') {
+        shape = new fabric.Line([startX, startY, startX, startY], shapeProps);
+      }
+      
+      if (shape) {
+        fCanvas.add(shape);
+      }
+    };
+
+    const onMouseMove = (o) => {
+      if (!isDrawingShape || !shape || activeTool !== 'shapes') return;
+      const pointer = o.scenePoint || o.pointer || { x: o.e.clientX, y: o.e.clientY };
+      
+      if (activeShape === 'rectangle') {
+        shape.set({ width: Math.abs(startX - pointer.x), height: Math.abs(startY - pointer.y) });
+        shape.set({ left: Math.min(startX, pointer.x), top: Math.min(startY, pointer.y) });
+      } else if (activeShape === 'circle') {
+        const radius = Math.sqrt(Math.pow(startX - pointer.x, 2) + Math.pow(startY - pointer.y, 2));
+        shape.set({ radius: radius });
+      } else if (activeShape === 'triangle') {
+        shape.set({ width: Math.abs(startX - pointer.x), height: Math.abs(startY - pointer.y) });
+        shape.set({ left: Math.min(startX, pointer.x), top: Math.min(startY, pointer.y) });
+      } else if (activeShape === 'line') {
+        shape.set({ x2: pointer.x, y2: pointer.y });
+      }
+      
+      fCanvas.renderAll();
+    };
+
+    const onMouseUp = () => {
+      if (activeTool !== 'shapes') return;
+      isDrawingShape = false;
+      if (shape) {
+        shape.setCoords(); // Update hit boxes
+      }
+      shape = null;
+    };
+
+    fCanvas.on('mouse:down', onMouseDown);
+    fCanvas.on('mouse:move', onMouseMove);
+    fCanvas.on('mouse:up', onMouseUp);
+
+    return () => {
+      fCanvas.off('mouse:down', onMouseDown);
+      fCanvas.off('mouse:move', onMouseMove);
+      fCanvas.off('mouse:up', onMouseUp);
+    };
+  }, [activeTool, activeShape, activeColor, penSize]);
+
+  // Global drag handler for the menu
+  useEffect(() => {
+    const handlePointerMove = (e) => {
+      if (!dragRef.current.isDragging) return;
+      
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      const dx = clientX - dragRef.current.startX;
+      const dy = clientY - dragRef.current.startY;
+      
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        setIsDraggingMenu(true);
+      }
+      
+      if (isDraggingMenu || Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        setMenuOffset({
+          x: dragRef.current.initialX + dx,
+          y: dragRef.current.initialY + dy
+        });
+      }
+    };
+
+    const handlePointerUp = () => {
+      if (dragRef.current.isDragging) {
+        dragRef.current.isDragging = false;
+        setTimeout(() => setIsDraggingMenu(false), 50);
+      }
+    };
+
+    window.addEventListener('mousemove', handlePointerMove);
+    window.addEventListener('mouseup', handlePointerUp);
+    window.addEventListener('touchmove', handlePointerMove, { passive: false });
+    window.addEventListener('touchend', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handlePointerMove);
+      window.removeEventListener('mouseup', handlePointerUp);
+      window.removeEventListener('touchmove', handlePointerMove);
+      window.removeEventListener('touchend', handlePointerUp);
+    };
+  }, [isDraggingMenu]);
+
+  const clearBoard = () => {
+    if (fabricRef.current) {
+      fabricRef.current.clear();
+      fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+      fabricRef.current.renderAll();
+    }
+  };
+
 
   // Global drag handler for the menu
   useEffect(() => {
@@ -198,13 +428,20 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     
     setIsDrawing(true);
     startPosRef.current = { x, y };
+    lastPosRef.current = { x, y };
     
     if (activeTool === 'shapes') {
       snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
     } else {
+      // Draw initial dot
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.fillStyle = activeColor;
+      if (activeTool === 'eraser') ctx.fillStyle = isOverlay ? '#FFFFFF' : boardColor;
+      
       ctx.beginPath();
-      ctx.moveTo(x, y);
-      draw(e);
+      ctx.arc(x, y, (activeTool === 'eraser' ? eraserSize : activeTool === 'highlighter' ? 30 : penSize) / 2, 0, Math.PI * 2);
+      ctx.fill();
     }
   };
 
@@ -308,6 +545,8 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       ctx.globalCompositeOperation = 'source-over';
       ctx.lineWidth = eraserSize;
       ctx.strokeStyle = isOverlay ? '#FFFFFF' : boardColor;
+      ctx.beginPath();
+      ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
       ctx.lineTo(x, y);
       ctx.stroke();
     } else if (activeTool === 'highlighter') {
@@ -323,15 +562,21 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         }
       }
       ctx.strokeStyle = `rgba(${r},${g},${b},0.05)`; // Lighter for overlay effect
+      ctx.beginPath();
+      ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
       ctx.lineTo(x, y);
       ctx.stroke();
     } else {
       ctx.globalCompositeOperation = 'source-over';
       ctx.lineWidth = penSize;
       ctx.strokeStyle = activeColor;
+      ctx.beginPath();
+      ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
       ctx.lineTo(x, y);
       ctx.stroke();
     }
+    
+    lastPosRef.current = { x, y };
   };
 
   const stopDrawing = () => {
@@ -345,44 +590,19 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     }
   };
 
-  const clearBoard = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.globalCompositeOperation = 'source-over';
-    if (!isOverlay) {
-      ctx.fillStyle = boardColor;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    } else {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-  };
-
   return (
-    <div className={`relative w-full h-full flex flex-col overflow-hidden ${isOverlay ? 'bg-transparent' : 'bg-slate-900'}`} ref={containerRef}>
-      
-      {/* Canvas */}
-      <canvas
-        id={canvasId}
-        ref={canvasRef}
-        className={`w-full h-full ${activeTool === 'select' ? 'cursor-default' : 'cursor-crosshair'} bg-white touch-none`}
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={stopDrawing}
-        onMouseOut={stopDrawing}
-        onTouchStart={startDrawing}
-        onTouchMove={draw}
-        onTouchEnd={stopDrawing}
-      />
+    <div className={`relative w-full h-full flex flex-col ${isOverlay ? 'bg-transparent' : 'bg-slate-900'} whiteboard-container`}>
+      {/* Dynamic Canvas Container */}
+      <div className="w-full h-full touch-none pointer-events-auto" ref={containerRef}></div>
       
       {/* Radial Menu Container */}
       <div 
-        className="absolute right-12 bottom-12 z-50 flex items-center justify-center pointer-events-none"
+        className="absolute right-12 top-12 z-50 flex items-center justify-center pointer-events-none"
         style={{ transform: `translate(${menuOffset.x}px, ${menuOffset.y}px)` }}
       >
         
         {/* Board Color Popout */}
-        <div className={`absolute bottom-full mb-8 transition-all duration-300 pointer-events-auto flex gap-3 p-3 bg-white rounded-full shadow-2xl border border-slate-200 ${showBoardColors && !isMenuOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-50 pointer-events-none'}`}>
+        <div className={`absolute top-full mt-8 transition-all duration-300 pointer-events-auto flex gap-3 p-3 bg-white rounded-full shadow-2xl border border-slate-200 ${showBoardColors && !isMenuOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-50 pointer-events-none'}`}>
           {boardBgColors.map(color => (
             <button
               key={color.name}

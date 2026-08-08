@@ -217,62 +217,75 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     // -1. Question Bank Overlay
     if (activeQuestionState?.isActive && activeQuestionState.questions) {
       const isPinned = pinnedUid === 'question-bank';
-      const qbTile = (
-        <div key="question-bank" className={`relative overflow-hidden bg-white shadow-xl group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 h-full w-full' : 'w-48 h-32 shrink-0 z-50 rounded-2xl pointer-events-none p-4'}`}>
-          
+      const qbContentNode = (
+        <>
           {/* Base Layer: Question Content */}
-          <div className={`absolute inset-0 w-full h-full flex flex-col max-w-6xl mx-auto ${isPinned ? 'p-8 md:p-12 pt-8 md:pt-12' : 'pt-12'} z-10 pointer-events-none`}>
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
-              <h2 className={`${isPinned ? 'text-2xl md:text-4xl leading-snug mb-10' : 'text-sm mb-2'} font-bold text-slate-900 whitespace-normal break-words`}>
-                <span className="text-slate-500 mr-3 md:mr-4">Q.{activeQuestionState.currentIndex + 1}</span>
-                <span dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
+          <div className={`absolute inset-0 h-full flex flex-col w-full z-10 pointer-events-none bg-white md:bg-white/90 md:backdrop-blur-sm p-6 md:p-12`}>
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 flex flex-col">
+              {/* Top: Full Width Question */}
+              <h2 className={`w-full flex font-bold text-slate-900 whitespace-normal break-words ${isPinned ? 'text-base md:text-lg mb-6' : 'text-sm mb-2'}`}>
+                <span className={`text-slate-500 shrink-0 ${isPinned ? 'w-16 mr-4 text-center' : 'w-10'}`}>Q.{activeQuestionState.currentIndex + 1}</span>
+                <span className="flex-1" dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
               </h2>
               
-              {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
-                <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[40vh] mb-10' : 'max-h-16 mb-2'} object-contain`} />
-              )}
-              
-              <div className="flex flex-col gap-4 md:gap-6 pl-4 md:pl-8">
-                {['A', 'B', 'C', 'D'].map(opt => {
-                  const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
-                  if (!text) return null;
-                  const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
-                  const isRevealed = activeQuestionState.isAnswerRevealed;
-                  
-                  // Student guessing logic
-                  const isGuessed = studentGuess === opt;
-                  let bgClass = "text-slate-800 hover:bg-slate-100 cursor-pointer p-4 rounded-xl inline-block w-max transition-colors";
-                  
-                  if (isRevealed) {
-                    bgClass = isCorrect ? "text-green-600 bg-green-50 p-4 rounded-xl inline-block w-max cursor-default" : (isGuessed ? "text-red-600 bg-red-50 p-4 rounded-xl inline-block w-max cursor-default" : "text-slate-400 p-4 rounded-xl inline-block w-max cursor-default");
-                  } else if (isGuessed) {
-                    bgClass = "text-indigo-600 bg-indigo-50 p-4 rounded-xl inline-block w-max cursor-pointer border border-indigo-200";
-                  }
-                  
-                  return (
-                    <div 
-                      key={opt} 
-                      onClick={() => !isRevealed && setStudentGuess(opt)}
-                      className={`flex items-center text-xl md:text-2xl font-semibold transition-all ${bgClass} pointer-events-auto`}
-                    >
-                      <span className="mr-4 font-bold">( {opt} )</span> 
-                      <span dangerouslySetInnerHTML={{ __html: text }} />
-                      {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500" />}
-                      {isRevealed && isGuessed && !isCorrect && <X size={24} className="inline ml-4 text-red-500" />}
+              {/* Bottom: Options (Left 40%) & Empty Workspace */}
+              <div className="w-full flex flex-1">
+                <div className="w-full md:w-[45%] flex flex-col pr-4">
+                  {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
+                    <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
+                      <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[30vh]' : 'max-h-16'} object-contain`} />
                     </div>
-                  );
-                })}
+                  )}
+                  <div className={`flex flex-col gap-4 md:gap-5 ${isPinned ? 'ml-20' : 'ml-10'}`}>
+                    {['A', 'B', 'C', 'D'].map(opt => {
+                      const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
+                      if (!text) return null;
+                      const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
+                      const isGuessed = studentGuess === opt;
+                      const isRevealed = activeQuestionState.isAnswerRevealed;
+
+                      let bgClass = 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200';
+                      if (isRevealed) {
+                        if (isCorrect) bgClass = 'bg-green-100 text-green-800 border-green-300 shadow-sm';
+                        else if (isGuessed) bgClass = 'bg-red-50 text-red-700 border-red-200';
+                        else bgClass = 'bg-slate-50/50 text-slate-400 border-slate-100';
+                      } else if (isGuessed) {
+                        bgClass = 'bg-indigo-100 text-indigo-800 border-indigo-300 shadow-sm';
+                      }
+
+                      return (
+                        <button
+                          key={opt}
+                          onClick={() => !isRevealed && setStudentGuess(opt)}
+                          className={`flex items-center text-base md:text-lg font-semibold transition-all p-3 rounded-xl ${bgClass} pointer-events-auto text-left w-max`}
+                        >
+                          <span className="mr-4 font-bold shrink-0 whitespace-nowrap">( {opt} )</span> 
+                          <span dangerouslySetInnerHTML={{ __html: text }} />
+                          {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500 shrink-0" />}
+                          {isRevealed && isGuessed && !isCorrect && <X size={24} className="inline ml-4 text-red-500 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Right Side: Empty Workspace for Whiteboard */}
+                <div className="hidden md:block md:w-[55%] border-l border-slate-200/50 border-dashed"></div>
               </div>
             </div>
           </div>
 
-          {/* Middle Layer: Whiteboard Overlay */}
+          {/* Middle Layer: Whiteboard Overlay (Covers Entire Screen) */}
           {hasQbWhiteboard && qbWhiteboardUser && isPinned && (
-            <div className="absolute inset-0 z-20 mix-blend-multiply pointer-events-none">
-              <RemoteUser user={qbWhiteboardUser} playVideo={true} playAudio={false} />
+            <div className="absolute inset-0 z-20 pointer-events-none">
+              <RemoteUser user={qbWhiteboardUser} playVideo={true} playAudio={false} style={{ objectFit: 'none', objectPosition: 'top left' }} />
             </div>
           )}
+        </>
+      );
 
+      const qbTile = (
+        <div key="question-bank" className={`relative overflow-hidden bg-white shadow-xl group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 h-full w-full' : 'w-48 h-32 shrink-0 z-50 rounded-2xl pointer-events-none p-4'}`}>
+          {qbContentNode}
           {/* Top Layer: Header */}
           {isPinned && (
             <div className={`absolute inset-x-0 top-0 w-full max-w-6xl mx-auto p-8 md:p-12 z-30 pointer-events-none flex justify-between items-start`}>
@@ -355,7 +368,6 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   };
 
   const { pinnedTiles, unpinnedTiles } = renderGridTiles();
-  const isScreenSharePinned = pinnedUid === 999999 || pinnedUid === 'local-screen';
 
   return (
     <div className="flex-1 flex flex-col relative bg-black">
@@ -448,6 +460,7 @@ export default function StudentLiveClasses({ department }) {
   const [newMessage, setNewMessage] = useState("");
   const chatEndRef = useRef(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('chat');
   const [chatToast, setChatToast] = useState({ show: false, sender: '', message: '' });
   const prevMessagesLength = useRef(0);
 

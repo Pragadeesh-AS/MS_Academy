@@ -12,7 +12,7 @@ import {
   Plus,
   Clock,
   MoreHorizontal,
-  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send
+  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import AgoraRTC, {
@@ -31,7 +31,7 @@ import AgoraRTC, {
   useConnectionState
 } from "agora-rtc-react";
 import Whiteboard from './Whiteboard';
-
+import { useLiveRecording } from './hooks/useLiveRecording';
 // Extracted component to handle whiteboard sharing as an independent client
 const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) => {
   const [wbClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
@@ -67,10 +67,8 @@ const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) 
 };
 
 // Extracted component to handle screen sharing as an independent client
-const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
+const ScreenShareClient = ({ appId, channel, token, onTrackEnded, onAudioTrackReady, onTrackReady }) => {
   const [screenClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
-  const [screenTrack, setScreenTrack] = useState(null);
-  const [screenAudioTrack, setScreenAudioTrack] = useState(null);
   const [joined, setJoined] = useState(false);
   const initStarted = useRef(false);
   
@@ -79,6 +77,16 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
   useEffect(() => {
     onTrackEndedRef.current = onTrackEnded;
   }, [onTrackEnded]);
+
+  const onAudioTrackReadyRef = useRef(onAudioTrackReady);
+  useEffect(() => {
+    onAudioTrackReadyRef.current = onAudioTrackReady;
+  }, [onAudioTrackReady]);
+
+  const onTrackReadyRef = useRef(onTrackReady);
+  useEffect(() => {
+    onTrackReadyRef.current = onTrackReady;
+  }, [onTrackReady]);
 
   useEffect(() => {
     if (initStarted.current) return;
@@ -110,8 +118,11 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
           localVidTrack = tracks;
         }
 
-        setScreenTrack(localVidTrack);
-        if (localAudTrack) setScreenAudioTrack(localAudTrack);
+        if (onTrackReadyRef.current) onTrackReadyRef.current(localVidTrack);
+        
+        if (localAudTrack) {
+          if (onAudioTrackReadyRef.current) onAudioTrackReadyRef.current(localAudTrack);
+        }
 
         const handleTrackEnded = () => {
           if (onTrackEndedRef.current) onTrackEndedRef.current();
@@ -146,34 +157,24 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded }) => {
       if (localAudTrack) {
         localAudTrack.stop();
         localAudTrack.close();
+        if (onAudioTrackReadyRef.current) onAudioTrackReadyRef.current(null);
       }
-      screenClient.leave();
+      try {
+        if (screenClient.connectionState === 'CONNECTED') {
+          screenClient.unpublish().catch(() => {});
+          screenClient.leave().catch(() => {});
+        }
+      } catch(e) {}
     };
   }, [screenClient, appId, channel, token]);
 
-  if (!screenTrack || !joined) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white font-bold animate-pulse">
-        Initializing Screen Share...
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full h-full relative">
-      <LocalVideoTrack track={screenTrack} play={true} className="w-full h-full object-cover" />
-      {screenAudioTrack && (
-        <div className="absolute top-4 left-4 bg-black/70 px-3 py-1 rounded-full text-white text-xs font-bold shadow-md z-30 flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-          Audio Shared
-        </div>
-      )}
-    </div>
-  );
+  return null;
 };
 
 // Extracted TeacherCall component for custom Agora rendering
 const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, departmentQuestions }) => {
+  const [activeTab, setActiveTab] = useState('chat');
+  const [isRevealing, setIsRevealing] = useState(false);
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [screenShareOn, setScreenShareOn] = useState(false);
@@ -186,346 +187,19 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [participantNames, setParticipantNames] = useState({});
   const client = useRTCClient();
   const connectionState = useConnectionState();
-
-  // --- RECORDING STATE & LOGIC ---
-  const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef(null);
-  const recordedChunksRef = useRef([]);
-  const timerIntervalRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const audioDestRef = useRef(null);
-  const mediaStreamSourcesRef = useRef(new Map());
-  const compositeCanvasRef = useRef(null);
-  const animFrameRef = useRef(null);
-
-  const startRecording = async () => {
-    try {
-      // --- UNIFIED CANVAS COMPOSITOR LOGIC ---
-      // We always render to the hidden composite canvas. 
-      // If whiteboard is on, we copy the whiteboard canvas to it.
-      // If whiteboard is off, we render the video grid to it.
-      const canvas = compositeCanvasRef.current;
-      const ctx = canvas.getContext('2d');
-      
-      const drawCompositor = () => {
-        const qState = activeQuestionStateRef.current;
-        const qbActive = qState?.isActive && qState?.questions;
-        
-        let targetWbCanvas = document.getElementById('whiteboard-canvas'); // Default to main WB
-        if (qbActive) {
-          targetWbCanvas = document.getElementById('qb-whiteboard-canvas');
-        } else if (whiteboardOnRef.current) {
-          targetWbCanvas = document.getElementById('main-whiteboard-canvas');
-        }
-
-        if (targetWbCanvas && (canvas.width !== targetWbCanvas.width || canvas.height !== targetWbCanvas.height)) {
-          canvas.width = targetWbCanvas.width;
-          canvas.height = targetWbCanvas.height;
-        }
-
-        ctx.fillStyle = '#0f172a'; // slate-900 background
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        if (qbActive) {
-          const qState = activeQuestionStateRef.current;
-          if (qState?.isActive && qState?.questions && qState.questions[qState.currentIndex]) {
-            const q = qState.questions[qState.currentIndex];
-            
-            const wbCanvas = document.getElementById('qb-whiteboard-canvas');
-            const domW = wbCanvas ? wbCanvas.width : 1280;
-            const domH = wbCanvas ? wbCanvas.height : 720;
-            
-            ctx.save();
-            ctx.scale(canvas.width / domW, canvas.height / domH);
-            
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, domW, domH);
-            
-            const stripHtml = (html) => html ? html.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ') : '';
-            const wrapText = (context, text, x, y, maxWidth, lineHeight) => {
-              const words = text.split(' ');
-              let line = '';
-              for(let n = 0; n < words.length; n++) {
-                const testLine = line + words[n] + ' ';
-                const metrics = context.measureText(testLine);
-                if (metrics.width > maxWidth && n > 0) {
-                  context.fillText(line, x, y);
-                  line = words[n] + ' ';
-                  y += lineHeight;
-                } else {
-                  line = testLine;
-                }
-              }
-              context.fillText(line, x, y);
-              return y + lineHeight;
-            };
-
-            ctx.textBaseline = 'top';
-            const isMd = domW >= 768;
-            
-            const containerEl = document.getElementById('qb-content');
-            if (containerEl) {
-              const wbCanvasDom = document.getElementById('qb-whiteboard-canvas');
-              const cRect = wbCanvasDom ? wbCanvasDom.getBoundingClientRect() : containerEl.getBoundingClientRect();
-              
-              const qNumEl = document.getElementById('qb-qnum');
-              if (qNumEl) {
-                const rect = qNumEl.getBoundingClientRect();
-                ctx.font = `bold ${isMd ? '36px' : '24px'} system-ui, -apple-system, sans-serif`;
-                ctx.fillStyle = '#64748b'; 
-                ctx.fillText(`Q.${qState.currentIndex + 1}`, rect.x - cRect.x, rect.y - cRect.y);
-              }
-              
-              const qTextEl = document.getElementById('qb-qtext');
-              if (qTextEl) {
-                const rect = qTextEl.getBoundingClientRect();
-                ctx.font = `bold ${isMd ? '36px' : '24px'} system-ui, -apple-system, sans-serif`;
-                ctx.fillStyle = '#0f172a';
-                const cleanQ = stripHtml(q.questionText);
-                wrapText(ctx, cleanQ, rect.x - cRect.x, rect.y - cRect.y, rect.width, isMd ? 48 : 34);
-              }
-            
-            const options = ['A', 'B', 'C', 'D'];
-            options.forEach(opt => {
-              const text = q[`option${opt}`];
-              if (text) {
-                const cleanOpt = stripHtml(text);
-                const isCorrect = q.correctAnswer === opt;
-                const isRevealed = qState.isAnswerRevealed;
-                
-                  const containerOptEl = document.getElementById(`qb-opt-container-${opt}`);
-                  const prefixOptEl = document.getElementById(`qb-opt-prefix-${opt}`);
-                  const textOptEl = document.getElementById(`qb-opt-text-${opt}`);
-                  
-                  if (containerOptEl && prefixOptEl && textOptEl) {
-                    const cOptRect = containerOptEl.getBoundingClientRect();
-                    const pRect = prefixOptEl.getBoundingClientRect();
-                    const tRect = textOptEl.getBoundingClientRect();
-                    
-                    const optFontSize = isMd ? 24 : 20;
-                    ctx.font = `600 ${optFontSize}px system-ui, -apple-system, sans-serif`;
-                    
-                    if (isRevealed && isCorrect) {
-                       ctx.fillStyle = '#f0fdf4';
-                       ctx.fillRect(cOptRect.x - cRect.x, cOptRect.y - cRect.y, cOptRect.width, cOptRect.height); 
-                       ctx.fillStyle = '#16a34a';
-                    } else {
-                       ctx.fillStyle = '#1e293b';
-                    }
-                    
-                    ctx.fillText(`( ${opt} )`, pRect.x - cRect.x, pRect.y - cRect.y);
-                    wrapText(ctx, cleanOpt, tRect.x - cRect.x, tRect.y - cRect.y, tRect.width, isMd ? 32 : 28);
-                  }
-                }
-              });
-            }
-            ctx.restore();
-          }
-
-          // Draw the whiteboard canvas directly
-          const wbCanvas = document.getElementById('qb-whiteboard-canvas');
-          if (wbCanvas) {
-            ctx.drawImage(wbCanvas, 0, 0, canvas.width, canvas.height);
-          }
-        } else if (whiteboardOnRef.current) {
-          const wbCanvas = document.getElementById('main-whiteboard-canvas');
-          if (wbCanvas) {
-            ctx.drawImage(wbCanvas, 0, 0, canvas.width, canvas.height);
-          }
-        } else {
-          // Draw the active video grid
-          const videos = Array.from(document.querySelectorAll('video')).filter(v => v.readyState >= 2 && !v.paused);
-          
-          if (videos.length > 0) {
-            let cols = 1, rows = 1;
-            const n = videos.length;
-            if (n === 2) { cols = 2; rows = 1; }
-            else if (n <= 4) { cols = 2; rows = 2; }
-            else if (n <= 6) { cols = 3; rows = 2; }
-            else if (n <= 9) { cols = 3; rows = 3; }
-            else { cols = 4; rows = Math.ceil(n / 4); }
-            
-            const w = canvas.width / cols;
-            const h = canvas.height / rows;
-            
-            videos.forEach((video, i) => {
-              const col = i % cols;
-              const row = Math.floor(i / cols);
-              const x = col * w;
-              const y = row * h;
-              
-              const vw = video.videoWidth;
-              const vh = video.videoHeight;
-              if (vw > 0 && vh > 0) {
-                const scale = Math.max(w / vw, h / vh);
-                const drawW = vw * scale;
-                const drawH = vh * scale;
-                const drawX = x + (w - drawW) / 2;
-                const drawY = y + (h - drawH) / 2;
-                
-                ctx.save();
-                ctx.beginPath();
-                ctx.rect(x, y, w, h);
-                ctx.clip();
-                ctx.drawImage(video, drawX, drawY, drawW, drawH);
-                ctx.restore();
-              }
-            });
-          }
-        }
-        
-        animFrameRef.current = requestAnimationFrame(drawCompositor);
-      };
-      
-      animFrameRef.current = requestAnimationFrame(drawCompositor);
-      const videoStream = canvas.captureStream(30);
-
-      const tracks = [...videoStream.getVideoTracks()];
-
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      const audioCtx = new AudioContext();
-      if (audioCtx.state === 'suspended') {
-        await audioCtx.resume(); 
-      }
-      const dest = audioCtx.createMediaStreamDestination();
-      
-      // CRITICAL HACK: Force the audio stream to stay "active" by playing a completely silent sound.
-      // If an audio stream goes completely dead, MediaRecorder stops writing video frames to the file!
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-      gainNode.gain.value = 0; // 0 volume = completely silent
-      oscillator.connect(gainNode);
-      gainNode.connect(dest);
-      oscillator.start();
-
-      audioContextRef.current = audioCtx;
-      audioDestRef.current = dest;
-
-      tracks.push(...dest.stream.getAudioTracks());
-
-      const combinedStream = new MediaStream(tracks);
-      
-      const types = [
-        'video/webm;codecs=h264,opus',
-        'video/webm;codecs=vp8,opus',
-        'video/webm',
-        'video/mp4'
-      ];
-      
-      let options = {};
-      for (const type of types) {
-        if (MediaRecorder.isTypeSupported(type)) {
-          options = { mimeType: type };
-          break;
-        }
-      }
-
-      const mediaRecorder = new MediaRecorder(combinedStream, options);
-      mediaRecorderRef.current = mediaRecorder;
-      recordedChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onerror = (e) => {
-        console.error("MediaRecorder error:", e);
-      };
-
-      mediaRecorder.onstop = () => {
-        const type = mediaRecorder.mimeType || 'video/webm';
-        const blob = new Blob(recordedChunksRef.current, { type });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        document.body.appendChild(a);
-        a.style = 'display: none';
-        a.href = url;
-        
-        let ext = 'webm';
-        if (type.includes('mp4')) ext = 'mp4';
-        else if (type.includes('matroska')) ext = 'mkv';
-        
-        a.download = `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}.${ext}`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-        setIsRecording(false);
-        setIsPaused(false);
-        setRecordingTime(0);
-        oscillator.stop();
-        if (animFrameRef.current) {
-          cancelAnimationFrame(animFrameRef.current);
-          animFrameRef.current = null;
-        }
-      };
-
-      videoStream.getVideoTracks()[0].onended = () => {
-        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-      };
-
-      mediaRecorder.start(1000); 
-      setIsRecording(true);
-      setIsPaused(false);
-      setRecordingTime(0);
-
-      timerIntervalRef.current = setInterval(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-          setRecordingTime(prev => prev + 1);
-          try {
-            // Force flush chunks
-            mediaRecorderRef.current.requestData();
-          } catch (e) {}
-        }
-      }, 1000);
-
-    } catch (err) {
-      console.error("Error starting recording:", err);
-    }
-  };
-
-  const togglePauseRecording = () => {
-    if (mediaRecorderRef.current) {
-      if (mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.pause();
-        setIsPaused(true);
-      } else if (mediaRecorderRef.current.state === 'paused') {
-        mediaRecorderRef.current.resume();
-        setIsPaused(false);
-      }
-    }
-  };
-
-  const stopRecording = () => {
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-      if (mediaRecorderRef.current.stream) {
-        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
-      }
-    }
-    
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-      audioDestRef.current = null;
-      mediaStreamSourcesRef.current.clear();
-    }
-  };
-
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
-  // --- END RECORDING LOGIC ---
-
+  const remoteUsers = useRemoteUsers();
+  const [screenShareAudioTrack, setScreenShareAudioTrack] = useState(null);
+  const [screenShareVideoTrack, setScreenShareVideoTrack] = useState(null);
 
   // Question Bank State
   const [isQBModalOpen, setIsQBModalOpen] = useState(false);
-  const [qbRangeInput, setQbRangeInput] = useState("");
+  const [selectedQBIds, setSelectedQBIds] = useState([]);
+  const [qbSearchFilter, setQbSearchFilter] = useState("");
+  const [qbDifficultyFilter, setQbDifficultyFilter] = useState("ALL");
   const [activeQuestionState, setActiveQuestionState] = useState(null);
-  const activeQuestionStateRef = useRef(null);
+  const activeQuestionStateRef = useRef(activeQuestionState);
+
+
   
   useEffect(() => {
     activeQuestionStateRef.current = activeQuestionState;
@@ -651,52 +325,23 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     }
   }, [client.connectionState, localMicrophoneTrack, localCameraTrack, client]);
 
-  const remoteUsers = useRemoteUsers();
 
-  // --- WEB AUDIO MIXING ---
-  useEffect(() => {
-    if (!isRecording || !audioContextRef.current || !audioDestRef.current) return;
 
-    const audioCtx = audioContextRef.current;
-    const dest = audioDestRef.current;
-    const sourcesMap = mediaStreamSourcesRef.current;
-    const currentTrackIds = new Set();
-
-    const addTrack = (track) => {
-      if (!track) return;
-      const nativeTrack = track.getMediaStreamTrack ? track.getMediaStreamTrack() : track;
-      if (!nativeTrack) return;
-      
-      const id = nativeTrack.id;
-      currentTrackIds.add(id);
-
-      if (!sourcesMap.has(id)) {
-        try {
-          const stream = new MediaStream([nativeTrack]);
-          const source = audioCtx.createMediaStreamSource(stream);
-          source.connect(dest);
-          sourcesMap.set(id, source);
-        } catch (e) {
-          console.error("Error connecting track to mix", e);
-        }
-      }
-    };
-
-    if (localMicrophoneTrack) addTrack(localMicrophoneTrack);
-    
-    remoteUsers.forEach(user => {
-      if (user.audioTrack) addTrack(user.audioTrack);
-    });
-
-    for (const [id, source] of sourcesMap.entries()) {
-      if (!currentTrackIds.has(id)) {
-        source.disconnect();
-        sourcesMap.delete(id);
-      }
-    }
-
-  }, [isRecording, localMicrophoneTrack, remoteUsers]);
-  // --- END WEB AUDIO MIXING ---
+  const {
+    isRecording,
+    isPaused,
+    recordingTime,
+    formatTime,
+    startRecording,
+    togglePauseRecording,
+    stopRecording,
+    compositeCanvasRef
+  } = useLiveRecording({
+    localMicrophoneTrack,
+    screenShareAudioTrack,
+    remoteUsers,
+    activeQuestionState
+  });
 
   const remoteUserStyle = { width: '100%', height: '100%' };
 
@@ -734,40 +379,22 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   }, [activeQuestionState?.isActive, whiteboardOn, screenShareOn, pinnedUid]);
 
   const handleStartQB = async () => {
-    if (!qbRangeInput.trim() || !departmentQuestions) return;
-
-    // Parse range, e.g., "1-5" or just "1"
-    const parts = qbRangeInput.split('-').map(p => parseInt(p.trim()));
-    let startIdx = 0;
-    let endIdx = 0;
-
-    if (parts.length === 1 && !isNaN(parts[0])) {
-      startIdx = parts[0] - 1;
-      endIdx = parts[0] - 1;
-    } else if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      startIdx = parts[0] - 1;
-      endIdx = parts[1] - 1;
-    } else {
-      alert("Invalid range format. Use e.g. 1-5");
+    if (!departmentQuestions || selectedQBIds.length === 0) {
+      alert("Please select at least one question.");
       return;
     }
 
-    if (startIdx < 0) startIdx = 0;
-    if (endIdx >= departmentQuestions.length) endIdx = departmentQuestions.length - 1;
-    if (startIdx > endIdx) {
-      alert("Invalid range.");
-      return;
-    }
-
-    const selectedQList = departmentQuestions.slice(startIdx, endIdx + 1);
+    // Preserve the order of selection based on departmentQuestions array
+    const selectedQList = departmentQuestions.filter(q => selectedQBIds.includes(q.id));
 
     if (selectedQList.length === 0) {
-      alert("No questions found in that range.");
+      alert("Selected questions not found.");
       return;
     }
 
     setIsQBModalOpen(false);
-    setQbRangeInput("");
+    setSelectedQBIds([]);
+    setQbSearchFilter("");
 
     await updateDoc(doc(db, 'live_sessions', sessionId), {
       activeQuestionState: {
@@ -814,62 +441,72 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     // -1. Question Bank Overlay
     if (activeQuestionState?.isActive && activeQuestionState.questions) {
       const isPinned = pinnedUid === 'question-bank';
-      const qbTile = (
-        <div key="question-bank" className={`relative overflow-hidden bg-white shadow-xl group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 h-full w-full' : 'w-48 h-32 shrink-0 z-50 rounded-2xl pointer-events-none p-4'}`}>
-
+      const qbContentNode = (
+        <>
           {/* Base Layer: Question Content */}
-          <div id="qb-content" className={`absolute inset-0 w-full h-full flex flex-col max-w-6xl mx-auto ${isPinned ? 'p-8 md:p-12 pt-8 md:pt-12' : 'pt-12'} z-10 pointer-events-none bg-white`}>
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
-              <div className={`${isPinned ? 'text-2xl md:text-4xl leading-snug mb-10' : 'text-sm mb-4'} font-bold text-slate-900 flex`}>
-                <div id="qb-qnum" className={`text-slate-500 shrink-0 ${isPinned ? 'w-16 md:w-24' : 'w-10'}`}>Q.{activeQuestionState.currentIndex + 1}</div>
+          <div id="qb-content" className={`absolute inset-0 h-full flex flex-col w-full z-10 pointer-events-none bg-white md:bg-white/90 p-6 md:p-12`}>
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 flex flex-col">
+              {/* Top: Full Width Question */}
+              <div className={`w-full flex font-bold text-slate-900 ${isPinned ? 'text-base md:text-lg mb-6' : 'text-sm mb-4'}`}>
+                <div id="qb-qnum" className={`text-slate-500 shrink-0 flex flex-col items-center gap-4 mt-1 ${isPinned ? 'w-16 mr-4' : 'w-10 mr-2'}`}>
+                  <span>Q.{activeQuestionState.currentIndex + 1}</span>
+                </div>
                 <div id="qb-qtext" className="flex-1" dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
               </div>
 
-              {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
-                <div className={`${isPinned ? 'ml-16 md:ml-24' : 'ml-10'}`}>
-                  <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[40vh] mb-10' : 'max-h-16 mb-2'} object-contain`} />
+              {/* Bottom: Options (Left 40%) */}
+              <div id="qb-options-area" className="w-full md:w-[45%] flex flex-col">
+                {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
+                  <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
+                    <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[30vh]' : 'max-h-16'} object-contain`} />
+                  </div>
+                )}
+
+                <div className={`flex flex-col gap-4 md:gap-5 ${isPinned ? 'ml-20' : 'ml-10'}`}>
+                  {['A', 'B', 'C', 'D'].map(opt => {
+                    const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
+                    if (!text) return null;
+                    const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
+                    const isRevealed = activeQuestionState.isAnswerRevealed;
+
+                    return (
+                      <div id={`qb-opt-container-${opt}`} key={opt} className={`flex items-center text-base md:text-lg font-semibold transition-all ${isRevealed && isCorrect ? 'text-green-600 bg-green-50 p-4 rounded-xl inline-block w-max' : 'text-slate-800 p-3'}`}>
+                        <span id={`qb-opt-prefix-${opt}`} className="mr-4 font-bold shrink-0 whitespace-nowrap">( {opt} )</span>
+                        <span id={`qb-opt-text-${opt}`} dangerouslySetInnerHTML={{ __html: text }} />
+                        {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500" />}
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-
-              <div className={`flex flex-col gap-4 md:gap-6 ${isPinned ? 'ml-16 md:ml-24' : 'ml-10'}`}>
-                {['A', 'B', 'C', 'D'].map(opt => {
-                  const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
-                  if (!text) return null;
-                  const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
-                  const isRevealed = activeQuestionState.isAnswerRevealed;
-
-                  return (
-                    <div id={`qb-opt-container-${opt}`} key={opt} className={`flex items-center text-xl md:text-2xl font-semibold transition-all ${isRevealed && isCorrect ? 'text-green-600 bg-green-50 p-4 rounded-xl inline-block w-max' : 'text-slate-800'}`}>
-                      <span id={`qb-opt-prefix-${opt}`} className="mr-4 font-bold">( {opt} )</span>
-                      <span id={`qb-opt-text-${opt}`} dangerouslySetInnerHTML={{ __html: text }} />
-                      {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500" />}
-                    </div>
-                  );
-                })}
               </div>
             </div>
           </div>
 
-          {/* Middle Layer: Whiteboard Overlay */}
+          {/* Middle Layer: Whiteboard Overlay (Covers Entire Screen) */}
           {isPinned && (
-            <div className="absolute inset-0 z-20 mix-blend-multiply pointer-events-auto">
+            <div className="absolute inset-0 z-40 pointer-events-none">
               <Whiteboard canvasId="qb-whiteboard-canvas" onStreamReady={setQbWhiteboardStream} isOverlay={true} />
               <WhiteboardShareClient appId={appId} channel={channel} token={token} stream={qbWhiteboardStream} uid={999997} />
-            </div>
-          )}
-
-          {/* Top Layer: Controls */}
-          {isPinned && (
-            <div className={`absolute inset-x-0 top-0 w-full max-w-6xl mx-auto p-8 md:p-12 z-30 pointer-events-none flex justify-end items-start`}>
-              <div className="flex gap-4 items-center pointer-events-auto">
-                <button onClick={handleNextQB} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full font-bold shadow-md transition-transform hover:scale-105" title={activeQuestionState.isAnswerRevealed ? "Next Question" : "Reveal Answer"}>
-                  {activeQuestionState.isAnswerRevealed ? "Next" : "Reveal"}
-                </button>
-                <button onClick={handleCloseQB} className="text-slate-400 hover:text-slate-600 bg-slate-100 p-2 rounded-full"><X size={20} /></button>
+              
+              {/* Top Layer: Interactive Controls Overlay (aligned with Q.1) */}
+              <div className="absolute inset-0 p-6 md:p-12 pointer-events-none flex flex-col">
+                <div className={`w-full flex font-bold ${isPinned ? 'text-base md:text-lg mb-8' : 'text-sm mb-4'}`}>
+                  <div className="shrink-0 flex flex-col items-center gap-4 mt-1 w-16 mr-4">
+                    <span className="invisible pointer-events-none">Q.{activeQuestionState.currentIndex + 1}</span>
+                    <button onClick={handleNextQB} className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-md transition-transform hover:scale-105 pointer-events-auto" title={activeQuestionState.isAnswerRevealed ? "Next Question" : "Reveal Answer"}>
+                      {activeQuestionState.isAnswerRevealed ? <ChevronRight size={22} /> : <Eye size={22} />}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
+        </>
+      );
 
+      const qbTile = (
+        <div key="question-bank" className={`relative overflow-hidden bg-white shadow-xl group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 h-full w-full' : 'w-48 h-32 shrink-0 z-50 rounded-2xl pointer-events-none p-4'}`}>
+          {qbContentNode}
           <button onClick={() => togglePin('question-bank')} className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-[70] pointer-events-auto">
             {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
           </button>
@@ -905,7 +542,19 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       const isPinned = pinnedUid === 'local-screen';
       const screenTile = (
         <div key="local-screen" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
-          <ScreenShareClient appId={appId} channel={channel} token={token} onTrackEnded={() => setScreenShareOn(false)} />
+          {screenShareVideoTrack ? (
+            <LocalVideoTrack track={screenShareVideoTrack} play={true} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white font-bold animate-pulse">
+              Initializing Screen Share...
+            </div>
+          )}
+          {screenShareAudioTrack && (
+            <div className="absolute top-4 left-24 bg-black/70 px-2 py-1 rounded-full text-white text-xs font-bold shadow-md z-30 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+              Audio Shared
+            </div>
+          )}
           <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-blue-600/90 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>Your Screen</div>
           <button onClick={() => togglePin('local-screen')} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
             {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
@@ -974,8 +623,18 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
 
   return (
     <div className="flex-1 flex flex-col relative bg-black">
+      {screenShareOn && (
+        <ScreenShareClient 
+          appId={appId} 
+          channel={channel} 
+          token={token} 
+          onTrackEnded={() => setScreenShareOn(false)} 
+          onAudioTrackReady={(track) => setScreenShareAudioTrack(track)}
+          onTrackReady={(track) => setScreenShareVideoTrack(track)}
+        />
+      )}
       {/* Hidden Composite Canvas for clean Recording */}
-      <canvas ref={compositeCanvasRef} width={1280} height={720} style={{ display: 'none' }} />
+      <canvas ref={compositeCanvasRef} width={1280} height={720} className="fixed top-0 left-0 pointer-events-none z-[9999]" style={{ opacity: 0.01, transform: 'scale(0.01)', transformOrigin: 'top left' }} />
 
       <div className="absolute top-4 right-4 z-50 flex gap-2">
         {chatToast.show && (
@@ -990,8 +649,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
         )}
       </div>
 
-      {/* Video Grid */}
-      <div className={`flex-1 relative ${pinnedUid ? 'overflow-hidden' : `p-4 grid ${gridColsClass} gap-4 auto-rows-fr`}`}>
+      {/* Video Grid / Classroom Presentation Layer */}
+      <div id="classroom-presentation" className={`flex-1 relative ${pinnedUid ? 'overflow-hidden' : `p-4 grid ${gridColsClass} gap-4 auto-rows-fr`}`}>
         {pinnedUid ? (
           <>
             {/* The single pinned video taking the full background */}
@@ -1063,9 +722,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
 
           {/* Question Bank Button */}
           <button
-            onClick={() => setIsQBModalOpen(true)}
+            onClick={() => activeQuestionState?.isActive ? handleCloseQB() : setIsQBModalOpen(true)}
             className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-full transition-all shadow-lg ${activeQuestionState?.isActive ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
-            title="Question Bank"
+            title={activeQuestionState?.isActive ? "Close Question Bank" : "Open Question Bank"}
           >
             <BookOpen size={20} className="md:w-6 md:h-6" />
           </button>
@@ -1079,12 +738,13 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
             <PenTool size={20} className="md:w-6 md:h-6" />
           </button>
 
+          {/* Screen Share Button */}
           <button
             onClick={() => setScreenShareOn(!screenShareOn)}
-            className={`w-12 h-12 rounded-full border-[1.5px] flex items-center justify-center transition-all ${screenShareOn ? 'border-transparent bg-white text-[#0078FF] shadow-[0_0_15px_rgba(255,255,255,0.5)]' : 'border-white text-white hover:bg-white/20'}`}
+            className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-full transition-all shadow-lg ${screenShareOn ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
             title={screenShareOn ? 'Stop Sharing' : 'Share Screen'}
           >
-            <MonitorUp size={22} strokeWidth={1.5} />
+            <MonitorUp size={20} className="md:w-6 md:h-6" />
           </button>
 
         </div>
@@ -1119,25 +779,124 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       {/* Question Bank Modal */}
       {isQBModalOpen && (
         <div className="absolute inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative animate-in zoom-in-95 duration-200">
             <button onClick={() => setIsQBModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20} /></button>
-            <h3 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2"><BookOpen className="text-indigo-600" /> Question Bank</h3>
-            <p className="text-slate-500 text-sm mb-6">Enter the question number range you'd like to present to the class.</p>
+            <h3 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2"><BookOpen className="text-indigo-600" /> Select Questions to Present</h3>
+            <p className="text-slate-500 text-sm mb-4">Choose the exact questions you'd like to share with the class.</p>
 
-            <div className="mb-6">
-              <label className="block text-sm font-bold text-slate-700 mb-2">Question Range (e.g. 1-5)</label>
-              <input
-                type="text"
-                value={qbRangeInput}
-                onChange={(e) => setQbRangeInput(e.target.value)}
-                placeholder="1-5"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+            <div className="flex items-center gap-2 mb-4 shrink-0">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="text" 
+                  placeholder="Search by topic or text..."
+                  value={qbSearchFilter}
+                  onChange={(e) => setQbSearchFilter(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-xl pl-10 pr-4 py-3 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-all"
+                />
+              </div>
+              <select 
+                value={qbDifficultyFilter}
+                onChange={(e) => setQbDifficultyFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-sm font-semibold rounded-xl px-4 py-3 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-all cursor-pointer"
+              >
+                <option value="ALL">All Difficulties</option>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+              </select>
             </div>
 
-            <button onClick={handleStartQB} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-colors">
-              Start Presentation
-            </button>
+            <div className="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl mb-4 bg-slate-50 p-2 space-y-2 min-h-[300px]">
+              {departmentQuestions && departmentQuestions
+                .filter(q => 
+                  ((q.questionText || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
+                  (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
+                  (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
+                  (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase()))
+                )
+                .map((q, idx) => {
+                  const isSelected = selectedQBIds.includes(q.id);
+                  const cleanText = q.questionText ? q.questionText.replace(/<[^>]+>/g, '').substring(0, 100) + '...' : '';
+                  return (
+                    <div 
+                      key={q.id}
+                      onClick={() => {
+                        setSelectedQBIds(prev => 
+                          prev.includes(q.id) ? prev.filter(id => id !== q.id) : [...prev, q.id]
+                        );
+                      }}
+                      className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-transparent hover:border-slate-200'}`}
+                    >
+                      <div className="mt-0.5 shrink-0">
+                        <div className={`w-5 h-5 rounded flex items-center justify-center border ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
+                          {isSelected && <Check size={14} className="text-white" />}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">{q.subject}</span>
+                          {q.topic && <span className="text-xs font-medium text-slate-500 truncate">{q.topic}</span>}
+                          {q.difficultyLevel && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                            q.difficultyLevel.toLowerCase() === 'easy' ? 'bg-green-100 text-green-700' :
+                            q.difficultyLevel.toLowerCase() === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>{q.difficultyLevel}</span>}
+                        </div>
+                        <p className="text-sm text-slate-800 line-clamp-2">{cleanText}</p>
+                      </div>
+                    </div>
+                  );
+              })}
+              {(!departmentQuestions || departmentQuestions.length === 0) && (
+                <div className="text-center py-10 text-slate-500 font-medium">No questions available in bank.</div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between shrink-0 mt-2">
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => {
+                    const filteredIds = departmentQuestions
+                      .filter(q => 
+                        ((q.questionText || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
+                        (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
+                        (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
+                        (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase()))
+                      ).map(q => q.id);
+                    
+                    const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedQBIds.includes(id));
+                    
+                    if (allSelected) {
+                      setSelectedQBIds(prev => prev.filter(id => !filteredIds.includes(id)));
+                    } else {
+                      setSelectedQBIds(prev => [...new Set([...prev, ...filteredIds])]);
+                    }
+                  }}
+                  className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  {departmentQuestions && departmentQuestions.filter(q => 
+                    ((q.questionText || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
+                    (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
+                    (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
+                    (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase()))
+                  ).every(q => selectedQBIds.includes(q.id)) && departmentQuestions.filter(q => 
+                    ((q.questionText || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
+                    (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
+                    (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
+                    (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase()))
+                  ).length > 0 ? "Deselect All" : "Select All"}
+                </button>
+                <span className="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">Selected: {selectedQBIds.length}</span>
+              </div>
+              <button 
+                onClick={handleStartQB}
+                disabled={selectedQBIds.length === 0}
+                className="py-3 px-6 bg-indigo-600 disabled:bg-indigo-400 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-colors"
+              >
+                Start Presentation
+              </button>
+            </div>
           </div>
         </div>
       )}
