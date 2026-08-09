@@ -16,6 +16,7 @@ export const useLiveRecording = ({
   const [recordingTime, setRecordingTime] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [pendingRecording, setPendingRecording] = useState(null);
   
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
@@ -268,40 +269,8 @@ export const useLiveRecording = ({
         if (type.includes('mp4')) ext = 'mp4';
         else if (type.includes('matroska')) ext = 'mkv';
         
-        let fileName = window.prompt("Enter a name for this recording:", `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}`);
-        if (!fileName) fileName = `LiveClass_Recording_${new Date().getTime()}`;
-
-        setIsUploading(true);
-        setUploadProgress(0);
-
-        const storageRef = ref(storage, `recordings/${fileName}.${ext}`);
-        const uploadTask = uploadBytesResumable(storageRef, blob);
-
-        uploadTask.on('state_changed', 
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            setUploadProgress(progress);
-          }, 
-          (error) => {
-            console.error("Upload error:", error);
-            alert("Error uploading recording: " + error.message);
-            setIsUploading(false);
-          }, 
-          async () => {
-            console.log("Upload successful!");
-            try {
-              const url = await getDownloadURL(uploadTask.snapshot.ref);
-              if (onUploadComplete) {
-                onUploadComplete(url, fileName);
-              }
-            } catch (err) {
-              console.error("Error getting download URL", err);
-            }
-            setIsUploading(false);
-            setUploadProgress(100);
-            setTimeout(() => setUploadProgress(0), 2000);
-          }
-        );
+        const defaultName = `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}`;
+        setPendingRecording({ blob, ext, defaultName });
 
         setIsRecording(false);
         setIsPaused(false);
@@ -335,6 +304,49 @@ export const useLiveRecording = ({
       console.error("Error starting recording:", err);
       alert("Error starting recording: " + err.message);
     }
+  };
+
+  const confirmRecordingName = (fileName) => {
+    if (!pendingRecording) return;
+    const { blob, ext, defaultName } = pendingRecording;
+    const finalName = fileName || defaultName;
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    setPendingRecording(null);
+
+    const storageRef = ref(storage, `recordings/${finalName}.${ext}`);
+    const uploadTask = uploadBytesResumable(storageRef, blob);
+
+    uploadTask.on('state_changed', 
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      }, 
+      (error) => {
+        console.error("Upload error:", error);
+        alert("Error uploading recording: " + error.message);
+        setIsUploading(false);
+      }, 
+      async () => {
+        console.log("Upload successful!");
+        try {
+          const url = await getDownloadURL(uploadTask.snapshot.ref);
+          if (onUploadComplete) {
+            onUploadComplete(url, finalName);
+          }
+        } catch (err) {
+          console.error("Error getting download URL", err);
+        }
+        setIsUploading(false);
+        setUploadProgress(100);
+        setTimeout(() => setUploadProgress(0), 2000);
+      }
+    );
+  };
+
+  const cancelRecording = () => {
+    setPendingRecording(null);
   };
 
   const togglePauseRecording = () => {
@@ -420,6 +432,9 @@ export const useLiveRecording = ({
     recordingTime,
     isUploading,
     uploadProgress,
+    pendingRecording,
+    confirmRecordingName,
+    cancelRecording,
     formatTime,
     startRecording,
     togglePauseRecording,

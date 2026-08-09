@@ -216,6 +216,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [qbDifficultyFilter, setQbDifficultyFilter] = useState("ALL");
   const [activeQuestionState, setActiveQuestionState] = useState(null);
   const activeQuestionStateRef = useRef(activeQuestionState);
+  const [newRecordingName, setNewRecordingName] = useState('');
 
 
   
@@ -263,44 +264,89 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
 
-  const { localMicrophoneTrack } = useLocalMicrophoneTrack(true);
-  const { localCameraTrack } = useLocalCameraTrack(true);
+  const [localMicrophoneTrack, setLocalMicrophoneTrack] = useState(null);
+  const [localCameraTrack, setLocalCameraTrack] = useState(null);
 
   useEffect(() => {
-    if (localCameraTrack) {
-      localCameraTrack.setEnabled(cameraOn).catch(console.error);
+    let activeTrack = null;
+    if (cameraOn) {
+      AgoraRTC.createCameraVideoTrack().then(track => {
+        activeTrack = track;
+        setLocalCameraTrack(track);
+      }).catch(console.error);
+    } else {
+      setLocalCameraTrack(prev => {
+        if (prev) {
+          try {
+            prev.stop();
+            prev.close();
+          } catch(e) {}
+        }
+        return null;
+      });
     }
-  }, [cameraOn, localCameraTrack]);
-
-  useEffect(() => {
-    if (localMicrophoneTrack) {
-      localMicrophoneTrack.setMuted(!micOn).catch(console.error);
-      localMicrophoneTrack.setEnabled(micOn).catch(console.error);
-    }
-  }, [micOn, localMicrophoneTrack]);
-
-  // Hard cleanup on unmount to ensure hardware is released
-  const tracksRef = useRef({ camera: null, mic: null });
-  useEffect(() => {
-    tracksRef.current.camera = localCameraTrack;
-    tracksRef.current.mic = localMicrophoneTrack;
-  }, [localCameraTrack, localMicrophoneTrack]);
-
-  useEffect(() => {
     return () => {
-      if (tracksRef.current.camera) {
-        tracksRef.current.camera.stop();
-        tracksRef.current.camera.close();
-      }
-      if (tracksRef.current.mic) {
-        tracksRef.current.mic.stop();
-        tracksRef.current.mic.close();
+      if (activeTrack) {
+        try {
+          activeTrack.stop();
+          activeTrack.close();
+        } catch(e) {}
       }
     };
-  }, []);
+  }, [cameraOn]);
 
-  // Automatically handle publishing and reconnects
-  usePublish([localMicrophoneTrack, localCameraTrack].filter(Boolean));
+  useEffect(() => {
+    let activeTrack = null;
+    if (micOn) {
+      AgoraRTC.createMicrophoneAudioTrack().then(track => {
+        activeTrack = track;
+        setLocalMicrophoneTrack(track);
+      }).catch(console.error);
+    } else {
+      setLocalMicrophoneTrack(prev => {
+        if (prev) {
+          try {
+            prev.stop();
+            prev.close();
+          } catch(e) {}
+        }
+        return null;
+      });
+    }
+    return () => {
+      if (activeTrack) {
+        try {
+          activeTrack.stop();
+          activeTrack.close();
+        } catch(e) {}
+      }
+    };
+  }, [micOn]);
+
+  // We are handling publishing manually in useEffects above
+  // usePublish([localMicrophoneTrack, localCameraTrack].filter(Boolean));
+
+  useEffect(() => {
+    if (localCameraTrack && client.connectionState === 'CONNECTED') {
+      client.publish(localCameraTrack).catch(console.error);
+      return () => {
+        if (client.connectionState === 'CONNECTED') {
+          client.unpublish(localCameraTrack).catch(console.error);
+        }
+      };
+    }
+  }, [localCameraTrack, client, client.connectionState]);
+
+  useEffect(() => {
+    if (localMicrophoneTrack && client.connectionState === 'CONNECTED') {
+      client.publish(localMicrophoneTrack).catch(console.error);
+      return () => {
+        if (client.connectionState === 'CONNECTED') {
+          client.unpublish(localMicrophoneTrack).catch(console.error);
+        }
+      };
+    }
+  }, [localMicrophoneTrack, client, client.connectionState]);
 
   const {
     isRecording,
@@ -308,6 +354,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     recordingTime,
     isUploading,
     uploadProgress,
+    pendingRecording,
+    confirmRecordingName,
+    cancelRecording,
     formatTime,
     startRecording,
     togglePauseRecording,
@@ -935,6 +984,49 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
         </div>
       )}
 
+      {/* 2. Recording Naming Modal */}
+      {pendingRecording && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => cancelRecording()}></div>
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative z-10 animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100">
+              <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center mb-4">
+                <Video size={24} />
+              </div>
+              <h2 className="text-xl font-[900] text-slate-900">Name Your Recording</h2>
+              <p className="text-slate-500 text-sm mt-1">Provide a memorable title for this session so students can easily find it.</p>
+            </div>
+            <div className="p-6">
+              <input
+                type="text"
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[15px] font-medium focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-100 transition-all bg-slate-50"
+                placeholder={pendingRecording.defaultName}
+                value={newRecordingName}
+                onChange={(e) => setNewRecordingName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="px-6 py-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
+              <button
+                onClick={() => cancelRecording()}
+                className="px-5 py-2.5 font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={() => {
+                  confirmRecordingName(newRecordingName);
+                  setNewRecordingName('');
+                }}
+                className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-md flex items-center gap-2 transition-colors"
+              >
+                <UploadCloud size={18} /> Save & Upload
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
@@ -962,6 +1054,7 @@ export default function LiveClasses({ department }) {
   const [activeSessions, setActiveSessions] = useState([]);
   const [upcomingClasses, setUpcomingClasses] = useState([]);
   const [departmentStudents, setDepartmentStudents] = useState([]);
+  const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
 
   useEffect(() => {
     const fetchStudents = async () => {
@@ -1391,7 +1484,7 @@ export default function LiveClasses({ department }) {
               <p className="text-slate-400 text-sm font-medium text-center py-4">No recordings yet.</p>
             ) : (
               recentRecordings.map(rec => (
-                <div key={rec.id} className="flex items-center justify-between p-3 bg-white rounded-xl shadow-sm border border-slate-100 hover:border-purple-200 transition-colors group cursor-pointer" onClick={() => window.open(rec.url, '_blank')}>
+                <div key={rec.id} className="flex items-center justify-between p-3 bg-white rounded-xl shadow-sm border border-slate-100 hover:border-purple-200 transition-colors group cursor-pointer" onClick={() => setPlayingVideoUrl(rec.url)}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                       <PlayCircle size={18} />
@@ -1539,6 +1632,27 @@ export default function LiveClasses({ department }) {
                 Schedule Class
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. In-App Video Player Modal */}
+      {playingVideoUrl && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setPlayingVideoUrl(null)}></div>
+          <div className="relative z-10 w-full max-w-5xl rounded-2xl overflow-hidden shadow-2xl bg-black border border-slate-800 animate-in zoom-in-95 duration-300">
+            <button 
+              onClick={() => setPlayingVideoUrl(null)} 
+              className="absolute top-4 right-4 z-20 w-10 h-10 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors backdrop-blur-sm"
+            >
+              <X size={20} />
+            </button>
+            <video 
+              src={playingVideoUrl} 
+              controls 
+              autoPlay 
+              className="w-full h-auto max-h-[85vh] outline-none"
+            />
           </div>
         </div>
       )}

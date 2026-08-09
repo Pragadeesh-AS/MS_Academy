@@ -99,44 +99,89 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     };
   }, [sessionId]);
 
-  const { localMicrophoneTrack } = useLocalMicrophoneTrack(true);
-  const { localCameraTrack } = useLocalCameraTrack(true);
+  const [localMicrophoneTrack, setLocalMicrophoneTrack] = useState(null);
+  const [localCameraTrack, setLocalCameraTrack] = useState(null);
 
   useEffect(() => {
-    if (localCameraTrack) {
-      localCameraTrack.setEnabled(cameraOn).catch(console.error);
+    let activeTrack = null;
+    if (cameraOn) {
+      AgoraRTC.createCameraVideoTrack().then(track => {
+        activeTrack = track;
+        setLocalCameraTrack(track);
+      }).catch(console.error);
+    } else {
+      setLocalCameraTrack(prev => {
+        if (prev) {
+          try {
+            prev.stop();
+            prev.close();
+          } catch(e) {}
+        }
+        return null;
+      });
     }
-  }, [cameraOn, localCameraTrack]);
-
-  useEffect(() => {
-    if (localMicrophoneTrack) {
-      localMicrophoneTrack.setMuted(!micOn).catch(console.error);
-      localMicrophoneTrack.setEnabled(micOn).catch(console.error);
-    }
-  }, [micOn, localMicrophoneTrack]);
-
-  // Hard cleanup on unmount to ensure hardware is released
-  const tracksRef = useRef({ camera: null, mic: null });
-  useEffect(() => {
-    tracksRef.current.camera = localCameraTrack;
-    tracksRef.current.mic = localMicrophoneTrack;
-  }, [localCameraTrack, localMicrophoneTrack]);
-
-  useEffect(() => {
     return () => {
-      if (tracksRef.current.camera) {
-        tracksRef.current.camera.stop();
-        tracksRef.current.camera.close();
-      }
-      if (tracksRef.current.mic) {
-        tracksRef.current.mic.stop();
-        tracksRef.current.mic.close();
+      if (activeTrack) {
+        try {
+          activeTrack.stop();
+          activeTrack.close();
+        } catch(e) {}
       }
     };
-  }, []);
+  }, [cameraOn]);
 
-  // Automatically handle publishing and reconnects
-  usePublish([localMicrophoneTrack, localCameraTrack].filter(Boolean));
+  useEffect(() => {
+    let activeTrack = null;
+    if (micOn) {
+      AgoraRTC.createMicrophoneAudioTrack().then(track => {
+        activeTrack = track;
+        setLocalMicrophoneTrack(track);
+      }).catch(console.error);
+    } else {
+      setLocalMicrophoneTrack(prev => {
+        if (prev) {
+          try {
+            prev.stop();
+            prev.close();
+          } catch(e) {}
+        }
+        return null;
+      });
+    }
+    return () => {
+      if (activeTrack) {
+        try {
+          activeTrack.stop();
+          activeTrack.close();
+        } catch(e) {}
+      }
+    };
+  }, [micOn]);
+
+  // We are handling publishing manually in useEffects above
+  // usePublish([localMicrophoneTrack, localCameraTrack].filter(Boolean));
+
+  useEffect(() => {
+    if (localCameraTrack && client.connectionState === 'CONNECTED') {
+      client.publish(localCameraTrack).catch(console.error);
+      return () => {
+        if (client.connectionState === 'CONNECTED') {
+          client.unpublish(localCameraTrack).catch(console.error);
+        }
+      };
+    }
+  }, [localCameraTrack, client, client.connectionState]);
+
+  useEffect(() => {
+    if (localMicrophoneTrack && client.connectionState === 'CONNECTED') {
+      client.publish(localMicrophoneTrack).catch(console.error);
+      return () => {
+        if (client.connectionState === 'CONNECTED') {
+          client.unpublish(localMicrophoneTrack).catch(console.error);
+        }
+      };
+    }
+  }, [localMicrophoneTrack, client, client.connectionState]);
 
   const remoteUsers = useRemoteUsers();
   const networkQuality = useNetworkQuality();
