@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
 import { useNavigate } from 'react-router-dom';
 import CreateTestButton from './CreateTestButton';
 import { 
   Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut, 
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
-  ChevronLeft, ChevronRight, UserCheck, Database, BarChart2, Megaphone, Sparkles,
+  ChevronLeft, ChevronRight, ChevronDown, UserCheck, Database, BarChart2, Megaphone, Sparkles,
   Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
@@ -23,6 +24,14 @@ import TeacherDirectory from './admin/TeacherDirectory';
 import FeesTracker from './admin/FeesTracker';
 
 // Default mock data to populate localStorage if empty
+const loadImage = (src) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.crossOrigin = 'Anonymous';
+  img.onload = () => resolve(img);
+  img.onerror = reject;
+  img.src = src;
+});
+
 const defaultStudents = [
   { id: 1, name: "Arjun Kumar", email: "arjun.k@gmail.com", joinedDate: "15 Jul 2026", status: "Active" },
   { id: 2, name: "Priya Sharma", email: "priya.sharma@yahoo.com", joinedDate: "18 Jul 2026", status: "Active" },
@@ -70,6 +79,41 @@ const defaultApplications = [
   }
 ];
 
+const sendEmailViaGAS = async (to, subject, htmlMessage, attachment = null) => {
+  const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
+  if (!webhookUrl) {
+    console.warn("VITE_GAS_WEBHOOK_URL is not set. Skipping email.");
+    return;
+  }
+  
+  const payload = {
+    to_email: to,
+    subject: subject,
+    message_html: htmlMessage
+  };
+
+  if (attachment) {
+    if (Array.isArray(attachment)) {
+      payload.attachments = attachment;
+    } else {
+      payload.attachment = attachment;
+    }
+  }
+
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify(payload)
+  });
+  
+  const result = await response.json();
+  if (result.status !== "success") {
+    throw new Error(result.message || "Failed to send email via Google Apps Script");
+  }
+};
+
 const defaultQueries = [
   {
     id: 'q-1',
@@ -116,6 +160,10 @@ export default function AdminDashboard() {
 
   // Core datasets states
   const [applications, setApplications] = useState([]);
+  const [selectedApp, setSelectedApp] = useState(null);
+  const [showRejectInput, setShowRejectInput] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isProcessingApp, setIsProcessingApp] = useState(false);
   const [queries, setQueries] = useState([]);
   const [courses, setCourses] = useState([]);
   
@@ -144,7 +192,6 @@ export default function AdminDashboard() {
   const [queryFilter, setQueryFilter] = useState('All');
 
   // Modal detail states
-  const [selectedApp, setSelectedApp] = useState(null);
   const [selectedQuery, setSelectedQuery] = useState(null);
   const [activeHeatmapIndex, setActiveHeatmapIndex] = useState(null);
 
@@ -256,18 +303,243 @@ export default function AdminDashboard() {
     navigate('/login');
   };
 
-  const updateAppStatus = async (id, status) => {
-    const updated = applications.map(app => 
-      app.id === id ? { ...app, status } : app
+  const updateAppStatus = async (app, status, reason = '') => {
+    setIsProcessingApp(true);
+    const updated = applications.map(a => 
+      a.id === app.id ? { ...a, status } : a
     );
     setApplications(updated);
+    
+    let emailFailed = false;
+    let emailErrorMsg = '';
     try {
-      await updateDoc(doc(db, 'career_applications', id), { status });
-      if (selectedApp && selectedApp.id === id) {
+      let subject, htmlMessage, attachment = null;
+
+      if (status === 'Shortlisted') {
+        subject = 'Congratulations! Welcome to MS Academy';
+        
+        // ----------------------------------------------------
+        // PDF 1: OFFER LETTER
+        // ----------------------------------------------------
+        const doc1 = new jsPDF();
+        
+        doc1.setFillColor(30, 58, 138);
+        doc1.rect(0, 0, 210, 40, 'F');
+        
+        let headerImgLoaded = false;
+        let loadedImg = null;
+        try {
+          loadedImg = await loadImage(logoImg);
+          headerImgLoaded = true;
+          doc1.addImage(loadedImg, 'PNG', 20, 8, 24, 24);
+          doc1.setTextColor(255, 255, 255);
+          doc1.setFontSize(28);
+          doc1.setFont('helvetica', 'bold');
+          doc1.text('MS ACADEMY', 50, 26);
+        } catch (e) {
+          doc1.setTextColor(255, 255, 255);
+          doc1.setFontSize(28);
+          doc1.setFont('helvetica', 'bold');
+          doc1.text('MS ACADEMY', 20, 26);
+        }
+        
+        doc1.setFontSize(14);
+        doc1.setFont('helvetica', 'normal');
+        doc1.text('OFFER OF EMPLOYMENT', 190, 26, { align: 'right' });
+        
+        doc1.setTextColor(51, 51, 51);
+        doc1.setFontSize(10);
+        doc1.text(`Ref: MSA/HR/${new Date().getFullYear()}/${Math.floor(Math.random()*10000)}`, 20, 55);
+        doc1.text(`Date: ${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`, 190, 55, { align: 'right' });
+        
+        doc1.setFontSize(12);
+        doc1.setFont('helvetica', 'bold');
+        doc1.text(`Dear ${app.fullName},`, 20, 75);
+        
+        doc1.setFont('helvetica', 'normal');
+        doc1.setFontSize(11);
+        
+        const p1 = `We are thrilled to officially extend an offer of employment to you for the position of ${app.role} at MS Academy. Following our rigorous recruitment process, our faculty board was highly impressed with your academic background and your experience (${app.experience}).`;
+        const p2 = `At MS Academy, we are committed to excellence in education and shaping the future of brilliant minds. We believe that your expertise will be a tremendous asset to our institution and our students.`;
+        const p3 = `This offer is contingent upon the successful completion of our standard onboarding background checks and verification of your academic credentials. Detailed terms and conditions of your employment, including compensation, benefits, and faculty guidelines, are enclosed in the orientation package that will be sent to you shortly.`;
+        const p4 = `Please indicate your acceptance of this offer by signing and returning a copy of this letter to the HR department within 5 business days.`;
+        const p5 = `We look forward to welcoming you to the MS Academy family and are excited about the positive impact you will make.`;
+        
+        let yPos1 = 90;
+        const lineSpacing1 = 6;
+        const writeParagraph1 = (text) => {
+           const lines = doc1.splitTextToSize(text, 170);
+           doc1.text(lines, 20, yPos1);
+           yPos1 += (lines.length * lineSpacing1) + 5;
+        };
+        writeParagraph1(p1);
+        writeParagraph1(p2);
+        writeParagraph1(p3);
+        writeParagraph1(p4);
+        writeParagraph1(p5);
+        
+        yPos1 += 15;
+        doc1.setFont('helvetica', 'bold');
+        doc1.text('Sincerely,', 20, yPos1);
+        yPos1 += 20;
+        doc1.text('_______________________', 20, yPos1);
+        yPos1 += 7;
+        doc1.text('Director of Recruitment', 20, yPos1);
+        doc1.setFont('helvetica', 'normal');
+        doc1.text('MS Academy', 20, yPos1 + 5);
+        
+        doc1.setDrawColor(200, 200, 200);
+        doc1.line(20, 280, 190, 280);
+        doc1.setFontSize(8);
+        doc1.setTextColor(150, 150, 150);
+        doc1.text('MS Academy | Tech City Campus | contact@msacademy.example.com', 105, 287, { align: 'center' });
+        
+        const pdfBase64Data1 = doc1.output('datauristring').split(',')[1];
+        
+        // ----------------------------------------------------
+        // PDF 2: ACCEPTANCE FORM
+        // ----------------------------------------------------
+        const doc2 = new jsPDF();
+        
+        doc2.setFillColor(30, 58, 138); 
+        doc2.rect(0, 0, 210, 40, 'F');
+        
+        if (headerImgLoaded && loadedImg) {
+          doc2.addImage(loadedImg, 'PNG', 20, 8, 24, 24);
+          doc2.setTextColor(255, 255, 255);
+          doc2.setFontSize(28);
+          doc2.setFont('helvetica', 'bold');
+          doc2.text('MS ACADEMY', 50, 26);
+        } else {
+          doc2.setTextColor(255, 255, 255);
+          doc2.setFontSize(28);
+          doc2.setFont('helvetica', 'bold');
+          doc2.text('MS ACADEMY', 20, 26);
+        }
+        
+        doc2.setFontSize(14);
+        doc2.setFont('helvetica', 'normal');
+        doc2.text('ACCEPTANCE OF OFFER', 190, 26, { align: 'right' });
+        
+        doc2.setTextColor(51, 51, 51);
+        doc2.setFontSize(16);
+        doc2.setFont('helvetica', 'bold');
+        doc2.text('OFFER ACCEPTANCE LETTER', 105, 60, { align: 'center' });
+        
+        doc2.setFontSize(11);
+        doc2.setFont('helvetica', 'normal');
+        
+        const acceptText = `I, ${app.fullName}, hereby accept the offer of employment from MS Academy for the position of ${app.role}, as outlined in the Offer Letter dated ${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}.`;
+        
+        const acceptLines = doc2.splitTextToSize(acceptText, 170);
+        doc2.text(acceptLines, 20, 80);
+        
+        const acceptText2 = `I understand that my employment is subject to the terms and conditions provided, and I am excited to join the faculty team.`;
+        const acceptLines2 = doc2.splitTextToSize(acceptText2, 170);
+        doc2.text(acceptLines2, 20, 95);
+        
+        let yForm = 130;
+        doc2.setFont('helvetica', 'bold');
+        doc2.text('Candidate Signature:', 20, yForm);
+        doc2.setFont('helvetica', 'normal');
+        doc2.line(70, yForm + 1, 190, yForm + 1); // underline
+        
+        yForm += 20;
+        doc2.setFont('helvetica', 'bold');
+        doc2.text('Printed Name:', 20, yForm);
+        doc2.setFont('helvetica', 'normal');
+        doc2.text(`${app.fullName}`, 70, yForm);
+        doc2.line(70, yForm + 1, 190, yForm + 1); // underline
+        
+        yForm += 20;
+        doc2.setFont('helvetica', 'bold');
+        doc2.text('Date of Signature:', 20, yForm);
+        doc2.setFont('helvetica', 'normal');
+        doc2.line(70, yForm + 1, 190, yForm + 1); // underline
+        
+        doc2.setDrawColor(200, 200, 200);
+        doc2.line(20, 280, 190, 280);
+        doc2.setFontSize(8);
+        doc2.setTextColor(150, 150, 150);
+        doc2.text('Please sign and return this page to the MS Academy HR Department.', 105, 287, { align: 'center' });
+        
+        const pdfBase64Data2 = doc2.output('datauristring').split(',')[1];
+        
+        attachment = [
+          {
+            filename: 'MS_Academy_Offer_Letter.pdf',
+            mimeType: 'application/pdf',
+            base64Data: pdfBase64Data1
+          },
+          {
+            filename: 'MS_Academy_Acceptance_Form.pdf',
+            mimeType: 'application/pdf',
+            base64Data: pdfBase64Data2
+          }
+        ];
+
+        htmlMessage = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+            <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); padding: 30px 20px; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 28px; letter-spacing: 1px;">Welcome to MS Academy</h1>
+            </div>
+            <div style="padding: 40px 30px; background-color: #ffffff;">
+              <h2 style="color: #1e293b; margin-top: 0;">Dear ${app.fullName},</h2>
+              <p style="color: #475569; font-size: 16px; line-height: 1.6;">We are absolutely delighted to inform you that you have been <strong>Shortlisted</strong> for the role of <strong>${app.role}</strong>.</p>
+              <p style="color: #475569; font-size: 16px; line-height: 1.6;">Our team was extremely impressed by your profile and experience. We are excited about the prospect of you joining our esteemed faculty and making a significant impact.</p>
+              <div style="background-color: #f8fafc; border-left: 4px solid #3b82f6; padding: 15px 20px; margin: 25px 0; border-radius: 0 8px 8px 0;">
+                <p style="margin: 0; color: #334155; font-weight: 500;">Please find your official Offer Letter attached to this email as a PDF document.</p>
+              </div>
+              <p style="color: #475569; font-size: 16px; line-height: 1.6;">Our HR team will reach out to you shortly with the next steps regarding your onboarding and orientation.</p>
+              <div style="margin-top: 40px;">
+                <p style="color: #1e293b; font-weight: bold; margin: 0;">Warmest congratulations,</p>
+                <p style="color: #64748B; margin: 5px 0 0 0;">MS Academy Recruitment Team</p>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        subject = 'Update on your Application';
+        const messageText = `We regret to inform you that your application for <b>${app.role}</b> was not successful at this time.<br/><br/><b>Reason:</b> ${reason}`;
+        
+        htmlMessage = `
+          <div style="font-family: sans-serif; padding: 20px;">
+            <h2>Hello ${app.fullName},</h2>
+            <p>${messageText}</p>
+            <br/>
+            <p>Best regards,<br/>MS Academy Team</p>
+          </div>
+        `;
+      }
+      
+      await sendEmailViaGAS(app.email, subject, htmlMessage, attachment);
+    } catch (emailErr) {
+      console.error("Email Error:", emailErr);
+      emailFailed = true;
+      emailErrorMsg = emailErr.message || "Failed to send email.";
+    }
+
+    try {
+      await updateDoc(doc(db, 'career_applications', app.id), { status });
+      if (selectedApp && selectedApp.id === app.id) {
         setSelectedApp({ ...selectedApp, status });
+      }
+      
+      if (status === 'Rejected') {
+        setShowRejectInput(false);
+        setRejectReason('');
+      }
+      
+      if (emailFailed) {
+        alert(`Application status updated to ${status}, but failed to send email. Error: ${emailErrorMsg}`);
+      } else {
+        alert(`Application ${status} successfully and email sent.`);
       }
     } catch (e) {
       console.error(e);
+      alert('Error updating status or sending email. Please try again.');
+    } finally {
+      setIsProcessingApp(false);
     }
   };
 
@@ -306,21 +578,18 @@ export default function AdminDashboard() {
     setIsInviting(true);
 
     try {
-      const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID';
-      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
-      const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
-
-      const loginLink = window.location.origin + '/login';
-
-      if (SERVICE_ID !== 'YOUR_SERVICE_ID') {
-        const templateParams = {
-          student_name: inviteForm.name,
-          to_email: inviteForm.email,
-          department: inviteForm.department,
-          login_link: loginLink
-        };
-        await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
-      }
+      const originUrl = window.location.hostname === 'localhost' ? 'https://msacademy-portal.example.com' : window.location.origin;
+      const loginLink = originUrl + '/login';
+      const htmlMessage = `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Hello ${inviteForm.name},</h2>
+          <p>You have been invited to join MS Academy under the ${inviteForm.department} department.</p>
+          <p><a href="${loginLink}" style="display:inline-block; padding:10px 20px; background:#2563EB; color:#fff; text-decoration:none; border-radius:5px;">Login to Portal</a></p>
+          <br/>
+          <p>Best regards,<br/>MS Academy Team</p>
+        </div>
+      `;
+      await sendEmailViaGAS(inviteForm.email, "Invitation to join MS Academy", htmlMessage);
 
       const newStudent = {
         name: inviteForm.name,
@@ -398,21 +667,18 @@ export default function AdminDashboard() {
     setIsTeacherInviting(true);
 
     try {
-      const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID';
-      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
-      const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
-
-      const loginLink = window.location.origin + '/login';
-
-      if (SERVICE_ID !== 'YOUR_SERVICE_ID') {
-        const templateParams = {
-          student_name: `${teacherInviteForm.name} (Faculty)`,
-          to_email: teacherInviteForm.email,
-          department: teacherInviteForm.department,
-          login_link: loginLink
-        };
-        await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
-      }
+      const originUrl = window.location.hostname === 'localhost' ? 'https://msacademy-portal.example.com' : window.location.origin;
+      const loginLink = originUrl + '/login';
+      const htmlMessage = `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>Hello ${teacherInviteForm.name} (Faculty),</h2>
+          <p>You have been invited to join MS Academy under the ${teacherInviteForm.department} department.</p>
+          <p><a href="${loginLink}" style="display:inline-block; padding:10px 20px; background:#2563EB; color:#fff; text-decoration:none; border-radius:5px;">Login to Portal</a></p>
+          <br/>
+          <p>Best regards,<br/>MS Academy Team</p>
+        </div>
+      `;
+      await sendEmailViaGAS(teacherInviteForm.email, "Faculty Invitation - MS Academy", htmlMessage);
 
       const newTeacher = {
         name: teacherInviteForm.name,
@@ -1064,8 +1330,109 @@ export default function AdminDashboard() {
             deleteTeacher={deleteTeacher}
             onInvite={() => setIsTeacherInviteModalOpen(true)}
             activeSubTab={teacherSubTab}
-            onTabChange={setTeacherSubTab}
-          />
+            setActiveSubTab={setTeacherSubTab}
+          >
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-[20px] font-bold text-[#0F172A]">Recruitment Applications</h3>
+                  <p className="text-[#64748B] text-[14px]">Review and manage incoming faculty applications</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                      type="text"
+                      placeholder="Search applications..."
+                      value={appSearch}
+                      onChange={(e) => setAppSearch(e.target.value)}
+                      className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 w-[250px]"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <select
+                      value={appFilter}
+                      onChange={(e) => setAppFilter(e.target.value)}
+                      className="pl-10 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 appearance-none cursor-pointer"
+                    >
+                      <option value="All">All Status</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Shortlisted">Shortlisted</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Applications Table */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[900px]">
+                    <thead>
+                      <tr className="bg-slate-50/50 border-b border-slate-200">
+                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Candidate</th>
+                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applied For</th>
+                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Experience</th>
+                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {applications.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-12 text-center text-slate-500">No applications found.</td>
+                        </tr>
+                      ) : (
+                        applications
+                          .filter(app => appFilter === 'All' || app.status === appFilter)
+                          .filter(app => app.fullName.toLowerCase().includes(appSearch.toLowerCase()) || app.email.toLowerCase().includes(appSearch.toLowerCase()))
+                          .map(app => (
+                          <tr key={app.id} className="hover:bg-slate-50/50 transition-colors group">
+                            <td className="py-4 px-6">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-100">
+                                  {app.fullName.split(' ').map(n=>n[0]).join('').substring(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="font-semibold text-slate-900 text-sm">{app.fullName}</div>
+                                  <div className="text-xs text-slate-500">{app.email}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 text-sm font-medium text-slate-700">{app.role}</td>
+                            <td className="py-4 px-6 text-sm text-slate-600">{app.experience}</td>
+                            <td className="py-4 px-6 text-sm text-slate-500">{app.date}</td>
+                            <td className="py-4 px-6">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${
+                                app.status === 'Shortlisted' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                                app.status === 'Rejected' ? 'bg-red-100 text-red-700 border border-red-200' :
+                                'bg-amber-100 text-amber-700 border border-amber-200'
+                              }`}>
+                                {app.status}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-right">
+                              <button
+                                onClick={() => setSelectedApp(app)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg text-xs font-semibold transition-all shadow-sm"
+                              >
+                                <Eye size={14} />
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </TeacherDirectory>
         )}
         
         {activeTab === 'typists' && (
@@ -1337,47 +1704,86 @@ export default function AdminDashboard() {
                 <p className="text-slate-600 text-xs leading-relaxed italic">"{selectedApp.message}"</p>
               </div>
 
-              {/* Simulated Resume Box */}
-              <div className="p-4 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-between text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
-                <div className="flex items-center gap-3">
-                  <FileText size={24} className="text-[#1d4ed8]" />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800 truncate max-w-[250px]">{selectedApp.resumeName || `Resume_${selectedApp.fullName.replace(/\s+/g, '_')}.pdf`}</span>
-                    <span className="text-[10px] font-medium text-slate-400">PDF Document • 1.4 MB</span>
+              {/* Resume Box */}
+              <div className="mt-4 p-4 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
+                <div className="flex items-center gap-3 overflow-hidden w-full">
+                  <FileText size={24} className="text-[#1d4ed8] shrink-0" />
+                  <div className="flex flex-col overflow-hidden w-full">
+                    <span className="text-xs font-bold text-slate-800 truncate">{selectedApp.resumeName || `Resume_${selectedApp.fullName.replace(/\s+/g, '_')}.pdf`}</span>
+                    <span className="text-[10px] font-medium text-slate-400">Document</span>
                   </div>
                 </div>
-                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full uppercase tracking-wider">Simulated</span>
+                {selectedApp.resumeUrl ? (
+                  <a 
+                    href={selectedApp.resumeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-full uppercase tracking-wider transition-colors shrink-0 flex items-center gap-1.5"
+                  >
+                    <span>View Resume</span>
+                    <ArrowUpRight size={14} />
+                  </a>
+                ) : (
+                  <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full uppercase tracking-wider">No File</span>
+                )}
               </div>
             </div>
 
             {/* Modal Actions */}
             <div className="flex gap-3 pt-4 border-t border-slate-50">
-              <button
-                onClick={() => {
-                  updateAppStatus(selectedApp.id, 'Shortlisted');
-                }}
-                className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                  selectedApp.status === 'Shortlisted'
-                    ? 'bg-emerald-500 text-white cursor-default'
-                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100'
-                }`}
-              >
-                <Check size={14} />
-                <span>{selectedApp.status === 'Shortlisted' ? 'Shortlisted!' : 'Shortlist Candidate'}</span>
-              </button>
-              <button
-                onClick={() => {
-                  updateAppStatus(selectedApp.id, 'Rejected');
-                }}
-                className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                  selectedApp.status === 'Rejected'
-                    ? 'bg-red-500 text-white cursor-default'
-                    : 'bg-red-50 hover:bg-red-100 text-red-750 border border-red-100'
-                }`}
-              >
-                <X size={14} />
-                <span>{selectedApp.status === 'Rejected' ? 'Rejected' : 'Reject Candidate'}</span>
-              </button>
+              {showRejectInput ? (
+                <div className="flex flex-col w-full gap-3">
+                  <textarea 
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Enter reason for rejection (this will be sent to the applicant)"
+                    className="w-full p-3 text-sm border border-slate-200 rounded-xl outline-none focus:border-red-400 bg-slate-50 min-h-[80px]"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button 
+                      onClick={() => { setShowRejectInput(false); setRejectReason(''); }}
+                      className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+                      disabled={isProcessingApp}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={() => updateAppStatus(selectedApp, 'Rejected', rejectReason)}
+                      className="px-4 py-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg flex items-center gap-2 transition-colors"
+                      disabled={isProcessingApp || !rejectReason.trim()}
+                    >
+                      {isProcessingApp ? 'Processing...' : 'Confirm Reject'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => updateAppStatus(selectedApp, 'Shortlisted')}
+                    disabled={isProcessingApp}
+                    className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                      selectedApp.status === 'Shortlisted'
+                        ? 'bg-emerald-500 text-white cursor-default'
+                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100'
+                    }`}
+                  >
+                    <Check size={14} />
+                    <span>{isProcessingApp ? 'Processing...' : selectedApp.status === 'Shortlisted' ? 'Shortlisted!' : 'Shortlist Candidate'}</span>
+                  </button>
+                  <button
+                    onClick={() => setShowRejectInput(true)}
+                    disabled={isProcessingApp}
+                    className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                      selectedApp.status === 'Rejected'
+                        ? 'bg-red-500 text-white cursor-default'
+                        : 'bg-red-50 hover:bg-red-100 text-red-750 border border-red-100'
+                    }`}
+                  >
+                    <X size={14} />
+                    <span>{isProcessingApp ? 'Processing...' : selectedApp.status === 'Rejected' ? 'Rejected' : 'Reject Candidate'}</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

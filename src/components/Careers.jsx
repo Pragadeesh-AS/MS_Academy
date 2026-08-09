@@ -5,8 +5,9 @@ import {
   ArrowRight, Sparkles, FileText, AlertCircle, RefreshCw 
 } from 'lucide-react';
 import { ShinyButton } from "./ui/shiny-button";
-import { db } from '../firebase';
+import { db, storage } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export default function Careers() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -173,6 +174,16 @@ export default function Careers() {
     setPanelState('submitting');
     
     try {
+      let resumeUrl = null;
+      let resumeName = null;
+
+      if (resumeFile) {
+        const storageRef = ref(storage, `resumes/${Date.now()}_${resumeFile.name}`);
+        await uploadBytes(storageRef, resumeFile);
+        resumeUrl = await getDownloadURL(storageRef);
+        resumeName = resumeFile.name;
+      }
+
       const newApplication = {
         fullName: formData.fullName,
         email: formData.email,
@@ -181,8 +192,8 @@ export default function Careers() {
         specialization: formData.specialization,
         message: formData.message || 'No cover letter message provided.',
         role: selectedRole,
-        // Since we are simulating, we just store the file name for visual purposes in Admin
-        resumeName: resumeFile ? resumeFile.name : null,
+        resumeName: resumeName,
+        resumeUrl: resumeUrl,
         date: new Date().toLocaleDateString('en-IN', {
           day: 'numeric',
           month: 'short',

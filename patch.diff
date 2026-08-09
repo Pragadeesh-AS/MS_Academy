@@ -1,0 +1,375 @@
+diff --git a/src/components/AdminDashboard.jsx b/src/components/AdminDashboard.jsx
+index 867557f..210ea13 100644
+--- a/src/components/AdminDashboard.jsx
++++ b/src/components/AdminDashboard.jsx
+@@ -70,6 +70,33 @@ const defaultApplications = [
+   }
+ ];
+ 
++const sendEmailViaGAS = async (to, subject, htmlMessage) => {
++  const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
++  if (!webhookUrl) {
++    console.warn("VITE_GAS_WEBHOOK_URL is not set. Skipping email.");
++    return;
++  }
++  
++  const payload = {
++    to_email: to,
++    subject: subject,
++    message_html: htmlMessage
++  };
++
++  const response = await fetch(webhookUrl, {
++    method: "POST",
++    headers: {
++      "Content-Type": "text/plain;charset=utf-8",
++    },
++    body: JSON.stringify(payload)
++  });
++  
++  const result = await response.json();
++  if (result.status !== "success") {
++    throw new Error(result.message || "Failed to send email via Google Apps Script");
++  }
++};
++
+ const defaultQueries = [
+   {
+     id: 'q-1',
+@@ -145,6 +172,9 @@ export default function AdminDashboard() {
+ 
+   // Modal detail states
+   const [selectedApp, setSelectedApp] = useState(null);
++  const [isProcessingApp, setIsProcessingApp] = useState(false);
++  const [showRejectInput, setShowRejectInput] = useState(false);
++  const [rejectReason, setRejectReason] = useState('');
+   const [selectedQuery, setSelectedQuery] = useState(null);
+   const [activeHeatmapIndex, setActiveHeatmapIndex] = useState(null);
+ 
+@@ -256,18 +286,58 @@ export default function AdminDashboard() {
+     navigate('/login');
+   };
+ 
+-  const updateAppStatus = async (id, status) => {
+-    const updated = applications.map(app => 
+-      app.id === id • { ...app, status } : app
+-    );
+-    setApplications(updated);
++  const updateAppStatus = async (app, status, reason = '') => {
++    setIsProcessingApp(true);
++    let emailFailed = false;
++    let emailErrorMsg = '';
+     try {
+-      await updateDoc(doc(db, 'career_applications', id), { status });
+-      if (selectedApp && selectedApp.id === id) {
++      const subject = status === 'Shortlisted' • 'Congratulations! Application Shortlisted' : 'Update on your Application';
++      const messageText = status === 'Shortlisted' 
++        • `We are pleased to inform you that you have been shortlisted for the <b>${app.role}</b> position.`
++        : `We regret to inform you that your application for <b>${app.role}</b> was not successful at this time.<br/><br/><b>Reason:</b> ${reason}`;
++      
++      const htmlMessage = `
++        <div style="font-family: sans-serif; padding: 20px;">
++          <h2>Hello ${app.fullName},</h2>
++          <p>${messageText}</p>
++          <br/>
++          <p>Best regards,<br/>MS Academy Team</p>
++        </div>
++      `;
++      
++      await sendEmailViaGAS(app.email, subject, htmlMessage);
++    } catch (emailErr) {
++      console.error("Email Error:", emailErr);
++      emailFailed = true;
++      emailErrorMsg = emailErr.message || "Failed to send email.";
++    }
++
++    try {
++      await updateDoc(doc(db, 'career_applications', app.id), { status });
++      const updated = applications.map(a => 
++        a.id === app.id • { ...a, status } : a
++      );
++      setApplications(updated);
++      
++      if (selectedApp && selectedApp.id === app.id) {
+         setSelectedApp({ ...selectedApp, status });
+       }
++      
++      if (status === 'Rejected') {
++        setShowRejectInput(false);
++        setRejectReason('');
++      }
++      
++      if (emailFailed) {
++        alert(`Application status updated to ${status}, but failed to send email. Error: ${emailErrorMsg}`);
++      } else {
++        alert(`Application ${status} successfully and email sent.`);
++      }
+     } catch (e) {
+       console.error(e);
++      alert('Database Error: ' + (e.message || JSON.stringify(e)));
++    } finally {
++      setIsProcessingApp(false);
+     }
+   };
+ 
+@@ -298,29 +368,11 @@ export default function AdminDashboard() {
+       updated.push({ code, fee: '₹30,000', batch: 'TBD', status: 'Active', [field]: value });
+     }
+     setCourses(updated);
+-    localStorage.setItem('gate_courses_config', JSON.stringify(updated));
+-  };
+-
+-  const handleInviteSubmit = async (e) => {
+-    e.preventDefault();
+-    setIsInviting(true);
+-
+-    try {
+-      const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID';
+-      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
+-      const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
+-
+-      const loginLink = window.location.origin + '/login';
+-
+-      if (SERVICE_ID !== 'YOUR_SERVICE_ID') {
+-        const templateParams = {
+-          student_name: inviteForm.name,
+-          to_email: inviteForm.email,
+-          department: inviteForm.department,
+-          login_link: loginLink
+-        };
+-        await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
+-      }
++          <br/>
++          <p>Best regards,<br/>MS Academy Team</p>
++        </div>
++      `;
++      await sendEmailViaGAS(inviteForm.email, "Invitation to join MS Academy", htmlMessage);
+ 
+       const newStudent = {
+         name: inviteForm.name,
+@@ -402,7 +454,10 @@ export default function AdminDashboard() {
+       const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'YOUR_INVITE_TEMPLATE_ID';
+       const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
+ 
+-      const loginLink = window.location.origin + '/login';
++      // Using a placeholder HTTPS URL instead of localhost to prevent emails from going to spam during local testing.
++      // Once deployed, you can revert this to window.location.origin or your actual production domain.
++      const originUrl = window.location.hostname === 'localhost' • 'https://msacademy-portal.example.com' : window.location.origin;
++      const loginLink = originUrl + '/login';
+ 
+       if (SERVICE_ID !== 'YOUR_SERVICE_ID') {
+         const templateParams = {
+@@ -1064,8 +1119,77 @@ export default function AdminDashboard() {
+             deleteTeacher={deleteTeacher}
+             onInvite={() => setIsTeacherInviteModalOpen(true)}
+             activeSubTab={teacherSubTab}
+-            onTabChange={setTeacherSubTab}
+-          />
++            setActiveSubTab={setTeacherSubTab}
++          >
++            {/* Recruitment Applications Table */}
++            <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_12px_30px_rgba(15,23,42,0.05)] overflow-hidden">
++              <div className="overflow-x-auto">
++                <table className="w-full text-left border-collapse min-w-[1050px]">
++                  <thead>
++                    <tr className="border-b border-[#EEF2F7]">
++                      <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Applicant Name</th>
++                      <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Applied Role</th>
++                      <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Experience</th>
++                      <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Applied Date</th>
++                      <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Status</th>
++                      <th className="py-5 px-6 text-[14px] font-medium text-[#64748B] text-center w-[120px]">Action</th>
++                    </tr>
++                  </thead>
++                  <tbody className="divide-y divide-[#EEF2F7]/60">
++                    {filteredApps.length === 0 • (
++                      <tr>
++                        <td colSpan="6" className="py-16 text-center">
++                          <h4 className="text-[16px] font-semibold text-[#0F172A] mb-1">No applications found</h4>
++                        </td>
++                      </tr>
++                    ) : (
++                      filteredApps.map((app) => (
++                        <tr key={app.id} className="hover:bg-[#F8FAFF] transition-colors h-[84px] group relative z-0 hover:z-10">
++                          <td className="px-6 py-4">
++                            <div className="flex items-center gap-4">
++                              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-50 text-indigo-700 font-bold flex items-center justify-center shrink-0 border border-indigo-100 group-hover:scale-105 transition-transform">
++                                {app.fullName.charAt(0).toUpperCase()}
++                              </div>
++                              <div className="flex flex-col">
++                                <span className="font-semibold text-[16px] text-[#0F172A] tracking-tight">{app.fullName}</span>
++                                <span className="text-[13px] text-[#64748B] font-medium">{app.email}</span>
++                              </div>
++                            </div>
++                          </td>
++                          <td className="px-6">
++                            <span className="text-[14px] text-[#475569] font-medium">{app.role}</span>
++                          </td>
++                          <td className="px-6">
++                            <span className="text-[14px] text-[#475569] font-medium">{app.experience}</span>
++                          </td>
++                          <td className="px-6">
++                            <span className="text-[14px] text-[#475569] font-medium">{app.date}</span>
++                          </td>
++                          <td className="px-6">
++                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold tracking-wide ${
++                              app.status === 'Shortlisted' • 'bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-[#10B981] border border-emerald-100' :
++                              app.status === 'Rejected' • 'bg-gradient-to-r from-red-50 to-red-100/50 text-red-600 border border-red-100' :
++                              'bg-gradient-to-r from-amber-50 to-amber-100/50 text-[#F59E0B] border border-amber-100'
++                            }`}>
++                              {app.status}
++                            </span>
++                          </td>
++                          <td className="px-6 text-center">
++                            <button 
++                              onClick={() => setSelectedApp(app)}
++                              className="px-4 py-2 bg-slate-100 hover:bg-[#2563EB] text-slate-600 hover:text-white text-xs font-bold rounded-xl transition-colors opacity-0 group-hover:opacity-100"
++                            >
++                              View
++                            </button>
++                          </td>
++                        </tr>
++                      ))
++                    )}
++                  </tbody>
++                </table>
++              </div>
++            </div>
++          </TeacherDirectory>
+         )}
+         
+         {activeTab === 'typists' && (
+@@ -1299,7 +1423,11 @@ export default function AdminDashboard() {
+         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+           <div className="bg-white rounded-[2.5rem] w-full max-w-[600px] max-h-[90vh] overflow-y-auto shadow-2xl p-8 relative space-y-6">
+             <button
+-              onClick={() => setSelectedApp(null)}
++              onClick={() => {
++                setSelectedApp(null);
++                setShowRejectInput(false);
++                setRejectReason('');
++              }}
+               className="absolute right-6 top-6 p-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors focus:outline-none"
+             >
+               <X size={16} />
+@@ -1337,47 +1465,86 @@ export default function AdminDashboard() {
+                 <p className="text-slate-600 text-xs leading-relaxed italic">"{selectedApp.message}"</p>
+               </div>
+ 
+-              {/* Simulated Resume Box */}
+-              <div className="p-4 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-between text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
+-                <div className="flex items-center gap-3">
+-                  <FileText size={24} className="text-[#1d4ed8]" />
+-                  <div className="flex flex-col">
+-                    <span className="text-xs font-bold text-slate-800 truncate max-w-[250px]">{selectedApp.resumeName || `Resume_${selectedApp.fullName.replace(/\s+/g, '_')}.pdf`}</span>
+-                    <span className="text-[10px] font-medium text-slate-400">PDF Document • 1.4 MB</span>
++              {/* Resume Box */}
++              <div className="mt-4 p-4 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">
++                <div className="flex items-center gap-3 overflow-hidden w-full">
++                  <FileText size={24} className="text-[#1d4ed8] shrink-0" />
++                  <div className="flex flex-col overflow-hidden w-full">
++                    <span className="text-xs font-bold text-slate-800 truncate">{selectedApp.resumeName || `Resume_${selectedApp.fullName.replace(/\s+/g, '_')}.pdf`}</span>
++                    <span className="text-[10px] font-medium text-slate-400">Document</span>
+                   </div>
+                 </div>
+-                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full uppercase tracking-wider">Simulated</span>
++                {selectedApp.resumeUrl • (
++                  <a 
++                    href={selectedApp.resumeUrl}
++                    target="_blank"
++                    rel="noopener noreferrer"
++                    className="text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-full uppercase tracking-wider transition-colors shrink-0 flex items-center gap-1.5"
++                  >
++                    <span>View Resume</span>
++                    <ArrowUpRight size={14} />
++                  </a>
++                ) : (
++                  <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full uppercase tracking-wider">No File</span>
++                )}
+               </div>
+             </div>
+ 
+             {/* Modal Actions */}
+             <div className="flex gap-3 pt-4 border-t border-slate-50">
+-              <button
+-                onClick={() => {
+-                  updateAppStatus(selectedApp.id, 'Shortlisted');
+-                }}
+-                className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+-                  selectedApp.status === 'Shortlisted'
+-                    • 'bg-emerald-500 text-white cursor-default'
+-                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100'
+-                }`}
+-              >
+-                <Check size={14} />
+-                <span>{selectedApp.status === 'Shortlisted' • 'Shortlisted!' : 'Shortlist Candidate'}</span>
+-              </button>
+-              <button
+-                onClick={() => {
+-                  updateAppStatus(selectedApp.id, 'Rejected');
+-                }}
+-                className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+-                  selectedApp.status === 'Rejected'
+-                    • 'bg-red-500 text-white cursor-default'
+-                    : 'bg-red-50 hover:bg-red-100 text-red-750 border border-red-100'
+-                }`}
+-              >
+-                <X size={14} />
+-                <span>{selectedApp.status === 'Rejected' • 'Rejected' : 'Reject Candidate'}</span>
+-              </button>
++              {showRejectInput • (
++                <div className="flex flex-col w-full gap-3">
++                  <textarea 
++                    value={rejectReason}
++                    onChange={(e) => setRejectReason(e.target.value)}
++                    placeholder="Enter reason for rejection (this will be sent to the applicant)"
++                    className="w-full p-3 text-sm border border-slate-200 rounded-xl outline-none focus:border-red-400 bg-slate-50 min-h-[80px]"
++                  />
++                  <div className="flex gap-2 justify-end">
++                    <button 
++                      onClick={() => { setShowRejectInput(false); setRejectReason(''); }}
++                      className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
++                      disabled={isProcessingApp}
++                    >
++                      Cancel
++                    </button>
++                    <button 
++                      onClick={() => updateAppStatus(selectedApp, 'Rejected', rejectReason)}
++                      className="px-4 py-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg flex items-center gap-2 transition-colors"
++                      disabled={isProcessingApp || !rejectReason.trim()}
++                    >
++                      {isProcessingApp • 'Processing...' : 'Confirm Reject'}
++                    </button>
++                  </div>
++                </div>
++              ) : (
++                <>
++                  <button
++                    onClick={() => updateAppStatus(selectedApp, 'Shortlisted')}
++                    disabled={isProcessingApp}
++                    className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
++                      selectedApp.status === 'Shortlisted'
++                        • 'bg-emerald-500 text-white cursor-default'
++                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100'
++                    }`}
++                  >
++                    <Check size={14} />
++                    <span>{isProcessingApp • 'Processing...' : selectedApp.status === 'Shortlisted' • 'Shortlisted!' : 'Shortlist Candidate'}</span>
++                  </button>
++                  <button
++                    onClick={() => setShowRejectInput(true)}
++                    disabled={isProcessingApp}
++                    className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
++                      selectedApp.status === 'Rejected'
++                        • 'bg-red-500 text-white cursor-default'
++                        : 'bg-red-50 hover:bg-red-100 text-red-750 border border-red-100'
++                    }`}
++                  >
++                    <X size={14} />
++                    <span>{isProcessingApp • 'Processing...' : selectedApp.status === 'Rejected' • 'Rejected' : 'Reject Candidate'}</span>
++                  </button>
++                </>
++              )}
+             </div>
+           </div>
+         </div>
