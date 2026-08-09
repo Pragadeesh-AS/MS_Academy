@@ -101,6 +101,12 @@ export const useLiveRecording = ({
         ctx.fillStyle = (compBg && compBg !== 'rgba(0, 0, 0, 0)') ? compBg : '#0f172a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+        // Scale all drawing operations to match the 1920x1080 canvas resolution
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        ctx.save();
+        ctx.scale(scaleX, scaleY);
+
         // 2. Draw Cached HTML-to-Image Canvas (Question Bank Content)
         if (cachedQbImageRef.current) {
            const { img } = cachedQbImageRef.current;
@@ -114,7 +120,7 @@ export const useLiveRecording = ({
         } else if (document.getElementById('qb-content')) {
            // Fallback loading state for QB in case html-to-image is still processing or failed
            ctx.fillStyle = '#ffffff';
-           ctx.fillRect(0, 0, canvas.width, canvas.height);
+           ctx.fillRect(0, 0, rect.width, rect.height);
            ctx.fillStyle = '#ff0000';
            ctx.font = '30px Arial';
            ctx.fillText('Loading Question Bank UI...', 50, 100);
@@ -145,6 +151,8 @@ export const useLiveRecording = ({
                ctx.restore();
            }
         });
+        
+        ctx.restore(); // Restore the global canvas scale
 
         // 5. Draw Mouse Cursor
         if (mousePosRef.current.x >= 0 && mousePosRef.current.y >= 0) {
@@ -169,8 +177,8 @@ export const useLiveRecording = ({
       };
       
       // Force an initial synchronous paint to ensure captureStream doesn't fail on an empty buffer
-      canvas.width = 1280;
-      canvas.height = 720;
+      canvas.width = 1920;
+      canvas.height = 1080;
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -227,10 +235,10 @@ export const useLiveRecording = ({
         'video/mp4'
       ];
       
-      let options = {};
+      let options = { videoBitsPerSecond: 8000000 }; // 8 Mbps high quality
       for (const type of types) {
         if (MediaRecorder.isTypeSupported(type)) {
-          options = { mimeType: type };
+          options.mimeType = type;
           break;
         }
       }

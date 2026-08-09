@@ -102,6 +102,26 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
   const { localCameraTrack } = useLocalCameraTrack(cameraOn);
 
+  // Hard cleanup on unmount to ensure hardware is released
+  const tracksRef = useRef({ camera: null, mic: null });
+  useEffect(() => {
+    tracksRef.current.camera = localCameraTrack;
+    tracksRef.current.mic = localMicrophoneTrack;
+  }, [localCameraTrack, localMicrophoneTrack]);
+
+  useEffect(() => {
+    return () => {
+      if (tracksRef.current.camera) {
+        tracksRef.current.camera.stop();
+        tracksRef.current.camera.close();
+      }
+      if (tracksRef.current.mic) {
+        tracksRef.current.mic.stop();
+        tracksRef.current.mic.close();
+      }
+    };
+  }, []);
+
   // Automatically handle publishing and reconnects
   usePublish([localMicrophoneTrack, localCameraTrack].filter(Boolean));
 
