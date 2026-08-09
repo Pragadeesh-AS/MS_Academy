@@ -3,16 +3,14 @@ import { jsPDF } from 'jspdf';
 import { useNavigate } from 'react-router-dom';
 import CreateTestButton from './CreateTestButton';
 import { 
-  Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut, 
+  Users, FileText, LayoutGrid, Mail, LogOut, 
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
-  ChevronLeft, ChevronRight, ChevronDown, UserCheck, Database, BarChart2, Megaphone, Sparkles,
-  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet
+  ChevronLeft, ChevronRight, ChevronDown, Database, BarChart2, Megaphone, Sparkles,
+  Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet
 } from 'lucide-react';
-import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
 import Analytics from './admin/Analytics';
 import AIGenerator from './admin/AIGenerator';
@@ -155,128 +153,69 @@ const defaultCourseOverrides = [
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
-  const [adminName, setAdminName] = useState('Admin');
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Core datasets states
   const [applications, setApplications] = useState([]);
   const [selectedApp, setSelectedApp] = useState(null);
-  const [showRejectInput, setShowRejectInput] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [isProcessingApp, setIsProcessingApp] = useState(false);
   const [queries, setQueries] = useState([]);
   const [courses, setCourses] = useState([]);
   
-  // Joined students dataset and subtab state
   const [joinedStudents, setJoinedStudents] = useState([]);
-  const [studentSubTab, setStudentSubTab] = useState('joined'); // 'joined' or 'queries'
 
-  // Invited teachers dataset
   const [invitedTeachers, setInvitedTeachers] = useState([]);
-  const [teacherSubTab, setTeacherSubTab] = useState('faculty'); // 'faculty' or 'recruitment'
+  const [teacherSubTab, setTeacherSubTab] = useState('faculty');
   const [isTeacherInviteModalOpen, setIsTeacherInviteModalOpen] = useState(false);
   const [teacherInviteForm, setTeacherInviteForm] = useState({ name: '', department: '', qualification: '', email: '' });
   const [isTeacherInviting, setIsTeacherInviting] = useState(false);
 
-  // Invited typists dataset
   const [invitedTypists, setInvitedTypists] = useState([]);
-  const [isTypistInviteModalOpen, setIsTypistInviteModalOpen] = useState(false);
-  const [typistInviteForm, setTypistInviteForm] = useState({ typistName: '', typistEmail: '', reviewerName: '', reviewerEmail: '' });
-  const [isTypistInviting, setIsTypistInviting] = useState(false);
   
   const [confirmDeleteObj, setConfirmDeleteObj] = useState(null);
 
-  // Search & Filter states
   const [appSearch, setAppSearch] = useState('');
   const [appFilter, setAppFilter] = useState('All');
   const [queryFilter, setQueryFilter] = useState('All');
 
-  // Modal detail states
   const [selectedQuery, setSelectedQuery] = useState(null);
-  const [activeHeatmapIndex, setActiveHeatmapIndex] = useState(null);
 
-  // Invite Student states
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ name: '', department: '', email: '' });
-  const [isInviting, setIsInviting] = useState(false);
-
-  // Popup States
   const [popupActive, setPopupActive] = useState(false);
   const [popupImageUrl, setPopupImageUrl] = useState('');
-  const [isUploadingPopup, setIsUploadingPopup] = useState(false);
 
-  // Auth Guard
   useEffect(() => {
     const role = localStorage.getItem('auth_role');
-    const name = localStorage.getItem('auth_name');
     if (role !== 'admin') {
       navigate('/login');
-    } else {
-      setAdminName(name || 'Admin');
     }
   }, [navigate]);
 
-  // Load database from Firestore (with fallbacks to localStorage for courses config)
   useEffect(() => {
     const syncData = async () => {
       try {
-        // 1. Fetch Applications
         const appsSnapshot = await getDocs(collection(db, 'career_applications'));
         const fetchedApps = appsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (fetchedApps.length > 0) {
-          setApplications(fetchedApps);
-        } else {
-          setApplications(defaultApplications);
-        }
+        setApplications(fetchedApps.length > 0 ? fetchedApps : defaultApplications);
 
-        // 2. Fetch Queries
         const queriesSnapshot = await getDocs(collection(db, 'contact_queries'));
         const fetchedQueries = queriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (fetchedQueries.length > 0) {
-          setQueries(fetchedQueries);
-        } else {
-          setQueries(defaultQueries);
-        }
+        setQueries(fetchedQueries.length > 0 ? fetchedQueries : defaultQueries);
 
-        // 3. Fetch Joined Students
         const studentsSnapshot = await getDocs(collection(db, 'joined_students'));
         const fetchedStudents = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (fetchedStudents.length > 0) {
-          setJoinedStudents(fetchedStudents);
-        } else {
-          setJoinedStudents(defaultStudents);
-        }
+        setJoinedStudents(fetchedStudents.length > 0 ? fetchedStudents : defaultStudents);
 
-        // 4. Fetch Invited Teachers
         const teachersSnapshot = await getDocs(collection(db, 'invited_teachers'));
-        const fetchedTeachers = teachersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setInvitedTeachers(fetchedTeachers);
+        setInvitedTeachers(teachersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-        // 4.5. Fetch Invited Typists
         const typistsSnapshot = await getDocs(collection(db, 'invited_typists'));
-        const fetchedTypists = typistsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setInvitedTypists(fetchedTypists);
+        setInvitedTypists(typistsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-        // 5. Keep courses config in localStorage for now since it's just settings
         const savedCourses = localStorage.getItem('gate_courses_config');
-        if (savedCourses) {
-          setCourses(JSON.parse(savedCourses));
-        } else {
-          localStorage.setItem('gate_courses_config', JSON.stringify(defaultCourseOverrides));
-          setCourses(defaultCourseOverrides);
-        }
+        setCourses(savedCourses ? JSON.parse(savedCourses) : defaultCourseOverrides);
       } catch (err) {
-        console.error("Failed to sync data from Firestore", err);
+        console.error("Failed to sync data", err);
       }
     };
-
-    // Run initial sync
     syncData();
-
-    // Listen for storage events on courses config
-    const handleStorage = () => syncData();
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   useEffect(() => {
@@ -288,398 +227,40 @@ export default function AdminDashboard() {
           setPopupActive(snap.data().isActive || false);
           setPopupImageUrl(snap.data().imageUrl || '');
         }
-      } catch (e) {
-        console.error("Popup fetch error:", e);
-      }
+      } catch (e) { console.error(e); }
     };
     fetchPopup();
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('auth_role');
-    localStorage.removeItem('auth_email');
-    localStorage.removeItem('auth_name');
-    window.dispatchEvent(new Event('storage'));
     navigate('/login');
   };
 
   const updateAppStatus = async (app, status, reason = '') => {
-    setIsProcessingApp(true);
-    const updated = applications.map(a => 
-      a.id === app.id ? { ...a, status } : a
-    );
+    const updated = applications.map(a => a.id === app.id ? { ...a, status } : a);
     setApplications(updated);
-    
-    let emailFailed = false;
-    let emailErrorMsg = '';
-    try {
-      let subject, htmlMessage, attachment = null;
-
-      if (status === 'Shortlisted') {
-        subject = 'Congratulations! Welcome to MS Academy';
-        
-        // ----------------------------------------------------
-        // PDF 1: OFFER LETTER
-        // ----------------------------------------------------
-        const doc1 = new jsPDF();
-        
-        doc1.setFillColor(30, 58, 138);
-        doc1.rect(0, 0, 210, 40, 'F');
-        
-        let headerImgLoaded = false;
-        let loadedImg = null;
-        try {
-          loadedImg = await loadImage(logoImg);
-          headerImgLoaded = true;
-          doc1.addImage(loadedImg, 'PNG', 20, 8, 24, 24);
-          doc1.setTextColor(255, 255, 255);
-          doc1.setFontSize(28);
-          doc1.setFont('helvetica', 'bold');
-          doc1.text('MS ACADEMY', 50, 26);
-        } catch (e) {
-          doc1.setTextColor(255, 255, 255);
-          doc1.setFontSize(28);
-          doc1.setFont('helvetica', 'bold');
-          doc1.text('MS ACADEMY', 20, 26);
-        }
-        
-        doc1.setFontSize(14);
-        doc1.setFont('helvetica', 'normal');
-        doc1.text('OFFER OF EMPLOYMENT', 190, 26, { align: 'right' });
-        
-        doc1.setTextColor(51, 51, 51);
-        doc1.setFontSize(10);
-        doc1.text(`Ref: MSA/HR/${new Date().getFullYear()}/${Math.floor(Math.random()*10000)}`, 20, 55);
-        doc1.text(`Date: ${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`, 190, 55, { align: 'right' });
-        
-        doc1.setFontSize(12);
-        doc1.setFont('helvetica', 'bold');
-        doc1.text(`Dear ${app.fullName},`, 20, 75);
-        
-        doc1.setFont('helvetica', 'normal');
-        doc1.setFontSize(11);
-        
-        const p1 = `We are thrilled to officially extend an offer of employment to you for the position of ${app.role} at MS Academy. Following our rigorous recruitment process, our faculty board was highly impressed with your academic background and your experience (${app.experience}).`;
-        const p2 = `At MS Academy, we are committed to excellence in education and shaping the future of brilliant minds. We believe that your expertise will be a tremendous asset to our institution and our students.`;
-        const p3 = `This offer is contingent upon the successful completion of our standard onboarding background checks and verification of your academic credentials. Detailed terms and conditions of your employment, including compensation, benefits, and faculty guidelines, are enclosed in the orientation package that will be sent to you shortly.`;
-        const p4 = `Please indicate your acceptance of this offer by signing and returning a copy of this letter to the HR department within 5 business days.`;
-        const p5 = `We look forward to welcoming you to the MS Academy family and are excited about the positive impact you will make.`;
-        
-        let yPos1 = 90;
-        const lineSpacing1 = 6;
-        const writeParagraph1 = (text) => {
-           const lines = doc1.splitTextToSize(text, 170);
-           doc1.text(lines, 20, yPos1);
-           yPos1 += (lines.length * lineSpacing1) + 5;
-        };
-        writeParagraph1(p1);
-        writeParagraph1(p2);
-        writeParagraph1(p3);
-        writeParagraph1(p4);
-        writeParagraph1(p5);
-        
-        yPos1 += 15;
-        doc1.setFont('helvetica', 'bold');
-        doc1.text('Sincerely,', 20, yPos1);
-        yPos1 += 20;
-        doc1.text('_______________________', 20, yPos1);
-        yPos1 += 7;
-        doc1.text('Director of Recruitment', 20, yPos1);
-        doc1.setFont('helvetica', 'normal');
-        doc1.text('MS Academy', 20, yPos1 + 5);
-        
-        doc1.setDrawColor(200, 200, 200);
-        doc1.line(20, 280, 190, 280);
-        doc1.setFontSize(8);
-        doc1.setTextColor(150, 150, 150);
-        doc1.text('MS Academy | Tech City Campus | contact@msacademy.example.com', 105, 287, { align: 'center' });
-        
-        const pdfBase64Data1 = doc1.output('datauristring').split(',')[1];
-        
-        // ----------------------------------------------------
-        // PDF 2: ACCEPTANCE FORM
-        // ----------------------------------------------------
-        const doc2 = new jsPDF();
-        
-        doc2.setFillColor(30, 58, 138); 
-        doc2.rect(0, 0, 210, 40, 'F');
-        
-        if (headerImgLoaded && loadedImg) {
-          doc2.addImage(loadedImg, 'PNG', 20, 8, 24, 24);
-          doc2.setTextColor(255, 255, 255);
-          doc2.setFontSize(28);
-          doc2.setFont('helvetica', 'bold');
-          doc2.text('MS ACADEMY', 50, 26);
-        } else {
-          doc2.setTextColor(255, 255, 255);
-          doc2.setFontSize(28);
-          doc2.setFont('helvetica', 'bold');
-          doc2.text('MS ACADEMY', 20, 26);
-        }
-        
-        doc2.setFontSize(14);
-        doc2.setFont('helvetica', 'normal');
-        doc2.text('ACCEPTANCE OF OFFER', 190, 26, { align: 'right' });
-        
-        doc2.setTextColor(51, 51, 51);
-        doc2.setFontSize(16);
-        doc2.setFont('helvetica', 'bold');
-        doc2.text('OFFER ACCEPTANCE LETTER', 105, 60, { align: 'center' });
-        
-        doc2.setFontSize(11);
-        doc2.setFont('helvetica', 'normal');
-        
-        const acceptText = `I, ${app.fullName}, hereby accept the offer of employment from MS Academy for the position of ${app.role}, as outlined in the Offer Letter dated ${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}.`;
-        
-        const acceptLines = doc2.splitTextToSize(acceptText, 170);
-        doc2.text(acceptLines, 20, 80);
-        
-        const acceptText2 = `I understand that my employment is subject to the terms and conditions provided, and I am excited to join the faculty team.`;
-        const acceptLines2 = doc2.splitTextToSize(acceptText2, 170);
-        doc2.text(acceptLines2, 20, 95);
-        
-        let yForm = 130;
-        doc2.setFont('helvetica', 'bold');
-        doc2.text('Candidate Signature:', 20, yForm);
-        doc2.setFont('helvetica', 'normal');
-        doc2.line(70, yForm + 1, 190, yForm + 1); // underline
-        
-        yForm += 20;
-        doc2.setFont('helvetica', 'bold');
-        doc2.text('Printed Name:', 20, yForm);
-        doc2.setFont('helvetica', 'normal');
-        doc2.text(`${app.fullName}`, 70, yForm);
-        doc2.line(70, yForm + 1, 190, yForm + 1); // underline
-        
-        yForm += 20;
-        doc2.setFont('helvetica', 'bold');
-        doc2.text('Date of Signature:', 20, yForm);
-        doc2.setFont('helvetica', 'normal');
-        doc2.line(70, yForm + 1, 190, yForm + 1); // underline
-        
-        doc2.setDrawColor(200, 200, 200);
-        doc2.line(20, 280, 190, 280);
-        doc2.setFontSize(8);
-        doc2.setTextColor(150, 150, 150);
-        doc2.text('Please sign and return this page to the MS Academy HR Department.', 105, 287, { align: 'center' });
-        
-        const pdfBase64Data2 = doc2.output('datauristring').split(',')[1];
-        
-        attachment = [
-          {
-            filename: 'MS_Academy_Offer_Letter.pdf',
-            mimeType: 'application/pdf',
-            base64Data: pdfBase64Data1
-          },
-          {
-            filename: 'MS_Academy_Acceptance_Form.pdf',
-            mimeType: 'application/pdf',
-            base64Data: pdfBase64Data2
-          }
-        ];
-
-        htmlMessage = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-            <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); padding: 30px 20px; text-align: center;">
-              <h1 style="color: white; margin: 0; font-size: 28px; letter-spacing: 1px;">Welcome to MS Academy</h1>
-            </div>
-            <div style="padding: 40px 30px; background-color: #ffffff;">
-              <h2 style="color: #1e293b; margin-top: 0;">Dear ${app.fullName},</h2>
-              <p style="color: #475569; font-size: 16px; line-height: 1.6;">We are absolutely delighted to inform you that you have been <strong>Shortlisted</strong> for the role of <strong>${app.role}</strong>.</p>
-              <p style="color: #475569; font-size: 16px; line-height: 1.6;">Our team was extremely impressed by your profile and experience. We are excited about the prospect of you joining our esteemed faculty and making a significant impact.</p>
-              <div style="background-color: #f8fafc; border-left: 4px solid #3b82f6; padding: 15px 20px; margin: 25px 0; border-radius: 0 8px 8px 0;">
-                <p style="margin: 0; color: #334155; font-weight: 500;">Please find your official Offer Letter attached to this email as a PDF document.</p>
-              </div>
-              <p style="color: #475569; font-size: 16px; line-height: 1.6;">Our HR team will reach out to you shortly with the next steps regarding your onboarding and orientation.</p>
-              <div style="margin-top: 40px;">
-                <p style="color: #1e293b; font-weight: bold; margin: 0;">Warmest congratulations,</p>
-                <p style="color: #64748B; margin: 5px 0 0 0;">MS Academy Recruitment Team</p>
-              </div>
-            </div>
-          </div>
-        `;
-      } else {
-        subject = 'Update on your Application';
-        const messageText = `We regret to inform you that your application for <b>${app.role}</b> was not successful at this time.<br/><br/><b>Reason:</b> ${reason}`;
-        
-        htmlMessage = `
-          <div style="font-family: sans-serif; padding: 20px;">
-            <h2>Hello ${app.fullName},</h2>
-            <p>${messageText}</p>
-            <br/>
-            <p>Best regards,<br/>MS Academy Team</p>
-          </div>
-        `;
-      }
-      
-      await sendEmailViaGAS(app.email, subject, htmlMessage, attachment);
-    } catch (emailErr) {
-      console.error("Email Error:", emailErr);
-      emailFailed = true;
-      emailErrorMsg = emailErr.message || "Failed to send email.";
-    }
-
     try {
       await updateDoc(doc(db, 'career_applications', app.id), { status });
-      if (selectedApp && selectedApp.id === app.id) {
-        setSelectedApp({ ...selectedApp, status });
-      }
-      
-      if (status === 'Rejected') {
-        setShowRejectInput(false);
-        setRejectReason('');
-      }
-      
-      if (emailFailed) {
-        alert(`Application status updated to ${status}, but failed to send email. Error: ${emailErrorMsg}`);
-      } else {
-        alert(`Application ${status} successfully and email sent.`);
-      }
-    } catch (e) {
-      console.error(e);
-      alert('Error updating status or sending email. Please try again.');
-    } finally {
-      setIsProcessingApp(false);
-    }
+      if (selectedApp && selectedApp.id === app.id) setSelectedApp({ ...selectedApp, status });
+    } catch (e) { console.error(e); }
   };
 
   const toggleQueryStatus = async (id) => {
     const query = queries.find(q => q.id === id);
     if (!query) return;
     const newStatus = query.status === 'Pending' ? 'Resolved' : 'Pending';
-
-    const updated = queries.map(q => 
-      q.id === id ? { ...q, status: newStatus } : q
-    );
-    setQueries(updated);
+    setQueries(queries.map(q => q.id === id ? { ...q, status: newStatus } : q));
     try {
       await updateDoc(doc(db, 'contact_queries', id), { status: newStatus });
-      if (selectedQuery && selectedQuery.id === id) {
-        setSelectedQuery({ ...selectedQuery, status: newStatus });
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const updateCourseDetail = (code, field, value) => {
-    const updated = courses.map(c => 
-      c.code === code ? { ...c, [field]: value } : c
-    );
-    if (!courses.some(c => c.code === code)) {
-      updated.push({ code, fee: '₹30,000', batch: 'TBD', status: 'Active', [field]: value });
-    }
-    setCourses(updated);
-    localStorage.setItem('gate_courses_config', JSON.stringify(updated));
-  };
-
-  const handleInviteSubmit = async (e) => {
-    e.preventDefault();
-    setIsInviting(true);
-
-    try {
-      const originUrl = window.location.hostname === 'localhost' ? 'https://msacademy-portal.example.com' : window.location.origin;
-      const loginLink = originUrl + '/login';
-      const htmlMessage = `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Hello ${inviteForm.name},</h2>
-          <p>You have been invited to join MS Academy under the ${inviteForm.department} department.</p>
-          <p><a href="${loginLink}" style="display:inline-block; padding:10px 20px; background:#2563EB; color:#fff; text-decoration:none; border-radius:5px;">Login to Portal</a></p>
-          <br/>
-          <p>Best regards,<br/>MS Academy Team</p>
-        </div>
-      `;
-      await sendEmailViaGAS(inviteForm.email, "Invitation to join MS Academy", htmlMessage);
-
-      const newStudent = {
-        name: inviteForm.name,
-        email: inviteForm.email,
-        department: inviteForm.department,
-        joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
-        status: "Invited"
-      };
-      
-      const docRef = await addDoc(collection(db, 'joined_students'), newStudent);
-      newStudent.id = docRef.id;
-      
-      const updatedStudents = [newStudent, ...joinedStudents];
-      setJoinedStudents(updatedStudents);
-      
-      setIsInviteModalOpen(false);
-      setInviteForm({ name: '', department: '', email: '' });
-      
-    } catch (error) {
-      console.error('Error sending invite:', error);
-      alert('Failed to send invite email. Please try again.');
-    } finally {
-      setIsInviting(false);
-    }
-  };
-
-  const handlePopupImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    if (file.size > 1048576) {
-      alert("Image is too large. Please upload an image under 1MB.");
-      return;
-    }
-    
-    setIsUploadingPopup(true);
-    try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const base64Url = reader.result;
-          setPopupImageUrl(base64Url);
-          
-          const docRef = doc(db, 'site_settings', 'popup');
-          await setDoc(docRef, { imageUrl: base64Url, isActive: popupActive }, { merge: true });
-        } catch (err) {
-          console.error("Firestore error:", err);
-          alert("Failed to save image to database.");
-        } finally {
-          setIsUploadingPopup(false);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error("FileReader error:", err);
-      setIsUploadingPopup(false);
-      alert("Failed to read image file.");
-    }
-  };
-
-  const handleTogglePopup = async () => {
-    const newStatus = !popupActive;
-    setPopupActive(newStatus);
-    try {
-      const docRef = doc(db, 'site_settings', 'popup');
-      await setDoc(docRef, { isActive: newStatus, imageUrl: popupImageUrl }, { merge: true });
-    } catch (err) {
-      console.error(err);
-      setPopupActive(!newStatus); 
-    }
+      if (selectedQuery && selectedQuery.id === id) setSelectedQuery({ ...selectedQuery, status: newStatus });
+    } catch (e) { console.error(e); }
   };
 
   const handleTeacherInviteSubmit = async (e) => {
     e.preventDefault();
     setIsTeacherInviting(true);
-
     try {
-      const originUrl = window.location.hostname === 'localhost' ? 'https://msacademy-portal.example.com' : window.location.origin;
-      const loginLink = originUrl + '/login';
-      const htmlMessage = `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Hello ${teacherInviteForm.name} (Faculty),</h2>
-          <p>You have been invited to join MS Academy under the ${teacherInviteForm.department} department.</p>
-          <p><a href="${loginLink}" style="display:inline-block; padding:10px 20px; background:#2563EB; color:#fff; text-decoration:none; border-radius:5px;">Login to Portal</a></p>
-          <br/>
-          <p>Best regards,<br/>MS Academy Team</p>
-        </div>
-      `;
-      await sendEmailViaGAS(teacherInviteForm.email, "Faculty Invitation - MS Academy", htmlMessage);
-
       const newTeacher = {
         name: teacherInviteForm.name,
         email: teacherInviteForm.email,
@@ -688,76 +269,33 @@ export default function AdminDashboard() {
         invitedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
         status: "Invited"
       };
-      
       const docRef = await addDoc(collection(db, 'invited_teachers'), newTeacher);
-      newTeacher.id = docRef.id;
-      
-      const updatedTeachers = [newTeacher, ...invitedTeachers];
-      setInvitedTeachers(updatedTeachers);
-      
+      setInvitedTeachers([{ ...newTeacher, id: docRef.id }, ...invitedTeachers]);
       setIsTeacherInviteModalOpen(false);
       setTeacherInviteForm({ name: '', department: '', qualification: '', email: '' });
-      
-    } catch (error) {
-      console.error('Failed to send teacher invite:', error);
-      alert('Failed to send teacher invite email. Please check your EmailJS configuration.');
-    } finally {
-      setIsTeacherInviting(false);
-    }
+    } finally { setIsTeacherInviting(false); }
   };
 
   const deleteTeacher = async (teacherId) => {
-    setConfirmDeleteObj({
-      type: 'teacher',
-      id: teacherId,
-      message: 'Are you sure you want to remove this teacher? They will lose access to the Faculty portal.'
-    });
+    setConfirmDeleteObj({ type: 'teacher', id: teacherId, message: 'Are you sure you want to remove this teacher?' });
   };
 
   const confirmDeleteAction = async () => {
     if (!confirmDeleteObj) return;
     const { type, id } = confirmDeleteObj;
-    
     if (type === 'teacher') {
-      const updatedTeachers = invitedTeachers.filter(t => t.id !== id);
-      setInvitedTeachers(updatedTeachers);
-      try {
-        await deleteDoc(doc(db, 'invited_teachers', id));
-      } catch (e) {
-        console.error("Failed to delete teacher", e);
-      }
+      setInvitedTeachers(invitedTeachers.filter(t => t.id !== id));
+      await deleteDoc(doc(db, 'invited_teachers', id));
     } else if (type === 'typist') {
-      setInvitedTypists(prev => prev.filter(t => t.id !== id));
-      try {
-        await deleteDoc(doc(db, 'invited_typists', id));
-      } catch (e) {
-        console.error("Failed to delete pair", e);
-      }
+      setInvitedTypists(invitedTypists.filter(t => t.id !== id));
+      await deleteDoc(doc(db, 'invited_typists', id));
     }
     setConfirmDeleteObj(null);
   };
 
-  // Filter lists
-  const filteredApps = applications.filter(app => {
-    const matchesSearch = app.fullName.toLowerCase().includes(appSearch.toLowerCase()) || 
-                          app.email.toLowerCase().includes(appSearch.toLowerCase()) ||
-                          app.specialization.toLowerCase().includes(appSearch.toLowerCase());
-    const matchesRole = appFilter === 'All' || app.role === appFilter;
-    return matchesSearch && matchesRole;
-  });
-
-  const filteredQueries = queries.filter(q => {
-    if (queryFilter === 'All') return true;
-    return q.status === queryFilter;
-  });
-
   return (
     <div className="h-screen w-full bg-slate-50/50 flex flex-col md:flex-row overflow-hidden">
-      
-      {/* Side Navigation Panel Wrapper */}
       <div className={`transition-all duration-300 ${isCollapsed ? 'w-[88px]' : 'w-full md:w-[280px]'} h-full flex-shrink-0 relative z-20`}>
-        
-        {/* Collapse Button (Now outside the overflow container so it's fully visible!) */}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="hidden md:flex absolute -right-3.5 top-9 w-7 h-7 bg-white border border-slate-200 rounded-full items-center justify-center shadow-sm text-slate-500 hover:text-slate-800 transition-colors z-30 hover:shadow-md"
@@ -767,7 +305,6 @@ export default function AdminDashboard() {
 
         <aside className="w-full h-full bg-[#f8f9fa] flex flex-col justify-between pt-8 pb-6 px-4 overflow-y-auto border-r border-slate-200/60 shadow-[4px_0_24px_rgba(0,0,0,0.02)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className="space-y-8">
-            {/* Admin title */}
             <div className={`flex items-center gap-3 px-2 mb-2 ${isCollapsed ? 'justify-center px-0' : ''}`}>
               <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm flex-shrink-0 border border-slate-200 overflow-hidden p-0.5">
                 <img src={logoImg} alt="MS Gate Academy Logo" className="w-full h-full object-contain" />
@@ -775,7 +312,6 @@ export default function AdminDashboard() {
               {!isCollapsed && <h3 className="text-[17px] font-[900] text-[#1D4ED8] tracking-tight whitespace-nowrap mt-0.5">MS Gate Academy</h3>}
             </div>
 
-            {/* Navigation Links */}
             <nav className="space-y-1.5 px-1">
               <button
                 onClick={() => setActiveTab('overview')}
@@ -821,11 +357,10 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('courses')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'courses' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
               >
-                <Package size={20} className={activeTab === 'courses' ? 'text-[#8b5cf6]' : 'text-[#8b5cf6]'} />
+                <Database size={20} className={activeTab === 'courses' ? 'text-[#8b5cf6]' : 'text-[#8b5cf6]'} />
                 {!isCollapsed && <span>Course Setup</span>}
               </button>
 
-              {/* Decorative Placeholders */}
               <button 
                 onClick={() => setActiveTab('attributes')}
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'attributes' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
@@ -850,22 +385,6 @@ export default function AdminDashboard() {
                 {!isCollapsed && <span>Question Bank</span>}
               </button>
 
-              <button
-                onClick={() => setActiveTab('premium_questions')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'premium_questions' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
-              >
-                <div className="relative">
-                  <Database size={20} className={activeTab === 'premium_questions' ? 'text-amber-500' : 'text-amber-500'} />
-                  <span className="absolute -top-1.5 -right-1.5 text-amber-500 text-[12px]">★</span>
-                </div>
-                {!isCollapsed && <span>Premium Questions</span>}
-              </button>
-
-              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
-                <FileText size={20} className="text-[#3b82f6]" />
-                {!isCollapsed && <span>Blogs</span>}
-              </button>
-
               <button 
                 onClick={() => setActiveTab('popup')}
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'popup' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
@@ -881,24 +400,10 @@ export default function AdminDashboard() {
                 <Sparkles size={20} className={activeTab === 'ai' ? 'text-[#5b32ea]' : 'text-[#eab308]'} />
                 {!isCollapsed && <span>AI Generator</span>}
               </button>
-
             </nav>
           </div>
 
-          {/* Profile Card & Logout */}
           <div className={`pt-5 border-t border-slate-200 mt-8 space-y-3 ${isCollapsed ? 'px-0' : 'px-2'}`}>
-            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-              <div className="w-10 h-10 rounded-full bg-[#e0e7ff] text-[#4f46e5] font-black text-[16px] flex items-center justify-center flex-shrink-0">
-                M
-              </div>
-              {!isCollapsed && (
-                <div className="flex flex-col min-w-0 overflow-hidden">
-                  <span className="font-bold text-[14px] text-slate-800 truncate">User</span>
-                  <span className="text-[12px] font-semibold text-slate-500 truncate">msacademics.edu@gmail.com</span>
-                </div>
-              )}
-            </div>
-
             <button
               onClick={handleLogout}
               className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-2'} py-2.5 mt-2 rounded-xl font-bold text-[14px] text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors`}
@@ -910,20 +415,11 @@ export default function AdminDashboard() {
         </aside>
       </div>
 
-      {/* Main Dashboard Container */}
-      <main className={`flex-1 w-full z-10 ${activeTab === 'analytics' ? 'h-full flex flex-col' : 'p-6 md:p-10 max-w-[1400px] mx-auto space-y-8 overflow-y-auto h-full'}`}>
-        
-        {/* Active Tab: Overview Dashboard */}
+      <main className={`flex-1 w-full z-10 p-6 md:p-10 max-w-[1400px] mx-auto space-y-8 overflow-y-auto h-full`}>
         {activeTab === 'overview' && (
           <div className="space-y-8">
-            
-            
-            {/* Premium SaaS Top Navigation Header */}
             <div className="flex items-center justify-between bg-transparent mb-2">
-              
-              {/* Left Section: Avatar + Welcome Message */}
               <div className="flex items-center gap-4">
-                {/* Profile Avatar */}
                 <div className="w-[48px] h-[48px] rounded-full bg-slate-200 border border-slate-200 shadow-[0_2px_8px_rgba(15,23,42,0.06)] overflow-hidden cursor-pointer hover:scale-105 transition-transform shrink-0">
                   <img src="https://ui-avatars.com/api/?name=Admin+User&background=1E293B&color=fff&size=100" alt="Admin Profile" className="w-full h-full object-cover" />
                 </div>
@@ -932,131 +428,67 @@ export default function AdminDashboard() {
                   <p className="text-[13px] font-[500] text-[#64748B] tracking-tight">Here's what's happening with your tests today.</p>
                 </div>
               </div>
-
-              {/* Center Section: Search Bar */}
-              <div className="hidden lg:flex items-center bg-[#FFFFFF] border border-[#EEF2F7] rounded-full h-[42px] w-[380px] px-4 shadow-[0_2px_12px_rgba(15,23,42,0.03)] transition-all hover:border-blue-400 hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] group">
-                <Search size={16} className="text-[#94A3B8] shrink-0" />
-                <input 
-                  type="text" 
-                  placeholder="Search tests, students, modules..." 
-                  className="w-full bg-transparent border-none outline-none text-[13px] text-[#0F172A] placeholder-[#94A3B8] font-sans px-3"
-                />
-                <div className="flex items-center justify-center bg-[#F1F5F9] rounded-[6px] px-2 py-0.5 shrink-0">
-                  <span className="text-[11px] font-[600] text-[#64748B]">Ctrl + K</span>
-                </div>
-              </div>
-
-              {/* Right Section: Notification */}
               <div className="flex items-center">
-                {/* Notification Button */}
                 <button className="relative flex items-center justify-center w-[42px] h-[42px] bg-[#FFFFFF] border border-[#EEF2F7] rounded-full shadow-[0_2px_12px_rgba(15,23,42,0.03)] hover:bg-[#F8FAFF] hover:border-blue-200 transition-all group">
                   <Bell size={18} className="text-[#64748B] group-hover:text-[#2563EB] group-hover:animate-pulse" />
                   <span className="absolute -top-1 -right-0.5 w-[16px] h-[16px] bg-[#EF4444] rounded-full border-[1.5px] border-white flex items-center justify-center text-[9px] font-bold text-white shadow-sm">3</span>
                 </button>
               </div>
-
             </div>
 
-            {/* Top Stat Bar - Premium SaaS Cards (Reduced Size) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
-              
-              {/* Card 1: Total Tests */}
               <div className="bg-white rounded-[22px] border border-[#EEF2F7] shadow-[0_12px_35px_rgba(15,23,42,0.06)] p-5 h-[130px] flex flex-col justify-between relative group cursor-pointer transition-all duration-300 ease-out hover:-translate-y-[4px] hover:shadow-[0_16px_40px_rgba(37,99,235,0.12)] hover:border-blue-400">
-                <div className="absolute top-5 right-5 text-[#94A3B8] group-hover:text-slate-600 transition-colors">
-                  <MoreHorizontal size={18} strokeWidth={2.5} />
-                </div>
                 <div className="flex items-center gap-4">
                   <div className="w-[50px] h-[50px] rounded-full bg-gradient-to-br from-[#EEF6FF] to-[#DCEEFF] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                    <FileText size={20} className="text-[#2563EB]" strokeWidth={2.5} style={{ filter: 'drop-shadow(0 0 6px rgba(37,99,235,0.3))' }} />
+                    <FileText size={20} className="text-[#2563EB]" />
                   </div>
                   <div className="flex flex-col">
                     <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">128</h3>
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Total Tests</span>
                   </div>
                 </div>
-                <div className="flex items-center text-[#16A34A] gap-2 mt-auto pt-1">
-                  <div className="w-[18px] h-[18px] rounded-full bg-green-50 flex items-center justify-center shrink-0">
-                    <ArrowUpRight size={12} strokeWidth={3} />
-                  </div>
-                  <span className="text-[13px] font-semibold tracking-tight">12% this month</span>
-                </div>
               </div>
 
-              {/* Card 2: Total Students */}
               <div className="bg-white rounded-[22px] border border-[#EEF2F7] shadow-[0_12px_35px_rgba(15,23,42,0.06)] p-5 h-[130px] flex flex-col justify-between relative group cursor-pointer transition-all duration-300 ease-out hover:-translate-y-[4px] hover:shadow-[0_16px_40px_rgba(37,99,235,0.12)] hover:border-blue-400">
-                <div className="absolute top-5 right-5 text-[#94A3B8] group-hover:text-slate-600 transition-colors">
-                  <MoreHorizontal size={18} strokeWidth={2.5} />
-                </div>
                 <div className="flex items-center gap-4">
                   <div className="w-[50px] h-[50px] rounded-full bg-gradient-to-br from-[#F3E8FF] to-[#E9D5FF] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                    <Users size={20} className="text-[#8B5CF6]" strokeWidth={2.5} style={{ filter: 'drop-shadow(0 0 6px rgba(139,92,246,0.3))' }} />
+                    <Users size={20} className="text-[#8B5CF6]" />
                   </div>
                   <div className="flex flex-col">
                     <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">521</h3>
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Total Students</span>
                   </div>
                 </div>
-                <div className="flex items-center text-[#16A34A] gap-2 mt-auto pt-1">
-                  <div className="w-[18px] h-[18px] rounded-full bg-green-50 flex items-center justify-center shrink-0">
-                    <ArrowUpRight size={12} strokeWidth={3} />
-                  </div>
-                  <span className="text-[13px] font-semibold tracking-tight">8% this month</span>
-                </div>
               </div>
 
-              {/* Card 3: Completion Rate */}
               <div className="bg-white rounded-[22px] border border-[#EEF2F7] shadow-[0_12px_35px_rgba(15,23,42,0.06)] p-5 h-[130px] flex flex-col justify-between relative group cursor-pointer transition-all duration-300 ease-out hover:-translate-y-[4px] hover:shadow-[0_16px_40px_rgba(37,99,235,0.12)] hover:border-blue-400">
-                <div className="absolute top-5 right-5 text-[#94A3B8] group-hover:text-slate-600 transition-colors">
-                  <MoreHorizontal size={18} strokeWidth={2.5} />
-                </div>
                 <div className="flex items-center gap-4">
                   <div className="w-[50px] h-[50px] rounded-full bg-gradient-to-br from-[#ECFDF5] to-[#D1FAE5] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                    <CheckCircle2 size={20} className="text-[#10B981]" strokeWidth={2.5} style={{ filter: 'drop-shadow(0 0 6px rgba(16,185,129,0.3))' }} />
+                    <CheckCircle2 size={20} className="text-[#10B981]" />
                   </div>
                   <div className="flex flex-col">
                     <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">87%</h3>
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Completion Rate</span>
                   </div>
                 </div>
-                <div className="flex items-center text-[#16A34A] gap-2 mt-auto pt-1">
-                  <div className="w-[18px] h-[18px] rounded-full bg-green-50 flex items-center justify-center shrink-0">
-                    <ArrowUpRight size={12} strokeWidth={3} />
-                  </div>
-                  <span className="text-[13px] font-semibold tracking-tight">5% this month</span>
-                </div>
               </div>
 
-              {/* Card 4: Average Score */}
               <div className="bg-white rounded-[22px] border border-[#EEF2F7] shadow-[0_12px_35px_rgba(15,23,42,0.06)] p-5 h-[130px] flex flex-col justify-between relative group cursor-pointer transition-all duration-300 ease-out hover:-translate-y-[4px] hover:shadow-[0_16px_40px_rgba(37,99,235,0.12)] hover:border-blue-400">
-                <div className="absolute top-5 right-5 text-[#94A3B8] group-hover:text-slate-600 transition-colors">
-                  <MoreHorizontal size={18} strokeWidth={2.5} />
-                </div>
                 <div className="flex items-center gap-4">
                   <div className="w-[50px] h-[50px] rounded-full bg-gradient-to-br from-[#FFF7ED] to-[#FED7AA] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                    <TrendingUp size={20} className="text-[#F59E0B]" strokeWidth={2.5} style={{ filter: 'drop-shadow(0 0 6px rgba(245,158,11,0.3))' }} />
+                    <TrendingUp size={20} className="text-[#F59E0B]" />
                   </div>
                   <div className="flex flex-col">
                     <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">89%</h3>
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Average Score</span>
                   </div>
                 </div>
-                <div className="flex items-center text-[#16A34A] gap-2 mt-auto pt-1">
-                  <div className="w-[18px] h-[18px] rounded-full bg-green-50 flex items-center justify-center shrink-0">
-                    <ArrowUpRight size={12} strokeWidth={3} />
-                  </div>
-                  <span className="text-[13px] font-semibold tracking-tight">7% this month</span>
-                </div>
               </div>
-
             </div>
 
-            {/* Main Grid (Tests + Bento Quick Actions) */}
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-              
-              {/* Left Section: Interactive List-View (Col span 7 or 8) */}
               <div className="xl:col-span-8 flex flex-col">
                 <div className="bg-white border border-[#EEF2F7] rounded-[26px] shadow-[0_12px_35px_rgba(15,23,42,0.06)] p-8">
-                  {/* Header */}
                   <div className="flex justify-between items-center mb-8">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-700 shadow-sm">
@@ -1067,189 +499,15 @@ export default function AdminDashboard() {
                         <p className="text-[13px] text-[#64748B] font-medium">Recently created AI-generated assessments</p>
                       </div>
                     </div>
-                    <button className="text-[13px] font-semibold text-[#0F172A] border border-[#E5E7EB] px-5 py-2 rounded-full hover:bg-slate-50 transition-colors shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
-                      View All &rarr;
-                    </button>
-                  </div>
-
-                  {/* Test List */}
-                  <div className="flex flex-col gap-[14px]">
-                    {[
-                      { title: "Practice Test: ME2023.pdf", sub: "Mechanical Engineering", diff: "Medium", color: "orange", time: "60", marks: "100", date: "2 Jul 2025" },
-                      { title: "CS Foundations: Q1.pdf", sub: "Computer Science", diff: "Easy", color: "green", time: "45", marks: "50", date: "1 Jul 2025" },
-                      { title: "Advanced Calculus: Final.pdf", sub: "Mathematics", diff: "Hard", color: "red", time: "120", marks: "200", date: "28 Jun 2025" },
-                      { title: "Physics Mock: PH2025.pdf", sub: "Physics", diff: "Medium", color: "orange", time: "90", marks: "100", date: "25 Jun 2025" },
-                      { title: "Data Structures 101.pdf", sub: "Computer Science", diff: "Easy", color: "green", time: "30", marks: "30", date: "20 Jun 2025" },
-                      { title: "Thermodynamics: ME-Mid.pdf", sub: "Mechanical Engineering", diff: "Hard", color: "red", time: "180", marks: "150", date: "18 Jun 2025" },
-                      { title: "Organic Chem: CH-202.pdf", sub: "Chemistry", diff: "Medium", color: "orange", time: "60", marks: "80", date: "15 Jun 2025" },
-                      { title: "Ethics in Tech: ET-400.pdf", sub: "Humanities", diff: "Easy", color: "green", time: "45", marks: "50", date: "10 Jun 2025" }
-                    ].map((test, idx) => {
-                      const diffStyles = {
-                        green: 'text-[#10B981] bg-gradient-to-r from-emerald-50 to-emerald-100/50',
-                        orange: 'text-[#F59E0B] bg-gradient-to-r from-orange-50 to-orange-100/50',
-                        red: 'text-[#EF4444] bg-gradient-to-r from-rose-50 to-rose-100/50'
-                      }[test.color];
-
-                      return (
-                        <div key={idx} className="group flex flex-col bg-white border border-[#EEF2F7] rounded-[18px] px-5 py-4 shadow-[0_3px_12px_rgba(15,23,42,0.04)] hover:bg-[#F8FAFF] hover:-translate-y-1 hover:shadow-[0_16px_35px_rgba(37,99,235,0.12)] transition-all duration-300 z-10 hover:z-20 overflow-hidden">
-                          
-                          {/* Main Row Content (Always visible) */}
-                          <div className="flex items-center justify-between">
-                            
-                            {/* Left Side */}
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-full bg-blue-50/50 border border-blue-100 flex items-center justify-center text-[#2563EB]">
-                                <FileText size={18} strokeWidth={2.5} />
-                              </div>
-                              <div className="flex flex-col w-[240px]">
-                                <h4 className="font-[600] text-[17px] text-[#0F172A] font-sans leading-tight whitespace-nowrap overflow-hidden text-ellipsis">{test.title}</h4>
-                                <span className="text-[13px] font-medium text-[#64748B] font-sans mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{test.sub}</span>
-                              </div>
-                              <span className={`ml-2 px-3 py-1 rounded-full text-[12px] font-bold tracking-wide shadow-sm whitespace-nowrap ${diffStyles}`}>
-                                {test.diff}
-                              </span>
-                            </div>
-
-                            {/* Metadata */}
-                            <div className="flex items-center gap-8 text-[#64748B] flex-1 justify-end">
-                              <div className="flex items-center gap-2 text-[14px] font-medium whitespace-nowrap">
-                                <Clock size={16} className="opacity-70" /> {test.time} mins
-                              </div>
-                              <div className="flex items-center gap-2 text-[14px] font-medium whitespace-nowrap">
-                                <Trophy size={16} className="opacity-70" /> {test.marks} Marks
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Hover Action Buttons (Expands downwards) */}
-                          <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-all duration-300 ease-in-out opacity-0 group-hover:opacity-100">
-                            <div className="overflow-hidden">
-                              <div className="flex items-center gap-3 pt-4 mt-4 border-t border-[#EEF2F7]">
-                                <button className="h-[40px] px-5 bg-white border border-[#E5E7EB] rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#2563EB] font-semibold text-[14px] flex items-center gap-2 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
-                                  <Edit2 size={16} strokeWidth={2.5} /> Edit Test
-                                </button>
-                                <button className="h-[40px] px-5 bg-white border border-[#E5E7EB] rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#2563EB] font-semibold text-[14px] flex items-center gap-2 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
-                                  <BarChart2 size={16} strokeWidth={2.5} /> Analytics
-                                </button>
-                                <div className="flex-1"></div>
-                                <button className="h-[40px] px-5 bg-[#FEF2F2] border border-red-100 rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#EF4444] font-semibold text-[14px] flex items-center gap-2 hover:bg-red-100 transition-all">
-                                  <Trash2 size={16} strokeWidth={2.5} /> Delete
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                        </div>
-                      );
-                    })}
                   </div>
                 </div>
               </div>
 
-              {/* Right Section: Bento Quick Actions (Col span 4) */}
               <div className="xl:col-span-4 space-y-6">
-
-                {/* Asymmetrical Bento Grid */}
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Primary Action (Styled component) */}
                   <div className="col-span-2 w-full">
                     <CreateTestButton />
                   </div>
-
-                  {/* Secondary Action 1 (Students) */}
-                  <button className="bg-white border border-[#EEF2F7] rounded-[20px] h-[80px] px-5 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group cursor-pointer text-left w-full overflow-hidden">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-[42px] h-[42px] shrink-0 rounded-full bg-gradient-to-br from-[#EEF6FF] to-[#DCEEFF] flex items-center justify-center text-[#2563EB]">
-                        <Users size={20} strokeWidth={2.5} />
-                      </div>
-                      <h4 className="font-bold text-[16px] text-[#0F172A] font-sans shrink-0">Students</h4>
-                    </div>
-                  </button>
-
-                  {/* Secondary Action 2 (Analytics) */}
-                  <button className="bg-white border border-[#EEF2F7] rounded-[20px] h-[80px] px-5 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group cursor-pointer text-left w-full overflow-hidden">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-[42px] h-[42px] shrink-0 rounded-full bg-gradient-to-br from-indigo-50 to-purple-100 flex items-center justify-center text-indigo-600">
-                        <BarChart2 size={20} strokeWidth={2.5} />
-                      </div>
-                      <h4 className="font-bold text-[16px] text-[#0F172A] font-sans shrink-0">Analytics</h4>
-                    </div>
-                  </button>
-                  
-                  {/* Secondary Action 3 (Manage Faculty, Spans 2 cols) */}
-                  <button className="col-span-2 bg-white border border-[#EEF2F7] rounded-[20px] h-[70px] px-6 py-0 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group text-left w-full overflow-hidden">
-                    <h4 className="font-bold text-[16px] text-[#0F172A] font-sans shrink-0">Manage Faculty</h4>
-                    
-                    <div className="w-8 h-8 shrink-0 rounded-full bg-slate-50 text-slate-600 border border-slate-100 flex items-center justify-center group-hover:translate-x-1 transition-transform group-hover:bg-blue-50 group-hover:text-blue-600 group-hover:border-blue-100 ml-2">
-                      <ArrowRight size={16} strokeWidth={2.5} />
-                    </div>
-                  </button>
-                </div>
-
-                {/* Student Activity Heatmap (GitHub Style) */}
-                <div className="bg-white border border-[#EEF2F7] rounded-[26px] shadow-[0_12px_35px_rgba(15,23,42,0.06)] p-[24px]">
-                  
-                  {/* Header */}
-                  <div className="flex justify-between items-center mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2.5 h-2.5 rounded-full bg-[#2563EB] animate-pulse shadow-[0_0_8px_rgba(37,99,235,0.6)]"></div>
-                      <div className="flex flex-col">
-                        <h4 className="font-bold text-[17px] text-[#0F172A] leading-tight">Student Activity</h4>
-                        <span className="font-medium text-[12px] text-[#64748B] mt-0.5">Daily student engagement overview</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F8FAFC] border border-[#EEF2F7] rounded-full cursor-pointer hover:bg-slate-50 transition-colors">
-                      <span className="text-[12px] font-semibold text-[#0F172A]">Last 30 Days</span>
-                      <ChevronRight size={14} className="text-slate-400 rotate-90" />
-                    </div>
-                  </div>
-
-                  {/* Heatmap Grid */}
-                  <div className="flex gap-3 mb-6">
-                    {/* Y-Axis Labels (Weeks) */}
-                    <div className="flex flex-col justify-between text-[11px] font-medium text-[#64748B] pt-6 pb-2 w-16 text-right shrink-0">
-                      <span>May 6</span>
-                      <span>May 13</span>
-                      <span>May 20</span>
-                      <span>May 27</span>
-                      <span>Jun 3</span>
-                    </div>
-
-                    {/* Grid + X-Axis Labels */}
-                    <div className="flex flex-col flex-1">
-                      {/* X-Axis Labels (Days) */}
-                      <div className="grid grid-cols-7 gap-2 mb-2 text-center">
-                        <span className="text-[11px] font-medium text-[#64748B]">Mon</span>
-                        <span className="text-[11px] font-medium text-[#64748B]">Tue</span>
-                        <span className="text-[11px] font-medium text-[#64748B]">Wed</span>
-                        <span className="text-[11px] font-medium text-[#64748B]">Thu</span>
-                        <span className="text-[11px] font-medium text-[#64748B]">Fri</span>
-                        <span className="text-[11px] font-medium text-[#64748B]">Sat</span>
-                        <span className="text-[11px] font-medium text-[#64748B]">Sun</span>
-                      </div>
-
-                      {/* Cells */}
-                      <div className="flex flex-col gap-2">
-                        {[[0,1,2,4,3,0,0],[1,2,4,5,2,1,0],[2,3,5,6,4,2,1],[1,4,6,6,5,1,0],[2,5,6,6,6,2,1]].map((week, weekIdx) => (
-                          <div key={weekIdx} className="grid grid-cols-7 gap-2">
-                            {week.map((val, dayIdx) => {
-                              const colors = [
-                                'bg-[#F8FAFC] border border-[#EEF2F7]', // 0
-                                'bg-[#DBEAFE]', // 1
-                                'bg-[#BFDBFE]', // 2
-                                'bg-[#93C5FD]', // 3
-                                'bg-[#60A5FA]', // 4
-                                'bg-[#3B82F6]', // 5
-                                'bg-[#2563EB] shadow-[0_0_8px_rgba(37,99,235,0.4)]'  // 6
-                              ];
-                              
-                              const count = val === 0 ? 0 : val * 35 + (dayIdx * 12);
-                              const id = weekIdx * 7 + dayIdx;
-
-                              return (
-                                <div key={dayIdx} className="relative group/cell flex justify-center">
-                                  <div className={`w-[18px] h-[18px] rounded-[4px] ${colors[val]} transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 group-hover/cell:scale-110 z-10`}></div>
-                                  
                                   {/* Tooltip */}
                                   <div className="absolute bottom-[140%] opacity-0 group-hover/cell:opacity-100 pointer-events-none transition-all duration-200 w-max bg-[#0F172A] text-white text-[11px] rounded-[8px] px-3 py-2 shadow-xl z-[100] translate-y-1 group-hover/cell:-translate-y-1">
                                     <div className="font-bold text-[#93C5FD] mb-0.5">Week {weekIdx + 1}, Day {dayIdx + 1}</div>

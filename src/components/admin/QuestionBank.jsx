@@ -1,12 +1,10 @@
-import { Eye, LayoutList, Bookmark, Clock, AlertCircle, Trophy, Star, Layers } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import Loader from '../Loader';
-import { createPortal } from 'react-dom';
-import { BookOpen, Plus, Trash2, Edit2, Search, Filter, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Settings, AlignLeft, Bold, Italic, List, Type, MousePointerClick, ChevronDown, ListTodo, Paperclip, Calculator, Eraser, Tag, Check, Sparkles, Circle } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
-export const stripHtmlAndNormalize = (htmlString) => {
+const stripHtmlAndNormalize = (htmlString) => {
   if (!htmlString) return '';
   // Replace <br/> with a space to prevent words from joining, then strip all tags
   const withSpaces = htmlString.replace(/<br\s*\/?>/gi, ' ').replace(/&nbsp;/g, ' ');
@@ -21,7 +19,7 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder = "Sele
   // Close when clicking outside
   useEffect(() => {
     const handleWindowClick = (e) => {
-      if (!e.target.closest(`.select-container-${label.replace(/\\s+/g, '-')}`)) {
+      if (!e.target.closest(`.select-container-${label.replace(/\s+/g, '-')}`)) {
         setIsOpen(false);
       }
     };
@@ -32,7 +30,7 @@ const SearchableSelect = ({ label, options, value, onChange, placeholder = "Sele
   const filteredOptions = options.filter(opt => opt.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className={`relative select-container-${label.replace(/\\s+/g, '-')}`}>
+    <div className={`relative select-container-${label.replace(/\s+/g, '-')}`}>
       <div 
         onClick={() => setIsOpen(!isOpen)}
         className="w-full bg-white border border-slate-200 text-slate-800 text-[13px] font-bold rounded-xl pl-9 pr-8 py-2.5 hover:border-blue-300 focus:ring-2 focus:ring-blue-500/20 outline-none cursor-pointer transition-all shadow-sm flex items-center justify-between"
@@ -634,7 +632,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const mcqQuestions = questions.filter(q => q.questionType === 'Single Choice' || q.questionType === 'Multiple Choice').length;
   const mcqPercentage = totalQuestions === 0 ? 0 : Math.round((mcqQuestions / totalQuestions) * 100);
   const totalSubjects = new Set(questions.map(q => q.subject).filter(Boolean)).size;
-  const numericalQuestions = questions.filter(q => q.questionType === 'Numerical').length;
   const pendingReview = 14; // Mocked as per requirement
 
   const relativeTime = (isoString) => {

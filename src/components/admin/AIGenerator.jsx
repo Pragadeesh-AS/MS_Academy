@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit, Play, Loader2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
