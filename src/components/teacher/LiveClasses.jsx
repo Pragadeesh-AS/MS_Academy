@@ -263,88 +263,11 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
 
-  const [localMicrophoneTrack, setLocalMicrophoneTrack] = useState(null);
-  const [localCameraTrack, setLocalCameraTrack] = useState(null);
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
+  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
 
-  // Microphone Lifecycle
-  useEffect(() => {
-    let track = null;
-    let isCancelled = false;
-
-    if (micOn) {
-      AgoraRTC.createMicrophoneAudioTrack().then(async (t) => {
-        if (isCancelled) { t.close(); return; }
-        track = t;
-        setLocalMicrophoneTrack(t);
-        if (client.connectionState === 'CONNECTED') {
-          await client.publish(t);
-        }
-      }).catch(console.error);
-    }
-
-    return () => {
-      isCancelled = true;
-      if (track) {
-        if (client.localTracks.includes(track)) {
-          client.unpublish(track).finally(() => {
-            track.stop();
-            track.close();
-          });
-        } else {
-          track.stop();
-          track.close();
-        }
-      }
-      setLocalMicrophoneTrack(null);
-    };
-  }, [micOn, client, client.connectionState]);
-
-  // Camera Lifecycle
-  useEffect(() => {
-    let track = null;
-    let isCancelled = false;
-
-    if (cameraOn) {
-      AgoraRTC.createCameraVideoTrack().then(async (t) => {
-        if (isCancelled) { t.close(); return; }
-        track = t;
-        setLocalCameraTrack(t);
-        if (client.connectionState === 'CONNECTED') {
-          await client.publish(t);
-        }
-      }).catch(console.error);
-    }
-
-    return () => {
-      isCancelled = true;
-      if (track) {
-        if (client.localTracks.includes(track)) {
-          client.unpublish(track).finally(() => {
-            track.stop();
-            track.close();
-          });
-        } else {
-          track.stop();
-          track.close();
-        }
-      }
-      setLocalCameraTrack(null);
-    };
-  }, [cameraOn, client, client.connectionState]);
-
-  // Publish tracks if connection happens after creation
-  useEffect(() => {
-    if (client.connectionState === 'CONNECTED') {
-      if (localMicrophoneTrack && !client.localTracks.includes(localMicrophoneTrack)) {
-        client.publish(localMicrophoneTrack).catch(console.error);
-      }
-      if (localCameraTrack && !client.localTracks.includes(localCameraTrack)) {
-        client.publish(localCameraTrack).catch(console.error);
-      }
-    }
-  }, [client.connectionState, localMicrophoneTrack, localCameraTrack, client]);
-
-
+  // Automatically handle publishing and reconnects
+  usePublish([localMicrophoneTrack, localCameraTrack].filter(Boolean));
 
   const {
     isRecording,

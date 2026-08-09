@@ -99,86 +99,11 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     };
   }, [sessionId]);
 
-  const [localMicrophoneTrack, setLocalMicrophoneTrack] = useState(null);
-  const [localCameraTrack, setLocalCameraTrack] = useState(null);
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
+  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
 
-  // Microphone Lifecycle
-  useEffect(() => {
-    let track = null;
-    let isCancelled = false;
-
-    if (micOn) {
-      AgoraRTC.createMicrophoneAudioTrack().then(async (t) => {
-        if (isCancelled) { t.close(); return; }
-        track = t;
-        setLocalMicrophoneTrack(t);
-        if (client.connectionState === 'CONNECTED') {
-          await client.publish(t);
-        }
-      }).catch(console.error);
-    }
-
-    return () => {
-      isCancelled = true;
-      if (track) {
-        if (client.localTracks.includes(track)) {
-          client.unpublish(track).finally(() => {
-            track.stop();
-            track.close();
-          });
-        } else {
-          track.stop();
-          track.close();
-        }
-      }
-      setLocalMicrophoneTrack(null);
-    };
-  }, [micOn, client, client.connectionState]);
-
-  // Camera Lifecycle
-  useEffect(() => {
-    let track = null;
-    let isCancelled = false;
-
-    if (cameraOn) {
-      AgoraRTC.createCameraVideoTrack().then(async (t) => {
-        if (isCancelled) { t.close(); return; }
-        track = t;
-        setLocalCameraTrack(t);
-        if (client.connectionState === 'CONNECTED') {
-          await client.publish(t);
-        }
-      }).catch(console.error);
-    }
-
-    return () => {
-      isCancelled = true;
-      if (track) {
-        if (client.localTracks.includes(track)) {
-          client.unpublish(track).finally(() => {
-            track.stop();
-            track.close();
-          });
-        } else {
-          track.stop();
-          track.close();
-        }
-      }
-      setLocalCameraTrack(null);
-    };
-  }, [cameraOn, client, client.connectionState]);
-
-  // Publish tracks if connection happens after creation
-  useEffect(() => {
-    if (client.connectionState === 'CONNECTED') {
-      if (localMicrophoneTrack && !client.localTracks.includes(localMicrophoneTrack)) {
-        client.publish(localMicrophoneTrack).catch(console.error);
-      }
-      if (localCameraTrack && !client.localTracks.includes(localCameraTrack)) {
-        client.publish(localCameraTrack).catch(console.error);
-      }
-    }
-  }, [client.connectionState, localMicrophoneTrack, localCameraTrack, client]);
+  // Automatically handle publishing and reconnects
+  usePublish([localMicrophoneTrack, localCameraTrack].filter(Boolean));
 
   const remoteUsers = useRemoteUsers();
   const networkQuality = useNetworkQuality();
@@ -250,56 +175,55 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
       const qbContentNode = (
         <>
           {/* Base Layer: Question Content */}
-          <div className={`absolute inset-0 h-full flex flex-col w-full z-10 pointer-events-none bg-white md:bg-white/90 md:backdrop-blur-sm p-6 md:p-12`}>
+          <div id="qb-content" className={`absolute inset-0 h-full flex flex-col w-full z-10 pointer-events-none bg-white md:bg-white/90 md:backdrop-blur-sm p-6 md:p-12`}>
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 flex flex-col">
               {/* Top: Full Width Question */}
-              <h2 className={`w-full flex font-bold text-slate-900 whitespace-normal break-words ${isPinned ? 'text-base md:text-lg mb-6' : 'text-sm mb-2'}`}>
-                <span className={`text-slate-500 shrink-0 ${isPinned ? 'w-16 mr-4 text-center' : 'w-10'}`}>Q.{activeQuestionState.currentIndex + 1}</span>
-                <span className="flex-1" dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
-              </h2>
-              
-              {/* Bottom: Options (Left 40%) & Empty Workspace */}
-              <div className="w-full flex flex-1">
-                <div className="w-full md:w-[45%] flex flex-col pr-4">
-                  {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
-                    <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
-                      <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[30vh]' : 'max-h-16'} object-contain`} />
-                    </div>
-                  )}
-                  <div className={`flex flex-col gap-4 md:gap-5 ${isPinned ? 'ml-20' : 'ml-10'}`}>
-                    {['A', 'B', 'C', 'D'].map(opt => {
-                      const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
-                      if (!text) return null;
-                      const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
-                      const isGuessed = studentGuess === opt;
-                      const isRevealed = activeQuestionState.isAnswerRevealed;
-
-                      let bgClass = 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200';
-                      if (isRevealed) {
-                        if (isCorrect) bgClass = 'bg-green-100 text-green-800 border-green-300 shadow-sm';
-                        else if (isGuessed) bgClass = 'bg-red-50 text-red-700 border-red-200';
-                        else bgClass = 'bg-slate-50/50 text-slate-400 border-slate-100';
-                      } else if (isGuessed) {
-                        bgClass = 'bg-indigo-100 text-indigo-800 border-indigo-300 shadow-sm';
-                      }
-
-                      return (
-                        <button
-                          key={opt}
-                          onClick={() => !isRevealed && setStudentGuess(opt)}
-                          className={`flex items-center text-base md:text-lg font-semibold transition-all p-3 rounded-xl ${bgClass} pointer-events-auto text-left w-max`}
-                        >
-                          <span className="mr-4 font-bold shrink-0 whitespace-nowrap">( {opt} )</span> 
-                          <span dangerouslySetInnerHTML={{ __html: text }} />
-                          {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500 shrink-0" />}
-                          {isRevealed && isGuessed && !isCorrect && <X size={24} className="inline ml-4 text-red-500 shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
+              <div className={`w-full flex font-bold text-slate-900 ${isPinned ? 'text-base md:text-lg mb-6' : 'text-sm mb-4'}`}>
+                <div id="qb-qnum" className={`text-slate-500 shrink-0 flex flex-col items-center gap-4 mt-1 ${isPinned ? 'w-16 mr-4' : 'w-10 mr-2'}`}>
+                  <span>Q.{activeQuestionState.currentIndex + 1}</span>
                 </div>
-                {/* Right Side: Empty Workspace for Whiteboard */}
-                <div className="hidden md:block md:w-[55%] border-l border-slate-200/50 border-dashed"></div>
+                <div id="qb-qtext" className="flex-1" dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
+              </div>
+              
+              {/* Bottom: Options (Left 40%) */}
+              <div id="qb-options-area" className="w-full md:w-[45%] flex flex-col">
+                {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
+                  <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
+                    <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[30vh]' : 'max-h-16'} object-contain`} />
+                  </div>
+                )}
+                <div className={`flex flex-col gap-4 md:gap-5 ${isPinned ? 'ml-20' : 'ml-10'}`}>
+                  {['A', 'B', 'C', 'D'].map(opt => {
+                    const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
+                    if (!text) return null;
+                    const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
+                    const isGuessed = studentGuess === opt;
+                    const isRevealed = activeQuestionState.isAnswerRevealed;
+
+                    let bgClass = 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200';
+                    if (isRevealed) {
+                      if (isCorrect) bgClass = 'bg-green-100 text-green-800 border-green-300 shadow-sm';
+                      else if (isGuessed) bgClass = 'bg-red-50 text-red-700 border-red-200';
+                      else bgClass = 'bg-slate-50/50 text-slate-400 border-slate-100';
+                    } else if (isGuessed) {
+                      bgClass = 'bg-indigo-100 text-indigo-800 border-indigo-300 shadow-sm';
+                    }
+
+                    return (
+                      <button
+                        id={`qb-opt-container-${opt}`}
+                        key={opt}
+                        onClick={() => !isRevealed && setStudentGuess(opt)}
+                        className={`flex items-center text-base md:text-lg font-semibold transition-all p-3 rounded-xl ${bgClass} pointer-events-auto text-left w-max`}
+                      >
+                        <span id={`qb-opt-prefix-${opt}`} className="mr-4 font-bold shrink-0 whitespace-nowrap">( {opt} )</span> 
+                        <span id={`qb-opt-text-${opt}`} dangerouslySetInnerHTML={{ __html: text }} />
+                        {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500 shrink-0" />}
+                        {isRevealed && isGuessed && !isCorrect && <X size={24} className="inline ml-4 text-red-500 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
