@@ -13,7 +13,8 @@ import {
   Pin,
   PinOff,
   X,
-  CheckCircle2
+  CheckCircle2,
+  WifiOff
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, setDoc, doc } from 'firebase/firestore';
@@ -29,7 +30,8 @@ import AgoraRTC, {
   RemoteUser,
   useConnectionState,
   useLocalMicrophoneTrack,
-  useLocalCameraTrack
+  useLocalCameraTrack,
+  useNetworkQuality
 } from "agora-rtc-react";
 
 // Extracted StudentCall component for custom Agora rendering
@@ -179,7 +181,14 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   }, [client.connectionState, localMicrophoneTrack, localCameraTrack, client]);
 
   const remoteUsers = useRemoteUsers();
+  const networkQuality = useNetworkQuality();
   const remoteUserStyle = { width: '100%', height: '100%' };
+
+  const getQuality = (uid) => {
+    const stats = networkQuality[uid];
+    if (!stats) return 0;
+    return Math.max(stats.uplinkNetworkQuality, stats.downlinkNetworkQuality);
+  };
   
   // Actually trigger subscriptions for the remote users
   useRemoteVideoTracks(remoteUsers);
@@ -318,6 +327,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
 
     // 1. Local Camera
     const isLocalPinned = pinnedUid === 'local-camera';
+    const localQuality = getQuality(client.uid);
+    const isLocalSlow = localQuality >= 4 && localQuality <= 6;
     const localTile = (
       <div key="local-camera" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isLocalPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
         {localCameraTrack && cameraOn ? (
@@ -329,7 +340,10 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
             </div>
           </div>
         )}
-        <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-black/70 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isLocalPinned ? 'scale-75 origin-top-left' : ''}`}>You (Student)</div>
+        <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-black/70 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isLocalPinned ? 'scale-75 origin-top-left' : ''}`}>
+          You (Student)
+          {isLocalSlow && <span className="ml-2 text-red-500 inline-flex items-center gap-1"><WifiOff size={12}/> Slow Network</span>}
+        </div>
         <button onClick={() => togglePin('local-camera')} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
             {isLocalPinned ? <PinOff size={16} /> : <Pin size={16} />}
         </button>
@@ -349,6 +363,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
 
       const isPinned = pinnedUid === user.uid;
       let userName = participantNames[user.uid] || `Remote User`;
+      const quality = getQuality(user.uid);
+      const isSlow = quality >= 4 && quality <= 6;
       
       // If it's the Teacher's Screen Share Client (UID 999999), hardcode the label and icon
       if (user.uid === 999999) {
@@ -370,7 +386,9 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
             </div>
           )}
           <div className={`absolute top-2 left-2 md:top-4 md:left-4 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 transition-opacity ${(user.uid === 999999 || user.uid === 999998) ? 'bg-blue-600/90' : 'bg-black/70'} ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>
-            {userName} {!user.hasAudio && user.uid !== 999999 && user.uid !== 999998 && <MicOff size={12} className="inline ml-1 text-red-400" />}
+            {userName} 
+            {!user.hasAudio && user.uid !== 999999 && user.uid !== 999998 && <MicOff size={12} className="inline ml-1 text-red-400" />}
+            {isSlow && <span className="ml-2 text-red-500 inline-flex items-center gap-1"><WifiOff size={12}/> Slow Network</span>}
           </div>
           <button onClick={() => togglePin(user.uid)} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
             {isPinned ? <PinOff size={16} /> : <Pin size={16} />}

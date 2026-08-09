@@ -19,7 +19,7 @@ export const useLiveRecording = ({
   const audioDestRef = useRef(null);
   const mediaStreamSourcesRef = useRef(new Map());
   const compositeCanvasRef = useRef(null);
-  const animFrameRef = useRef(null);
+  const workerRef = useRef(null);
   const cachedQbImageRef = useRef(null);
   const mousePosRef = useRef({ x: -100, y: -100 });
 
@@ -83,13 +83,11 @@ export const useLiveRecording = ({
 
         const presentationLayer = document.getElementById('classroom-presentation');
         if (!presentationLayer) {
-           animFrameRef.current = requestAnimationFrame(drawCompositor);
            return;
         }
 
         const rect = presentationLayer.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) {
-           animFrameRef.current = requestAnimationFrame(drawCompositor);
            return;
         }
 
@@ -168,8 +166,6 @@ export const useLiveRecording = ({
              ctx.restore();
            }
         }
-
-        animFrameRef.current = requestAnimationFrame(drawCompositor);
       };
       
       // Force an initial synchronous paint to ensure captureStream doesn't fail on an empty buffer
@@ -178,7 +174,25 @@ export const useLiveRecording = ({
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      animFrameRef.current = requestAnimationFrame(drawCompositor);
+      // Web Worker to bypass background tab throttling (requestAnimationFrame pauses in background)
+      const workerCode = `
+        let interval;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            interval = setInterval(() => self.postMessage('tick'), 1000/30);
+          } else if (e.data === 'stop') {
+            clearInterval(interval);
+          }
+        };
+      `;
+      const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(workerBlob);
+      const worker = new Worker(workerUrl);
+      worker.onmessage = () => drawCompositor();
+      worker.postMessage('start');
+      
+      workerRef.current = { worker, workerUrl };
+
       const videoStream = canvas.captureStream(30);
 
       const tracks = [...videoStream.getVideoTracks()];
@@ -253,9 +267,11 @@ export const useLiveRecording = ({
         setIsPaused(false);
         setRecordingTime(0);
         oscillator.stop();
-        if (animFrameRef.current) {
-          cancelAnimationFrame(animFrameRef.current);
-          animFrameRef.current = null;
+        if (workerRef.current) {
+          workerRef.current.worker.postMessage('stop');
+          workerRef.current.worker.terminate();
+          URL.revokeObjectURL(workerRef.current.workerUrl);
+          workerRef.current = null;
         }
       };
 

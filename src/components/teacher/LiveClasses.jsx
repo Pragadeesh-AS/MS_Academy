@@ -11,8 +11,7 @@ import {
   Calendar,
   Plus,
   Clock,
-  MoreHorizontal,
-  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye
+  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import AgoraRTC, {
@@ -28,7 +27,8 @@ import AgoraRTC, {
   RemoteUser,
   LocalVideoTrack,
   useLocalScreenTrack,
-  useConnectionState
+  useConnectionState,
+  useNetworkQuality
 } from "agora-rtc-react";
 import Whiteboard from './Whiteboard';
 import { useLiveRecording } from './hooks/useLiveRecording';
@@ -198,6 +198,14 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const client = useRTCClient();
   const connectionState = useConnectionState();
   const remoteUsers = useRemoteUsers();
+  const networkQuality = useNetworkQuality();
+  
+  const getQuality = (uid) => {
+    const stats = networkQuality[uid];
+    if (!stats) return 0;
+    return Math.max(stats.uplinkNetworkQuality, stats.downlinkNetworkQuality);
+  };
+
   const [screenShareAudioTrack, setScreenShareAudioTrack] = useState(null);
   const [screenShareVideoTrack, setScreenShareVideoTrack] = useState(null);
 
@@ -578,6 +586,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
 
     // 2. Local Camera
     const isLocalPinned = pinnedUid === 'local-camera';
+    const localQuality = getQuality(client.uid);
+    const isLocalSlow = localQuality >= 4 && localQuality <= 6;
     const localTile = (
       <div key="local-camera" className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isLocalPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
         {localCameraTrack && cameraOn ? (
@@ -589,7 +599,10 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
             </div>
           </div>
         )}
-        <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-black/70 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isLocalPinned ? 'scale-75 origin-top-left' : ''}`}>You (Teacher)</div>
+        <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-black/70 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 ${pinnedUid && !isLocalPinned ? 'scale-75 origin-top-left' : ''}`}>
+          You (Teacher)
+          {isLocalSlow && <span className="ml-2 text-red-500 inline-flex items-center gap-1"><WifiOff size={12}/> Slow Network</span>}
+        </div>
         <button onClick={() => togglePin('local-camera')} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
           {isLocalPinned ? <PinOff size={16} /> : <Pin size={16} />}
         </button>
@@ -605,6 +618,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     filteredUsers.forEach(user => {
       const isPinned = pinnedUid === user.uid;
       const userName = participantNames[user.uid] || `Student ${user.uid}`;
+      const quality = getQuality(user.uid);
+      const isSlow = quality >= 4 && quality <= 6;
       const remoteTile = (
         <div key={user.uid} className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
           <div className="absolute inset-0">
@@ -618,7 +633,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
             </div>
           )}
           <div className={`absolute top-2 left-2 md:top-4 md:left-4 bg-black/70 px-2 py-1 md:px-3 md:py-1 rounded-lg text-white text-xs md:text-sm font-bold shadow-md z-30 transition-opacity ${pinnedUid && !isPinned ? 'scale-75 origin-top-left' : ''}`}>
-            {userName} {!user.hasAudio && <MicOff size={12} className="inline ml-1 text-red-400" />}
+            {userName} 
+            {!user.hasAudio && <MicOff size={12} className="inline ml-1 text-red-400" />}
+            {isSlow && <span className="ml-2 text-red-500 inline-flex items-center gap-1"><WifiOff size={12}/> Slow Network</span>}
           </div>
           <button onClick={() => togglePin(user.uid)} className="absolute top-2 right-2 md:top-4 md:right-4 p-2 bg-black/50 hover:bg-blue-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-30">
             {isPinned ? <PinOff size={16} /> : <Pin size={16} />}
