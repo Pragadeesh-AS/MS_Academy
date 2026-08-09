@@ -99,8 +99,21 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     };
   }, [sessionId]);
 
-  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
-  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(true);
+  const { localCameraTrack } = useLocalCameraTrack(true);
+
+  useEffect(() => {
+    if (localCameraTrack) {
+      localCameraTrack.setEnabled(cameraOn).catch(console.error);
+    }
+  }, [cameraOn, localCameraTrack]);
+
+  useEffect(() => {
+    if (localMicrophoneTrack) {
+      localMicrophoneTrack.setMuted(!micOn).catch(console.error);
+      localMicrophoneTrack.setEnabled(micOn).catch(console.error);
+    }
+  }, [micOn, localMicrophoneTrack]);
 
   // Hard cleanup on unmount to ensure hardware is released
   const tracksRef = useRef({ camera: null, mic: null });

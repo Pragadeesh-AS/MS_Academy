@@ -1,16 +1,21 @@
 import { useState, useRef, useEffect } from 'react';
 import { toCanvas } from 'html-to-image';
 import html2canvas from 'html2canvas';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../../firebase';
 
 export const useLiveRecording = ({ 
   localMicrophoneTrack, 
   screenShareAudioTrack, 
   remoteUsers, 
-  activeQuestionState 
+  activeQuestionState,
+  onUploadComplete
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
@@ -258,19 +263,46 @@ export const useLiveRecording = ({
       mediaRecorder.onstop = () => {
         const type = mediaRecorder.mimeType || 'video/webm';
         const blob = new Blob(recordedChunksRef.current, { type });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        document.body.appendChild(a);
-        a.style = 'display: none';
-        a.href = url;
         
         let ext = 'webm';
         if (type.includes('mp4')) ext = 'mp4';
         else if (type.includes('matroska')) ext = 'mkv';
         
-        a.download = `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}.${ext}`;
-        a.click();
-        window.URL.revokeObjectURL(url);
+        let fileName = window.prompt("Enter a name for this recording:", `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}`);
+        if (!fileName) fileName = `LiveClass_Recording_${new Date().getTime()}`;
+
+        setIsUploading(true);
+        setUploadProgress(0);
+
+        const storageRef = ref(storage, `recordings/${fileName}.${ext}`);
+        const uploadTask = uploadBytesResumable(storageRef, blob);
+
+        uploadTask.on('state_changed', 
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+          }, 
+          (error) => {
+            console.error("Upload error:", error);
+            alert("Error uploading recording: " + error.message);
+            setIsUploading(false);
+          }, 
+          async () => {
+            console.log("Upload successful!");
+            try {
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              if (onUploadComplete) {
+                onUploadComplete(url, fileName);
+              }
+            } catch (err) {
+              console.error("Error getting download URL", err);
+            }
+            setIsUploading(false);
+            setUploadProgress(100);
+            setTimeout(() => setUploadProgress(0), 2000);
+          }
+        );
+
         setIsRecording(false);
         setIsPaused(false);
         setRecordingTime(0);
@@ -281,6 +313,7 @@ export const useLiveRecording = ({
           URL.revokeObjectURL(workerRef.current.workerUrl);
           workerRef.current = null;
         }
+        recordedChunksRef.current = [];
       };
 
       videoStream.getVideoTracks()[0].onended = () => {
@@ -385,6 +418,8 @@ export const useLiveRecording = ({
     isRecording,
     isPaused,
     recordingTime,
+    isUploading,
+    uploadProgress,
     formatTime,
     startRecording,
     togglePauseRecording,

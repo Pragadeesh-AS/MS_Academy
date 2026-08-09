@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download, Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download, Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
-import { db } from '../firebase';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { db, storage } from '../firebase';
+import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, listAll, getDownloadURL } from 'firebase/storage';
 import StudentLiveClasses from './StudentLiveClasses';
 import StudentTests from './StudentTests';
 
@@ -26,6 +27,51 @@ export default function Dashboard() {
     yearOfStudy: '',
     referralSource: ''
   });
+
+  const [recordings, setRecordings] = useState([]);
+
+  useEffect(() => {
+    if (!studentDepartment) return;
+    const q = query(
+      collection(db, 'recordings'),
+      where('department', 'in', [studentDepartment, 'General'])
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const recs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      recs.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+      setRecordings(recs);
+    });
+    return () => unsubscribe();
+  }, [studentDepartment]);
+
+  // One-time sync to pull orphaned recordings from storage into firestore
+  useEffect(() => {
+    const syncStorageToFirestore = async () => {
+      try {
+        const listRef = ref(storage, 'recordings');
+        const res = await listAll(listRef);
+        for (const itemRef of res.items) {
+          const fileName = itemRef.name;
+          const q = query(collection(db, 'recordings'), where('fileName', '==', fileName));
+          const snap = await getDocs(q);
+          if (snap.empty) {
+            const url = await getDownloadURL(itemRef);
+            await addDoc(collection(db, 'recordings'), {
+              fileName,
+              url,
+              teacherName: 'Teacher (Synced)',
+              department: 'General',
+              createdAt: serverTimestamp()
+            });
+            console.log("Synced orphaned recording:", fileName);
+          }
+        }
+      } catch (err) {
+        console.error("Error syncing storage:", err);
+      }
+    };
+    syncStorageToFirestore();
+  }, []);
 
   useEffect(() => {
     const role = localStorage.getItem('auth_role');
@@ -431,14 +477,41 @@ export default function Dashboard() {
         )}
 
         {activeTab === 'recordings' && (
-          <div className="bg-white rounded-3xl p-12 border border-slate-200 shadow-sm text-center mt-6">
-             <div className="w-20 h-20 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <PlayCircle size={32} />
-            </div>
-            <h2 className="text-2xl font-[900] text-slate-900 mb-2">Watch Past Sessions</h2>
-            <p className="text-slate-500 max-w-md mx-auto">
-              Once you enroll in a course, the recordings of all past live classes will appear here for you to review.
-            </p>
+          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mt-6">
+            <h2 className="text-2xl font-[900] text-slate-900 mb-6 flex items-center gap-3">
+              <PlayCircle className="text-purple-500" size={28} /> Past Class Recordings
+            </h2>
+            
+            {recordings.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-20 h-20 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <PlayCircle size={32} />
+                </div>
+                <h3 className="text-xl font-[900] text-slate-900 mb-2">No Recordings Yet</h3>
+                <p className="text-slate-500 max-w-md mx-auto">
+                  Once live classes are completed, their recordings will automatically appear here for you to review.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {recordings.map(rec => (
+                  <div key={rec.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:shadow-md hover:border-purple-200 transition-all group">
+                    <div className="aspect-video bg-slate-200 rounded-xl mb-4 relative overflow-hidden group-cursor-pointer flex items-center justify-center">
+                       <PlayCircle size={48} className="text-white drop-shadow-md opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all z-10 cursor-pointer" onClick={() => window.open(rec.url, '_blank')} />
+                       <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent pointer-events-none"></div>
+                       <span className="absolute bottom-3 left-3 text-white text-xs font-bold px-2 py-1 bg-black/40 rounded-lg pointer-events-none backdrop-blur-sm">
+                         {new Date(rec.createdAt?.toMillis() || Date.now()).toLocaleDateString()}
+                       </span>
+                    </div>
+                    <h3 className="font-bold text-slate-800 text-lg line-clamp-2 mb-1">{rec.fileName}</h3>
+                    <p className="text-sm text-slate-500 font-medium">By {rec.teacherName}</p>
+                    <button onClick={() => window.open(rec.url, '_blank')} className="w-full mt-4 py-2.5 bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
+                      <Play size={16} /> Watch Now
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

@@ -11,7 +11,7 @@ import {
   Calendar,
   Plus,
   Clock,
-  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff
+  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import AgoraRTC, {
@@ -182,7 +182,7 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded, onAudioTrackRe
 };
 
 // Extracted TeacherCall component for custom Agora rendering
-const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, departmentQuestions }) => {
+const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, departmentQuestions, department }) => {
   const [activeTab, setActiveTab] = useState('chat');
   const [isRevealing, setIsRevealing] = useState(false);
   const [micOn, setMicOn] = useState(false);
@@ -263,8 +263,21 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
 
-  const { localMicrophoneTrack } = useLocalMicrophoneTrack(micOn);
-  const { localCameraTrack } = useLocalCameraTrack(cameraOn);
+  const { localMicrophoneTrack } = useLocalMicrophoneTrack(true);
+  const { localCameraTrack } = useLocalCameraTrack(true);
+
+  useEffect(() => {
+    if (localCameraTrack) {
+      localCameraTrack.setEnabled(cameraOn).catch(console.error);
+    }
+  }, [cameraOn, localCameraTrack]);
+
+  useEffect(() => {
+    if (localMicrophoneTrack) {
+      localMicrophoneTrack.setMuted(!micOn).catch(console.error);
+      localMicrophoneTrack.setEnabled(micOn).catch(console.error);
+    }
+  }, [micOn, localMicrophoneTrack]);
 
   // Hard cleanup on unmount to ensure hardware is released
   const tracksRef = useRef({ camera: null, mic: null });
@@ -293,6 +306,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     isRecording,
     isPaused,
     recordingTime,
+    isUploading,
+    uploadProgress,
     formatTime,
     startRecording,
     togglePauseRecording,
@@ -302,7 +317,21 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     localMicrophoneTrack,
     screenShareAudioTrack,
     remoteUsers,
-    activeQuestionState
+    activeQuestionState,
+    onUploadComplete: async (url, fileName) => {
+      try {
+        const teacherName = localStorage.getItem('auth_name') || 'Teacher';
+        await addDoc(collection(db, 'recordings'), {
+          fileName,
+          url,
+          teacherName,
+          department: department || 'General',
+          createdAt: serverTimestamp()
+        });
+      } catch (err) {
+        console.error("Error saving recording metadata", err);
+      }
+    }
   });
 
   const remoteUserStyle = { width: '100%', height: '100%' };
@@ -664,7 +693,21 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
         <div className="flex items-center gap-6 pr-6 border-r border-white/20">
 
           {/* Record Button */}
-          {!isRecording ? (
+          {isUploading ? (
+            <div className="flex items-center gap-3 bg-blue-600/20 rounded-full p-2 pr-4 border border-blue-500/30 shadow-[0_0_15px_rgba(37,99,235,0.2)]">
+              <div className="relative w-8 h-8 flex items-center justify-center">
+                <svg className="w-8 h-8 transform -rotate-90">
+                  <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="3" fill="none" className="text-blue-500/30" />
+                  <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="3" fill="none" className="text-blue-500 transition-all duration-300" strokeDasharray="88" strokeDashoffset={88 - (88 * uploadProgress) / 100} />
+                </svg>
+                <UploadCloud size={14} className="absolute text-blue-400 animate-pulse" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xs text-blue-300 font-bold leading-none mb-1">Uploading</span>
+                <span className="text-[10px] text-blue-400 font-mono leading-none">{Math.round(uploadProgress)}%</span>
+              </div>
+            </div>
+          ) : !isRecording ? (
             <button
               onClick={startRecording}
               className="w-12 h-12 rounded-full flex items-center justify-center text-white bg-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all"
@@ -752,8 +795,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           {/* End Call Button */}
           <button
             onClick={() => handleEndMeet()}
-            className="w-12 h-12 rounded-full text-white flex items-center justify-center control-btn-danger"
-            title="End Call"
+            disabled={isUploading}
+            className={`w-12 h-12 rounded-full text-white flex items-center justify-center ${isUploading ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'control-btn-danger'}`}
+            title={isUploading ? "Wait for upload to finish" : "End Call"}
           >
             <PhoneOff size={22} strokeWidth={1.5} />
           </button>
@@ -1026,7 +1070,22 @@ export default function LiveClasses({ department }) {
     }
   };
 
-  const recentRecordings = [];
+  const [recentRecordings, setRecentRecordings] = useState([]);
+
+  useEffect(() => {
+    let q;
+    if (department && department !== 'All Departments') {
+      q = query(collection(db, 'recordings'), where('department', 'in', [department, 'General']));
+    } else {
+      q = query(collection(db, 'recordings'));
+    }
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const recs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      recs.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+      setRecentRecordings(recs);
+    });
+    return () => unsubscribe();
+  }, [department]);
 
   const handleConfirmStartMeet = async (e) => {
     if (e) e.preventDefault();
@@ -1145,6 +1204,7 @@ export default function LiveClasses({ department }) {
                 chatToast={chatToast}
                 setChatToast={setChatToast}
                 departmentQuestions={departmentQuestions}
+                department={department}
               />
             </AgoraRTCProvider>
 
@@ -1326,9 +1386,26 @@ export default function LiveClasses({ department }) {
             <PlayCircle className="text-purple-500" size={20} /> Recent Recordings
           </h3>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-4">
-            {recentRecordings.length === 0 && (
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar">
+            {recentRecordings.length === 0 ? (
               <p className="text-slate-400 text-sm font-medium text-center py-4">No recordings yet.</p>
+            ) : (
+              recentRecordings.map(rec => (
+                <div key={rec.id} className="flex items-center justify-between p-3 bg-white rounded-xl shadow-sm border border-slate-100 hover:border-purple-200 transition-colors group cursor-pointer" onClick={() => window.open(rec.url, '_blank')}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                      <PlayCircle size={18} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 line-clamp-1">{rec.fileName}</h4>
+                      <p className="text-[11px] text-slate-500 font-bold">{new Date(rec.createdAt?.toMillis() || Date.now()).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Watch Recording">
+                    <Play size={16} fill="currentColor" />
+                  </button>
+                </div>
+              ))
             )}
           </div>
 
