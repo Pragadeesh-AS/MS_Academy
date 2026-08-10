@@ -291,8 +291,14 @@ const StudentDirectory = ({
                               onClick={async () => {
                                 if (window.confirm(`Are you sure you want to ${student.isPro ? 'downgrade' : 'upgrade'} ${student.name}?`)) {
                                   try {
-                                    await updateDoc(doc(db, 'joined_students', String(student.id)), { isPro: !student.isPro });
-                                    setJoinedStudents(joinedStudents.map(s => s.id === student.id ? { ...s, isPro: !student.isPro } : s));
+                                    const updateData = { isPro: !student.isPro };
+                                    if (student.isPro) {
+                                      updateData.purchasedBundles = [];
+                                    }
+                                    await updateDoc(doc(db, 'joined_students', String(student.id)), updateData);
+                                    setJoinedStudents(joinedStudents.map(s => 
+                                      s.id === student.id ? { ...s, isPro: !student.isPro, ...(student.isPro ? { purchasedBundles: [] } : {}) } : s
+                                    ));
                                   } catch (error) {
                                     console.error('Error updating tier:', error);
                                     alert(`Failed to update student tier. Error: ${error.message}`);
