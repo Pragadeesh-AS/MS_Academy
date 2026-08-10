@@ -23,6 +23,7 @@ import TypistDirectory from './admin/TypistDirectory';
 import StudentDirectory from './admin/StudentDirectory';
 import TeacherDirectory from './admin/TeacherDirectory';
 import FeesTracker from './admin/FeesTracker';
+import TestsManager from './TestsManager';
 
 // Default mock data to populate localStorage if empty
 const loadImage = (src) => new Promise((resolve, reject) => {
@@ -858,6 +859,14 @@ export default function AdminDashboard() {
               </button>
 
               <button
+                onClick={() => setActiveTab('tests')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'tests' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <Trophy size={20} className={activeTab === 'tests' ? 'text-[#f97316]' : 'text-[#f97316]'} />
+                {!isCollapsed && <span>Tests Manager</span>}
+              </button>
+
+              <button
                 onClick={() => setActiveTab('premium_questions')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'premium_questions' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
               >
@@ -1160,7 +1169,7 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   {/* Primary Action (Styled component) */}
                   <div className="col-span-2 w-full">
-                    <CreateTestButton />
+                    <CreateTestButton onClick={() => setActiveTab('tests')} />
                   </div>
 
                   {/* Secondary Action 1 (Students) */}
