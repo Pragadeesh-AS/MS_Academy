@@ -71,13 +71,15 @@ export default function Dashboard() {
   const canAccessNote = (note) => {
     if (isPro) return true;
     
-    // Explicit bundleId match
-    if (note.bundleId && purchasedBundles.includes(note.bundleId)) {
-      return true;
+    // EXCLUSIVE BUNDLE: If a note is assigned to a specific bundle, 
+    // it can ONLY be unlocked by purchasing that specific bundle.
+    if (note.bundleId) {
+      return purchasedBundles.includes(note.bundleId);
     }
 
-    // Implicit department match (any purchased bundle for this department with 'notes' permission)
-    const studentPurchasedDeptBundles = availableBundles.filter(b => 
+    // GENERAL NOTES: If no specific bundle is assigned, 
+    // unlock it if they have any purchased bundle for this department with 'notes' permission.
+    const studentPurchasedDeptBundles = (availableBundles || []).filter(b => 
       purchasedBundles.includes(b.id) && 
       (b.department === note.department || b.department === 'General' || note.department === 'General') &&
       (b.permissions?.includes('notes') || !b.permissions)
