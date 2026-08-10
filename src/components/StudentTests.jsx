@@ -362,36 +362,30 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
 
   const canAccessTest = (test) => {
-    const isAdmin = test.createdBy === 'Admin' || test.createdBy === 'MS Academy Admin';
+    // 1. Explicitly Free
+    if (test.bundleId === 'free') return true;
     
-    // If the test explicitly requires a specific bundle, check if the student owns it AND it grants 'tests'
-    let hasExactBundle = false;
-    if (test.bundleId && test.bundleId !== 'free') {
-      if (purchasedBundles && purchasedBundles.includes(test.bundleId)) {
-        const bundle = (bundles || []).find(b => b.id === test.bundleId);
-        if (!bundle || !bundle.permissions || bundle.permissions.includes('tests')) {
-          hasExactBundle = true;
-        }
-      }
-    } else if (isAdmin) {
-      // If Admin created it and it's marked 'free' (or no bundle), it is truly free
-      hasExactBundle = true; 
+    // Legacy support: Old tests created by Admin without a bundleId were considered free
+    if (test.bundleId === undefined && (test.createdBy === 'Admin' || test.createdBy === 'MS Academy Admin')) {
+      return true;
     }
 
-    if (hasExactBundle) return true;
-    if (isPro) return true; // Legacy fallback
+    // 2. EXCLUSIVE BUNDLE: If assigned to a specific paid bundle
+    if (test.bundleId && test.bundleId !== 'free') {
+      return purchasedBundles.includes(test.bundleId);
+    }
+
+    // 3. Pro User Fallback
+    if (isPro) return true;
     
-    // Check if student purchased ANY bundle for this test's department that grants 'tests'
+    // 4. GENERAL TESTS: Check if student purchased ANY bundle for this department with 'tests' permission
     const studentPurchasedDeptBundles = (bundles || []).filter(b => 
       purchasedBundles.includes(b.id) && 
       b.department === test.department &&
       (!b.permissions || b.permissions.includes('tests'))
     );
-    if (studentPurchasedDeptBundles.length > 0) {
-      return true;
-    }
     
-    return false;
+    return studentPurchasedDeptBundles.length > 0;
   };
 
   return (

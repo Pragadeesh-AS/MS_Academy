@@ -22,6 +22,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   const [total1Mark, setTotal1Mark] = useState(30);
   const [total2Mark, setTotal2Mark] = useState(35);
   const [scheduledTime, setScheduledTime] = useState('');
+  const [bundleId, setBundleId] = useState(''); // '' means dept level, 'free' means free, 'specific_id' means exclusive
+  const [bundles, setBundles] = useState([]);
 
   const [selectedDept, setSelectedDept] = useState(department || '');
   const [selectedSubject, setSelectedSubject] = useState('');
@@ -44,7 +46,19 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     fetchTests();
     fetchAttributes();
     fetchQuestions();
+    if (!isTeacher) {
+      fetchBundles();
+    }
   }, [department]);
+
+  const fetchBundles = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'course_bundles'));
+      setBundles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (err) {
+      console.error("Error fetching bundles:", err);
+    }
+  };
 
   // Always pull the latest counts from database when the creator modal opens or step changes
   useEffect(() => {
@@ -277,6 +291,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       status: 'active',
       questions: finalQuestionIds,
       allocations,
+      bundleId: isTeacher ? '' : bundleId,
       createdBy: localStorage.getItem('auth_name') || (isTeacher ? 'Teacher' : 'Admin'),
       createdAt: serverTimestamp()
     };
@@ -304,6 +319,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     setSelectedSubject('');
     setSelectedTopics([]);
     setAllocations({});
+    setBundleId('');
     setStep(1);
   };
 
@@ -501,6 +517,24 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                       />
                     </div>
                   </div>
+
+                  {/* Access Control (Admin Only) */}
+                  {!isTeacher && (
+                    <div className="space-y-1.5">
+                      <label className="text-[12px] font-[900] text-slate-800 uppercase tracking-wide">Access Control (Admin Only)</label>
+                      <select 
+                        value={bundleId} 
+                        onChange={e => setBundleId(e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm bg-white"
+                      >
+                        <option value="">Requires Department Bundle (Default)</option>
+                        <option value="free">Free for Everyone</option>
+                        {bundles.map(b => (
+                          <option key={b.id} value={b.id}>Require Specific Bundle: {b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Total 1-Mark and 2-Mark questions count */}
                   <div className="grid grid-cols-2 gap-4">
