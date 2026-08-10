@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { db, auth } from '../firebase';
 import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert } from 'lucide-react';
+import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
 import logoImg from '../assets/msgate_logo.png';
 
-export default function StudentTests({ department }) {
+export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [] }) {
   const [tests, setTests] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -360,6 +360,40 @@ export default function StudentTests({ department }) {
     );
   }
 
+
+  const canAccessTest = (test) => {
+    const isAdmin = test.createdBy === 'Admin' || test.createdBy === 'MS Academy Admin';
+    
+    // If the test explicitly requires a specific bundle, check if the student owns it AND it grants 'tests'
+    let hasExactBundle = false;
+    if (test.bundleId && test.bundleId !== 'free') {
+      if (purchasedBundles && purchasedBundles.includes(test.bundleId)) {
+        const bundle = (bundles || []).find(b => b.id === test.bundleId);
+        if (!bundle || !bundle.permissions || bundle.permissions.includes('tests')) {
+          hasExactBundle = true;
+        }
+      }
+    } else if (isAdmin) {
+      // If Admin created it and it's marked 'free' (or no bundle), it is truly free
+      hasExactBundle = true; 
+    }
+
+    if (hasExactBundle) return true;
+    if (isPro) return true; // Legacy fallback
+    
+    // Check if student purchased ANY bundle for this test's department that grants 'tests'
+    const studentPurchasedDeptBundles = (bundles || []).filter(b => 
+      purchasedBundles.includes(b.id) && 
+      b.department === test.department &&
+      (!b.permissions || b.permissions.includes('tests'))
+    );
+    if (studentPurchasedDeptBundles.length > 0) {
+      return true;
+    }
+    
+    return false;
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -426,7 +460,14 @@ export default function StudentTests({ department }) {
                     <span className="mt-0.5">Duration: {test.duration} mins • Target: {test.targetMarks || 100} Marks</span>
                   </div>
 
-                  {isCompleted ? (
+                  {!canAccessTest(test) ? (
+                    <button 
+                      disabled
+                      className="px-4 py-2 bg-amber-50 text-amber-600 font-bold text-xs rounded-xl flex items-center gap-1.5 opacity-80 cursor-not-allowed border border-amber-200"
+                    >
+                      <Lock size={14} /> Locked (Pro)
+                    </button>
+                  ) : isCompleted ? (
                     <button 
                       onClick={() => viewAttemptResult(test.id)}
                       className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"

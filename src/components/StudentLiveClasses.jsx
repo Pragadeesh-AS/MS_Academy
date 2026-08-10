@@ -14,7 +14,8 @@ import {
   PinOff,
   X,
   CheckCircle2,
-  WifiOff
+  WifiOff,
+  Lock
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, setDoc, doc } from 'firebase/firestore';
@@ -500,7 +501,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   );
 };
 
-export default function StudentLiveClasses({ department }) {
+export default function StudentLiveClasses({ department, isPro, purchasedBundles = [], bundles = [] }) {
   const [agoraClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
   const [isInCall, setIsInCall] = useState(false);
   const [currentSession, setCurrentSession] = useState(null);
@@ -535,6 +536,7 @@ export default function StudentLiveClasses({ department }) {
           time: 'Started recently',
           students: '...', // Mocked student count for now
           isLive: true,
+          bundleId: data.bundleId || 'free',
           ...data
         });
       });
@@ -543,6 +545,35 @@ export default function StudentLiveClasses({ department }) {
 
     return () => unsubscribe();
   }, [department]);
+
+  const canAccessClass = (cls) => {
+    const isAdmin = cls.teacher === 'Admin' || cls.teacher === 'MS Academy Admin';
+    
+    let hasExactBundle = false;
+    if (cls.bundleId && cls.bundleId !== 'free') {
+      if (purchasedBundles && purchasedBundles.includes(cls.bundleId)) {
+        const bundle = (bundles || []).find(b => b.id === cls.bundleId);
+        if (!bundle || !bundle.permissions || bundle.permissions.includes('live_classes')) {
+          hasExactBundle = true;
+        }
+      }
+    } else if (isAdmin) {
+      hasExactBundle = true;
+    }
+
+    if (hasExactBundle) return true;
+    if (isPro) return true;
+    
+    // Check if they own any bundle for this department that has the 'live_classes' permission
+    const studentPurchasedDeptBundles = (bundles || []).filter(b => 
+      purchasedBundles.includes(b.id) && 
+      b.department === cls.department &&
+      (b.permissions?.includes('live_classes') || !b.permissions)
+    );
+    if (studentPurchasedDeptBundles.length > 0) return true;
+    
+    return false;
+  };
 
   useEffect(() => {
     if (!isInCall || !currentSession) return;
@@ -720,6 +751,8 @@ export default function StudentLiveClasses({ department }) {
   }
 
   // Regular Dashboard View for Live Sessions
+
+
   return (
     <div className="space-y-8 mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -753,7 +786,14 @@ export default function StudentLiveClasses({ department }) {
               </div>
               
               <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2 mt-2 sm:mt-0">
-                {cls.isLive ? (
+                {!canAccessClass(cls) ? (
+                  <button 
+                    disabled
+                    className="w-full sm:w-auto px-6 py-2.5 bg-amber-50 text-amber-600 font-bold rounded-xl flex items-center justify-center gap-2 cursor-not-allowed border border-amber-200"
+                  >
+                    Locked (Pro) <Lock size={16} />
+                  </button>
+                ) : cls.isLive ? (
                   <button 
                     onClick={() => handleJoinMeet(cls)}
                     className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-md shadow-blue-600/20"

@@ -3,7 +3,7 @@ import Loader from '../Loader';
 import { createPortal } from 'react-dom';
 import { 
   Package, Plus, Trash2, Edit2, Search, X, CheckCircle2, Image as ImageIcon,
-  Check, Tag, Zap, Star
+  Check, Tag, Zap, Star, ShieldCheck
 } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
@@ -28,7 +28,8 @@ export default function CourseSetup() {
     department: 'CSE',
     status: 'Active',
     imageUrl: '',
-    features: ['']
+    features: [''],
+    permissions: ['tests', 'live_classes', 'recordings', 'notes']
   });
 
   const showToast = (message, type = 'success') => {
@@ -81,7 +82,8 @@ export default function CourseSetup() {
       department: 'CSE',
       status: 'Active',
       imageUrl: '',
-      features: ['']
+      features: [''],
+      permissions: ['tests', 'live_classes', 'recordings', 'notes']
     });
     setCurrentId(null);
     setIsEditing(false);
@@ -97,7 +99,8 @@ export default function CourseSetup() {
       department: bundle.department || 'CSE',
       status: bundle.status || 'Active',
       imageUrl: bundle.imageUrl || '',
-      features: bundle.features && bundle.features.length > 0 ? bundle.features : ['']
+      features: bundle.features && bundle.features.length > 0 ? bundle.features : [''],
+      permissions: bundle.permissions || ['tests', 'live_classes', 'recordings', 'notes']
     });
     setCurrentId(bundle.id);
     setIsEditing(true);
@@ -125,6 +128,17 @@ export default function CourseSetup() {
     const newFeatures = [...formData.features];
     newFeatures[index] = value;
     setFormData({ ...formData, features: newFeatures });
+  };
+
+  const togglePermission = (perm) => {
+    setFormData(prev => {
+      const current = prev.permissions || [];
+      if (current.includes(perm)) {
+        return { ...prev, permissions: current.filter(p => p !== perm) };
+      } else {
+        return { ...prev, permissions: [...current, perm] };
+      }
+    });
   };
 
   const addFeature = () => {
@@ -415,7 +429,34 @@ export default function CourseSetup() {
                   />
                 </div>
 
-                <div className="md:col-span-2 space-y-2">
+                <div className="md:col-span-2 space-y-3 text-left border border-slate-200 p-5 rounded-2xl bg-slate-50/50 mt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ShieldCheck size={18} className="text-[#5b32ea]" />
+                    <label className="text-[13px] font-[900] text-slate-800 uppercase tracking-widest">Bundle Permissions (Resource Access)</label>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mb-3">Select which resources students get access to when they purchase this bundle.</p>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { id: 'tests', label: 'Practice Tests' },
+                      { id: 'live_classes', label: 'Live Classes' },
+                      { id: 'recordings', label: 'Recordings' },
+                      { id: 'notes', label: 'Study Notes' }
+                    ].map(perm => (
+                      <label key={perm.id} className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:border-[#5b32ea] transition-all">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 text-[#5b32ea] rounded border-slate-300 focus:ring-[#5b32ea]"
+                          checked={(formData.permissions || []).includes(perm.id)}
+                          onChange={() => togglePermission(perm.id)}
+                        />
+                        <span className="text-sm font-bold text-slate-700">{perm.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 space-y-2 mt-4">
                   <label className="text-[13px] font-[800] text-slate-700 uppercase tracking-wide">Cover Image</label>
                   <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 flex flex-col items-center justify-center gap-3 relative overflow-hidden transition-all hover:border-slate-300">
                     {formData.imageUrl ? (

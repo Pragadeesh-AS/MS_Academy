@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db } from '../../firebase';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { 
   Search, 
   ChevronDown, 
@@ -214,6 +214,7 @@ const StudentDirectory = ({
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Student</th>
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Department</th>
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Year</th>
+                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Tier</th>
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Status</th>
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Joined Date</th>
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Last Login</th>
@@ -257,6 +258,15 @@ const StudentDirectory = ({
                           <span className="text-[14px] text-[#475569] font-medium">{student.year}</span>
                         </td>
                         <td className="px-6">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[12px] font-bold tracking-wide ${
+                            student.isPro 
+                              ? 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200 shadow-sm' 
+                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}>
+                            {student.isPro ? '✨ PRO' : 'Normal'}
+                          </span>
+                        </td>
+                        <td className="px-6">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold tracking-wide ${
                             student.status === 'Active' 
                               ? 'bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-[#10B981] border border-emerald-100' 
@@ -276,6 +286,23 @@ const StudentDirectory = ({
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                             <button onClick={() => setSelectedStudent(student)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
                               <Eye size={18} />
+                            </button>
+                            <button 
+                              onClick={async () => {
+                                if (window.confirm(`Are you sure you want to ${student.isPro ? 'downgrade' : 'upgrade'} ${student.name}?`)) {
+                                  try {
+                                    await updateDoc(doc(db, 'joined_students', String(student.id)), { isPro: !student.isPro });
+                                    setJoinedStudents(joinedStudents.map(s => s.id === student.id ? { ...s, isPro: !student.isPro } : s));
+                                  } catch (error) {
+                                    console.error('Error updating tier:', error);
+                                    alert(`Failed to update student tier. Error: ${error.message}`);
+                                  }
+                                }
+                              }}
+                              className={`p-2 rounded-[10px] transition-colors ${student.isPro ? 'text-amber-600 hover:bg-amber-50' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`} 
+                              title={student.isPro ? "Downgrade to Normal" : "Upgrade to Pro"}
+                            >
+                              <ShieldCheck size={18} />
                             </button>
                             <button className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Student">
                               <Edit size={18} />

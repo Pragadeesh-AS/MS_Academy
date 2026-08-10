@@ -217,6 +217,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [activeQuestionState, setActiveQuestionState] = useState(null);
   const activeQuestionStateRef = useRef(activeQuestionState);
   const [newRecordingName, setNewRecordingName] = useState('');
+  const [sessionBundleId, setSessionBundleId] = useState('free');
 
 
   
@@ -248,6 +249,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     const unsubSession = onSnapshot(doc(db, 'live_sessions', sessionId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+        if (data.bundleId) setSessionBundleId(data.bundleId);
         if (data.activeQuestionState) {
           setActiveQuestionState(data.activeQuestionState);
         } else {
@@ -375,6 +377,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           url,
           teacherName,
           department: department || 'General',
+          bundleId: sessionBundleId || 'free',
           createdAt: serverTimestamp()
         });
       } catch (err) {
@@ -1048,8 +1051,9 @@ export default function LiveClasses({ department }) {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
 
-  const [newClass, setNewClass] = useState({ topic: '', time: '', selectedStudents: [] });
-  const [startClassData, setStartClassData] = useState({ topic: '' });
+  const [newClass, setNewClass] = useState({ topic: '', time: '', selectedStudents: [], bundleId: '' });
+  const [startClassData, setStartClassData] = useState({ topic: '', bundleId: '' });
+  const [availableBundles, setAvailableBundles] = useState([]);
 
   const [activeSessions, setActiveSessions] = useState([]);
   const [upcomingClasses, setUpcomingClasses] = useState([]);
@@ -1072,6 +1076,16 @@ export default function LiveClasses({ department }) {
       }
     };
     fetchStudents();
+
+    const fetchBundles = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'course_bundles'));
+        setAvailableBundles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        console.error("Error fetching bundles:", err);
+      }
+    };
+    fetchBundles();
   }, [department]);
 
   const [departmentQuestions, setDepartmentQuestions] = useState([]);
@@ -1183,7 +1197,6 @@ export default function LiveClasses({ department }) {
   const handleConfirmStartMeet = async (e) => {
     if (e) e.preventDefault();
     setIsStartModalOpen(false);
-    setIsInCall(true);
 
     try {
       const teacherName = localStorage.getItem('auth_name') || 'Teacher';
@@ -1195,11 +1208,11 @@ export default function LiveClasses({ department }) {
         department: department || 'General',
         topic: startClassData.topic || "Instant Live Session",
         status: 'live',
+        bundleId: startClassData.bundleId || 'free',
         startedAt: serverTimestamp()
       };
 
       const docRef = await addDoc(collection(db, 'live_sessions'), sessionData);
-      setCurrentSessionId(docRef.id);
     } catch (e) {
       console.error("Failed to create live session in Firestore", e);
     }
@@ -1419,7 +1432,7 @@ export default function LiveClasses({ department }) {
                         }}
                         className="px-5 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors flex items-center justify-center gap-2 shadow-md shadow-red-500/20"
                       >
-                        Re-Join <Video size={16} />
+                        Join <Video size={16} />
                       </button>
                     </div>
                   </div>
@@ -1579,7 +1592,7 @@ export default function LiveClasses({ department }) {
                     className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                   />
                 </div>
-
+                
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Date & Time</label>

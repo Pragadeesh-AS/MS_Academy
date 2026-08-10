@@ -4,6 +4,8 @@ import './index.css';
 import { ShinyButton } from "./components/ui/shiny-button";
 import { motion } from "motion/react";
 import { Sparkles } from 'lucide-react';
+import { auth, db } from './firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import Home from './components/Home';
 import AboutUs from './components/AboutUs';
 import Contact from './components/Contact';

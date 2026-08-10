@@ -222,24 +222,24 @@ export default function AdminDashboard() {
       try {
         // 1. Fetch Applications
         const appsSnapshot = await getDocs(collection(db, 'career_applications'));
-        setApplications(appsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setApplications(appsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
 
         // 2. Fetch Queries
         const queriesSnapshot = await getDocs(collection(db, 'contact_queries'));
-        setQueries(queriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setQueries(queriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
 
         // 3. Fetch Joined Students
         const studentsSnapshot = await getDocs(collection(db, 'joined_students'));
-        setJoinedStudents(studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setJoinedStudents(studentsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
 
         // 4. Fetch Invited Teachers
         const teachersSnapshot = await getDocs(collection(db, 'invited_teachers'));
-        const fetchedTeachers = teachersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const fetchedTeachers = teachersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
         setInvitedTeachers(fetchedTeachers);
 
         // 4.5. Fetch Invited Typists
         const typistsSnapshot = await getDocs(collection(db, 'invited_typists'));
-        const fetchedTypists = typistsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const fetchedTypists = typistsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
         setInvitedTypists(fetchedTypists);
 
         // 5. Keep courses config in localStorage for now since it's just settings
@@ -592,7 +592,8 @@ export default function AdminDashboard() {
         email: inviteForm.email,
         department: inviteForm.department,
         joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
-        status: "Invited"
+        status: "Invited",
+        isPro: false
       };
       
       const docRef = await addDoc(collection(db, 'joined_students'), newStudent);

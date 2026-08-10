@@ -32,7 +32,6 @@ export default function LoginSignup() {
       } else {
         const newStudentRef = doc(collection(db, 'joined_students'));
         await setDoc(newStudentRef, {
-          id: Date.now(),
           name: name,
           email: email,
           whatsappNumber: whatsappNumber,
@@ -205,36 +204,37 @@ export default function LoginSignup() {
 
   const handleGoogleUser = async (user) => {
     try {
+      const userEmail = user.email || '';
       const adminEmails = ['msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
-      if (adminEmails.includes(user.email.toLowerCase())) {
+      if (adminEmails.includes(userEmail.toLowerCase())) {
         localStorage.setItem('auth_role', 'admin');
-        localStorage.setItem('auth_email', user.email);
+        localStorage.setItem('auth_email', userEmail);
         localStorage.setItem('auth_name', 'MS Academy Admin');
         window.dispatchEvent(new Event('storage'));
         navigate('/admin');
         return;
       }
 
-      const userName = user.displayName || user.email.split('@')[0];
-      const isTeacher = await checkTeacherRole(user.email);
-      const isTypist = await checkTypistRole(user.email);
+      const userName = user.displayName || userEmail.split('@')[0] || 'User';
+      const isTeacher = await checkTeacherRole(userEmail);
+      const isTypist = await checkTypistRole(userEmail);
       
       if (isTeacher) {
         localStorage.setItem('auth_role', 'teacher');
-        localStorage.setItem('auth_email', user.email);
+        localStorage.setItem('auth_email', userEmail);
         localStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
         navigate('/teacher-dashboard');
       } else if (isTypist) {
         localStorage.setItem('auth_role', 'typist');
-        localStorage.setItem('auth_email', user.email);
+        localStorage.setItem('auth_email', userEmail);
         localStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
         navigate('/typist-dashboard');
       } else {
-        await markStudentAsActive(user.email, userName);
+        await markStudentAsActive(userEmail, userName);
         localStorage.setItem('auth_role', 'student');
-        localStorage.setItem('auth_email', user.email);
+        localStorage.setItem('auth_email', userEmail);
         localStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
         navigate('/student');
@@ -270,7 +270,10 @@ export default function LoginSignup() {
     try {
       setLoading(true);
       const provider = new GoogleAuthProvider();
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      if (result && result.user) {
+        await handleGoogleUser(result.user);
+      }
     } catch (err) {
       console.error(err);
       setError(err.message);

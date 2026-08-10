@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download, Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download, Trophy, ChevronLeft, ChevronRight, Crown, Lock } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -13,6 +13,9 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [studentName, setStudentName] = useState('Student');
   const [studentDepartment, setStudentDepartment] = useState('');
+  const [isPro, setIsPro] = useState(false);
+  const [purchasedBundles, setPurchasedBundles] = useState([]);
+  const [availableBundles, setAvailableBundles] = useState([]);
   const [activeTab, setActiveTab] = useState('learning');
   const [isCollapsed, setIsCollapsed] = useState(false);
   
@@ -30,6 +33,36 @@ export default function Dashboard() {
 
   const [recordings, setRecordings] = useState([]);
   const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
+
+  const canAccessRecording = (rec) => {
+    const isAdmin = rec.teacherName === 'Admin' || rec.teacherName === 'MS Academy Admin';
+    
+    let hasExactBundle = false;
+    if (rec.bundleId && rec.bundleId !== 'free') {
+      if (purchasedBundles && purchasedBundles.includes(rec.bundleId)) {
+        const bundle = (availableBundles || []).find(b => b.id === rec.bundleId);
+        if (!bundle || !bundle.permissions || bundle.permissions.includes('recordings')) {
+          hasExactBundle = true;
+        }
+      }
+    } else if (isAdmin) {
+      hasExactBundle = true;
+    }
+
+    if (hasExactBundle) return true;
+    if (isPro) return true;
+    
+    // Check if they own any bundle for this department that has the 'recordings' permission
+    const studentPurchasedDeptBundles = (availableBundles || []).filter(b => 
+      purchasedBundles.includes(b.id) && 
+      (b.department === rec.department || rec.department === 'General' || !rec.department) &&
+      (b.permissions?.includes('recordings') || !b.permissions)
+    );
+    
+    if (studentPurchasedDeptBundles.length > 0) return true;
+    
+    return false;
+  };
 
   useEffect(() => {
     if (!studentDepartment) return;
@@ -72,6 +105,16 @@ export default function Dashboard() {
       }
     };
     syncStorageToFirestore();
+    
+    const fetchBundles = async () => {
+      try {
+        const bSnapshot = await getDocs(collection(db, 'course_bundles'));
+        setAvailableBundles(bSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+      } catch (e) {
+        console.error("Failed to fetch bundles:", e);
+      }
+    };
+    fetchBundles();
   }, []);
 
   useEffect(() => {
@@ -99,6 +142,12 @@ export default function Dashboard() {
             
             if (data.department) {
               setStudentDepartment(data.department);
+            }
+            if (data.isPro) {
+              setIsPro(true);
+            }
+            if (data.purchasedBundles) {
+              setPurchasedBundles(data.purchasedBundles);
             }
             
             // Check if all onboarding fields exist
@@ -135,6 +184,30 @@ export default function Dashboard() {
       console.error("Error updating onboarding details", e);
       alert("Failed to save details. Please try again.");
     }
+  };
+
+  const handleUpgradeToPro = async (bundleId) => {
+    if (!docId || !bundleId) return;
+    
+    // Simulate payment process delay
+    setLoading(true);
+    setTimeout(async () => {
+      try {
+        const newPurchased = [...purchasedBundles, bundleId];
+        await updateDoc(doc(db, 'joined_students', docId), {
+          purchasedBundles: newPurchased,
+          isPro: true
+        });
+        setPurchasedBundles(newPurchased);
+        setIsPro(true);
+        alert('Payment Successful! Bundle unlocked. 🎉');
+      } catch (e) {
+        console.error("Error upgrading account", e);
+        alert("Failed to upgrade account. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    }, 1500);
   };
 
   if (loading) {
@@ -316,6 +389,16 @@ export default function Dashboard() {
             <Trophy size={18} />
             {!isCollapsed && <span>Practice Tests</span>}
           </button>
+          
+          <div className="pt-4 mt-4 border-t border-slate-200">
+            <button 
+              onClick={() => setActiveTab('upgrade')}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'upgrade' ? 'bg-amber-50 text-amber-600' : isPro ? 'text-amber-500 hover:bg-amber-50' : 'bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5'}`}
+            >
+              <Crown size={18} className={isPro && activeTab !== 'upgrade' ? 'text-amber-500' : ''} />
+              {!isCollapsed && <span>{isPro ? 'Pro Benefits' : 'Upgrade to Pro'}</span>}
+            </button>
+          </div>
         </nav>
       </aside>
 
@@ -323,8 +406,18 @@ export default function Dashboard() {
       <main className={`flex-1 p-8 overflow-y-auto ${showOnboarding ? 'blur-sm pointer-events-none' : ''} transition-all duration-300`}>
         <header className="mb-8 flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
           <div>
-            <h1 className="text-3xl font-[900] text-slate-900 tracking-tight">Welcome, {studentName}! 👋</h1>
-            <p className="text-slate-500 font-medium mt-1">Pick up where you left off and track your progress.</p>
+            <h1 className="text-2xl sm:text-3xl font-[900] text-slate-900 tracking-tight flex items-center gap-3">
+              Welcome back, {studentName.split(' ')[0]} 👋
+              {isPro && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-100 to-orange-100 border border-amber-200 text-[12px] text-amber-700 font-bold uppercase tracking-wider shadow-sm">
+                  <Crown size={14} className="text-amber-500" /> Pro
+                </span>
+              )}
+            </h1>
+            <p className="text-slate-500 font-medium text-sm sm:text-[15px] mt-1 flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+              {studentDepartment || "Department Not Set"}
+            </p>
           </div>
           <button 
             onClick={() => navigate('/student/profile')}
@@ -412,9 +505,27 @@ export default function Dashboard() {
 
             {/* Study Materials */}
             <div>
-              <h2 className="text-xl font-[900] text-slate-900 mb-5 mt-4">Recent Study Materials</h2>
-              <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm overflow-hidden">
-                <div className="divide-y divide-slate-100">
+              <h2 className="text-xl font-[900] text-slate-900 mb-5 mt-4 flex items-center gap-2">
+                Recent Study Materials
+                {!isPro && <Lock size={16} className="text-amber-500" />}
+              </h2>
+              <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm overflow-hidden relative">
+                {!isPro && (
+                  <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center">
+                    <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-4 shadow-sm border border-amber-200">
+                      <Lock size={28} />
+                    </div>
+                    <h3 className="text-xl font-[900] text-slate-900 mb-2">Pro Exclusive Content</h3>
+                    <p className="text-slate-500 font-medium text-sm max-w-xs mb-6">Upgrade to MS Academy Pro to unlock all handwritten notes, PYQs, and premium study materials.</p>
+                    <button 
+                      onClick={() => setActiveTab('upgrade')}
+                      className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/30 transition-all hover:-translate-y-0.5"
+                    >
+                      Unlock Now
+                    </button>
+                  </div>
+                )}
+                <div className={`divide-y divide-slate-100 ${!isPro ? 'opacity-40 select-none pointer-events-none' : ''}`}>
                   
                   {/* Material 1 */}
                   <div className="p-4 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors group">
@@ -465,7 +576,7 @@ export default function Dashboard() {
                   </div>
 
                 </div>
-                <div className="p-5 bg-slate-50 border-t border-slate-100 text-center">
+                <div className={`p-5 bg-slate-50 border-t border-slate-100 text-center ${!isPro ? 'opacity-40 select-none pointer-events-none' : ''}`}>
                   <button className="text-[13px] font-[900] text-blue-600 hover:text-blue-700 uppercase tracking-wide">View all materials in drive &rarr;</button>
                 </div>
               </div>
@@ -474,45 +585,58 @@ export default function Dashboard() {
         )}
         
         {activeTab === 'live' && (
-          <StudentLiveClasses department={studentDepartment} />
+          <StudentLiveClasses department={studentDepartment} isPro={isPro} purchasedBundles={purchasedBundles} bundles={availableBundles} />
         )}
 
         {activeTab === 'recordings' && (
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mt-6">
+          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mt-6 relative overflow-hidden">
             <h2 className="text-2xl font-[900] text-slate-900 mb-6 flex items-center gap-3">
               <PlayCircle className="text-purple-500" size={28} /> Past Class Recordings
             </h2>
             
-            {recordings.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-20 h-20 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <PlayCircle size={32} />
-                </div>
-                <h3 className="text-xl font-[900] text-slate-900 mb-2">No Recordings Yet</h3>
-                <p className="text-slate-500 max-w-md mx-auto">
-                  Once live classes are completed, their recordings will automatically appear here for you to review.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {recordings.map(rec => (
-                  <div key={rec.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:shadow-md hover:border-purple-200 transition-all group">
-                    <div className="aspect-video bg-slate-200 rounded-xl mb-4 relative overflow-hidden group-cursor-pointer flex items-center justify-center">
-                       <PlayCircle size={48} className="text-white drop-shadow-md opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all z-10 cursor-pointer" onClick={() => setPlayingVideoUrl(rec.url)} />
-                       <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent pointer-events-none"></div>
-                       <span className="absolute bottom-3 left-3 text-white text-xs font-bold px-2 py-1 bg-black/40 rounded-lg pointer-events-none backdrop-blur-sm">
-                         {new Date(rec.createdAt?.toMillis() || Date.now()).toLocaleDateString()}
-                       </span>
-                    </div>
-                    <h3 className="font-bold text-slate-800 text-lg line-clamp-2 mb-1">{rec.fileName}</h3>
-                    <p className="text-sm text-slate-500 font-medium">By {rec.teacherName}</p>
-                    <button onClick={() => setPlayingVideoUrl(rec.url)} className="w-full mt-4 py-2.5 bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
-                      <Play size={16} /> Watch Now
-                    </button>
+            <div>
+              {recordings.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <PlayCircle size={32} />
                   </div>
-                ))}
-              </div>
-            )}
+                  <h3 className="text-xl font-[900] text-slate-900 mb-2">No Recordings Yet</h3>
+                  <p className="text-slate-500 max-w-md mx-auto">
+                    Once live classes are completed, their recordings will automatically appear here for you to review.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {recordings.map(rec => (
+                    <div key={rec.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:shadow-md hover:border-purple-200 transition-all group">
+                      <div className="aspect-video bg-slate-200 rounded-xl mb-4 relative overflow-hidden group-cursor-pointer flex items-center justify-center">
+                         {!canAccessRecording(rec) ? (
+                            <Lock size={48} className="text-slate-400 drop-shadow-md z-10" />
+                         ) : (
+                            <PlayCircle size={48} className="text-white drop-shadow-md opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all z-10 cursor-pointer" onClick={() => setPlayingVideoUrl(rec.url)} />
+                         )}
+                         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent pointer-events-none"></div>
+                         <span className="absolute bottom-3 left-3 text-white text-xs font-bold px-2 py-1 bg-black/40 rounded-lg pointer-events-none backdrop-blur-sm">
+                           {new Date(rec.createdAt?.toMillis() || Date.now()).toLocaleDateString()}
+                         </span>
+                      </div>
+                      <h3 className="font-bold text-slate-800 text-lg line-clamp-2 mb-1">{rec.fileName}</h3>
+                      <p className="text-sm text-slate-500 font-medium">By {rec.teacherName}</p>
+                      
+                      {!canAccessRecording(rec) ? (
+                        <button disabled className="w-full mt-4 py-2.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-xl font-bold flex items-center justify-center gap-2 cursor-not-allowed">
+                          <Lock size={16} /> Locked (Pro)
+                        </button>
+                      ) : (
+                        <button onClick={() => setPlayingVideoUrl(rec.url)} className="w-full mt-4 py-2.5 bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">
+                          <Play size={16} /> Watch Now
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -529,9 +653,94 @@ export default function Dashboard() {
         )}
 
         {activeTab === 'tests' && (
-          <StudentTests department={studentDepartment} />
+          <StudentTests isPro={isPro} department={studentDepartment} purchasedBundles={purchasedBundles} bundles={availableBundles} />
         )}
 
+        {activeTab === 'upgrade' && (
+          <div className="max-w-6xl mx-auto py-10 px-4">
+            <div className="text-center mb-10">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 text-amber-500 mb-6 shadow-sm border border-amber-200">
+                <Crown size={40} />
+              </div>
+              <h2 className="text-4xl font-[900] text-slate-900 tracking-tight mb-4">
+                Explore MS Academy Course Bundles
+              </h2>
+              <p className="text-lg text-slate-500 font-medium max-w-2xl mx-auto">
+                Unlock your true potential and get access to all our premium GATE preparation features by purchasing a bundle below.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {availableBundles.length === 0 ? (
+                <div className="col-span-full text-center py-12 text-slate-500 font-medium">
+                  No course bundles available at the moment. Please check back later!
+                </div>
+              ) : (
+                availableBundles.map(bundle => {
+                  const isPurchased = purchasedBundles.includes(bundle.id);
+                  return (
+                    <div key={bundle.id} className={`bg-white rounded-[24px] border ${isPurchased ? 'border-emerald-200 shadow-emerald-500/10' : 'border-amber-200 shadow-amber-500/10'} shadow-xl overflow-hidden flex flex-col relative`}>
+                      {isPurchased && (
+                        <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full z-10 flex items-center gap-1 shadow-md">
+                           ✓ Purchased
+                        </div>
+                      )}
+                      {bundle.imageUrl ? (
+                        <img src={bundle.imageUrl} alt={bundle.name} className="w-full h-48 object-cover" />
+                      ) : (
+                        <div className="w-full h-48 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+                          <BookOpen size={48} className="text-slate-300" />
+                        </div>
+                      )}
+                      <div className="p-6 flex-1 flex flex-col">
+                        <div className="mb-4">
+                          <h3 className="text-xl font-[900] text-slate-900 line-clamp-2 leading-tight">{bundle.name}</h3>
+                          <p className="text-sm text-slate-500 font-medium mt-1">{bundle.tagline}</p>
+                        </div>
+                        
+                        <div className="flex items-end gap-2 mb-6">
+                          <span className="text-3xl font-[900] text-slate-900">₹{bundle.discountedPrice || bundle.price}</span>
+                          {bundle.discountedPrice && bundle.discountedPrice !== bundle.price && (
+                            <span className="text-sm font-bold text-slate-400 line-through mb-1">₹{bundle.price}</span>
+                          )}
+                        </div>
+
+                        <div className="flex-1">
+                          <ul className="space-y-3 mb-6">
+                            {(bundle.features || []).map((feature, idx) => (
+                              <li key={idx} className="flex items-start gap-3">
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${isPurchased ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                                  <span className="text-[10px] font-bold">✓</span>
+                                </div>
+                                <span className="text-sm text-slate-600 font-medium">{feature}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        
+                        {isPurchased ? (
+                          <button 
+                            disabled
+                            className="w-full py-3 bg-slate-100 text-slate-400 font-bold rounded-xl cursor-not-allowed"
+                          >
+                            Already Owned
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => handleUpgradeToPro(bundle.id)}
+                            className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-[900] rounded-xl shadow-md transition-transform hover:-translate-y-0.5"
+                          >
+                            Buy Now
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* In-App Video Player Modal */}
