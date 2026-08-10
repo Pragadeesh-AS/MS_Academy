@@ -55,6 +55,9 @@ export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
     const loadPdf = async () => {
       try {
         setLoading(true);
+        setError(null);
+        setPages([]);
+        
         const loadingTask = pdfjsLib.getDocument(url);
         const loadedPdf = await loadingTask.promise;
         if (!active) return;
@@ -78,8 +81,9 @@ export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
         }
       } catch (err) {
         console.error("Error loading PDF:", err);
-        if (active) {
-          setError("Failed to load PDF.");
+        // Ignore AbortException which happens during StrictMode unmounts
+        if (active && err.name !== 'AbortException') {
+          setError("Failed to load PDF. Please check your connection and try again.");
           setLoading(false);
         }
       }
@@ -128,18 +132,26 @@ export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
         ))}
 
         {!loading && isLocked && (
-          <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-[24px] p-10 text-center shadow-xl my-8 relative overflow-hidden flex flex-col items-center">
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-400 to-orange-500"></div>
-            <div className="w-20 h-20 bg-gradient-to-br from-amber-100 to-orange-100 text-amber-500 rounded-full flex items-center justify-center mb-6 shadow-inner border border-amber-200">
-              <Lock size={36} />
+          <div className="w-full max-w-3xl shrink-0 bg-white border-2 border-amber-100 rounded-[32px] p-12 text-center shadow-2xl my-8 relative overflow-hidden flex flex-col items-center">
+            {/* Decorative background elements */}
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500"></div>
+            <div className="absolute -top-24 -right-24 w-48 h-48 bg-amber-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
+            <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-orange-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
+            
+            <div className="w-24 h-24 bg-gradient-to-br from-amber-50 to-orange-100 text-amber-500 rounded-full flex items-center justify-center mb-8 shadow-inner border border-amber-200 z-10 relative group hover:scale-105 transition-transform duration-300">
+              <div className="absolute inset-0 bg-amber-400/20 rounded-full animate-ping opacity-50"></div>
+              <Lock size={40} className="drop-shadow-sm" />
             </div>
-            <h3 className="text-3xl font-[900] text-slate-900 mb-3 tracking-tight">Unlock the Full Material</h3>
-            <p className="text-slate-500 text-lg mb-8 max-w-lg font-medium leading-relaxed">
-              You've reached the end of the free preview. There are <strong className="text-slate-800">{numPages - previewLimit} more pages</strong> waiting for you! 
-              Purchase the course bundle to instantly unlock the entire document.
+            
+            <h3 className="text-3xl font-[900] text-slate-900 mb-4 tracking-tight z-10 relative">Unlock the Full Material</h3>
+            
+            <p className="text-slate-500 text-[17px] mb-10 max-w-xl font-medium leading-relaxed z-10 relative">
+              You've reached the end of the free preview. There are <strong className="text-slate-800 bg-amber-100 px-2 py-0.5 rounded-md font-bold">{numPages - previewLimit} more pages</strong> waiting for you! 
+              Purchase the course bundle to instantly unlock the entire high-quality document.
             </p>
-            <button onClick={onUpgrade} className="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-[900] text-lg shadow-lg shadow-amber-500/20 transition-all hover:-translate-y-1 inline-flex items-center gap-3">
-              <Lock size={20} /> Upgrade to Pro
+            
+            <button onClick={onUpgrade} className="px-10 py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl font-[900] text-lg shadow-xl shadow-amber-500/25 transition-all hover:-translate-y-1 inline-flex items-center gap-3 z-10 relative group border border-amber-400/50">
+              <Lock size={20} className="group-hover:scale-110 transition-transform" /> Upgrade to Pro
             </button>
           </div>
         )}
