@@ -23,32 +23,9 @@ export default function NotesManager() {
   const [fileUrl, setFileUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
 
-  const [departments, setDepartments] = useState(['General']);
+  const departments = ['General', 'CSE', 'ECE', 'ME', 'CE', 'EE', 'DS'];
 
   useEffect(() => {
-    // Fetch course configuration for departments
-    const savedCourses = localStorage.getItem('gate_courses_config');
-    if (savedCourses) {
-      try {
-        const parsed = JSON.parse(savedCourses);
-        // The config is usually an object mapping branch IDs to data or an array.
-        // We'll extract the branch names (or IDs) for the department dropdown.
-        let fetchedDepts = ['General'];
-        if (Array.isArray(parsed)) {
-            // If it's an array of objects
-            parsed.forEach(c => {
-                if (c.name || c.id) fetchedDepts.push(c.name || c.id);
-            });
-        } else if (typeof parsed === 'object') {
-            Object.values(parsed).forEach(c => {
-                if (c.name || c.title) fetchedDepts.push(c.name || c.title);
-            });
-        }
-        setDepartments([...new Set(fetchedDepts)]);
-      } catch (e) {
-        console.error("Error parsing courses config:", e);
-      }
-    }
 
     // Fetch course bundles from Firestore
     const fetchBundles = async () => {
@@ -154,7 +131,7 @@ export default function NotesManager() {
   const getBundleName = (bId) => {
     if (!bId) return 'Any bundle (Dept-level)';
     const b = bundles.find(x => x.id === bId);
-    return b ? b.title : bId;
+    return b ? b.name : bId;
   };
 
   const filteredNotes = notes.filter(n => 
@@ -301,7 +278,7 @@ export default function NotesManager() {
                   >
                     <option value="">-- Apply to ANY bundle containing Notes for this dept --</option>
                     {bundles.map(b => (
-                      <option key={b.id} value={b.id}>{b.title} ({b.id})</option>
+                      <option key={b.id} value={b.id}>{b.name} ({b.id})</option>
                     ))}
                   </select>
                   <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
