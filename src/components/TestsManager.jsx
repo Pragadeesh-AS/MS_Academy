@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark } from 'lucide-react';
+import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
+import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2 } from 'lucide-react';
 
 export default function TestsManager({ department = '', isTeacher = false }) {
   const [tests, setTests] = useState([]);
@@ -10,6 +10,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   const [questions, setQuestions] = useState([]);
   const [attributes, setAttributes] = useState([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [editBundleTest, setEditBundleTest] = useState(null);
+  const [editBundleValue, setEditBundleValue] = useState('');
 
   // Wizard Step State
   const [step, setStep] = useState(1); // 1: Specs, 2: Hierarchy, 3: Allocations
@@ -323,6 +325,27 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     setStep(1);
   };
 
+  const handleSaveBundle = async () => {
+    if (!editBundleTest) return;
+    try {
+      await updateDoc(doc(db, 'tests', editBundleTest.id), { bundleId: editBundleValue });
+      setTests(prev => prev.map(t => t.id === editBundleTest.id ? { ...t, bundleId: editBundleValue } : t));
+      setEditBundleTest(null);
+    } catch (err) {
+      console.error('Failed to update bundle:', err);
+      alert('Failed to update access control. Please try again.');
+    }
+  };
+
+  const getBundleLabel = (test) => {
+    if (test.bundleId === 'free') return { text: 'Free', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+    if (test.bundleId && test.bundleId !== '') {
+      const b = bundles.find(b => b.id === test.bundleId);
+      return { text: b ? b.name : 'Paid Bundle', color: 'bg-amber-100 text-amber-700 border-amber-200' };
+    }
+    return { text: 'Dept Bundle', color: 'bg-slate-100 text-slate-600 border-slate-200' };
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 font-sans">
       
@@ -367,6 +390,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                   <th className="px-6 py-4">Target Audience</th>
                   <th className="px-6 py-4">Subtopic Blueprint</th>
                   <th className="px-6 py-4">Marks & Duration</th>
+                  {!isTeacher && <th className="px-6 py-4">Access</th>}
                   <th className="px-6 py-4">Scheduled Date</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
@@ -397,6 +421,13 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                         {test.duration} mins ({test.questions?.length || 0} Qs)
                       </div>
                     </td>
+                    {!isTeacher && (
+                      <td className="px-6 py-5">
+                        {(() => { const lbl = getBundleLabel(test); return (
+                          <span className={`px-2.5 py-1 text-[11px] font-[800] rounded-lg border ${lbl.color}`}>{lbl.text}</span>
+                        ); })()}
+                      </td>
+                    )}
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[13px]">
                         <Calendar size={14} />
@@ -404,13 +435,24 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                       </div>
                     </td>
                     <td className="px-6 py-5 text-right">
-                      <button 
-                        onClick={() => handleDelete(test.id)}
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors inline-flex"
-                        title="Delete Test"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        {!isTeacher && (
+                          <button 
+                            onClick={() => { setEditBundleTest(test); setEditBundleValue(test.bundleId || ''); }}
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors inline-flex"
+                            title="Edit Access Control"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleDelete(test.id)}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors inline-flex"
+                          title="Delete Test"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -831,6 +873,43 @@ export default function TestsManager({ department = '', isTeacher = false }) {
               <div className="flex justify-end gap-3">
                 <button onClick={() => setDeleteConfirmId(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
                 <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Access Control Modal */}
+      {editBundleTest && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 font-sans">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-[900] text-slate-900">Edit Access Control</h3>
+                <p className="text-xs text-slate-400 font-semibold mt-0.5">{editBundleTest.title}</p>
+              </div>
+              <button onClick={() => setEditBundleTest(null)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-[900] text-slate-800 uppercase tracking-wide">Access Control</label>
+                <select 
+                  value={editBundleValue} 
+                  onChange={e => setEditBundleValue(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm bg-white"
+                >
+                  <option value="">Requires Department Bundle (Default)</option>
+                  <option value="free">Free for Everyone</option>
+                  {bundles.map(b => (
+                    <option key={b.id} value={b.id}>Require Specific Bundle: {b.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={() => setEditBundleTest(null)} className="px-5 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors text-sm">Cancel</button>
+                <button onClick={handleSaveBundle} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-md text-sm">Save Changes</button>
               </div>
             </div>
           </div>
