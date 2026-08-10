@@ -22,10 +22,25 @@ export default function NotesManager() {
   const [uploadMode, setUploadMode] = useState('file'); // 'file' or 'url'
   const [fileUrl, setFileUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
-
-  const departments = ['General', 'CSE', 'ECE', 'ME', 'CE', 'EE', 'DS'];
+  const [departments, setDepartments] = useState(['General']);
 
   useEffect(() => {
+    // Fetch course configuration for departments
+    const savedCourses = localStorage.getItem('gate_courses_config');
+    if (savedCourses) {
+      try {
+        const parsed = JSON.parse(savedCourses);
+        let fetchedDepts = ['General'];
+        if (Array.isArray(parsed)) {
+            parsed.forEach(c => {
+                if (c.code) fetchedDepts.push(c.code);
+            });
+        }
+        setDepartments([...new Set(fetchedDepts)]);
+      } catch (e) {
+        console.error("Error parsing courses config:", e);
+      }
+    }
 
     // Fetch course bundles from Firestore
     const fetchBundles = async () => {
@@ -278,7 +293,7 @@ export default function NotesManager() {
                   >
                     <option value="">-- Apply to ANY bundle containing Notes for this dept --</option>
                     {bundles.map(b => (
-                      <option key={b.id} value={b.id}>{b.name} ({b.id})</option>
+                      <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
                   <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
