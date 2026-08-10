@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Download, Trophy, ChevronLeft, ChevronRight, Crown, Lock } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -573,7 +573,7 @@ export default function Dashboard() {
                           </div>
                           {hasAccess ? (
                             <a href={note.url} target="_blank" rel="noopener noreferrer" className="px-4 py-2.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
-                              <Download size={16} /> <span className="hidden sm:inline">Download</span>
+                              <Eye size={16} /> <span className="hidden sm:inline">View</span>
                             </a>
                           ) : (
                             <button onClick={() => setActiveTab('upgrade')} className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
@@ -684,7 +684,7 @@ export default function Dashboard() {
                             <div className="flex flex-wrap gap-x-3 gap-y-1 mt-auto">
                               {note.fileName && (
                                 <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-                                  <Download size={12} /> {note.fileName}
+                                  <FileText size={12} /> {note.fileName}
                                 </span>
                               )}
                               <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
@@ -697,7 +697,7 @@ export default function Dashboard() {
                         <div className="mt-auto pt-4 border-t border-slate-100">
                           {hasAccess ? (
                             <a href={note.url} target="_blank" rel="noopener noreferrer" className="w-full py-2.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
-                              <Download size={16} /> Download Note
+                              <Eye size={16} /> View Note
                             </a>
                           ) : (
                             <button onClick={() => setActiveTab('upgrade')} className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
