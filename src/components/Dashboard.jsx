@@ -230,11 +230,9 @@ export default function Dashboard() {
       try {
         const newPurchased = [...purchasedBundles, bundleId];
         await updateDoc(doc(db, 'joined_students', docId), {
-          purchasedBundles: newPurchased,
-          isPro: true
+          purchasedBundles: newPurchased
         });
         setPurchasedBundles(newPurchased);
-        setIsPro(true);
         alert('Payment Successful! Bundle unlocked. 🎉');
       } catch (e) {
         console.error("Error upgrading account", e);
