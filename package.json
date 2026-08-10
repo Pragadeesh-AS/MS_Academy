@@ -23,7 +23,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fabric": "^7.4.0",
-    "firebase": "^12.16.0",
+    "firebase": "^12.17.1",
     "framer-motion": "^12.42.2",
     "gsap": "^3.15.0",
     "html-to-image": "^1.11.13",

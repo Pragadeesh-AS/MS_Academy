@@ -222,30 +222,15 @@ export default function AdminDashboard() {
       try {
         // 1. Fetch Applications
         const appsSnapshot = await getDocs(collection(db, 'career_applications'));
-        const fetchedApps = appsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (fetchedApps.length > 0) {
-          setApplications(fetchedApps);
-        } else {
-          setApplications(defaultApplications);
-        }
+        setApplications(appsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
         // 2. Fetch Queries
         const queriesSnapshot = await getDocs(collection(db, 'contact_queries'));
-        const fetchedQueries = queriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (fetchedQueries.length > 0) {
-          setQueries(fetchedQueries);
-        } else {
-          setQueries(defaultQueries);
-        }
+        setQueries(queriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
         // 3. Fetch Joined Students
         const studentsSnapshot = await getDocs(collection(db, 'joined_students'));
-        const fetchedStudents = studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (fetchedStudents.length > 0) {
-          setJoinedStudents(fetchedStudents);
-        } else {
-          setJoinedStudents(defaultStudents);
-        }
+        setJoinedStudents(studentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
         // 4. Fetch Invited Teachers
         const teachersSnapshot = await getDocs(collection(db, 'invited_teachers'));
@@ -581,12 +566,23 @@ export default function AdminDashboard() {
       const originUrl = window.location.hostname === 'localhost' ? 'https://msacademy-portal.example.com' : window.location.origin;
       const loginLink = originUrl + '/login';
       const htmlMessage = `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2>Hello ${inviteForm.name},</h2>
-          <p>You have been invited to join MS Academy under the ${inviteForm.department} department.</p>
-          <p><a href="${loginLink}" style="display:inline-block; padding:10px 20px; background:#2563EB; color:#fff; text-decoration:none; border-radius:5px;">Login to Portal</a></p>
-          <br/>
-          <p>Best regards,<br/>MS Academy Team</p>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+          <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); padding: 30px 20px; text-align: center;">
+            <img src="https://raw.githubusercontent.com/Pragadeesh-AS/MS_Academy/main/src/assets/msgate_logo.png" alt="MS GATE Academy Logo" style="height: 60px; margin-bottom: 15px; border-radius: 8px; background-color: white; padding: 5px;" />
+            <h1 style="color: white; margin: 0; font-size: 28px; letter-spacing: 1px;">Welcome to MS GATE Academy 🎓</h1>
+          </div>
+          <div style="padding: 40px 30px; background-color: #ffffff;">
+            <h2 style="color: #1e293b; margin-top: 0;">Hello ${inviteForm.name}, 👋</h2>
+            <p style="color: #475569; font-size: 16px; line-height: 1.6;">You have been officially invited to join <strong>MS GATE Academy</strong> under the <strong>${inviteForm.department}</strong> department! 📚✨</p>
+            <p style="color: #475569; font-size: 16px; line-height: 1.6;">We are excited to have you on board. Start exploring your courses and modules by logging into the student portal.</p>
+            <div style="text-align: center; margin: 35px 0;">
+              <a href="${loginLink}" style="display:inline-block; padding:12px 28px; background-color:#2563EB; color:#ffffff; font-weight:bold; text-decoration:none; border-radius:8px; font-size: 16px; box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);">🚀 Login to Portal</a>
+            </div>
+            <div style="margin-top: 40px; border-top: 1px solid #e2e8f0; pt-4;">
+              <p style="color: #1e293b; font-weight: bold; margin: 20px 0 0 0;">Best regards,</p>
+              <p style="color: #64748B; margin: 5px 0 0 0;">MS GATE Academy Team 🏫</p>
+            </div>
+          </div>
         </div>
       `;
       await sendEmailViaGAS(inviteForm.email, "Invitation to join MS Academy", htmlMessage);

@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { db } from '../../firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
 import { 
   Search, 
   ChevronDown, 
@@ -48,6 +50,20 @@ const StudentDirectory = ({
     (currentPage - 1) * studentsPerPage, 
     currentPage * studentsPerPage
   );
+
+  const handleDeleteStudent = async (studentId) => {
+    if (window.confirm("Are you sure you want to delete this student?")) {
+      try {
+        // Convert to string in case it's a numeric mock ID (1, 2, 3...)
+        const idString = String(studentId);
+        await deleteDoc(doc(db, 'joined_students', idString));
+        setJoinedStudents(joinedStudents.filter(s => s.id !== studentId));
+      } catch (error) {
+        console.error("Error deleting student:", error);
+        alert("Failed to delete student from the database.");
+      }
+    }
+  };
 
   return (
     <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.03) 0%, transparent 70%)' }}>
@@ -265,7 +281,7 @@ const StudentDirectory = ({
                               <Edit size={18} />
                             </button>
                             <button 
-                              onClick={() => setJoinedStudents(joinedStudents.filter(s => s.id !== student.id))}
+                              onClick={() => handleDeleteStudent(student.id)}
                               className="p-2 text-[#64748B] hover:text-red-500 hover:bg-red-50 rounded-[10px] transition-colors" title="Delete Student"
                             >
                               <Trash2 size={18} />
