@@ -8,6 +8,7 @@ import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, 
 import { ref, listAll, getDownloadURL } from 'firebase/storage';
 import StudentLiveClasses from './StudentLiveClasses';
 import StudentTests from './StudentTests';
+import PDFViewer from './PDFViewer';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ export default function Dashboard() {
   const [notes, setNotes] = useState([]);
   const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
   const [viewingNoteUrl, setViewingNoteUrl] = useState(null);
+  const [viewingNoteAccess, setViewingNoteAccess] = useState(false);
 
   const canAccessRecording = (rec) => {
     const isAdmin = rec.teacherName === 'Admin' || rec.teacherName === 'MS Academy Admin';
@@ -573,12 +575,12 @@ export default function Dashboard() {
                             </div>
                           </div>
                           {hasAccess ? (
-                            <button onClick={() => setViewingNoteUrl(note.url)} className="px-4 py-2.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
-                              <Eye size={16} /> <span className="hidden sm:inline">View</span>
+                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(true); }} className="px-4 py-2.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
+                              <Eye size={16} /> <span className="hidden sm:inline">View Full</span>
                             </button>
                           ) : (
-                            <button onClick={() => setActiveTab('upgrade')} className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
-                              <Lock size={16} /> <span className="hidden sm:inline">Locked</span>
+                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(false); }} className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
+                              <Eye size={16} /> <span className="hidden sm:inline">Preview</span>
                             </button>
                           )}
                         </div>
@@ -697,12 +699,12 @@ export default function Dashboard() {
                         
                         <div className="mt-auto pt-4 border-t border-slate-100">
                           {hasAccess ? (
-                            <button onClick={() => setViewingNoteUrl(note.url)} className="w-full py-2.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
-                              <Eye size={16} /> View Note
+                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(true); }} className="w-full py-2.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                              <Eye size={16} /> View Full Note
                             </button>
                           ) : (
-                            <button onClick={() => setActiveTab('upgrade')} className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
-                              <Lock size={16} /> Locked (Requires Bundle)
+                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(false); }} className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                              <Eye size={16} /> Preview (3 Pages)
                             </button>
                           )}
                         </div>
@@ -849,16 +851,10 @@ export default function Dashboard() {
             ✕
           </button>
           <div className="w-full max-w-5xl h-[85vh] bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col relative">
-            <div className="absolute top-0 left-0 right-0 h-12 bg-white flex items-center justify-center border-b border-slate-200 z-10 pointer-events-none">
-              <span className="font-bold text-slate-700 text-sm flex items-center gap-2">
-                <FileText size={16} className="text-blue-500" /> MS Academy Document Viewer
-              </span>
-            </div>
-            {/* Using toolbar=0 to try to hide the download button natively in Chrome/Firefox */}
-            <iframe 
-              src={`${viewingNoteUrl}#toolbar=0`}
-              className="w-full flex-1 mt-12"
-              title="Document Viewer"
+            <PDFViewer 
+               url={viewingNoteUrl} 
+               previewLimit={viewingNoteAccess ? null : 3} 
+               onUpgrade={() => { setViewingNoteUrl(null); setActiveTab('upgrade'); }} 
             />
           </div>
         </div>
