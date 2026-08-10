@@ -1679,6 +1679,9 @@ export default function AdminDashboard() {
         {/* AI Generator Tab */}
         {activeTab === 'ai' && <AIGenerator />}
 
+        {/* Tests Manager Tab */}
+        {activeTab === 'tests' && <TestsManager department="" isTeacher={false} />}
+
       </main>
 
       {/* Details Modal Overlay for applications */}
