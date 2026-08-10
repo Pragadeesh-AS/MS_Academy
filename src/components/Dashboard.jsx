@@ -649,6 +649,71 @@ export default function Dashboard() {
           </div>
         )}
 
+        {activeTab === 'notes' && (
+          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mt-6 relative overflow-hidden">
+            <h2 className="text-2xl font-[900] text-slate-900 mb-6 flex items-center gap-3">
+              <FileText className="text-blue-500" size={28} /> All Study Notes
+            </h2>
+            
+            <div>
+              {notes.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <FileText size={32} />
+                  </div>
+                  <h3 className="text-xl font-[900] text-slate-900 mb-2">No Study Notes Yet</h3>
+                  <p className="text-slate-500 max-w-md mx-auto">
+                    Once teachers upload study materials for your department, they will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {notes.map(note => {
+                    const hasAccess = canAccessNote(note);
+                    return (
+                      <div key={note.id} className={`bg-white rounded-2xl border ${hasAccess ? 'border-slate-200 hover:border-blue-300 hover:shadow-md' : 'border-slate-100 opacity-75'} p-5 transition-all flex flex-col`}>
+                        <div className="flex items-start gap-4 mb-4">
+                          <div className={`w-14 h-14 shrink-0 rounded-[14px] flex items-center justify-center shadow-inner ${hasAccess ? 'bg-blue-50 text-blue-500' : 'bg-slate-100 text-slate-400'}`}>
+                            <FileText size={28} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-[900] text-slate-900 text-[16px] mb-1 truncate" title={note.title}>{note.title}</h4>
+                            {note.description && (
+                              <p className="text-[13px] text-slate-500 font-medium line-clamp-2 mb-2">{note.description}</p>
+                            )}
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-auto">
+                              {note.fileName && (
+                                <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                                  <Download size={12} /> {note.fileName}
+                                </span>
+                              )}
+                              <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                                <Calendar size={12} /> {note.createdAt?.toDate ? note.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-auto pt-4 border-t border-slate-100">
+                          {hasAccess ? (
+                            <a href={note.url} target="_blank" rel="noopener noreferrer" className="w-full py-2.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                              <Download size={16} /> Download Note
+                            </a>
+                          ) : (
+                            <button onClick={() => setActiveTab('upgrade')} className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                              <Lock size={16} /> Locked (Requires Bundle)
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'schedule' && (
           <div className="bg-white rounded-3xl p-12 border border-slate-200 shadow-sm text-center mt-6">
              <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
