@@ -6,7 +6,9 @@ import {
   Check, Tag, Zap, Star, ShieldCheck
 } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { gateCoursesData } from '../GateCourses';
 
 export default function CourseSetup() {
   const [bundles, setBundles] = useState([]);
@@ -384,13 +386,10 @@ export default function CourseSetup() {
                     onChange={(e) => setFormData({...formData, department: e.target.value})}
                     className="w-full bg-slate-50 border border-slate-200 text-[14px] font-[700] text-slate-900 rounded-xl px-4 py-3 outline-none focus:border-[#5b32ea] focus:ring-1 focus:ring-[#5b32ea] transition-all"
                   >
-                    <option value="CSE">Computer Science (CSE)</option>
-                    <option value="ECE">Electronics (ECE)</option>
-                    <option value="ME">Mechanical (ME)</option>
-                    <option value="CE">Civil (CE)</option>
-                    <option value="EE">Electrical (EE)</option>
-                    <option value="DS">Data Science (DS)</option>
-                    <option value="ALL">All Departments</option>
+                    <option value="General">General / All Departments</option>
+                    {gateCoursesData.map(course => (
+                      <option key={course.code} value={course.name}>{course.name}</option>
+                    ))}
                   </select>
                 </div>
 
