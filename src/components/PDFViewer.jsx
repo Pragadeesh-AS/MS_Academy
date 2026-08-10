@@ -23,13 +23,18 @@ const PdfPage = ({ page, scale }) => {
     // but React 18 strict mode might double mount.
     const renderTask = page.render(renderContext);
     
+    // Handle render errors (including cancellation)
+    renderTask.promise.catch(err => {
+      if (err.name !== 'RenderingCancelledException' && err.name !== 'AbortException') {
+        console.error('PDF render error:', err);
+      }
+    });
+    
     return () => {
-      // If we unmount before render finishes, we can cancel it
-      renderTask.cancel().catch(err => {
-         if (err.name !== 'RenderingCancelledException') {
-            console.error(err);
-         }
-      });
+      // Cancel the render task if the component unmounts
+      if (renderTask) {
+        renderTask.cancel();
+      }
     };
   }, [page, scale]);
 
