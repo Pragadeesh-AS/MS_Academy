@@ -550,21 +550,7 @@ export default function Dashboard() {
                 {!isPro && <Lock size={16} className="text-amber-500" />}
               </h2>
               <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm overflow-hidden relative">
-                {!isPro && (
-                  <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-6 text-center">
-                    <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-4 shadow-sm border border-amber-200">
-                      <Lock size={28} />
-                    </div>
-                    <h3 className="text-xl font-[900] text-slate-900 mb-2">Pro Exclusive Content</h3>
-                    <p className="text-slate-500 font-medium text-sm max-w-xs mb-6">Upgrade to MS Academy Pro to unlock all handwritten notes, PYQs, and premium study materials.</p>
-                    <button 
-                      onClick={() => setActiveTab('upgrade')}
-                      className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/30 transition-all hover:-translate-y-0.5"
-                    >
-                      Unlock Now
-                    </button>
-                  </div>
-                )}
+
                 <div className="divide-y divide-slate-100">
                   {notes.length === 0 ? (
                     <div className="p-8 text-center text-slate-500 font-medium">
