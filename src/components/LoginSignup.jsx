@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, TrendingUp, BookOpen, Trophy, Quote, Phone } from 'lucide-react';
 import signupImage from '../assets/signup2.png';
 import { auth, db } from '../firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
 import { collection, getDocs, query, where, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
@@ -203,15 +203,8 @@ export default function LoginSignup() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setError('');
-    setResetMessage('');
+  const handleGoogleUser = async (user) => {
     try {
-      const provider = new GoogleAuthProvider();
-      const userCredential = await signInWithPopup(auth, provider);
-      const user = userCredential.user;
-      
-      // Check admin emails for Google Login
       const adminEmails = ['msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
       if (adminEmails.includes(user.email.toLowerCase())) {
         localStorage.setItem('auth_role', 'admin');
@@ -249,6 +242,39 @@ export default function LoginSignup() {
     } catch (err) {
       console.error(err);
       setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const checkRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result && result.user) {
+          setLoading(true);
+          await handleGoogleUser(result.user);
+        }
+      } catch (err) {
+        console.error(err);
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+    checkRedirectResult();
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setResetMessage('');
+    try {
+      setLoading(true);
+      const provider = new GoogleAuthProvider();
+      await signInWithRedirect(auth, provider);
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+      setLoading(false);
     }
   };
 
