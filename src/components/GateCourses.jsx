@@ -73,7 +73,7 @@ const themes = {
   }
 };
 
-const gateCoursesData = [
+export const gateCoursesData = [
   {
     code: "CSE",
     name: "Computer Science (CSE)",

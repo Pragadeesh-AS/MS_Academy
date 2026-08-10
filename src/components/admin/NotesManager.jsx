@@ -4,6 +4,7 @@ import { collection, query, getDocs, addDoc, deleteDoc, doc, serverTimestamp, on
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { FileText, Plus, Trash2, UploadCloud, Link as LinkIcon, X, CheckCircle2, ChevronDown, Layers, Book, Copy, Search, AlertCircle, FilePlus, ArrowUpRight, Save } from 'lucide-react';
 import Loader from '../Loader';
+import { gateCoursesData } from '../GateCourses';
 
 export default function NotesManager() {
   const [notes, setNotes] = useState([]);
@@ -25,22 +26,9 @@ export default function NotesManager() {
   const [departments, setDepartments] = useState(['General']);
 
   useEffect(() => {
-    // Fetch course configuration for departments
-    const savedCourses = localStorage.getItem('gate_courses_config');
-    if (savedCourses) {
-      try {
-        const parsed = JSON.parse(savedCourses);
-        let fetchedDepts = ['General'];
-        if (Array.isArray(parsed)) {
-            parsed.forEach(c => {
-                if (c.code) fetchedDepts.push(c.code);
-            });
-        }
-        setDepartments([...new Set(fetchedDepts)]);
-      } catch (e) {
-        console.error("Error parsing courses config:", e);
-      }
-    }
+    // Populate departments from the comprehensive list in gateCoursesData
+    const fetchedDepts = ['General', ...gateCoursesData.map(c => c.name)];
+    setDepartments(fetchedDepts);
 
     // Fetch course bundles from Firestore
     const fetchBundles = async () => {
