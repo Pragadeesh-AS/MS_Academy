@@ -32,6 +32,7 @@ export default function Dashboard() {
   });
 
   const [recordings, setRecordings] = useState([]);
+  const [notes, setNotes] = useState([]);
   const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
 
   const canAccessRecording = (rec) => {
@@ -64,6 +65,26 @@ export default function Dashboard() {
     return false;
   };
 
+  const canAccessNote = (note) => {
+    if (isPro) return true;
+    
+    // Explicit bundleId match
+    if (note.bundleId && purchasedBundles.includes(note.bundleId)) {
+      return true;
+    }
+
+    // Implicit department match (any purchased bundle for this department with 'notes' permission)
+    const studentPurchasedDeptBundles = availableBundles.filter(b => 
+      purchasedBundles.includes(b.id) && 
+      (b.department === note.department || b.department === 'General' || note.department === 'General') &&
+      (b.permissions?.includes('notes') || !b.permissions)
+    );
+    
+    if (studentPurchasedDeptBundles.length > 0) return true;
+    
+    return false;
+  };
+
   useEffect(() => {
     if (!studentDepartment) return;
     const q = query(
@@ -74,6 +95,20 @@ export default function Dashboard() {
       const recs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       recs.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
       setRecordings(recs);
+    });
+    return () => unsubscribe();
+  }, [studentDepartment]);
+
+  useEffect(() => {
+    if (!studentDepartment) return;
+    const q = query(
+      collection(db, 'notes'),
+      where('department', 'in', [studentDepartment, 'General'])
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedNotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      fetchedNotes.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+      setNotes(fetchedNotes);
     });
     return () => unsubscribe();
   }, [studentDepartment]);
@@ -372,8 +407,13 @@ export default function Dashboard() {
             onClick={() => setActiveTab('recordings')}
             className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'recordings' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
           >
-            <PlayCircle size={18} />
-            {!isCollapsed && <span>Recordings</span>}
+            <PlayCircle size={18} /> {!isCollapsed && <span>Recordings</span>}
+          </button>
+          <button 
+            onClick={() => setActiveTab('notes')}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'notes' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+          >
+            <FileText size={18} /> {!isCollapsed && <span>Study Notes</span>}
           </button>
           <button 
             onClick={() => setActiveTab('schedule')}
@@ -525,59 +565,44 @@ export default function Dashboard() {
                     </button>
                   </div>
                 )}
-                <div className={`divide-y divide-slate-100 ${!isPro ? 'opacity-40 select-none pointer-events-none' : ''}`}>
-                  
-                  {/* Material 1 */}
-                  <div className="p-4 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors group">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-[14px] bg-red-50 text-red-500 flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                        <FileText size={24} />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm sm:text-[15px]">Data Structures Handwritten Notes</h4>
-                        <p className="text-[12px] text-slate-500 font-bold mt-1">PDF Document • 2.4 MB • Uploaded Today</p>
-                      </div>
+                <div className="divide-y divide-slate-100">
+                  {notes.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 font-medium">
+                      No study materials available yet.
                     </div>
-                    <button className="px-4 py-2.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
-                       <Download size={16} /> <span className="hidden sm:inline">Download</span>
-                    </button>
-                  </div>
-
-                  {/* Material 2 */}
-                  <div className="p-4 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors group">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-[14px] bg-purple-50 text-purple-600 flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                        <FileText size={24} />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm sm:text-[15px]">GATE CSE 2023 Solved Paper (PYQ)</h4>
-                        <p className="text-[12px] text-slate-500 font-bold mt-1">PDF Document • 5.1 MB • Uploaded Yesterday</p>
-                      </div>
-                    </div>
-                    <button className="px-4 py-2.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
-                       <Download size={16} /> <span className="hidden sm:inline">Download</span>
-                    </button>
-                  </div>
-
-                  {/* Material 3 */}
-                  <div className="p-4 sm:p-6 flex items-center justify-between hover:bg-slate-50 transition-colors group">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-[14px] bg-orange-50 text-orange-500 flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                        <FileText size={24} />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm sm:text-[15px]">Engineering Maths Calculus Cheat Sheet</h4>
-                        <p className="text-[12px] text-slate-500 font-bold mt-1">PDF Document • 1.1 MB • Uploaded Oct 12</p>
-                      </div>
-                    </div>
-                    <button className="px-4 py-2.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
-                       <Download size={16} /> <span className="hidden sm:inline">Download</span>
-                    </button>
-                  </div>
-
+                  ) : (
+                    notes.slice(0, 5).map(note => {
+                      const hasAccess = canAccessNote(note);
+                      return (
+                        <div key={note.id} className={`p-4 sm:p-6 flex items-center justify-between transition-colors group ${!hasAccess ? 'opacity-50 select-none' : 'hover:bg-slate-50'}`}>
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-[14px] flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform ${hasAccess ? 'bg-blue-50 text-blue-500' : 'bg-slate-100 text-slate-400'}`}>
+                              <FileText size={24} />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-slate-900 text-sm sm:text-[15px]">{note.title}</h4>
+                              <p className="text-[12px] text-slate-500 font-bold mt-1">
+                                {note.fileName ? `${note.fileName} • ` : ''}
+                                {note.createdAt?.toDate ? note.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Just now'}
+                              </p>
+                            </div>
+                          </div>
+                          {hasAccess ? (
+                            <a href={note.url} target="_blank" rel="noopener noreferrer" className="px-4 py-2.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
+                              <Download size={16} /> <span className="hidden sm:inline">Download</span>
+                            </a>
+                          ) : (
+                            <button onClick={() => setActiveTab('upgrade')} className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
+                              <Lock size={16} /> <span className="hidden sm:inline">Locked</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-                <div className={`p-5 bg-slate-50 border-t border-slate-100 text-center ${!isPro ? 'opacity-40 select-none pointer-events-none' : ''}`}>
-                  <button className="text-[13px] font-[900] text-blue-600 hover:text-blue-700 uppercase tracking-wide">View all materials in drive &rarr;</button>
+                <div className="p-5 bg-slate-50 border-t border-slate-100 text-center">
+                  <button onClick={() => setActiveTab('notes')} className="text-[13px] font-[900] text-blue-600 hover:text-blue-700 uppercase tracking-wide">View all study materials &rarr;</button>
                 </div>
               </div>
             </div>

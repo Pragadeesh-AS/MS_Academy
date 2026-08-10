@@ -14,6 +14,7 @@ import { db, storage } from '../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
+import NotesManager from './admin/NotesManager';
 import Analytics from './admin/Analytics';
 import AIGenerator from './admin/AIGenerator';
 import AttributesManager from './admin/AttributesManager';
@@ -823,6 +824,15 @@ export default function AdminDashboard() {
               </button>
 
               {/* Decorative Placeholders */}
+              <button
+                onClick={() => { setActiveTab('notes'); setIsCollapsed(true); }}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'notes' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                title={isCollapsed ? "Study Notes" : ""}
+              >
+                <FileText size={20} className={activeTab === 'notes' ? 'text-[#3b82f6]' : 'text-[#3b82f6]'} />
+                {!isCollapsed && <span>Study Notes</span>}
+              </button>
+
               <button 
                 onClick={() => setActiveTab('attributes')}
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'attributes' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
@@ -1560,6 +1570,10 @@ export default function AdminDashboard() {
           </div>
         )}
         
+        {activeTab === 'notes' && (
+          <NotesManager />
+        )}
+
         {activeTab === 'attributes' && (
           <AttributesManager />
         )}
