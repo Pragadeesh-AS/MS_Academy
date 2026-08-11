@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { 
   Search, 
   ChevronDown, 
@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Filter,
   X,
-  RotateCcw
+  RotateCcw,
+  Package
 } from 'lucide-react';
 
 const StudentDirectory = ({ 
@@ -30,7 +31,21 @@ const StudentDirectory = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [bundles, setBundles] = useState([]);
   const studentsPerPage = 10;
+
+  useEffect(() => {
+    const fetchBundles = async () => {
+      try {
+        const bSnapshot = await getDocs(collection(db, 'course_bundles'));
+        const bData = bSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setBundles(bData);
+      } catch (error) {
+        console.error("Error fetching bundles:", error);
+      }
+    };
+    fetchBundles();
+  }, []);
 
   // Enhance existing students with mock data for the premium view
   const enhancedStudents = joinedStudents.map(student => ({
@@ -258,12 +273,12 @@ const StudentDirectory = ({
                           <span className="text-[14px] text-[#475569] font-medium">{student.year}</span>
                         </td>
                         <td className="px-6">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[12px] font-bold tracking-wide ${
-                            student.isPro 
+                          <span className={`inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${
+                            student.isPro || (student.purchasedBundles && student.purchasedBundles.length > 0)
                               ? 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200 shadow-sm' 
                               : 'bg-slate-100 text-slate-600 border border-slate-200'
                           }`}>
-                            {student.isPro ? '✨ PRO' : 'Normal'}
+                            {(student.isPro || (student.purchasedBundles && student.purchasedBundles.length > 0)) ? (student.purchasedBundles && student.purchasedBundles.length > 0 ? `✨ PRO (${student.purchasedBundles.length} Bundles)` : '✨ PRO') : 'Normal'}
                           </span>
                         </td>
                         <td className="px-6">
@@ -292,12 +307,9 @@ const StudentDirectory = ({
                                 if (window.confirm(`Are you sure you want to ${student.isPro ? 'downgrade' : 'upgrade'} ${student.name}?`)) {
                                   try {
                                     const updateData = { isPro: !student.isPro };
-                                    if (student.isPro) {
-                                      updateData.purchasedBundles = [];
-                                    }
                                     await updateDoc(doc(db, 'joined_students', String(student.id)), updateData);
                                     setJoinedStudents(joinedStudents.map(s => 
-                                      s.id === student.id ? { ...s, isPro: !student.isPro, ...(student.isPro ? { purchasedBundles: [] } : {}) } : s
+                                      s.id === student.id ? { ...s, isPro: !student.isPro } : s
                                     ));
                                   } catch (error) {
                                     console.error('Error updating tier:', error);
@@ -418,6 +430,61 @@ const StudentDirectory = ({
                   <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.joinedDate}</p>
                 </div>
               </div>
+              
+              {selectedStudent.purchasedBundles && selectedStudent.purchasedBundles.length > 0 && (
+                <div className="pt-6 border-t border-[#EEF2F7]">
+                  <div className="flex items-center justify-between mb-4">
+                    <h5 className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Purchased Bundles</h5>
+                    <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{selectedStudent.purchasedBundles.length}</span>
+                  </div>
+                  <div className="space-y-2.5 max-h-[160px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+                    {selectedStudent.purchasedBundles.map((bundle, idx) => {
+                      const b = bundles.find(bItem => bItem.id === bundle);
+                      const bundleName = b ? b.name : (typeof bundle === 'string' ? bundle : (bundle.title || bundle.name || `Bundle ${idx + 1}`));
+                      
+                      return (
+                        <div key={idx} className="flex items-center justify-between bg-white border border-[#EEF2F7] p-3 rounded-[12px] transition-all hover:border-blue-200 hover:shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                              <Package size={16} />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[14px] font-semibold text-[#0F172A] leading-tight">{bundleName}</span>
+                              <span className="text-[11px] font-medium text-[#64748B]">Active Plan</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              if (window.confirm(`Are you sure you want to cancel ${bundleName} for ${selectedStudent.name}?`)) {
+                                try {
+                                  const updatedBundles = selectedStudent.purchasedBundles.filter((_, i) => i !== idx);
+                                  const isPro = updatedBundles.length > 0 ? selectedStudent.isPro : false;
+                                  
+                                  await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), { 
+                                    purchasedBundles: updatedBundles,
+                                    isPro: isPro
+                                  });
+                                  
+                                  const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles, isPro: isPro };
+                                  setSelectedStudent(updatedStudent);
+                                  setJoinedStudents(joinedStudents.map(s => s.id === selectedStudent.id ? updatedStudent : s));
+                                } catch (error) {
+                                  console.error('Error cancelling bundle:', error);
+                                  alert(`Failed to cancel bundle. Error: ${error.message}`);
+                                }
+                              }
+                            }}
+                            className="text-[#94A3B8] hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                            title="Cancel Bundle"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="p-6 bg-[#F8FAFC] border-t border-[#EEF2F7] flex justify-end">
               <button onClick={() => setSelectedStudent(null)} className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm">

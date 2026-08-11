@@ -39,23 +39,20 @@ export default function Dashboard() {
   const [viewingNoteAccess, setViewingNoteAccess] = useState(false);
 
   const canAccessRecording = (rec) => {
-    const isAdmin = rec.teacherName === 'Admin' || rec.teacherName === 'MS Academy Admin';
-    
-    let hasExactBundle = false;
+    if (isPro) return true;
+
+    // 1. EXCLUSIVE BUNDLE: If the recording is assigned to a specific paid bundle
     if (rec.bundleId && rec.bundleId !== 'free') {
       if (purchasedBundles && purchasedBundles.includes(rec.bundleId)) {
         const bundle = (availableBundles || []).find(b => b.id === rec.bundleId);
         if (!bundle || !bundle.permissions || bundle.permissions.includes('recordings')) {
-          hasExactBundle = true;
+          return true;
         }
       }
-    } else if (isAdmin) {
-      hasExactBundle = true;
+      return false; // Do not fall through
     }
 
-    if (hasExactBundle) return true;
-    if (isPro) return true;
-    
+    // 2. GENERAL RECORDINGS (No specific bundleId):
     // Check if they own any bundle for this department that has the 'recordings' permission
     const studentPurchasedDeptBundles = (availableBundles || []).filter(b => 
       purchasedBundles.includes(b.id) && 
@@ -65,6 +62,10 @@ export default function Dashboard() {
     
     if (studentPurchasedDeptBundles.length > 0) return true;
     
+    // 3. Legacy support: Admin-created recordings without a bundleId are accessible to everyone
+    const isAdmin = rec.teacherName === 'Admin' || rec.teacherName === 'MS Academy Admin';
+    if (isAdmin) return true;
+
     return false;
   };
 

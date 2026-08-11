@@ -547,23 +547,21 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
   }, [department]);
 
   const canAccessClass = (cls) => {
-    const isAdmin = cls.teacher === 'Admin' || cls.teacher === 'MS Academy Admin';
-    
-    let hasExactBundle = false;
+    if (isPro) return true;
+
+    // 1. EXCLUSIVE BUNDLE: If the class is assigned to a specific paid bundle
     if (cls.bundleId && cls.bundleId !== 'free') {
       if (purchasedBundles && purchasedBundles.includes(cls.bundleId)) {
         const bundle = (bundles || []).find(b => b.id === cls.bundleId);
         if (!bundle || !bundle.permissions || bundle.permissions.includes('live_classes')) {
-          hasExactBundle = true;
+          return true;
         }
       }
-    } else if (isAdmin) {
-      hasExactBundle = true;
+      // If it requires a specific bundle and they don't have it (or don't have permission), deny access.
+      return false; 
     }
 
-    if (hasExactBundle) return true;
-    if (isPro) return true;
-    
+    // 2. GENERAL CLASSES (No specific bundleId):
     // Check if they own any bundle for this department that has the 'live_classes' permission
     const studentPurchasedDeptBundles = (bundles || []).filter(b => 
       purchasedBundles.includes(b.id) && 
@@ -572,6 +570,10 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     );
     if (studentPurchasedDeptBundles.length > 0) return true;
     
+    // 3. Legacy support: Admin-created classes without a bundleId are accessible to everyone
+    const isAdmin = cls.teacher === 'Admin' || cls.teacher === 'MS Academy Admin';
+    if (isAdmin) return true;
+
     return false;
   };
 
