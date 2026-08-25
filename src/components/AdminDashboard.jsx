@@ -6,7 +6,7 @@ import {
   Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut, 
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, ChevronDown, UserCheck, Database, BarChart2, Megaphone, Sparkles,
-  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet
+  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
@@ -23,6 +23,7 @@ import TypistDirectory from './admin/TypistDirectory';
 import StudentDirectory from './admin/StudentDirectory';
 import TeacherDirectory from './admin/TeacherDirectory';
 import FeesTracker from './admin/FeesTracker';
+import SalaryManager from './admin/SalaryManager';
 import TestsManager from './TestsManager';
 
 // Default mock data to populate localStorage if empty
@@ -814,6 +815,14 @@ export default function AdminDashboard() {
               >
                 <Wallet size={20} className={activeTab === 'fees' ? 'text-[#eab308]' : 'text-[#eab308]'} />
                 {!isCollapsed && <span>Fees Tracker</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('salary')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'salary' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+              >
+                <IndianRupee size={20} className={activeTab === 'salary' ? 'text-[#10b981]' : 'text-[#10b981]'} />
+                {!isCollapsed && <span>Staff Salary</span>}
               </button>
 
               <button
@@ -1675,6 +1684,7 @@ export default function AdminDashboard() {
         {/* Active Tab: Course Bundles */}
         {activeTab === 'courses' && <CourseSetup />}
         {activeTab === 'fees' && <FeesTracker />}
+        {activeTab === 'salary' && <SalaryManager teachers={invitedTeachers} typists={invitedTypists} />}
 
         {/* AI Generator Tab */}
         {activeTab === 'ai' && <AIGenerator />}
