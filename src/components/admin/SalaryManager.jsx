@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Search, Wallet, CheckCircle2, X, FileText, IndianRupee, History, Calendar, AlertCircle
+  Search, Wallet, CheckCircle2, X, FileText, IndianRupee, History, Calendar, AlertCircle, FilePlus2
 } from 'lucide-react';
 import { db } from '../../firebase';
-import { updateDoc, doc } from 'firebase/firestore';
+import { updateDoc, doc, collection, getDocs } from 'firebase/firestore';
 
 const SalaryManager = ({ teachers, typists }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -13,11 +13,44 @@ const SalaryManager = ({ teachers, typists }) => {
   const [newBaseSalary, setNewBaseSalary] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const [questions, setQuestions] = useState([]);
 
-  // Combine staff with a generic role tag and default salary fields if missing
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        const qSnapshot = await getDocs(collection(db, 'question_bank'));
+        setQuestions(qSnapshot.docs.map(d => d.data()));
+      } catch (error) {
+        console.error("Failed to fetch questions", error);
+      }
+    };
+    fetchQuestions();
+  }, []);
+
+  // Combine staff with a generic role tag and calculate per-question payouts for Typists
   const allStaff = [
     ...teachers.map(t => ({ ...t, systemRole: 'Teacher', collection: 'invited_teachers', baseSalary: t.baseSalary || 0, salaryHistory: t.salaryHistory || [] })),
-    ...typists.map(t => ({ ...t, systemRole: 'Typist', collection: 'invited_typists', baseSalary: t.baseSalary || 0, salaryHistory: t.salaryHistory || [] }))
+    ...typists.map(t => {
+      const nameStr = t.name || t.fullName || '';
+      // Count questions typed by this typist
+      const totalTyped = questions.filter(q => (q.typedBy === nameStr) || (q.pairId === t.pairId)).length;
+      const paidQuestionsCount = t.paidQuestionsCount || 0;
+      const pendingQuestionsCount = Math.max(0, totalTyped - paidQuestionsCount);
+      const perQuestionRate = t.baseSalary || 0; // Using baseSalary as the per-question rate for Typists
+      const pendingPayout = pendingQuestionsCount * perQuestionRate;
+
+      return { 
+        ...t, 
+        systemRole: 'Typist', 
+        collection: 'invited_typists', 
+        baseSalary: perQuestionRate, 
+        salaryHistory: t.salaryHistory || [],
+        totalTyped,
+        paidQuestionsCount,
+        pendingQuestionsCount,
+        pendingPayout
+      };
+    })
   ];
 
   const filteredStaff = allStaff.filter(staff => {
@@ -44,12 +77,9 @@ const SalaryManager = ({ teachers, typists }) => {
       await updateDoc(staffRef, {
         baseSalary: Number(newBaseSalary)
       });
-      showToast('Base salary updated successfully');
+      showToast(selectedStaff.systemRole === 'Typist' ? 'Per-question rate updated successfully' : 'Base salary updated successfully');
       
-      // Update local state by mutating the prop lists directly is tricky in React, 
-      // but the AdminDashboard should ideally re-fetch or we just update the selectedStaff locally for immediate UI update.
       setSelectedStaff(prev => ({ ...prev, baseSalary: Number(newBaseSalary) }));
-      
       setIsSalaryModalOpen(false);
     } catch (error) {
       console.error("Error updating salary", error);
@@ -60,31 +90,53 @@ const SalaryManager = ({ teachers, typists }) => {
 
   const markCurrentMonthPaid = async (staff) => {
     const nameStr = staff.name || staff.fullName || 'Staff';
-    if (window.confirm(`Mark salary as paid for ${nameStr} this month?`)) {
+    if (window.confirm(`Mark salary as paid for ${nameStr}?`)) {
       try {
         const currentDate = new Date();
         const monthYear = currentDate.toLocaleString('default', { month: 'short', year: 'numeric' });
-        const newRecord = {
+        
+        let amountPaid = staff.baseSalary;
+        let updateData = {};
+        let newRecord = {
           month: monthYear,
-          amount: staff.baseSalary,
           paidAt: currentDate.toISOString(),
           status: 'Paid'
         };
 
+        if (staff.systemRole === 'Typist') {
+          amountPaid = staff.pendingPayout;
+          const newPaidCount = (staff.paidQuestionsCount || 0) + staff.pendingQuestionsCount;
+          updateData.paidQuestionsCount = newPaidCount;
+          newRecord.amount = amountPaid;
+          newRecord.questionsPaid = staff.pendingQuestionsCount;
+        } else {
+          newRecord.amount = amountPaid;
+        }
+
         const updatedHistory = [newRecord, ...(staff.salaryHistory || [])];
         const staffRef = doc(db, staff.collection, staff.id);
         
-        await updateDoc(staffRef, {
-          salaryHistory: updatedHistory
-        });
+        updateData.salaryHistory = updatedHistory;
         
-        showToast(`Salary marked as paid for ${monthYear}`);
+        await updateDoc(staffRef, updateData);
+        
+        showToast(`Payment recorded successfully for ${nameStr}`);
         
         if (selectedStaff && selectedStaff.id === staff.id) {
-            setSelectedStaff(prev => ({ ...prev, salaryHistory: updatedHistory }));
+            setSelectedStaff(prev => ({ 
+              ...prev, 
+              salaryHistory: updatedHistory,
+              ...(staff.systemRole === 'Typist' ? { paidQuestionsCount: updateData.paidQuestionsCount, pendingQuestionsCount: 0, pendingPayout: 0 } : {})
+            }));
         }
         
-        staff.salaryHistory = updatedHistory; // Mutating prop directly just for optimitic UI if not selecting
+        // Optimistic UI update for the list
+        staff.salaryHistory = updatedHistory; 
+        if (staff.systemRole === 'Typist') {
+          staff.paidQuestionsCount = updateData.paidQuestionsCount;
+          staff.pendingQuestionsCount = 0;
+          staff.pendingPayout = 0;
+        }
       } catch (error) {
         console.error("Error updating payment history", error);
         showToast('Failed to mark as paid', 'error');
@@ -154,8 +206,8 @@ const SalaryManager = ({ teachers, typists }) => {
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Member</th>
                   <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Role / Dept</th>
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Base Salary</th>
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Payment</th>
+                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Salary / Rate</th>
+                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Pending Payout</th>
                   <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
@@ -169,7 +221,20 @@ const SalaryManager = ({ teachers, typists }) => {
                     const lastPayment = staff.salaryHistory?.length > 0 ? staff.salaryHistory[0] : null;
                     const currentDate = new Date();
                     const currentMonthYear = currentDate.toLocaleString('default', { month: 'short', year: 'numeric' });
-                    const isPaidThisMonth = lastPayment?.month === currentMonthYear;
+                    
+                    let isPaidThisMonth = false;
+                    let isPayable = false;
+                    let pendingText = '';
+                    
+                    if (staff.systemRole === 'Teacher') {
+                      isPaidThisMonth = lastPayment?.month === currentMonthYear;
+                      isPayable = !isPaidThisMonth && staff.baseSalary > 0;
+                      pendingText = isPaidThisMonth ? 'Paid this month' : `₹${(staff.baseSalary || 0).toLocaleString('en-IN')}`;
+                    } else {
+                      isPayable = staff.pendingQuestionsCount > 0 && staff.baseSalary > 0;
+                      pendingText = `₹${staff.pendingPayout.toLocaleString('en-IN')}`;
+                    }
+
                     const nameStr = staff.name || staff.fullName || 'Unknown';
                     const emailStr = staff.email || '';
 
@@ -200,18 +265,39 @@ const SalaryManager = ({ teachers, typists }) => {
                           <div className="font-bold text-slate-800 text-sm flex items-center gap-1">
                             <IndianRupee size={14} className="text-slate-400" />
                             {staff.baseSalary ? staff.baseSalary.toLocaleString('en-IN') : 'Not Set'}
-                            <span className="text-[10px] text-slate-400 font-normal">/mo</span>
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              {staff.systemRole === 'Teacher' ? '/mo' : '/q'}
+                            </span>
                           </div>
+                          {staff.systemRole === 'Typist' && (
+                            <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                              <FilePlus2 size={12} className="text-indigo-400"/>
+                              Typed: {staff.totalTyped || 0}
+                            </div>
+                          )}
                         </td>
                         <td className="py-4 px-6">
-                          {lastPayment ? (
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium text-slate-700">{lastPayment.month}</span>
-                              <span className="text-xs text-emerald-600 font-medium">Paid</span>
+                           <div className="flex flex-col">
+                              {staff.systemRole === 'Typist' ? (
+                                <>
+                                  <span className={`text-sm font-bold ${staff.pendingPayout > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                    {pendingText}
+                                  </span>
+                                  {staff.pendingQuestionsCount > 0 && (
+                                    <span className="text-[11px] text-slate-500">{staff.pendingQuestionsCount} unpaid questions</span>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  <span className={`text-sm font-bold ${isPaidThisMonth ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                    {pendingText}
+                                  </span>
+                                  {lastPayment && (
+                                    <span className="text-[11px] text-slate-500">Last: {lastPayment.month}</span>
+                                  )}
+                                </>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-xs text-slate-400 italic">No payments recorded</span>
-                          )}
                         </td>
                         <td className="py-4 px-6 text-right space-x-2">
                            <button
@@ -228,10 +314,10 @@ const SalaryManager = ({ teachers, typists }) => {
                           
                           <button
                             onClick={() => markCurrentMonthPaid(staff)}
-                            disabled={isPaidThisMonth || !staff.baseSalary}
-                            title={isPaidThisMonth ? "Already paid this month" : !staff.baseSalary ? "Set base salary first" : "Mark current month as paid"}
+                            disabled={!isPayable}
+                            title={isPayable ? "Mark as paid" : "No pending payment"}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm ${
-                              isPaidThisMonth || !staff.baseSalary
+                              !isPayable
                                 ? 'bg-slate-100 text-slate-400 border-transparent cursor-not-allowed'
                                 : 'bg-emerald-500 hover:bg-emerald-600 text-white border-transparent'
                             }`}
@@ -277,15 +363,17 @@ const SalaryManager = ({ teachers, typists }) => {
             {/* Modal Body */}
             <div className="p-8 flex-1 overflow-y-auto">
               
-              {/* Set Base Salary Form */}
+              {/* Set Base Salary / Rate Form */}
               <form onSubmit={handleUpdateSalary} className="mb-10 p-6 bg-slate-50 border border-slate-200 rounded-2xl">
                 <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
                   <Wallet size={16} className="text-blue-600" />
-                  Base Salary Configuration
+                  {selectedStaff.systemRole === 'Typist' ? 'Per Question Rate Configuration' : 'Base Salary Configuration'}
                 </h3>
                 <div className="flex gap-4 items-end">
                   <div className="flex-1">
-                    <label className="block text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">Monthly Salary (₹)</label>
+                    <label className="block text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">
+                      {selectedStaff.systemRole === 'Typist' ? 'Rate per Question (₹)' : 'Monthly Salary (₹)'}
+                    </label>
                     <div className="relative">
                       <IndianRupee size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input 
@@ -304,10 +392,30 @@ const SalaryManager = ({ teachers, typists }) => {
                     disabled={isUpdating}
                     className="h-[46px] px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-colors shadow-sm disabled:opacity-70 flex items-center justify-center"
                   >
-                    {isUpdating ? 'Saving...' : 'Update Salary'}
+                    {isUpdating ? 'Saving...' : 'Update Rate'}
                   </button>
                 </div>
               </form>
+
+              {/* Typist Stats Box */}
+              {selectedStaff.systemRole === 'Typist' && (
+                <div className="mb-10 p-6 bg-indigo-50 border border-indigo-100 rounded-2xl flex gap-6">
+                  <div className="flex-1">
+                    <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">Total Typed</div>
+                    <div className="text-2xl font-black text-indigo-900">{selectedStaff.totalTyped || 0}</div>
+                  </div>
+                  <div className="w-px bg-indigo-200"></div>
+                  <div className="flex-1">
+                    <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">Total Paid</div>
+                    <div className="text-2xl font-black text-indigo-900">{selectedStaff.paidQuestionsCount || 0}</div>
+                  </div>
+                  <div className="w-px bg-indigo-200"></div>
+                  <div className="flex-1">
+                    <div className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-1">Unpaid</div>
+                    <div className="text-2xl font-black text-emerald-600">{selectedStaff.pendingQuestionsCount || 0}</div>
+                  </div>
+                </div>
+              )}
 
               {/* Payment History */}
               <div>
@@ -322,23 +430,29 @@ const SalaryManager = ({ teachers, typists }) => {
                         <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Month</th>
                         <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Amount</th>
                         <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Paid On</th>
+                        {selectedStaff.systemRole === 'Typist' && (
+                          <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Questions</th>
+                        )}
                         <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {(!selectedStaff.salaryHistory || selectedStaff.salaryHistory.length === 0) ? (
                         <tr>
-                          <td colSpan="4" className="px-6 py-8 text-center text-sm text-slate-500 italic">No payment history available.</td>
+                          <td colSpan={selectedStaff.systemRole === 'Typist' ? "5" : "4"} className="px-6 py-8 text-center text-sm text-slate-500 italic">No payment history available.</td>
                         </tr>
                       ) : (
                         selectedStaff.salaryHistory.map((record, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50">
                             <td className="px-6 py-4 font-semibold text-sm text-slate-900">{record.month}</td>
-                            <td className="px-6 py-4 font-medium text-sm text-slate-700">₹{record.amount.toLocaleString('en-IN')}</td>
+                            <td className="px-6 py-4 font-medium text-sm text-slate-700">₹{record.amount?.toLocaleString('en-IN') || 0}</td>
                             <td className="px-6 py-4 text-sm text-slate-500 flex items-center gap-2">
                               <Calendar size={14} className="text-slate-400" />
                               {new Date(record.paidAt).toLocaleDateString('en-GB')}
                             </td>
+                            {selectedStaff.systemRole === 'Typist' && (
+                              <td className="px-6 py-4 font-medium text-sm text-slate-700">{record.questionsPaid || 0}</td>
+                            )}
                             <td className="px-6 py-4">
                               <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-emerald-100 text-emerald-700">
                                 {record.status}
