@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
 import { collection, query, getDocs, addDoc, deleteDoc, doc, serverTimestamp, onSnapshot, orderBy } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { FileText, Plus, Trash2, UploadCloud, Link as LinkIcon, X, CheckCircle2, ChevronDown, Layers, Book, Copy, Search, AlertCircle, FilePlus, ArrowUpRight, Save } from 'lucide-react';
 import Loader from '../Loader';
 import { gateCoursesData } from '../GateCourses';
@@ -121,10 +121,21 @@ export default function NotesManager() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (note) => {
     if (!window.confirm("Are you sure you want to delete this note?")) return;
     try {
-      await deleteDoc(doc(db, 'notes', id));
+      // If it's a file uploaded to Firebase Storage, delete the file first
+      if (note.url && note.url.includes('firebasestorage.googleapis.com')) {
+        const fileRef = ref(storage, note.url);
+        try {
+          await deleteObject(fileRef);
+        } catch (storageErr) {
+          console.warn("Could not delete from storage (might already be deleted):", storageErr);
+        }
+      }
+      
+      // Delete the Firestore document
+      await deleteDoc(doc(db, 'notes', note.id));
     } catch (err) {
       console.error(err);
       alert("Failed to delete note");
