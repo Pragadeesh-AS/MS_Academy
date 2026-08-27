@@ -127,9 +127,16 @@ export default function Dashboard() {
         const res = await listAll(listRef);
         for (const itemRef of res.items) {
           const fileName = itemRef.name;
-          const q = query(collection(db, 'recordings'), where('fileName', '==', fileName));
-          const snap = await getDocs(q);
-          if (snap.empty) {
+          // Check for exact match or name without extension (for backwards compatibility with older recordings)
+          const baseName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+          
+          const q1 = query(collection(db, 'recordings'), where('fileName', '==', fileName));
+          const snap1 = await getDocs(q1);
+          
+          const q2 = query(collection(db, 'recordings'), where('fileName', '==', baseName));
+          const snap2 = await getDocs(q2);
+
+          if (snap1.empty && snap2.empty) {
             const url = await getDownloadURL(itemRef);
             await addDoc(collection(db, 'recordings'), {
               fileName,

@@ -333,7 +333,7 @@ export const useLiveRecording = ({
         try {
           const url = await getDownloadURL(uploadTask.snapshot.ref);
           if (onUploadComplete) {
-            onUploadComplete(url, finalName);
+            onUploadComplete(url, `${finalName}.${ext}`);
           }
         } catch (err) {
           console.error("Error getting download URL", err);
