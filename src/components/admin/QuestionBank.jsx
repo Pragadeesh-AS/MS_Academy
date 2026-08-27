@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Loader from '../Loader';
-import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, Layers, Clock, Trophy, Star, Filter } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
@@ -198,6 +198,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
   
+  const [selectedFolder, setSelectedFolder] = useState(null);
   const [search, setSearch] = useState('');
   const [filterDept, setFilterDept] = useState('All');
   const [filterSubject, setFilterSubject] = useState('All');
@@ -310,15 +311,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     ? attributes.find(a => a.type === 'subject' && a.name === filterSubject) 
     : null;
 
-  const departments = [
-    'Computer Science (CSE)',
-    'Electronics (ECE)',
-    'Mechanical (ME)',
-    'Civil (CE)',
-    'Electrical (EE)',
-    'Data Science (DS)',
-    'All Departments'
-  ];
+  const departments = Array.from(new Set([
+    ...attributes.filter(a => a.type === 'department').map(a => a.name),
+    ...questions.map(q => q.department).filter(Boolean)
+  ]));
   
   const subjects = attributes
     .filter(a => a.type === 'subject' && (!selectedDeptObj || a.parentId === selectedDeptObj.id))
@@ -591,7 +587,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       fillBlankRangeEnd: '',
       matchColumn1: ['', ''],
       matchColumn2: ['', ''],
-      department: '',
+      department: selectedFolder || '',
       subject: '',
       topic: '',
       year: '',
@@ -605,7 +601,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   const filteredQuestions = questions.filter(q => {
     const matchesSearch = q.questionText?.toLowerCase().includes(search.toLowerCase());
-    const matchesDept = filterDept === 'All' || q.department === filterDept;
+    const matchesDept = selectedFolder 
+      ? (selectedFolder === 'Uncategorized' ? (!q.department || q.department.trim() === '') : q.department === selectedFolder)
+      : (filterDept === 'All' || q.department === filterDept);
     const matchesSubject = filterSubject === 'All' || q.subject === filterSubject;
     const matchesTopic = filterTopic === 'All' || q.topic === filterTopic;
     const matchesYear = filterYear === 'All' || q.year === filterYear;
@@ -629,11 +627,11 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   });
 
 
-  const totalQuestions = questions.length;
-  const mcqQuestions = questions.filter(q => q.questionType === 'Single Choice' || q.questionType === 'Multiple Choice').length;
+  const totalQuestions = filteredQuestions.length;
+  const mcqQuestions = filteredQuestions.filter(q => q.questionType === 'Single Choice' || q.questionType === 'Multiple Choice').length;
   const mcqPercentage = totalQuestions === 0 ? 0 : Math.round((mcqQuestions / totalQuestions) * 100);
-  const totalSubjects = new Set(questions.map(q => q.subject).filter(Boolean)).size;
-  const pendingReview = 14; // Mocked as per requirement
+  const totalSubjects = new Set(filteredQuestions.map(q => q.subject).filter(Boolean)).size;
+  const pendingReview = filteredQuestions.filter(q => q.status === 'In Review').length;
 
   const relativeTime = (isoString) => {
     if (!isoString) return 'Yesterday';
@@ -666,100 +664,135 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         <div className="flex-1 flex flex-col gap-6 relative z-10 w-full min-w-0">
           
           {/* Main Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-[64px] h-[64px] rounded-[20px] bg-white border border-[#EEF2F7] shadow-sm flex items-center justify-center shrink-0">
-                <BookOpen size={28} className="text-[#2563EB]" strokeWidth={2} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <h1 className="text-[36px] font-[800] text-[#0F172A] leading-none tracking-tight font-sans">
-                  Question Bank
-                </h1>
-                <p className="text-[15px] font-[500] text-[#64748B] mt-1">
-                  Manage practice questions for students across all departments.
-                </p>
-              </div>
-            </div>
-
-            <button 
-              onClick={openAddCreator}
-              className="h-[56px] px-8 bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] hover:shadow-[0_8px_20px_rgba(37,99,235,0.25)] hover:-translate-y-1 text-white font-[600] text-[15px] rounded-[16px] transition-all shrink-0 flex items-center justify-center gap-2 group"
-            >
-              <Plus size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" /> 
-              Add Question
-            </button>
-          </div>
-
-          {/* KPI CARDS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-            {[
-              { label: 'Total Questions', value: totalQuestions, icon: FileText, color: 'blue' },
-              { label: 'Subjects', value: totalSubjects, icon: Bookmark, color: 'purple' },
-              { label: 'MCQ Questions', value: `${mcqPercentage}%`, icon: CheckCircle2, color: 'green' },
-              { label: 'Pending Review', value: pendingReview, icon: AlertCircle, color: 'orange' },
-            ].map((stat, i) => (
-              <div key={i} className="bg-white rounded-[20px] border border-[#EEF2F7] p-5 shadow-[0_8px_24px_rgba(15,23,42,0.03)] flex items-center gap-5 hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(15,23,42,0.06)] transition-all duration-300">
-                <div className={`w-[54px] h-[54px] rounded-full bg-${stat.color}-50 flex items-center justify-center shrink-0 border border-${stat.color}-100`}>
-                  <stat.icon size={24} className={`text-${stat.color}-500`} strokeWidth={2} />
+          <div className="flex flex-col gap-4">
+            {selectedFolder && (
+              <button 
+                onClick={() => setSelectedFolder(null)} 
+                className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-all w-fit font-semibold text-sm group"
+              >
+                <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm group-hover:border-slate-300 group-hover:shadow group-hover:-translate-x-1 transition-all">
+                  <ArrowLeft size={16} strokeWidth={2.5} /> 
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-[28px] font-[800] text-[#0F172A] leading-none">{stat.value}</span>
-                  <span className="text-[14px] font-[600] text-[#64748B] mt-1.5">{stat.label}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* SEARCH BAR */}
-          <div className="relative w-full shadow-[0_4px_16px_rgba(15,23,42,0.02)]">
-            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-              <Search size={22} className="text-[#94A3B8]" />
-            </div>
-            <input 
-              type="text"
-              placeholder="Search questions by text..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-[58px] pl-14 pr-6 bg-white border border-[#EEF2F7] rounded-[18px] text-[16px] font-[500] text-[#0F172A] placeholder-[#94A3B8] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all"
-            />
-          </div>
-
-          {/* FILTERS */}
-          <div className="flex flex-wrap items-center gap-3">
-            {[
-              { label: 'Status', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: ['Draft', 'In Review', 'Approved'] },
-              { label: 'Department', val: filterDept, setter: setFilterDept, icon: Layers, opts: departments },
-              { label: 'Subject', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
-              { label: 'Topic', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
-              { label: 'Year', val: filterYear, setter: setFilterYear, icon: Clock, opts: years },
-              { label: 'Marks', val: filterMark, setter: setFilterMark, icon: Trophy, opts: marks },
-              { label: 'Difficulty', val: filterDifficulty, setter: setFilterDifficulty, icon: Star, opts: difficulties }
-            ].map((f, i) => (
-              <div key={i} className="relative group shrink-0">
-                <select 
-                  value={f.val}
-                  onChange={(e) => f.setter(e.target.value)}
-                  className="h-[48px] pl-11 pr-10 appearance-none bg-white border border-[#E5E7EB] rounded-[14px] text-[13px] font-[600] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer min-w-[140px] hover:border-[#CBD5E1]"
-                >
-                  <option value="All">All {f.label}s</option>
-                  {f.opts.map((opt, idx) => (
-                    <option key={idx} value={opt}>{opt}</option>
-                  ))}
-                </select>
-                <f.icon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#2563EB]" />
-                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none group-hover:text-[#64748B] transition-colors" />
-              </div>
-            ))}
+                Back to Departments
+              </button>
+            )}
             
-            <button 
-              onClick={() => {
-                setSearch(''); setFilterStatus('All'); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All');
-              }}
-              className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2"
-            >
-              <X size={16} /> Reset
-            </button>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-[64px] h-[64px] rounded-[20px] bg-white border border-[#EEF2F7] shadow-sm flex items-center justify-center shrink-0">
+                  <BookOpen size={28} className="text-[#2563EB]" strokeWidth={2} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <h1 className="text-[36px] font-[800] text-[#0F172A] leading-none tracking-tight font-sans">
+                    {selectedFolder ? `${selectedFolder} Questions` : 'Question Bank'}
+                  </h1>
+                  <p className="text-[15px] font-[500] text-[#64748B] mt-1">
+                    {selectedFolder ? `Manage practice questions for ${selectedFolder}.` : 'Select a department folder to manage practice questions.'}
+                  </p>
+                </div>
+              </div>
+
+            {selectedFolder && (
+              <button 
+                onClick={openAddCreator}
+                className="h-[56px] px-8 bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] hover:shadow-[0_8px_20px_rgba(37,99,235,0.25)] hover:-translate-y-1 text-white font-[600] text-[15px] rounded-[16px] transition-all shrink-0 flex items-center justify-center gap-2 group"
+              >
+                <Plus size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" /> 
+                Add Question
+              </button>
+            )}
           </div>
+        </div>
+
+          {!selectedFolder ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 mt-4">
+              {[
+                ...departments.filter(d => d !== 'All Departments').map(dept => ({ name: dept, count: filteredQuestions.filter(q => q.department === dept).length })),
+                { name: 'Uncategorized', count: filteredQuestions.filter(q => !q.department || q.department.trim() === '').length }
+              ].filter(dept => dept.count > 0).map((dept, i) => (
+                  <div key={i} onClick={() => setSelectedFolder(dept.name)} className="bg-white rounded-2xl border border-[#EEF2F7] shadow-[0_8px_24px_rgba(15,23,42,0.03)] p-6 cursor-pointer hover:shadow-[0_12px_32px_rgba(15,23,42,0.08)] hover:-translate-y-1 transition-all duration-300 group">
+                    <div className="w-[54px] h-[54px] bg-blue-50 text-blue-600 rounded-[18px] flex items-center justify-center mb-5 group-hover:bg-blue-600 group-hover:text-white transition-colors border border-blue-100 group-hover:border-blue-600">
+                      <FolderOpen size={26} strokeWidth={2} />
+                    </div>
+                    <h3 className="font-[800] text-[18px] text-[#0F172A] mb-1.5 truncate" title={dept.name}>{dept.name}</h3>
+                    <div className="flex items-center gap-2 text-slate-500 font-semibold text-sm">
+                      <FileText size={14} className="text-slate-400" />
+                      {dept.count} Questions
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <>
+              {/* KPI CARDS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                {[
+                  { label: 'Total Questions', value: totalQuestions, icon: FileText, color: 'blue' },
+                  { label: 'Subjects', value: totalSubjects, icon: Bookmark, color: 'purple' },
+                  { label: 'MCQ Questions', value: `${mcqPercentage}%`, icon: CheckCircle2, color: 'green' },
+                  { label: 'Pending Review', value: pendingReview, icon: AlertCircle, color: 'orange' },
+                ].map((stat, i) => (
+                  <div key={i} className="bg-white rounded-[20px] border border-[#EEF2F7] p-5 shadow-[0_8px_24px_rgba(15,23,42,0.03)] flex items-center gap-5 hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(15,23,42,0.06)] transition-all duration-300">
+                    <div className={`w-[54px] h-[54px] rounded-full bg-${stat.color}-50 flex items-center justify-center shrink-0 border border-${stat.color}-100`}>
+                      <stat.icon size={24} className={`text-${stat.color}-500`} strokeWidth={2} />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[28px] font-[800] text-[#0F172A] leading-none">{stat.value}</span>
+                      <span className="text-[14px] font-[600] text-[#64748B] mt-1.5">{stat.label}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* SEARCH BAR */}
+              <div className="relative w-full shadow-[0_4px_16px_rgba(15,23,42,0.02)]">
+                <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                  <Search size={22} className="text-[#94A3B8]" />
+                </div>
+                <input 
+                  type="text"
+                  placeholder="Search questions by text..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full h-[58px] pl-14 pr-6 bg-white border border-[#EEF2F7] rounded-[18px] text-[16px] font-[500] text-[#0F172A] placeholder-[#94A3B8] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all"
+                />
+              </div>
+
+              {/* FILTERS */}
+              <div className="flex flex-wrap items-center gap-3">
+                {[
+                  { label: 'Status', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: ['Draft', 'In Review', 'Approved'] },
+                  { label: 'Subject', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
+                  { label: 'Topic', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
+                  { label: 'Year', val: filterYear, setter: setFilterYear, icon: Clock, opts: years },
+                  { label: 'Marks', val: filterMark, setter: setFilterMark, icon: Trophy, opts: marks },
+                  { label: 'Difficulty', val: filterDifficulty, setter: setFilterDifficulty, icon: Star, opts: difficulties }
+                ].map((f, i) => (
+                  <div key={i} className="relative group shrink-0">
+                    <select 
+                      value={f.val}
+                      onChange={(e) => f.setter(e.target.value)}
+                      className="h-[48px] pl-11 pr-10 appearance-none bg-white border border-[#E5E7EB] rounded-[14px] text-[13px] font-[600] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer min-w-[140px] hover:border-[#CBD5E1]"
+                    >
+                      <option value="All">All {f.label}s</option>
+                      {f.opts.map((opt, idx) => (
+                        <option key={idx} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                    <f.icon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#2563EB]" />
+                    <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none group-hover:text-[#64748B] transition-colors" />
+                  </div>
+                ))}
+                
+                <button 
+                  onClick={() => {
+                    setSearch(''); setFilterStatus('All'); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All');
+                  }}
+                  className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2"
+                >
+                  <X size={16} /> Reset
+                </button>
+              </div>
 
           {/* QUESTION TABLE */}
           <div className="bg-white border border-[#EEF2F7] rounded-[24px] shadow-[0_10px_28px_rgba(15,23,42,0.05)] flex flex-col mb-8">
@@ -942,7 +975,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               </div>
             )}
           </div>
-
+            </>
+          )}
         </div>
       </div>
 

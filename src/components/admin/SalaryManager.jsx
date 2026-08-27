@@ -27,30 +27,137 @@ const SalaryManager = ({ teachers, typists }) => {
     fetchQuestions();
   }, []);
 
-  // Combine staff with a generic role tag and calculate per-question payouts for Typists
-  const allStaff = [
-    ...teachers.map(t => ({ ...t, systemRole: 'Teacher', collection: 'invited_teachers', baseSalary: t.baseSalary || 0, salaryHistory: t.salaryHistory || [] })),
-    ...typists.map(t => {
-      const nameStr = t.name || t.fullName || '';
-      // Count questions typed by this typist
-      const totalTyped = questions.filter(q => (q.typedBy === nameStr) || (q.pairId === t.pairId)).length;
-      const paidQuestionsCount = t.paidQuestionsCount || 0;
-      const pendingQuestionsCount = Math.max(0, totalTyped - paidQuestionsCount);
-      const perQuestionRate = t.baseSalary || 0; // Using baseSalary as the per-question rate for Typists
-      const pendingPayout = pendingQuestionsCount * perQuestionRate;
+  const teacherStaff = teachers.map(t => ({ ...t, systemRole: 'Teacher', collection: 'invited_teachers', baseSalary: t.baseSalary || 0, salaryHistory: t.salaryHistory || [], isGhost: false }));
+  
+  const existingPairIds = new Set(typists.map(t => t.pairId).filter(Boolean));
+  const existingNames = new Set();
+  typists.forEach(t => {
+    if (t.name || t.fullName || t.typistName) existingNames.add((t.name || t.fullName || t.typistName).trim().toLowerCase());
+    if (t.reviewerName) existingNames.add(t.reviewerName.trim().toLowerCase());
+  });
 
-      return { 
-        ...t, 
-        systemRole: 'Typist', 
-        collection: 'invited_typists', 
-        baseSalary: perQuestionRate, 
-        salaryHistory: t.salaryHistory || [],
-        totalTyped,
-        paidQuestionsCount,
-        pendingQuestionsCount,
-        pendingPayout
-      };
-    })
+  // Find ghost typists and reviewers from questions
+  const ghostTypistsMap = {};
+  questions.forEach(q => {
+    const pairId = q.pairId;
+    const typedBy = q.typedBy?.trim();
+    const reviewedBy = q.reviewedBy?.trim();
+    
+    // Fallbacks for pairs without proper name registration
+    if (pairId && !existingPairIds.has(pairId)) {
+      if (!ghostTypistsMap[`${pairId}_typist`]) {
+        ghostTypistsMap[`${pairId}_typist`] = { pairId, name: typedBy || `Unknown Typist (${pairId})`, role: 'Typist', count: 0 };
+      }
+      ghostTypistsMap[`${pairId}_typist`].count += 1;
+      
+      if (reviewedBy) {
+        if (!ghostTypistsMap[`${pairId}_reviewer`]) {
+           ghostTypistsMap[`${pairId}_reviewer`] = { pairId, name: reviewedBy, role: 'Reviewer', count: 0 };
+        }
+        ghostTypistsMap[`${pairId}_reviewer`].count += 1;
+      }
+    } else {
+      if (typedBy && !existingNames.has(typedBy.toLowerCase())) {
+        const key = `typist_${typedBy.toLowerCase()}`;
+        if (!ghostTypistsMap[key]) {
+          ghostTypistsMap[key] = { pairId: null, name: typedBy, role: 'Typist', count: 0 };
+        }
+        ghostTypistsMap[key].count += 1;
+      }
+
+      if (reviewedBy && !existingNames.has(reviewedBy.toLowerCase())) {
+        const key = `reviewer_${reviewedBy.toLowerCase()}`;
+        if (!ghostTypistsMap[key]) {
+          ghostTypistsMap[key] = { pairId: null, name: reviewedBy, role: 'Reviewer', count: 0 };
+        }
+        ghostTypistsMap[key].count += 1;
+      }
+    }
+  });
+
+  const ghostTypists = Object.values(ghostTypistsMap).map((ghost, i) => ({
+    id: `ghost-${i}`,
+    name: ghost.name,
+    email: `Unregistered ${ghost.role}`,
+    pairId: ghost.pairId,
+    systemRole: ghost.role,
+    collection: 'invited_typists',
+    baseSalary: 0,
+    salaryHistory: [],
+    totalTyped: ghost.count,
+    paidQuestionsCount: 0,
+    pendingQuestionsCount: ghost.count,
+    pendingPayout: 0,
+    isGhost: true,
+    isSubRole: ghost.role.toLowerCase()
+  }));
+
+  const typistStaff = [];
+  
+  typists.forEach(t => {
+      // 1. TYPIST
+      const tNameStr = t.typistName || t.name || t.fullName || '';
+      if (tNameStr || !t.reviewerName) {
+        const totalTyped = questions.filter(q => 
+          (tNameStr && q.typedBy && q.typedBy.trim().toLowerCase() === tNameStr.trim().toLowerCase()) || 
+          (t.pairId && q.pairId === t.pairId)
+        ).length;
+        const paidCount = t.paidQuestionsCount || 0;
+        const pendingCount = Math.max(0, totalTyped - paidCount);
+        const rate = t.baseSalary || 0; 
+        const pendingPayout = pendingCount * rate;
+
+        typistStaff.push({ 
+          ...t, 
+          name: tNameStr || 'Unknown Typist',
+          email: t.typistEmail || t.email,
+          systemRole: 'Typist', 
+          collection: 'invited_typists', 
+          baseSalary: rate, 
+          salaryHistory: t.salaryHistory || [],
+          totalTyped,
+          paidQuestionsCount: paidCount,
+          pendingQuestionsCount: pendingCount,
+          pendingPayout,
+          isGhost: false,
+          isSubRole: 'typist'
+        });
+      }
+
+      // 2. REVIEWER
+      const rNameStr = t.reviewerName || '';
+      if (rNameStr) {
+        const totalReviewed = questions.filter(q => 
+          (rNameStr && q.reviewedBy && q.reviewedBy.trim().toLowerCase() === rNameStr.trim().toLowerCase()) || 
+          (t.pairId && q.pairId === t.pairId && q.reviewedBy)
+        ).length;
+        const rPaidCount = t.reviewerPaidQuestionsCount || 0;
+        const rPendingCount = Math.max(0, totalReviewed - rPaidCount);
+        const rRate = t.reviewerBaseSalary || 0; 
+        const rPendingPayout = rPendingCount * rRate;
+
+        typistStaff.push({ 
+          ...t, 
+          name: rNameStr,
+          email: t.reviewerEmail,
+          systemRole: 'Reviewer', 
+          collection: 'invited_typists', 
+          baseSalary: rRate, 
+          salaryHistory: t.reviewerSalaryHistory || [],
+          totalTyped: totalReviewed,
+          paidQuestionsCount: rPaidCount,
+          pendingQuestionsCount: rPendingCount,
+          pendingPayout: rPendingPayout,
+          isGhost: false,
+          isSubRole: 'reviewer'
+        });
+      }
+  });
+
+  const allStaff = [
+    ...teacherStaff, 
+    ...typistStaff.filter(t => t.totalTyped > 0), 
+    ...ghostTypists.filter(t => t.totalTyped > 0)
   ];
 
   const filteredStaff = allStaff.filter(staff => {
@@ -74,10 +181,16 @@ const SalaryManager = ({ teachers, typists }) => {
     setIsUpdating(true);
     try {
       const staffRef = doc(db, selectedStaff.collection, selectedStaff.id);
-      await updateDoc(staffRef, {
-        baseSalary: Number(newBaseSalary)
-      });
-      showToast(selectedStaff.systemRole === 'Typist' ? 'Per-question rate updated successfully' : 'Base salary updated successfully');
+      
+      const updateData = {};
+      if (selectedStaff.isSubRole === 'reviewer') {
+        updateData.reviewerBaseSalary = Number(newBaseSalary);
+      } else {
+        updateData.baseSalary = Number(newBaseSalary);
+      }
+      
+      await updateDoc(staffRef, updateData);
+      showToast(selectedStaff.systemRole === 'Teacher' ? 'Base salary updated successfully' : 'Per-question rate updated successfully');
       
       setSelectedStaff(prev => ({ ...prev, baseSalary: Number(newBaseSalary) }));
       setIsSalaryModalOpen(false);
@@ -103,12 +216,17 @@ const SalaryManager = ({ teachers, typists }) => {
           status: 'Paid'
         };
 
-        if (staff.systemRole === 'Typist') {
+        if (staff.systemRole === 'Typist' || staff.systemRole === 'Reviewer') {
           amountPaid = staff.pendingPayout;
           const newPaidCount = (staff.paidQuestionsCount || 0) + staff.pendingQuestionsCount;
-          updateData.paidQuestionsCount = newPaidCount;
           newRecord.amount = amountPaid;
           newRecord.questionsPaid = staff.pendingQuestionsCount;
+
+          if (staff.isSubRole === 'reviewer') {
+            updateData.reviewerPaidQuestionsCount = newPaidCount;
+          } else {
+            updateData.paidQuestionsCount = newPaidCount;
+          }
         } else {
           newRecord.amount = amountPaid;
         }
@@ -116,7 +234,11 @@ const SalaryManager = ({ teachers, typists }) => {
         const updatedHistory = [newRecord, ...(staff.salaryHistory || [])];
         const staffRef = doc(db, staff.collection, staff.id);
         
-        updateData.salaryHistory = updatedHistory;
+        if (staff.isSubRole === 'reviewer') {
+          updateData.reviewerSalaryHistory = updatedHistory;
+        } else {
+          updateData.salaryHistory = updatedHistory;
+        }
         
         await updateDoc(staffRef, updateData);
         
@@ -126,14 +248,14 @@ const SalaryManager = ({ teachers, typists }) => {
             setSelectedStaff(prev => ({ 
               ...prev, 
               salaryHistory: updatedHistory,
-              ...(staff.systemRole === 'Typist' ? { paidQuestionsCount: updateData.paidQuestionsCount, pendingQuestionsCount: 0, pendingPayout: 0 } : {})
+              ...(staff.systemRole !== 'Teacher' ? { paidQuestionsCount: (staff.paidQuestionsCount || 0) + staff.pendingQuestionsCount, pendingQuestionsCount: 0, pendingPayout: 0 } : {})
             }));
         }
         
         // Optimistic UI update for the list
         staff.salaryHistory = updatedHistory; 
-        if (staff.systemRole === 'Typist') {
-          staff.paidQuestionsCount = updateData.paidQuestionsCount;
+        if (staff.systemRole !== 'Teacher') {
+          staff.paidQuestionsCount = (staff.paidQuestionsCount || 0) + staff.pendingQuestionsCount;
           staff.pendingQuestionsCount = 0;
           staff.pendingPayout = 0;
         }
@@ -269,16 +391,16 @@ const SalaryManager = ({ teachers, typists }) => {
                               {staff.systemRole === 'Teacher' ? '/mo' : '/q'}
                             </span>
                           </div>
-                          {staff.systemRole === 'Typist' && (
+                          {staff.systemRole !== 'Teacher' && (
                             <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                               <FilePlus2 size={12} className="text-indigo-400"/>
-                              Typed: {staff.totalTyped || 0}
+                              {staff.systemRole === 'Reviewer' ? 'Reviewed' : 'Typed'}: {staff.totalTyped || 0}
                             </div>
                           )}
                         </td>
                         <td className="py-4 px-6">
                            <div className="flex flex-col">
-                              {staff.systemRole === 'Typist' ? (
+                              {staff.systemRole !== 'Teacher' ? (
                                 <>
                                   <span className={`text-sm font-bold ${staff.pendingPayout > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
                                     {pendingText}
@@ -306,7 +428,13 @@ const SalaryManager = ({ teachers, typists }) => {
                               setNewBaseSalary(staff.baseSalary?.toString() || '');
                               setIsSalaryModalOpen(true);
                             }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg text-xs font-semibold transition-all shadow-sm"
+                            disabled={staff.isGhost}
+                            title={staff.isGhost ? "Add to Typist Directory first" : "Manage"}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold transition-all shadow-sm ${
+                              staff.isGhost 
+                                ? 'text-slate-300 bg-slate-50 cursor-not-allowed' 
+                                : 'text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50'
+                            }`}
                           >
                             <Wallet size={14} />
                             Manage
@@ -314,10 +442,10 @@ const SalaryManager = ({ teachers, typists }) => {
                           
                           <button
                             onClick={() => markCurrentMonthPaid(staff)}
-                            disabled={!isPayable}
-                            title={isPayable ? "Mark as paid" : "No pending payment"}
+                            disabled={!isPayable || staff.isGhost}
+                            title={staff.isGhost ? "Add to Typist Directory first" : (isPayable ? "Mark as paid" : "No pending payment")}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm ${
-                              !isPayable
+                              !isPayable || staff.isGhost
                                 ? 'bg-slate-100 text-slate-400 border-transparent cursor-not-allowed'
                                 : 'bg-emerald-500 hover:bg-emerald-600 text-white border-transparent'
                             }`}

@@ -7,6 +7,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import LiveClasses from './teacher/LiveClasses';
 import TeacherQuestionBank from './teacher/TeacherQuestionBank';
 import TestsManager from './TestsManager';
+import TeacherStudents from './teacher/TeacherStudents';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
@@ -156,6 +157,7 @@ export default function TeacherDashboard() {
         )}
 
         {activeTab === 'live' && <LiveClasses department={teacherDepartment} />}
+        {activeTab === 'students' && <TeacherStudents department={teacherDepartment} />}
         {activeTab === 'questions' && <TeacherQuestionBank department={teacherDepartment} />}
         {activeTab === 'tests' && <TestsManager department={teacherDepartment} isTeacher={true} />}
       </main>

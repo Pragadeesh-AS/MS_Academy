@@ -52,9 +52,18 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     { name: 'Light Purple', value: '#c4b5fd' }
   ]);
   const [activeColor, setActiveColor] = useState(staticColors[0].value);
+  const [recentColors, setRecentColors] = useState(['#1E293B', '#EF4444', '#3b82f6']);
+
+  const handleColorSelect = (colorValue) => {
+    setActiveColor(colorValue);
+    setRecentColors(prev => {
+      const newRecent = [colorValue, ...prev.filter(c => c !== colorValue)];
+      return newRecent.slice(0, 3);
+    });
+  };
 
   const handleCustomColor = (colorValue) => {
-    setActiveColor(colorValue);
+    handleColorSelect(colorValue);
     const allColors = [...staticColors, ...dynamicColors];
     const exists = allColors.some(c => c.value.toLowerCase() === colorValue.toLowerCase());
     
@@ -240,8 +249,20 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       }
     };
     
+    const onMouseDown = () => {
+      // Hide all popouts when drawing starts
+      setShowToolOptions(false);
+      setShowShapeOptions(false);
+      setShowBoardColors(false);
+    };
+    
     fCanvas.on('path:created', onPathCreated);
-    return () => fCanvas.off('path:created', onPathCreated);
+    fCanvas.on('mouse:down', onMouseDown);
+    
+    return () => {
+      fCanvas.off('path:created', onPathCreated);
+      fCanvas.off('mouse:down', onMouseDown);
+    };
   }, [activeTool]);
 
   // Handle Shapes Drawing Logic
@@ -624,131 +645,157 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       {/* Dynamic Canvas Container */}
       <div className="w-full h-full touch-none pointer-events-auto" ref={containerRef}></div>
       
-      {/* Radial Menu Container */}
-      <div 
-        className="absolute right-12 top-12 z-50 flex items-center justify-center pointer-events-none"
-        style={{ transform: `translate(${menuOffset.x}px, ${menuOffset.y}px)` }}
-      >
+      {/* Static Left Sidebar Menu */}
+      <div className="absolute left-4 top-1/2 -translate-y-1/2 z-50 flex items-start gap-4 pointer-events-none">
         
-        {/* Board Color Popout */}
-        <div className={`absolute top-full mt-8 transition-all duration-300 pointer-events-auto flex gap-3 p-3 bg-white rounded-full shadow-2xl border border-slate-200 ${showBoardColors && !isMenuOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-10 scale-50 pointer-events-none'}`}>
-          {boardBgColors.map(color => (
-            <button
-              key={color.name}
-              onClick={() => { setBoardColor(color.value); setShowBoardColors(false); }}
-              className={`w-10 h-10 rounded-full border-2 transition-transform ${boardColor === color.value ? 'scale-110 border-slate-900' : 'border-slate-200 hover:scale-105 shadow-sm'}`}
-              style={{ backgroundColor: color.value }}
-              title={color.name}
-            />
-          ))}
+        {/* Main Toolbar */}
+        <div className="bg-slate-800 rounded-2xl p-2 shadow-2xl border border-slate-700 flex flex-col items-center gap-2 pointer-events-auto">
+          {[
+            { id: 'select', icon: <MousePointer2 size={18} />, label: 'Select' },
+            { id: 'shapes', icon: <Shapes size={18} />, label: 'Shapes' },
+            { id: 'pen', icon: <PenTool size={18} />, label: 'Pen' },
+            { id: 'highlighter', icon: <Highlighter size={18} />, label: 'Highlight' },
+            { id: 'eraser', icon: <Eraser size={18} />, label: 'Eraser' },
+            { id: 'colors', icon: <Palette size={18} />, label: 'Colors' },
+            { id: 'clear', icon: <Trash2 size={18} />, label: 'Clear' },
+          ].map((item) => {
+            const isActive = activeTool === item.id || (item.id === 'colors' && showBoardColors);
+            return (
+              <div key={item.id} className="relative group">
+                <button
+                  onClick={() => {
+                    if (item.id === 'clear') {
+                      clearBoard();
+                    } else if (item.id === 'colors') {
+                      setShowBoardColors(!showBoardColors);
+                      setShowToolOptions(false);
+                      setShowShapeOptions(false);
+                    } else {
+                      if (activeTool === item.id) {
+                        // Toggle options if clicking the same tool again
+                        if (['pen', 'highlighter', 'eraser'].includes(item.id)) {
+                          setShowToolOptions(!showToolOptions);
+                        } else if (item.id === 'shapes') {
+                          setShowShapeOptions(!showShapeOptions);
+                        }
+                      } else {
+                        // Switching to a new tool
+                        setActiveTool(item.id);
+                        setShowBoardColors(false);
+                        
+                        // Don't auto-open options for pen/highlighter/eraser, let the user click again if they want the full menu
+                        setShowToolOptions(false);
+                        
+                        // Auto-open shapes menu because it requires selecting a shape
+                        if (item.id === 'shapes') {
+                          setShowShapeOptions(true);
+                        } else {
+                          setShowShapeOptions(false);
+                        }
+                      }
+                    }
+                  }}
+                  className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${isActive ? 'bg-indigo-100 text-indigo-600 shadow-md' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                  title={item.label}
+                >
+                  {item.icon}
+                </button>
+                
+                {/* 3 Recently Used Colors explicitly when Pen is active (rendered inline for quick access) */}
+                {item.id === 'pen' && activeTool === 'pen' && (
+                  <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 p-1.5 bg-slate-800 rounded-full border border-slate-700 shadow-lg animate-in slide-in-from-left-2 fade-in">
+                    {recentColors.map((color, idx) => (
+                      <button
+                        key={`recent-${color}-${idx}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleColorSelect(color);
+                        }}
+                        className={`w-6 h-6 rounded-full border-2 transition-transform ${activeColor === color ? 'border-white scale-110 shadow-sm' : 'border-transparent hover:scale-110'}`}
+                        style={{ backgroundColor: color }}
+                        title={`Use Color ${color}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        {/* Shape Options Popout */}
-        <div className={`absolute right-full mr-8 transition-all duration-300 pointer-events-auto flex flex-col gap-4 p-5 bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-auto ${showShapeOptions && !isMenuOpen ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-10 scale-50 pointer-events-none'}`}>
-          <div className="flex items-center gap-3 max-w-[196px] overflow-x-auto pb-2 custom-scrollbar">
-            {[
-              { id: 'line', icon: <Minus size={20} />, label: 'Line' },
-              { id: 'rectangle', icon: <Square size={20} />, label: 'Rectangle' },
-              { id: 'circle', icon: <Circle size={20} />, label: 'Circle' },
-              { id: 'triangle', icon: <Triangle size={20} />, label: 'Triangle' },
-              { id: 'diamond', icon: <Diamond size={20} />, label: 'Diamond' },
-              { id: 'pentagon', icon: <Pentagon size={20} />, label: 'Pentagon' },
-              { id: 'hexagon', icon: <Hexagon size={20} />, label: 'Hexagon' },
-              { id: 'octagon', icon: <Octagon size={20} />, label: 'Octagon' },
-              { id: 'star', icon: <Star size={20} />, label: 'Star' },
-            ].map(shape => (
-              <button
-                key={shape.id}
-                onClick={() => setActiveShape(shape.id)}
-                className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors border-2 ${activeShape === shape.id ? 'border-slate-300 bg-slate-700 text-white shadow-md' : 'border-transparent text-slate-300 hover:bg-slate-700 hover:text-white'}`}
-                title={shape.label}
-              >
-                {shape.icon}
-              </button>
-            ))}
-          </div>
+        {/* Popout Panels Container */}
+        <div className="relative flex-col items-start pointer-events-auto h-full mt-2">
           
-          <div className="w-full h-px bg-slate-700" />
-          
-          {/* Include Size Slider */}
-          <div className="flex items-center gap-4">
-            <div className="w-4 h-4 bg-white rounded-full shrink-0" style={{ transform: `scale(${Math.max(0.3, penSize / 12)})` }} />
-            <input 
-              type="range" 
-              min="1" 
-              max="24" 
-              value={penSize} 
-              onChange={(e) => setPenSize(Number(e.target.value))} 
-              className="flex-1 accent-white w-40 cursor-pointer" 
-            />
-          </div>
-
-          <div className="w-full h-px bg-slate-700" />
-
-          {/* Include Color Picker inside Shapes */}
-          <div className="flex items-center gap-5">
-            <div className="grid grid-cols-4 gap-2.5">
-              {[...staticColors, ...dynamicColors].map((color, idx) => (
+          {/* Board Color Popout */}
+          {showBoardColors && (
+            <div className="absolute left-0 top-0 flex items-center gap-3 p-3 bg-slate-800 rounded-full shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-left-2 z-10 w-max">
+              {boardBgColors.map(color => (
                 <button
-                  key={`shape-color-${color.name}-${idx}`}
-                  onClick={() => setActiveColor(color.value)}
-                  className={`w-6 h-6 rounded-full border-2 transition-transform ${activeColor === color.value ? 'scale-125 border-slate-300 shadow-md z-10' : 'border-slate-600 hover:scale-110'}`}
+                  key={color.name}
+                  onClick={() => { setBoardColor(color.value); setShowBoardColors(false); }}
+                  className={`w-8 h-8 rounded-full border-2 transition-transform ${boardColor === color.value ? 'scale-110 border-white shadow-md' : 'border-slate-500 hover:scale-105 shadow-sm'}`}
                   style={{ backgroundColor: color.value }}
                   title={color.name}
                 />
               ))}
             </div>
-            <div className="relative flex items-center justify-center w-12 h-12 rounded-full cursor-pointer hover:scale-105 transition-transform shrink-0 shadow-lg" title="Custom Color" style={{ background: 'conic-gradient(from 90deg, red, yellow, lime, aqua, blue, magenta, red)' }}>
-              <input 
-                type="color" 
-                value={![...staticColors, ...dynamicColors].some(c => c.value === activeColor) ? activeColor : '#000000'}
-                onChange={(e) => handleCustomColor(e.target.value)}
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
-              />
-              <div className="absolute top-0 right-0 translate-x-1/4 -translate-y-1/4 bg-slate-700 rounded-full p-0.5 border border-slate-500 shadow-sm pointer-events-none">
-                <Plus size={10} className="text-slate-300" />
+          )}
+
+          {/* Shape Options Popout */}
+          {showShapeOptions && (
+            <div className="absolute left-0 top-0 flex flex-col gap-4 p-5 bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-left-2 z-10 w-max">
+              <div className="flex items-center gap-2 max-w-[200px] flex-wrap">
+                {[
+                  { id: 'line', icon: <Minus size={18} />, label: 'Line' },
+                  { id: 'rectangle', icon: <Square size={18} />, label: 'Rectangle' },
+                  { id: 'circle', icon: <Circle size={18} />, label: 'Circle' },
+                  { id: 'triangle', icon: <Triangle size={18} />, label: 'Triangle' },
+                  { id: 'diamond', icon: <Diamond size={18} />, label: 'Diamond' },
+                  { id: 'pentagon', icon: <Pentagon size={18} />, label: 'Pentagon' },
+                  { id: 'hexagon', icon: <Hexagon size={18} />, label: 'Hexagon' },
+                  { id: 'octagon', icon: <Octagon size={18} />, label: 'Octagon' },
+                  { id: 'star', icon: <Star size={18} />, label: 'Star' },
+                ].map(shape => (
+                  <button
+                    key={shape.id}
+                    onClick={() => setActiveShape(shape.id)}
+                    className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-colors border-2 ${activeShape === shape.id ? 'border-slate-300 bg-slate-700 text-white shadow-md' : 'border-transparent text-slate-400 hover:bg-slate-700 hover:text-white'}`}
+                    title={shape.label}
+                  >
+                    {shape.icon}
+                  </button>
+                ))}
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tool Options Popout (Slider + Colors) */}
-        <div className={`absolute right-full mr-8 transition-all duration-300 pointer-events-auto flex flex-col gap-4 p-5 bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 w-auto ${showToolOptions && !isMenuOpen ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-10 scale-50 pointer-events-none'}`}>
-          {/* Size Slider */}
-          <div className="flex items-center gap-4">
-            <div className="w-4 h-4 bg-white rounded-full shrink-0" style={{ transform: `scale(${activeTool === 'eraser' ? Math.max(0.2, eraserSize / 40) : Math.max(0.3, penSize / 12)})` }} />
-            <input 
-              type="range" 
-              min={activeTool === 'eraser' ? "10" : "1"} 
-              max={activeTool === 'eraser' ? "100" : "24"} 
-              value={activeTool === 'eraser' ? eraserSize : penSize} 
-              onChange={(e) => activeTool === 'eraser' ? setEraserSize(Number(e.target.value)) : setPenSize(Number(e.target.value))} 
-              className="flex-1 accent-white w-40 cursor-pointer" 
-            />
-          </div>
-
-          {/* Color Picker Grid (Hidden for Eraser) */}
-          {activeTool !== 'eraser' && (
-            <>
+              
               <div className="w-full h-px bg-slate-700" />
-              <div className="flex items-center gap-5">
-                
-                {/* 4x3 Grid */}
-                <div className="grid grid-cols-4 gap-2.5">
-                  {/* Preset Colors */}
+              
+              {/* Size Slider */}
+              <div className="flex items-center gap-4">
+                <div className="w-4 h-4 bg-white rounded-full shrink-0" style={{ transform: `scale(${Math.max(0.3, penSize / 12)})` }} />
+                <input 
+                  type="range" min="1" max="24" 
+                  value={penSize} 
+                  onChange={(e) => setPenSize(Number(e.target.value))} 
+                  className="flex-1 accent-indigo-500 w-40 cursor-pointer" 
+                />
+              </div>
+
+              <div className="w-full h-px bg-slate-700" />
+
+              {/* Color Picker */}
+              <div className="flex items-center gap-4">
+                <div className="grid grid-cols-4 gap-2">
                   {[...staticColors, ...dynamicColors].map((color, idx) => (
                     <button
-                      key={`${color.name}-${idx}`}
-                      onClick={() => setActiveColor(color.value)}
-                      className={`w-6 h-6 rounded-full border-2 transition-transform ${activeColor === color.value ? 'scale-125 border-slate-300 shadow-md z-10' : 'border-slate-600 hover:scale-110'}`}
+                      key={`shape-color-${color.name}-${idx}`}
+                      onClick={() => handleColorSelect(color.value)}
+                      className={`w-6 h-6 rounded-full border-2 transition-transform ${activeColor === color.value ? 'scale-125 border-white shadow-md z-10' : 'border-slate-600 hover:scale-110'}`}
                       style={{ backgroundColor: color.value }}
                       title={color.name}
                     />
                   ))}
                 </div>
-
-                {/* Custom Color Wheel */}
-                <div className="relative flex items-center justify-center w-12 h-12 rounded-full cursor-pointer hover:scale-105 transition-transform shrink-0 shadow-lg" title="Custom Color" style={{ background: 'conic-gradient(from 90deg, red, yellow, lime, aqua, blue, magenta, red)' }}>
+                <div className="relative flex items-center justify-center w-10 h-10 rounded-full cursor-pointer hover:scale-105 transition-transform shrink-0 shadow-lg" title="Custom Color" style={{ background: 'conic-gradient(from 90deg, red, yellow, lime, aqua, blue, magenta, red)' }}>
                   <input 
                     type="color" 
                     value={![...staticColors, ...dynamicColors].some(c => c.value === activeColor) ? activeColor : '#000000'}
@@ -759,111 +806,56 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                     <Plus size={10} className="text-slate-300" />
                   </div>
                 </div>
-
               </div>
-            </>
+            </div>
           )}
-        </div>
 
-        {/* Radial Buttons */}
-        <div className="relative flex items-center justify-center w-12 h-12 pointer-events-auto">
-          {(() => {
-            const menuItems = [
-              { id: 'select', icon: <MousePointer2 size={18} />, label: 'Select' },
-              { id: 'shapes', icon: <Shapes size={18} />, label: 'Shapes' },
-              { id: 'pen', icon: <PenTool size={18} />, label: 'Pen' },
-              { id: 'highlighter', icon: <Highlighter size={18} />, label: 'Highlight' },
-              { id: 'eraser', icon: <Eraser size={18} />, label: 'Eraser' },
-              { id: 'colors', icon: <Palette size={18} />, label: 'Colors' },
-              { id: 'clear', icon: <Trash2 size={18} />, label: 'Clear' },
-            ];
-            
-            const radius = 65; // distance from center
-            return menuItems.map((item, index) => {
-              const angle = (index * (360 / menuItems.length)) - 90; // Start at top
-              const radians = (angle * Math.PI) / 180;
-              const x = Math.cos(radians) * radius;
-              const y = Math.sin(radians) * radius;
-              const isActive = activeTool === item.id;
-              
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    if (item.id === 'clear') {
-                      clearBoard();
-                      setIsMenuOpen(false);
-                    } else if (item.id === 'colors') {
-                      setIsMenuOpen(false);
-                      setShowBoardColors(true);
-                      setShowToolOptions(false);
-                      setShowShapeOptions(false);
-                    } else {
-                      setActiveTool(item.id);
-                      setIsMenuOpen(false);
-                      setShowBoardColors(false);
-                      if (['pen', 'highlighter', 'eraser'].includes(item.id)) {
-                        setShowToolOptions(true);
-                        setShowShapeOptions(false);
-                      } else if (item.id === 'shapes') {
-                        setShowShapeOptions(true);
-                        setShowToolOptions(false);
-                      } else {
-                        setShowToolOptions(false);
-                        setShowShapeOptions(false);
-                      }
-                    }
-                  }}
-                  className={`absolute flex flex-col items-center justify-center w-10 h-10 rounded-full shadow-lg transition-all duration-300 border border-slate-200/50 ${isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-800 text-white hover:bg-slate-700'} ${isMenuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-50 pointer-events-none'}`}
-                  style={{ 
-                    transform: isMenuOpen ? `translate(${x}px, ${y}px) scale(1)` : `translate(0px, 0px) scale(0)`,
-                    transitionDelay: isMenuOpen ? `${index * 30}ms` : '0ms'
-                  }}
-                  title={item.label}
-                >
-                  {item.icon}
-                </button>
-              );
-            });
-          })()}
-          
-          {/* Center Toggle Button */}
-          <button
-            onPointerDown={(e) => {
-              if (e.button !== 0 && e.type !== 'touchstart') return;
-              dragRef.current = {
-                isDragging: true,
-                startX: e.type === 'touchstart' ? e.touches[0].clientX : e.clientX,
-                startY: e.type === 'touchstart' ? e.touches[0].clientY : e.clientY,
-                initialX: menuOffset.x,
-                initialY: menuOffset.y
-              };
-            }}
-            onClick={(e) => {
-              if (isDraggingMenu) {
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-              }
-              setIsMenuOpen(!isMenuOpen);
-              setShowToolOptions(false);
-              setShowBoardColors(false);
-              setShowShapeOptions(false);
-            }}
-            className="absolute z-10 flex items-center justify-center w-12 h-12 rounded-full bg-slate-900 text-white shadow-xl hover:scale-105 transition-transform border-2 border-white/20 touch-none cursor-grab active:cursor-grabbing"
-          >
-            {isMenuOpen ? (
-              <X size={20} />
-            ) : (
-              // Show active tool icon when collapsed
-              activeTool === 'select' ? <MousePointer2 size={20} /> :
-              activeTool === 'shapes' ? <Shapes size={20} /> :
-              activeTool === 'pen' ? <PenTool size={20} /> :
-              activeTool === 'highlighter' ? <Highlighter size={20} /> :
-              activeTool === 'eraser' ? <Eraser size={20} /> :
-              <MousePointer2 size={20} />
-            )}
-          </button>
+          {/* Tool Options Popout */}
+          {showToolOptions && (
+            <div className="absolute left-0 top-0 flex flex-col gap-4 p-5 bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-left-2 z-10 w-max">
+              <div className="flex items-center gap-4">
+                <div className="w-4 h-4 bg-white rounded-full shrink-0" style={{ transform: `scale(${activeTool === 'eraser' ? Math.max(0.2, eraserSize / 40) : Math.max(0.3, penSize / 12)})` }} />
+                <input 
+                  type="range" 
+                  min={activeTool === 'eraser' ? "10" : "1"} 
+                  max={activeTool === 'eraser' ? "100" : "24"} 
+                  value={activeTool === 'eraser' ? eraserSize : penSize} 
+                  onChange={(e) => activeTool === 'eraser' ? setEraserSize(Number(e.target.value)) : setPenSize(Number(e.target.value))} 
+                  className="flex-1 accent-indigo-500 w-40 cursor-pointer" 
+                />
+              </div>
+
+              {activeTool !== 'eraser' && (
+                <>
+                  <div className="w-full h-px bg-slate-700" />
+                  <div className="flex items-center gap-4">
+                    <div className="grid grid-cols-4 gap-2">
+                      {[...staticColors, ...dynamicColors].map((color, idx) => (
+                        <button
+                          key={`${color.name}-${idx}`}
+                          onClick={() => handleColorSelect(color.value)}
+                          className={`w-6 h-6 rounded-full border-2 transition-transform ${activeColor === color.value ? 'scale-125 border-white shadow-md z-10' : 'border-slate-600 hover:scale-110'}`}
+                          style={{ backgroundColor: color.value }}
+                          title={color.name}
+                        />
+                      ))}
+                    </div>
+                    <div className="relative flex items-center justify-center w-10 h-10 rounded-full cursor-pointer hover:scale-105 transition-transform shrink-0 shadow-lg" title="Custom Color" style={{ background: 'conic-gradient(from 90deg, red, yellow, lime, aqua, blue, magenta, red)' }}>
+                      <input 
+                        type="color" 
+                        value={![...staticColors, ...dynamicColors].some(c => c.value === activeColor) ? activeColor : '#000000'}
+                        onChange={(e) => handleCustomColor(e.target.value)}
+                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                      />
+                      <div className="absolute top-0 right-0 translate-x-1/4 -translate-y-1/4 bg-slate-700 rounded-full p-0.5 border border-slate-500 shadow-sm pointer-events-none">
+                        <Plus size={10} className="text-slate-300" />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
       
