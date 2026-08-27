@@ -5,80 +5,15 @@ import {
   LineChart, Line
 } from 'recharts';
 
-// --- MOCK DATA ---
-const mockTests = [
-  { id: 't1', title: 'Mock Test 1: CSE Core', category: 'Core subject', date: 'Oct 15, 2026' },
-  { id: 't2', title: 'Aptitude Assessment', category: 'General', date: 'Oct 20, 2026' },
-  { id: 't3', title: 'Mathematics Final', category: 'Engineering Math', date: 'Nov 02, 2026' }
-];
+import { db } from '../../firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
-const mockTestAnalytics = {
-  t1: {
-    title: 'Mock Test 1: CSE Core',
-    avgScore: 72, highestScore: 98, participants: 145, avgTime: '45m 20s',
-    distribution: [
-      { range: '0-20%', count: 5 }, { range: '21-40%', count: 15 },
-      { range: '41-60%', count: 45 }, { range: '61-80%', count: 60 }, { range: '81-100%', count: 20 },
-    ],
-    students: [
-      { id: 's1', name: 'Arjun Kumar', score: 75, maxScore: 100, timeTaken: '58m 00s' },
-      { id: 's2', name: 'Priya Sharma', score: 82, maxScore: 100, timeTaken: '59m 10s' },
-      { id: 's3', name: 'Rahul Verma', score: 98, maxScore: 100, timeTaken: '40m 15s' },
-      { id: 's4', name: 'Sneha Reddy', score: 45, maxScore: 100, timeTaken: '60m 00s' },
-      { id: 's5', name: 'Karthik Raja', score: 68, maxScore: 100, timeTaken: '55m 40s' }
-    ]
-  },
-  t2: {
-    title: 'Aptitude Assessment',
-    avgScore: 65, highestScore: 92, participants: 120, avgTime: '38m 15s',
-    distribution: [
-      { range: '0-20%', count: 10 }, { range: '21-40%', count: 25 },
-      { range: '41-60%', count: 50 }, { range: '61-80%', count: 30 }, { range: '81-100%', count: 5 },
-    ],
-    students: [
-      { id: 's1', name: 'Arjun Kumar', score: 65, maxScore: 100, timeTaken: '42m 15s' },
-      { id: 's2', name: 'Priya Sharma', score: 80, maxScore: 100, timeTaken: '40m 00s' },
-      { id: 's6', name: 'Vikram Singh', score: 92, maxScore: 100, timeTaken: '35m 10s' }
-    ]
-  },
-  t3: {
-    title: 'Mathematics Final',
-    avgScore: 85, highestScore: 100, participants: 90, avgTime: '110m 00s',
-    distribution: [
-      { range: '0-20%', count: 0 }, { range: '21-40%', count: 5 },
-      { range: '41-60%', count: 10 }, { range: '61-80%', count: 35 }, { range: '81-100%', count: 40 },
-    ],
-    students: [
-      { id: 's7', name: 'Aditi Rao', score: 100, maxScore: 100, timeTaken: '95m 20s' },
-      { id: 's8', name: 'Sanjay Dutt', score: 85, maxScore: 100, timeTaken: '115m 00s' },
-      { id: 's9', name: 'Neha Gupta', score: 70, maxScore: 100, timeTaken: '120m 00s' }
-    ]
-  }
-};
-
-const fullTestTemplate1 = [
-  { q: "What is the time complexity of QuickSort in the worst case?", selected: "O(n log n)", correct: "O(n^2)", explanation: "QuickSort degrades to O(n^2) when the pivot is the smallest or largest element.", status: "Wrong", timeSpent: "2m 15s" },
-  { q: "Which protocol is used for secure communication over a computer network?", selected: "HTTPS", correct: "HTTPS", explanation: "HTTPS encrypts the HTTP protocol using TLS/SSL.", status: "Correct", timeSpent: "0m 45s" },
-  { q: "What does HTML stand for?", selected: "Hyper Text Markup Language", correct: "Hyper Text Markup Language", explanation: "Standard markup language for documents designed to be displayed in a web browser.", status: "Correct", timeSpent: "0m 10s" },
-  { q: "Which of the following is not a NoSQL database?", selected: null, correct: "MySQL", explanation: "MySQL is a relational database management system.", status: "Unattempted", timeSpent: "0m 30s" },
-  { q: "In Python, which of the following is a mutable data type?", selected: "Tuple", correct: "List", explanation: "Lists can be modified after creation, whereas tuples are immutable.", status: "Wrong", timeSpent: "1m 10s" }
-];
-
-const fullTestTemplate2 = [
-  { q: "If A is 10 miles north of B, and C is 10 miles east of B. What is the distance between A and C?", selected: "10 miles", correct: "14.14 miles", explanation: "Using the Pythagorean theorem: sqrt(10^2 + 10^2).", status: "Wrong", timeSpent: "3m 20s" },
-  { q: "What is the next number in the sequence: 2, 6, 12, 20, ...?", selected: "30", correct: "30", explanation: "The differences are 4, 6, 8, so the next difference is 10.", status: "Correct", timeSpent: "1m 05s" },
-  { q: "A train running at the speed of 60 km/hr crosses a pole in 9 seconds. What is the length of the train?", selected: null, correct: "150 meters", explanation: "Speed = 60 * (5/18) m/s. Distance = Speed * Time.", status: "Unattempted", timeSpent: "2m 00s" }
-];
-
-const mockStudentHistory = {
-  'Arjun Kumar': [
-    { id: 'a1', testName: 'Aptitude Test', score: 65, timeTaken: '42m 15s', totalQ: 3, attempted: 2, correct: 1, wrong: 1, negMarks: -3.33, allQuestions: fullTestTemplate2 },
-    { id: 'a2', testName: 'Mock Test 1', score: 75, timeTaken: '58m 00s', totalQ: 5, attempted: 4, correct: 2, wrong: 2, negMarks: -2.5, allQuestions: fullTestTemplate1 }
-  ],
-  'Priya Sharma': [
-    { id: 'p1', testName: 'Aptitude Test', score: 80, timeTaken: '40m 00s', totalQ: 3, attempted: 3, correct: 2, wrong: 1, negMarks: -2.0, allQuestions: fullTestTemplate2 },
-    { id: 'p2', testName: 'Mock Test 1', score: 82, timeTaken: '59m 10s', totalQ: 5, attempted: 5, correct: 4, wrong: 1, negMarks: -1.0, allQuestions: fullTestTemplate1 }
-  ]
+// Helper
+const formatTime = (seconds) => {
+  if (!seconds) return '0m 0s';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}m ${s}s`;
 };
 
 export default function Analytics({ joinedStudents = [], department = null }) {
@@ -93,41 +28,180 @@ export default function Analytics({ joinedStudents = [], department = null }) {
   const [detailedTestId, setDetailedTestId] = useState(null);
   const [filterStatus, setFilterStatus] = useState('All'); 
   
-  // Student Logic
-  let departmentStudents = joinedStudents;
-  if (department) {
-    departmentStudents = joinedStudents.filter(s => s.department?.toLowerCase() === department.toLowerCase());
-  }
-  
-  // Use unique names from department students if available, else fallback to mock keys
-  let baseStudentNames = [];
-  if (departmentStudents.length > 0) {
-    // Get unique names
-    baseStudentNames = [...new Set(departmentStudents.map(s => s.name || 'Unknown Student'))].filter(Boolean);
-  } else if (!department && joinedStudents.length > 0) {
-    baseStudentNames = [...new Set(joinedStudents.map(s => s.name || 'Unknown Student'))].filter(Boolean);
-  } else if (department && departmentStudents.length === 0) {
-    baseStudentNames = [];
-  } else {
-    baseStudentNames = Object.keys(mockStudentHistory);
-  }
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [realTests, setRealTests] = React.useState([]);
+  const [computedTestAnalytics, setComputedTestAnalytics] = React.useState({});
+  const [computedStudentHistory, setComputedStudentHistory] = React.useState({});
 
-  // Create a dynamic history map so real students have some mock data to show
-  const dynamicStudentHistory = { ...mockStudentHistory };
-  baseStudentNames.forEach((name, index) => {
-    if (!dynamicStudentHistory[name]) {
-      dynamicStudentHistory[name] = index % 2 === 0 ? mockStudentHistory['Arjun Kumar'] : mockStudentHistory['Priya Sharma'];
-    }
-  });
+  React.useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        let testsQuery = collection(db, 'tests');
+        if (department) {
+          testsQuery = query(collection(db, 'tests'), where('department', '==', department));
+        }
+        
+        const [testsSnap, attemptsSnap] = await Promise.all([
+          getDocs(testsQuery),
+          getDocs(collection(db, 'test_attempts'))
+        ]);
+        
+        const fetchedTests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        const fetchedAttempts = attemptsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        
+        // Allowed emails for this department/global view
+        let validEmails = null;
+        if (department && joinedStudents) {
+           const departmentStudents = joinedStudents.filter(s => s.department?.toLowerCase() === department.toLowerCase());
+           validEmails = departmentStudents.map(s => s.email?.toLowerCase()).filter(Boolean);
+        }
 
-  const allStudentNames = baseStudentNames;
+        const tAnalytics = {};
+        const sHistory = {};
+
+        fetchedTests.forEach(test => {
+          tAnalytics[test.id] = {
+            id: test.id,
+            title: test.title || 'Untitled Test',
+            category: test.subject || test.department || 'General',
+            date: test.createdAt ? new Date(test.createdAt.seconds * 1000).toLocaleDateString() : 'Unknown Date',
+            avgScore: 0,
+            highestScore: 0,
+            participants: 0,
+            avgTime: '0m 0s',
+            distribution: [
+              { range: '0-20%', count: 0 }, { range: '21-40%', count: 0 },
+              { range: '41-60%', count: 0 }, { range: '61-80%', count: 0 }, { range: '81-100%', count: 0 },
+            ],
+            students: [],
+            _totalScore: 0,
+            _totalTime: 0,
+            _targetMarks: test.targetMarks || 100,
+          };
+        });
+
+        fetchedAttempts.forEach(attempt => {
+          if (!tAnalytics[attempt.testId]) return;
+          
+          if (validEmails && !validEmails.includes(attempt.studentEmail?.toLowerCase())) {
+            return;
+          }
+
+          const testSummary = tAnalytics[attempt.testId];
+          testSummary.participants += 1;
+          testSummary._totalScore += attempt.score || 0;
+          
+          let attemptTimeTaken = 0;
+          if (attempt.responses && Array.isArray(attempt.responses)) {
+              attemptTimeTaken = attempt.responses.reduce((sum, r) => sum + (r.timeSpent || 0), 0);
+          }
+          testSummary._totalTime += attemptTimeTaken;
+
+          if ((attempt.score || 0) > testSummary.highestScore) {
+            testSummary.highestScore = attempt.score;
+          }
+          
+          const maxScore = testSummary._targetMarks;
+          const pct = maxScore > 0 ? ((attempt.score || 0) / maxScore) * 100 : 0;
+          
+          if (pct <= 20) testSummary.distribution[0].count++;
+          else if (pct <= 40) testSummary.distribution[1].count++;
+          else if (pct <= 60) testSummary.distribution[2].count++;
+          else if (pct <= 80) testSummary.distribution[3].count++;
+          else testSummary.distribution[4].count++;
+          
+          testSummary.students.push({
+            id: attempt.id,
+            name: attempt.studentName || attempt.studentEmail || 'Unknown',
+            score: attempt.score || 0,
+            maxScore: maxScore,
+            timeTaken: formatTime(attemptTimeTaken)
+          });
+
+          const sName = attempt.studentName || attempt.studentEmail || 'Unknown';
+          if (!sHistory[sName]) {
+            sHistory[sName] = [];
+          }
+          
+          let allQuestions = [];
+          let correct = 0;
+          let wrong = 0;
+          let unattempted = 0;
+          let negMarks = 0;
+
+          if (attempt.responses && Array.isArray(attempt.responses)) {
+            allQuestions = attempt.responses.map(r => {
+              let status = 'Unattempted';
+              if (r.selectedOption !== null && r.selectedOption !== undefined) {
+                 if (r.isCorrect) {
+                   status = 'Correct';
+                   correct++;
+                 } else {
+                   status = 'Wrong';
+                   wrong++;
+                 }
+              } else {
+                 unattempted++;
+              }
+              
+              return {
+                q: r.questionText || "Question text hidden",
+                selected: r.selectedOption !== null ? `Option ${r.selectedOption}` : null,
+                correct: r.correctOption !== null ? `Option ${r.correctOption}` : 'Unknown',
+                explanation: r.explanation || 'No explanation provided.',
+                status,
+                timeSpent: formatTime(r.timeSpent || 0)
+              };
+            });
+          }
+
+          sHistory[sName].push({
+            id: attempt.id,
+            testName: attempt.testTitle || 'Untitled Test',
+            score: attempt.score || 0,
+            timeTaken: formatTime(attemptTimeTaken),
+            totalQ: attempt.totalQuestions || allQuestions.length,
+            attempted: correct + wrong,
+            correct,
+            wrong,
+            negMarks: 0,
+            allQuestions
+          });
+        });
+
+        // Finalize averages
+        Object.values(tAnalytics).forEach(test => {
+           if (test.participants > 0) {
+             const avgScoreRaw = test._totalScore / test.participants;
+             test.avgTime = formatTime(test._totalTime / test.participants);
+             test.avgScore = Math.round((avgScoreRaw / test._targetMarks) * 100) || 0;
+             test.highestScore = Math.round((test.highestScore / test._targetMarks) * 100) || 0;
+           } else {
+             test.avgScore = 0;
+             test.highestScore = 0;
+           }
+        });
+
+        setRealTests(fetchedTests);
+        setComputedTestAnalytics(tAnalytics);
+        setComputedStudentHistory(sHistory);
+      } catch (err) {
+        console.error("Failed to fetch analytics data", err);
+      }
+      setIsLoading(false);
+    };
+    fetchData();
+  }, [department, joinedStudents]);
+
+  const allStudentNames = Object.keys(computedStudentHistory);
   const filteredStudentNames = allStudentNames.filter(name => name.toLowerCase().includes(studentSearch.toLowerCase()));
   
-  const activeStudentData = selectedStudentName ? dynamicStudentHistory[selectedStudentName] : [];
+  const activeStudentData = selectedStudentName ? computedStudentHistory[selectedStudentName] : [];
   const activeDetailedTest = detailedTestId ? activeStudentData.find(t => t.id === detailedTestId) : null;
 
   // Global Logic
-  const activeGlobalTest = detailedGlobalTestId ? mockTestAnalytics[detailedGlobalTestId] : null;
+  const activeGlobalTest = detailedGlobalTestId ? computedTestAnalytics[detailedGlobalTestId] : null;
 
   const openStudentTestDetail = (id) => {
     setDetailedTestId(id);
@@ -207,9 +281,16 @@ export default function Analytics({ joinedStudents = [], department = null }) {
       {/* Main Content Area (Scrollable) */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         
-        {/* ============================================================== */}
-        {/* GLOBAL TEST ANALYTICS */}
-        {/* ============================================================== */}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center flex-1 min-h-[400px]">
+             <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+             <p className="text-slate-500 font-bold">Compiling Analytics Data...</p>
+          </div>
+        ) : (
+          <>
+            {/* ============================================================== */}
+            {/* GLOBAL TEST ANALYTICS */}
+            {/* ============================================================== */}
         {activeInnerTab === 'global' && (
           <div className="max-w-5xl mx-auto flex flex-col gap-8 pb-12">
             {!detailedGlobalTestId ? (
@@ -226,7 +307,7 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                 </div>
 
                 <div className="flex flex-col gap-4">
-                  {mockTests.map(test => (
+                  {Object.values(computedTestAnalytics).map(test => (
                     <div 
                       key={test.id} 
                       onClick={() => openGlobalTestDetail(test.id)}
@@ -238,6 +319,8 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                           <span className="bg-slate-100 px-2.5 py-1 rounded-md">{test.category}</span>
                           <span>•</span>
                           <span>{test.date}</span>
+                          <span>•</span>
+                          <span>{test.participants} Attempts</span>
                         </div>
                       </div>
                       <div className="p-3 rounded-full bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors text-slate-400">
@@ -245,6 +328,12 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                       </div>
                     </div>
                   ))}
+                  
+                  {Object.values(computedTestAnalytics).length === 0 && (
+                    <div className="text-center py-12 text-slate-400 font-bold bg-slate-50 rounded-2xl">
+                      No tests found.
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -320,7 +409,11 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                       </h4>
                       <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-1.5 flex items-center gap-2">
                         <Search size={14} className="text-slate-400" />
-                        <span className="text-xs font-bold text-slate-400">Search disabled in mock mode</span>
+                        <input
+                          type="text"
+                          placeholder="Search leaderboard..."
+                          className="bg-transparent border-none outline-none text-xs text-slate-600 font-medium placeholder:text-slate-400 w-32"
+                        />
                       </div>
                     </div>
                     
@@ -417,7 +510,7 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {filteredStudentNames.length > 0 ? (
                     filteredStudentNames.map(name => {
-                      const data = mockStudentHistory[name];
+                      const data = computedStudentHistory[name];
                       const totalTests = data.length;
                       const avgScore = totalTests > 0 ? Math.round(data.reduce((acc, t) => acc + t.score, 0) / totalTests) : 0;
                       
@@ -660,6 +753,8 @@ export default function Analytics({ joinedStudents = [], department = null }) {
               </div>
             )}
           </div>
+            )}
+          </>
         )}
 
       </div>
