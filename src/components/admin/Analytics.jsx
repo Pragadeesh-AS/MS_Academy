@@ -81,7 +81,7 @@ const mockStudentHistory = {
   ]
 };
 
-export default function Analytics({ joinedStudents = [] }) {
+export default function Analytics({ joinedStudents = [], department = null }) {
   const [activeInnerTab, setActiveInnerTab] = useState('global'); // 'global' or 'student'
   
   // Drill-down states for Global
@@ -94,10 +94,36 @@ export default function Analytics({ joinedStudents = [] }) {
   const [filterStatus, setFilterStatus] = useState('All'); 
   
   // Student Logic
-  const allStudentNames = Object.keys(mockStudentHistory);
+  let departmentStudents = joinedStudents;
+  if (department) {
+    departmentStudents = joinedStudents.filter(s => s.department?.toLowerCase() === department.toLowerCase());
+  }
+  
+  // Use unique names from department students if available, else fallback to mock keys
+  let baseStudentNames = [];
+  if (departmentStudents.length > 0) {
+    // Get unique names
+    baseStudentNames = [...new Set(departmentStudents.map(s => s.name || 'Unknown Student'))].filter(Boolean);
+  } else if (!department && joinedStudents.length > 0) {
+    baseStudentNames = [...new Set(joinedStudents.map(s => s.name || 'Unknown Student'))].filter(Boolean);
+  } else if (department && departmentStudents.length === 0) {
+    baseStudentNames = [];
+  } else {
+    baseStudentNames = Object.keys(mockStudentHistory);
+  }
+
+  // Create a dynamic history map so real students have some mock data to show
+  const dynamicStudentHistory = { ...mockStudentHistory };
+  baseStudentNames.forEach((name, index) => {
+    if (!dynamicStudentHistory[name]) {
+      dynamicStudentHistory[name] = index % 2 === 0 ? mockStudentHistory['Arjun Kumar'] : mockStudentHistory['Priya Sharma'];
+    }
+  });
+
+  const allStudentNames = baseStudentNames;
   const filteredStudentNames = allStudentNames.filter(name => name.toLowerCase().includes(studentSearch.toLowerCase()));
   
-  const activeStudentData = selectedStudentName ? mockStudentHistory[selectedStudentName] : [];
+  const activeStudentData = selectedStudentName ? dynamicStudentHistory[selectedStudentName] : [];
   const activeDetailedTest = detailedTestId ? activeStudentData.find(t => t.id === detailedTestId) : null;
 
   // Global Logic

@@ -8,6 +8,8 @@ import LiveClasses from './teacher/LiveClasses';
 import TeacherQuestionBank from './teacher/TeacherQuestionBank';
 import TestsManager from './TestsManager';
 import TeacherStudents from './teacher/TeacherStudents';
+import Analytics from './admin/Analytics';
+import { TrendingUp } from 'lucide-react';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
@@ -15,6 +17,7 @@ export default function TeacherDashboard() {
   const [teacherDepartment, setTeacherDepartment] = useState('');
   const [activeTab, setActiveTab] = useState('courses');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [joinedStudents, setJoinedStudents] = useState([]);
 
   useEffect(() => {
     const role = localStorage.getItem('auth_role');
@@ -51,6 +54,13 @@ export default function TeacherDashboard() {
         navigate('/login');
       } else {
         setTeacherName(name || 'Teacher');
+        // Fetch all students for analytics
+        try {
+          const studentsSnapshot = await getDocs(collection(db, 'joined_students'));
+          setJoinedStudents(studentsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+        } catch (error) {
+          console.error("Error fetching students:", error);
+        }
       }
     };
     checkAccess();
@@ -124,6 +134,13 @@ export default function TeacherDashboard() {
             <Calendar size={18} />
             {!isCollapsed && <span>Test Modules</span>}
           </button>
+          <button 
+            onClick={() => setActiveTab('analytics')}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'analytics' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+          >
+            <TrendingUp size={18} />
+            {!isCollapsed && <span>Analytics</span>}
+          </button>
         </nav>
 
         <div className={`p-4 border-t border-slate-100 ${isCollapsed ? 'px-2' : ''}`}>
@@ -160,6 +177,7 @@ export default function TeacherDashboard() {
         {activeTab === 'students' && <TeacherStudents department={teacherDepartment} />}
         {activeTab === 'questions' && <TeacherQuestionBank department={teacherDepartment} />}
         {activeTab === 'tests' && <TestsManager department={teacherDepartment} isTeacher={true} />}
+        {activeTab === 'analytics' && <Analytics joinedStudents={joinedStudents} department={teacherDepartment} />}
       </main>
     </div>
   );
