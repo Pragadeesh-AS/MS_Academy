@@ -208,7 +208,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       ...prev,
       [topic]: {
         ...prev[topic],
-        [type]: Math.max(0, parseInt(val) || 0)
+        [type]: val === '' ? '' : Math.max(0, parseInt(val) || 0)
       }
     }));
   };
@@ -542,8 +542,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                       <label className="text-[13px] font-[800] text-slate-800">Duration (Minutes)</label>
                       <input 
                         type="number" 
-                        value={duration} 
-                        onChange={e => setDuration(parseInt(e.target.value) || 0)}
+                        value={duration === '' ? '' : duration} 
+                        onChange={e => setDuration(e.target.value === '' ? '' : parseInt(e.target.value))}
                         placeholder="180"
                         className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
                       />
@@ -552,8 +552,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                       <label className="text-[13px] font-[800] text-slate-800">Target Total Marks</label>
                       <input 
                         type="number" 
-                        value={targetMarks} 
-                        onChange={e => setTargetMarks(parseInt(e.target.value) || 0)}
+                        value={targetMarks === '' ? '' : targetMarks} 
+                        onChange={e => setTargetMarks(e.target.value === '' ? '' : parseInt(e.target.value))}
                         placeholder="100"
                         className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
                       />
@@ -584,8 +584,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                       <label className="text-[12px] font-[900] text-blue-800 uppercase tracking-wide">Total 1-Mark Questions</label>
                       <input 
                         type="number" 
-                        value={total1Mark} 
-                        onChange={e => setTotal1Mark(parseInt(e.target.value) || 0)}
+                        value={total1Mark === '' ? '' : total1Mark} 
+                        onChange={e => setTotal1Mark(e.target.value === '' ? '' : parseInt(e.target.value))}
                         placeholder="30"
                         className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm mt-1"
                       />
@@ -594,8 +594,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                       <label className="text-[12px] font-[900] text-purple-800 uppercase tracking-wide">Total 2-Mark Questions</label>
                       <input 
                         type="number" 
-                        value={total2Mark} 
-                        onChange={e => setTotal2Mark(parseInt(e.target.value) || 0)}
+                        value={total2Mark === '' ? '' : total2Mark} 
+                        onChange={e => setTotal2Mark(e.target.value === '' ? '' : parseInt(e.target.value))}
                         placeholder="35"
                         className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm mt-1"
                       />
