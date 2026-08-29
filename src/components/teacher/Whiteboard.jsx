@@ -206,15 +206,11 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         obj.selectable = true;
         obj.evented = true;
       });
-    } else if (activeTool === 'pen' || activeTool === 'highlighter' || activeTool === 'eraser') {
+    } else if (activeTool === 'pen' || activeTool === 'highlighter') {
       fCanvas.isDrawingMode = true;
       let brush = new fabric.PencilBrush(fCanvas);
       
-      if (activeTool === 'eraser') {
-         brush.color = isOverlay ? 'transparent' : boardColor;
-         brush.width = eraserSize;
-         // In a real app with transparent overlays, eraser is tricky. For solid backgrounds, matching bg color works perfectly.
-      } else if (activeTool === 'highlighter') {
+      if (activeTool === 'highlighter') {
          // Create a translucent color
          let r = 0, g = 0, b = 0;
          if (activeColor.startsWith('#')) {
@@ -264,6 +260,69 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       fCanvas.off('mouse:down', onMouseDown);
     };
   }, [activeTool]);
+
+  // Object Eraser Logic
+  useEffect(() => {
+    const fCanvas = fabricRef.current;
+    if (!fCanvas || activeTool !== 'eraser') return;
+
+    let isErasing = false;
+
+    const eraseObject = (e) => {
+      if (!e.pointer) return;
+      const point = new fabric.Point(e.pointer.x, e.pointer.y);
+      const objects = fCanvas.getObjects();
+      
+      // Calculate hit tolerance based on eraserSize
+      const tolerance = eraserSize / 2;
+
+      for (let i = objects.length - 1; i >= 0; i--) {
+        const obj = objects[i];
+        if (!obj.selectable && obj.type !== 'path' && obj.type !== 'rect' && obj.type !== 'circle' && obj.type !== 'triangle' && obj.type !== 'line') continue; // Only erase drawn objects
+        
+        // Simple bounding box check with tolerance
+        const bound = obj.getBoundingRect();
+        if (
+          point.x >= bound.left - tolerance && 
+          point.x <= bound.left + bound.width + tolerance &&
+          point.y >= bound.top - tolerance && 
+          point.y <= bound.top + bound.height + tolerance
+        ) {
+          // Additional exact point intersection check for more precision
+          if (fCanvas.containsPoint(e.e, obj)) {
+            fCanvas.remove(obj);
+          } else {
+            // For thin lines/paths where containsPoint might fail, bounding box with small tolerance is enough to delete
+            fCanvas.remove(obj);
+          }
+        }
+      }
+    };
+
+    const onMouseDown = (e) => {
+      isErasing = true;
+      eraseObject(e);
+    };
+
+    const onMouseMove = (e) => {
+      if (!isErasing) return;
+      eraseObject(e);
+    };
+
+    const onMouseUp = () => {
+      isErasing = false;
+    };
+
+    fCanvas.on('mouse:down', onMouseDown);
+    fCanvas.on('mouse:move', onMouseMove);
+    fCanvas.on('mouse:up', onMouseUp);
+
+    return () => {
+      fCanvas.off('mouse:down', onMouseDown);
+      fCanvas.off('mouse:move', onMouseMove);
+      fCanvas.off('mouse:up', onMouseUp);
+    };
+  }, [activeTool, eraserSize]);
 
   // Handle Shapes Drawing Logic
   useEffect(() => {
@@ -481,17 +540,28 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     lastPosRef.current = { x, y };
     
     if (activeTool === 'shapes') {
-      snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        snapshotRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height);
     } else {
       // Draw initial dot
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.fillStyle = activeColor;
-      if (activeTool === 'eraser') ctx.fillStyle = isOverlay ? '#FFFFFF' : boardColor;
-      
       ctx.beginPath();
       ctx.arc(x, y, (activeTool === 'eraser' ? eraserSize : activeTool === 'highlighter' ? 30 : penSize) / 2, 0, Math.PI * 2);
-      ctx.fill();
+      
+      if (activeTool === 'eraser') {
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        ctx.stroke(); // Double stroke for visibility on dark/light backgrounds
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // slight fill
+        ctx.fill();
+      } else {
+        if (activeTool === 'highlighter') ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+        else ctx.fillStyle = activeColor;
+        ctx.fill();
+      }
     }
   };
 
