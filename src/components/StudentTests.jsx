@@ -42,9 +42,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       
       // Filter by department (matching student department or "All Departments")
       const studentTests = allTests.filter(t => 
-        t.department === department || 
-        t.department === 'All Departments' || 
-        t.department === 'All'
+        t.department === department
       );
       setTests(studentTests);
 

@@ -96,7 +96,7 @@ export default function Dashboard() {
     if (!studentDepartment) return;
     const q = query(
       collection(db, 'recordings'),
-      where('department', 'in', [studentDepartment, 'General'])
+      where('department', '==', studentDepartment)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const recs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -110,7 +110,7 @@ export default function Dashboard() {
     if (!studentDepartment) return;
     const q = query(
       collection(db, 'notes'),
-      where('department', 'in', [studentDepartment, 'General'])
+      where('department', '==', studentDepartment)
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedNotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -743,8 +743,6 @@ export default function Dashboard() {
               ) : (
                 (() => {
                   const filteredBundles = availableBundles.filter(b => 
-                    !b.department || 
-                    b.department === 'General' || 
                     b.department === studentDepartment
                   );
                   
