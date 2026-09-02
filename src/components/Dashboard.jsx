@@ -741,9 +741,24 @@ export default function Dashboard() {
                   No course bundles available at the moment. Please check back later!
                 </div>
               ) : (
-                availableBundles.map(bundle => {
-                  const isPurchased = purchasedBundles.includes(bundle.id);
-                  return (
+                (() => {
+                  const filteredBundles = availableBundles.filter(b => 
+                    !b.department || 
+                    b.department === 'General' || 
+                    b.department === studentDepartment
+                  );
+                  
+                  if (filteredBundles.length === 0) {
+                    return (
+                      <div className="col-span-full text-center py-12 text-slate-500 font-medium">
+                        No course bundles available for your department at the moment.
+                      </div>
+                    );
+                  }
+                  
+                  return filteredBundles.map(bundle => {
+                    const isPurchased = purchasedBundles.includes(bundle.id);
+                    return (
                     <div key={bundle.id} className={`bg-white rounded-[24px] border ${isPurchased ? 'border-emerald-200 shadow-emerald-500/10' : 'border-amber-200 shadow-amber-500/10'} shadow-xl overflow-hidden flex flex-col relative`}>
                       {isPurchased && (
                         <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full z-10 flex items-center gap-1 shadow-md">
@@ -801,7 +816,8 @@ export default function Dashboard() {
                       </div>
                     </div>
                   );
-                })
+                  });
+                })()
               )}
             </div>
           </div>
