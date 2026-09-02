@@ -782,7 +782,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('overview')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'overview' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <LayoutGrid size={20} className={activeTab === \'overview\' ? \'text-white\' : \'text-slate-400\'} />
+                <LayoutGrid size={20} className={activeTab === 'overview' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Dashboard</span>}
               </button>
 
@@ -790,7 +790,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('teachers')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'teachers' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <BookOpen size={20} className={activeTab === \'teachers\' ? \'text-white\' : \'text-slate-400\'} />
+                <BookOpen size={20} className={activeTab === 'teachers' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Teachers</span>}
               </button>
 
@@ -798,7 +798,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('typists')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'typists' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Book size={20} className={activeTab === \'typists\' ? \'text-white\' : \'text-slate-400\'} />
+                <Book size={20} className={activeTab === 'typists' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Data Entry Pairs</span>}
               </button>
 
@@ -814,7 +814,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('fees')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'fees' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Wallet size={20} className={activeTab === \'fees\' ? \'text-white\' : \'text-slate-400\'} />
+                <Wallet size={20} className={activeTab === 'fees' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Fees Tracker</span>}
               </button>
 
@@ -822,7 +822,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('salary')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'salary' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <IndianRupee size={20} className={activeTab === \'salary\' ? \'text-white\' : \'text-slate-400\'} />
+                <IndianRupee size={20} className={activeTab === 'salary' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Staff Salary</span>}
               </button>
 
@@ -830,7 +830,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('courses')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'courses' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Package size={20} className={activeTab === \'courses\' ? \'text-white\' : \'text-slate-400\'} />
+                <Package size={20} className={activeTab === 'courses' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Course Setup</span>}
               </button>
 
@@ -840,7 +840,7 @@ export default function AdminDashboard() {
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'notes' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
                 title={isCollapsed ? "Study Notes" : ""}
               >
-                <FileText size={20} className={activeTab === \'notes\' ? \'text-white\' : \'text-slate-400\'} />
+                <FileText size={20} className={activeTab === 'notes' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Study Notes</span>}
               </button>
 
@@ -849,7 +849,7 @@ export default function AdminDashboard() {
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'recordings' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
                 title={isCollapsed ? "Live Recordings" : ""}
               >
-                <Video size={20} className={activeTab === \'recordings\' ? \'text-white\' : \'text-slate-400\'} />
+                <Video size={20} className={activeTab === 'recordings' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Live Recordings</span>}
               </button>
 
@@ -873,7 +873,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('questions')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'questions' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Database size={20} className={activeTab === \'questions\' ? \'text-white\' : \'text-slate-400\'} />
+                <Database size={20} className={activeTab === 'questions' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Question Bank</span>}
               </button>
 
@@ -881,7 +881,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('tests')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'tests' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Trophy size={20} className={activeTab === \'tests\' ? \'text-white\' : \'text-slate-400\'} />
+                <Trophy size={20} className={activeTab === 'tests' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Tests Manager</span>}
               </button>
 
@@ -913,7 +913,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('ai')}
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'ai' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Sparkles size={20} className={activeTab === \'ai\' ? \'text-white\' : \'text-slate-400\'} />
+                <Sparkles size={20} className={activeTab === 'ai' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>AI Generator</span>}
               </button>
 
