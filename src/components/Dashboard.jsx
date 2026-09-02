@@ -444,15 +444,35 @@ export default function Dashboard() {
             {!isCollapsed && <span>Practice Tests</span>}
           </button>
           
-          <div className="pt-4 mt-4 border-t border-slate-200">
-            <button 
-              onClick={() => setActiveTab('upgrade')}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'upgrade' ? 'bg-amber-50 text-amber-600' : isPro ? 'text-amber-500 hover:bg-amber-50' : 'bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5'}`}
-            >
-              <Crown size={18} className={isPro && activeTab !== 'upgrade' ? 'text-amber-500' : ''} />
-              {!isCollapsed && <span>{isPro ? 'Pro Benefits' : 'Upgrade to Pro'}</span>}
-            </button>
-          </div>
+          {/* Upgrade to Premium Banner */}
+          {!isCollapsed && !isPro && (
+            <div className="mt-6 bg-gradient-to-br from-[#4f46e5] to-[#8b5cf6] rounded-[20px] p-5 text-white shadow-[0_10px_25px_rgba(99,102,241,0.4)] relative overflow-hidden">
+              <div className="flex justify-between items-start mb-3">
+                <h4 className="font-bold text-[18px] leading-tight w-[60%] tracking-tight">Upgrade to<br/>Premium</h4>
+                <div className="text-4xl drop-shadow-md z-10 relative">🎓</div>
+              </div>
+              <p className="text-[12.5px] text-indigo-50 mb-5 leading-[1.4] font-medium opacity-90">Unlock premium questions,<br/>advanced analytics & more.</p>
+              <button 
+                onClick={() => setActiveTab('upgrade')} 
+                className="w-full bg-white text-[#5b21b6] font-bold text-[14px] py-2.5 rounded-[14px] hover:bg-slate-50 transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
+              >
+                Upgrade Now <ArrowRight size={16} strokeWidth={2.5} />
+              </button>
+            </div>
+          )}
+          
+          {/* Original button fallback for collapsed state or Pro users */}
+          {(isCollapsed || isPro) && (
+            <div className="pt-4 mt-4 border-t border-slate-200">
+              <button 
+                onClick={() => setActiveTab('upgrade')}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'upgrade' ? 'bg-amber-50 text-amber-600' : isPro ? 'text-amber-500 hover:bg-amber-50' : 'bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5'}`}
+              >
+                <Crown size={18} className={isPro && activeTab !== 'upgrade' ? 'text-amber-500' : ''} />
+                {!isCollapsed && <span>{isPro ? 'Pro Benefits' : 'Upgrade to Pro'}</span>}
+              </button>
+            </div>
+          )}
         </nav>
       </aside>
 
