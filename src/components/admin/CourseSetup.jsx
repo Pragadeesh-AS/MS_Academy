@@ -5,7 +5,7 @@ import {
   Package, Plus, Trash2, Edit2, Search, X, CheckCircle2, Image as ImageIcon,
   Check, Tag, Zap, Star, ShieldCheck
 } from 'lucide-react';
-import { db } from '../../firebase';
+import { db, storage } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { gateCoursesData } from '../GateCourses';
@@ -59,20 +59,41 @@ export default function CourseSetup() {
     fetchBundles();
   }, []);
 
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadProgress, setImageUploadProgress] = useState(0);
+
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
-    if (file.size > 1048576) {
-      showToast("Image is too large. Please upload an image under 1MB.", "error");
+    if (file.size > 2 * 1024 * 1024) { // Increased limit to 2MB since it's going to storage
+      showToast("Image is too large. Please upload an image under 2MB.", "error");
       return;
     }
     
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFormData({ ...formData, imageUrl: reader.result });
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingImage(true);
+    const storageRef = ref(storage, `bundles/${Date.now()}_${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+    
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const prog = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setImageUploadProgress(prog);
+      },
+      (error) => {
+        console.error(error);
+        showToast("Image upload failed", "error");
+        setIsUploadingImage(false);
+      },
+      async () => {
+        const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+        setFormData({ ...formData, imageUrl: downloadUrl });
+        setIsUploadingImage(false);
+        setImageUploadProgress(0);
+        showToast("Image uploaded successfully!", "success");
+      }
+    );
   };
 
   const openAddCreator = () => {
@@ -471,6 +492,11 @@ export default function CourseSetup() {
                           </button>
                         </div>
                       </div>
+                    ) : isUploadingImage ? (
+                      <div className="w-full py-8 flex flex-col items-center justify-center">
+                        <Loader size={32} />
+                        <span className="text-sm font-bold text-slate-500 mt-4">Uploading image... {Math.round(imageUploadProgress)}%</span>
+                      </div>
                     ) : (
                       <>
                         <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-slate-400">
@@ -478,7 +504,7 @@ export default function CourseSetup() {
                         </div>
                         <div className="text-center">
                           <p className="text-[13px] font-[800] text-slate-700">Click to upload cover image</p>
-                          <p className="text-[11px] font-[600] text-slate-400 mt-1">JPEG, PNG under 1MB</p>
+                          <p className="text-[11px] font-[600] text-slate-400 mt-1">JPEG, PNG under 2MB</p>
                         </div>
                         <input 
                           type="file" 
@@ -545,9 +571,10 @@ export default function CourseSetup() {
                 </button>
                 <button 
                   type="submit"
-                  className="flex-1 py-3.5 rounded-xl bg-[#059669] text-white font-[800] text-[14px] hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2"
+                  disabled={isUploadingImage}
+                  className="flex-1 py-3.5 rounded-xl bg-[#059669] text-white font-[800] text-[14px] hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Check size={18} /> {isEditing ? 'Save Changes' : 'Create Bundle'}
+                  <Check size={18} /> {isUploadingImage ? 'Uploading Image...' : (isEditing ? 'Save Changes' : 'Create Bundle')}
                 </button>
               </div>
 
