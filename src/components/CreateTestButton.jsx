@@ -5,6 +5,7 @@ const Button = ({ onClick }) => {
   return (
     <StyledWrapper>
       <button onClick={onClick} className="pb-ai-button">
+        <span style={{ fontSize: '1.2em', marginRight: '4px' }}>+</span>
         <span>Create Test Module</span>
         <span className="pb-ai-sparkle">✦</span>
       </button>
@@ -46,11 +47,11 @@ const StyledWrapper = styled.div`
     font-weight: 500;
     letter-spacing: -0.4px;
 
-    background: linear-gradient(180deg, #60A5FA 0%, #2563EB 45%, #1D4ED8 100%);
+    background: linear-gradient(180deg, #8b5cf6 0%, #6366f1 45%, #4f46e5 100%);
 
     box-shadow:
-      0 0 0 6px rgba(37, 99, 235, 0.12),
-      0 10px 30px rgba(37, 99, 235, 0.35),
+      0 0 0 6px rgba(99, 102, 241, 0.12),
+      0 10px 30px rgba(99, 102, 241, 0.35),
       inset 0 2px 10px rgba(255, 255, 255, 0.22);
 
     overflow: hidden;
@@ -130,8 +131,8 @@ const StyledWrapper = styled.div`
     transform: translateY(-2px) scale(1.02);
 
     box-shadow:
-      0 0 0 10px rgba(37, 99, 235, 0.16),
-      0 16px 40px rgba(37, 99, 235, 0.42),
+      0 0 0 10px rgba(99, 102, 241, 0.16),
+      0 16px 40px rgba(99, 102, 241, 0.42),
       inset 0 2px 10px rgba(255, 255, 255, 0.28);
   }
 

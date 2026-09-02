@@ -766,128 +766,128 @@ export default function AdminDashboard() {
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
 
-        <aside className="w-full h-full bg-[#f8f9fa] flex flex-col justify-between pt-8 pb-6 px-4 overflow-y-auto border-r border-slate-200/60 shadow-[4px_0_24px_rgba(0,0,0,0.02)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <aside className="w-full h-full bg-[#111827] flex flex-col justify-between pt-8 pb-6 px-4 overflow-y-auto border-none shadow-2xl [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className="space-y-8">
             {/* Admin title */}
             <div className={`flex items-center gap-3 px-2 mb-2 ${isCollapsed ? 'justify-center px-0' : ''}`}>
               <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm flex-shrink-0 border border-slate-200 overflow-hidden p-0.5">
                 <img src={logoImg} alt="MS Gate Academy Logo" className="w-full h-full object-contain" />
               </div>
-              {!isCollapsed && <h3 className="text-[17px] font-[900] text-[#1D4ED8] tracking-tight whitespace-nowrap mt-0.5">MS Gate Academy</h3>}
+              {!isCollapsed && <h3 className="text-[17px] font-[900] text-white tracking-tight whitespace-nowrap mt-0.5 flex items-center gap-2">MS Gate Academy <ShieldCheck size={16} className="text-amber-400" /></h3>}
             </div>
 
             {/* Navigation Links */}
             <nav className="space-y-1.5 px-1">
               <button
                 onClick={() => setActiveTab('overview')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'overview' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'overview' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <LayoutGrid size={20} className={activeTab === 'overview' ? 'text-[#3b82f6]' : 'text-[#3b82f6]'} />
+                <LayoutGrid size={20} className={activeTab === \'overview\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>Dashboard</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('teachers')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'teachers' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'teachers' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <BookOpen size={20} className={activeTab === 'teachers' ? 'text-[#8b5cf6]' : 'text-[#8b5cf6]'} />
+                <BookOpen size={20} className={activeTab === \'teachers\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>Teachers</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('typists')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'typists' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'typists' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Book size={20} className={activeTab === 'typists' ? 'text-[#3b82f6]' : 'text-[#3b82f6]'} />
+                <Book size={20} className={activeTab === \'typists\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>Data Entry Pairs</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('queries')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'queries' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'queries' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Users size={20} className="text-[#f97316]" />
+                <Users size={20} className=\"text-slate-400\" />
                 {!isCollapsed && <span>Students</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('fees')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'fees' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'fees' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Wallet size={20} className={activeTab === 'fees' ? 'text-[#eab308]' : 'text-[#eab308]'} />
+                <Wallet size={20} className={activeTab === \'fees\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>Fees Tracker</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('salary')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'salary' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'salary' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <IndianRupee size={20} className={activeTab === 'salary' ? 'text-[#10b981]' : 'text-[#10b981]'} />
+                <IndianRupee size={20} className={activeTab === \'salary\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>Staff Salary</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('courses')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'courses' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'courses' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Package size={20} className={activeTab === 'courses' ? 'text-[#8b5cf6]' : 'text-[#8b5cf6]'} />
+                <Package size={20} className={activeTab === \'courses\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>Course Setup</span>}
               </button>
 
               {/* Decorative Placeholders */}
               <button
                 onClick={() => { setActiveTab('notes'); setIsCollapsed(true); }}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'notes' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'notes' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
                 title={isCollapsed ? "Study Notes" : ""}
               >
-                <FileText size={20} className={activeTab === 'notes' ? 'text-[#3b82f6]' : 'text-[#3b82f6]'} />
+                <FileText size={20} className={activeTab === \'notes\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>Study Notes</span>}
               </button>
 
               <button
                 onClick={() => { setActiveTab('recordings'); setIsCollapsed(true); }}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'recordings' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'recordings' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
                 title={isCollapsed ? "Live Recordings" : ""}
               >
-                <Video size={20} className={activeTab === 'recordings' ? 'text-[#f43f5e]' : 'text-[#f43f5e]'} />
+                <Video size={20} className={activeTab === \'recordings\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>Live Recordings</span>}
               </button>
 
               <button 
                 onClick={() => setActiveTab('attributes')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'attributes' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'attributes' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Tag size={20} className="text-[#0d9488]" />
+                <Tag size={20} className=\"text-slate-400\" />
                 {!isCollapsed && <span>Attributes</span>}
               </button>
 
               <button 
                 onClick={() => setActiveTab('analytics')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'analytics' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'analytics' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <BarChart2 size={20} className="text-[#e11d48]" />
+                <BarChart2 size={20} className=\"text-slate-400\" />
                 {!isCollapsed && <span>Analytics</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('questions')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'questions' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'questions' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Database size={20} className={activeTab === 'questions' ? 'text-[#eab308]' : 'text-[#eab308]'} />
+                <Database size={20} className={activeTab === \'questions\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>Question Bank</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('tests')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'tests' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'tests' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Trophy size={20} className={activeTab === 'tests' ? 'text-[#f97316]' : 'text-[#f97316]'} />
+                <Trophy size={20} className={activeTab === \'tests\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>Tests Manager</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('premium_questions')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'premium_questions' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'premium_questions' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
                 <div className="relative">
                   <Database size={20} className={activeTab === 'premium_questions' ? 'text-amber-500' : 'text-amber-500'} />
@@ -896,47 +896,58 @@ export default function AdminDashboard() {
                 {!isCollapsed && <span>Premium Questions</span>}
               </button>
 
-              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 transition-all`}>
-                <FileText size={20} className="text-[#3b82f6]" />
+              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all`}>
+                <FileText size={20} className=\"text-slate-400\" />
                 {!isCollapsed && <span>Blogs</span>}
               </button>
 
               <button 
                 onClick={() => setActiveTab('popup')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'popup' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'popup' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Megaphone size={20} className="text-[#a855f7]" />
+                <Megaphone size={20} className=\"text-slate-400\" />
                 {!isCollapsed && <span>Popup</span>}
               </button>
 
               <button 
                 onClick={() => setActiveTab('ai')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'ai' ? 'bg-[#ebeeff] text-[#5b32ea]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/80'}`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'ai' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Sparkles size={20} className={activeTab === 'ai' ? 'text-[#5b32ea]' : 'text-[#eab308]'} />
+                <Sparkles size={20} className={activeTab === \'ai\' ? \'text-white\' : \'text-slate-400\'} />
                 {!isCollapsed && <span>AI Generator</span>}
               </button>
 
             </nav>
           </div>
 
-          {/* Profile Card & Logout */}
-          <div className={`pt-5 border-t border-slate-200 mt-8 space-y-3 ${isCollapsed ? 'px-0' : 'px-2'}`}>
+                      {/* Upgrade to Premium */}
+            {!isCollapsed && (
+              <div className="mt-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
+                <div className="absolute top-2 right-2 text-3xl opacity-20">??</div>
+                <h4 className="font-bold text-[15px] mb-1">Upgrade to Premium</h4>
+                <p className="text-[12px] text-indigo-100 mb-4 leading-tight">Unlock premium questions, advanced analytics & more.</p>
+                <button className="w-full bg-white text-indigo-600 font-bold text-[13px] py-2.5 rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-1">
+                  Upgrade Now <ArrowRight size={14} />
+                </button>
+              </div>
+            )}
+\n            {/* Profile Card & Logout */}
+          <div className={`pt-5 mt-8 space-y-3 ${isCollapsed ? 'px-0' : 'px-2'}`}>
             <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-              <div className="w-10 h-10 rounded-full bg-[#e0e7ff] text-[#4f46e5] font-black text-[16px] flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-[#1e293b] text-white font-black text-[16px] flex items-center justify-center flex-shrink-0">
                 M
               </div>
               {!isCollapsed && (
                 <div className="flex flex-col min-w-0 overflow-hidden">
-                  <span className="font-bold text-[14px] text-slate-800 truncate">User</span>
-                  <span className="text-[12px] font-semibold text-slate-500 truncate">msacademics.edu@gmail.com</span>
+                  <span className="font-bold text-[14px] text-white truncate">User</span>
+                  <span className="text-[12px] font-semibold text-slate-400 truncate">msacademics.edu@gmail.com</span>
                 </div>
               )}
             </div>
 
             <button
               onClick={handleLogout}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-2'} py-2.5 mt-2 rounded-xl font-bold text-[14px] text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors`}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-2'} py-2.5 mt-2 rounded-xl font-bold text-[14px] text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors`}
             >
               <LogOut size={18} className="text-slate-500" />
               {!isCollapsed && <span>Logout</span>}
@@ -1009,11 +1020,12 @@ export default function AdminDashboard() {
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Total Tests</span>
                   </div>
                 </div>
-                <div className="flex items-center text-[#16A34A] gap-2 mt-auto pt-1">
-                  <div className="w-[18px] h-[18px] rounded-full bg-green-50 flex items-center justify-center shrink-0">
-                    <ArrowUpRight size={12} strokeWidth={3} />
+                <div className="flex items-end justify-between w-full mt-auto pt-1">
+                  <div className="flex items-center text-[#16A34A] gap-1.5">
+                    <ArrowUpRight size={14} strokeWidth={3} />
+                    <span className="text-[12px] font-semibold tracking-tight">12% this month</span>
                   </div>
-                  <span className="text-[13px] font-semibold tracking-tight">12% this month</span>
+                  <svg className="w-16 h-8 text-blue-300 opacity-60" viewBox="0 0 100 30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M0 25 Q 15 20 25 15 T 50 15 T 75 10 T 100 5"/></svg>
                 </div>
               </div>
 
@@ -1031,11 +1043,12 @@ export default function AdminDashboard() {
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Total Students</span>
                   </div>
                 </div>
-                <div className="flex items-center text-[#16A34A] gap-2 mt-auto pt-1">
-                  <div className="w-[18px] h-[18px] rounded-full bg-green-50 flex items-center justify-center shrink-0">
-                    <ArrowUpRight size={12} strokeWidth={3} />
+                <div className="flex items-end justify-between w-full mt-auto pt-1">
+                  <div className="flex items-center text-[#16A34A] gap-1.5">
+                    <ArrowUpRight size={14} strokeWidth={3} />
+                    <span className="text-[12px] font-semibold tracking-tight">8% this month</span>
                   </div>
-                  <span className="text-[13px] font-semibold tracking-tight">8% this month</span>
+                  <svg className="w-16 h-8 text-purple-300 opacity-60" viewBox="0 0 100 30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M0 20 Q 20 15 30 25 T 60 10 T 80 5 T 100 15"/></svg>
                 </div>
               </div>
 
@@ -1053,11 +1066,12 @@ export default function AdminDashboard() {
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Completion Rate</span>
                   </div>
                 </div>
-                <div className="flex items-center text-[#16A34A] gap-2 mt-auto pt-1">
-                  <div className="w-[18px] h-[18px] rounded-full bg-green-50 flex items-center justify-center shrink-0">
-                    <ArrowUpRight size={12} strokeWidth={3} />
+                <div className="flex items-end justify-between w-full mt-auto pt-1">
+                  <div className="flex items-center text-[#16A34A] gap-1.5">
+                    <ArrowUpRight size={14} strokeWidth={3} />
+                    <span className="text-[12px] font-semibold tracking-tight">5% this month</span>
                   </div>
-                  <span className="text-[13px] font-semibold tracking-tight">5% this month</span>
+                  <svg className="w-16 h-8 text-emerald-300 opacity-60" viewBox="0 0 100 30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M0 15 Q 15 25 35 15 T 65 10 T 85 5 T 100 10"/></svg>
                 </div>
               </div>
 
@@ -1075,11 +1089,12 @@ export default function AdminDashboard() {
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Average Score</span>
                   </div>
                 </div>
-                <div className="flex items-center text-[#16A34A] gap-2 mt-auto pt-1">
-                  <div className="w-[18px] h-[18px] rounded-full bg-green-50 flex items-center justify-center shrink-0">
-                    <ArrowUpRight size={12} strokeWidth={3} />
+                <div className="flex items-end justify-between w-full mt-auto pt-1">
+                  <div className="flex items-center text-[#16A34A] gap-1.5">
+                    <ArrowUpRight size={14} strokeWidth={3} />
+                    <span className="text-[12px] font-semibold tracking-tight">7% this month</span>
                   </div>
-                  <span className="text-[13px] font-semibold tracking-tight">7% this month</span>
+                  <svg className="w-16 h-8 text-orange-300 opacity-60" viewBox="0 0 100 30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M0 25 Q 15 10 30 15 T 50 10 T 70 20 T 100 5"/></svg>
                 </div>
               </div>
 
@@ -1153,6 +1168,7 @@ export default function AdminDashboard() {
                               <div className="flex items-center gap-2 text-[14px] font-medium whitespace-nowrap">
                                 <Trophy size={16} className="opacity-70" /> {test.marks} Marks
                               </div>
+                              <ChevronRight size={18} className="opacity-40 group-hover:opacity-100 group-hover:text-[#2563EB] transition-all ml-2 shrink-0" />
                             </div>
                           </div>
 
@@ -1192,32 +1208,31 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Secondary Action 1 (Students) */}
-                  <button className="bg-white border border-[#EEF2F7] rounded-[20px] h-[80px] px-5 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group cursor-pointer text-left w-full overflow-hidden">
+                  <button className="bg-white border border-[#EEF2F7] rounded-[20px] h-[80px] px-4 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group cursor-pointer text-left w-full overflow-hidden">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-[42px] h-[42px] shrink-0 rounded-full bg-gradient-to-br from-[#EEF6FF] to-[#DCEEFF] flex items-center justify-center text-[#2563EB]">
-                        <Users size={20} strokeWidth={2.5} />
+                      <div className="w-[38px] h-[38px] shrink-0 rounded-full bg-gradient-to-br from-[#EEF6FF] to-[#DCEEFF] flex items-center justify-center text-[#2563EB]">
+                        <Users size={18} strokeWidth={2.5} />
                       </div>
-                      <h4 className="font-bold text-[16px] text-[#0F172A] font-sans shrink-0">Students</h4>
+                      <div className="flex flex-col min-w-0">
+                        <h4 className="font-bold text-[14px] text-[#0F172A] font-sans">Students</h4>
+                        <span className="text-[11px] text-[#64748B] font-medium whitespace-nowrap overflow-hidden text-ellipsis">Manage all students</span>
+                      </div>
                     </div>
+                    <ArrowRight size={14} className="text-slate-400 group-hover:text-blue-600 transition-colors ml-1 shrink-0" strokeWidth={2.5} />
                   </button>
 
                   {/* Secondary Action 2 (Analytics) */}
-                  <button className="bg-white border border-[#EEF2F7] rounded-[20px] h-[80px] px-5 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group cursor-pointer text-left w-full overflow-hidden">
+                  <button className="bg-white border border-[#EEF2F7] rounded-[20px] h-[80px] px-4 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group cursor-pointer text-left w-full overflow-hidden">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-[42px] h-[42px] shrink-0 rounded-full bg-gradient-to-br from-indigo-50 to-purple-100 flex items-center justify-center text-indigo-600">
-                        <BarChart2 size={20} strokeWidth={2.5} />
+                      <div className="w-[38px] h-[38px] shrink-0 rounded-full bg-gradient-to-br from-indigo-50 to-purple-100 flex items-center justify-center text-indigo-600">
+                        <BarChart2 size={18} strokeWidth={2.5} />
                       </div>
-                      <h4 className="font-bold text-[16px] text-[#0F172A] font-sans shrink-0">Analytics</h4>
+                      <div className="flex flex-col min-w-0">
+                        <h4 className="font-bold text-[14px] text-[#0F172A] font-sans">Analytics</h4>
+                        <span className="text-[11px] text-[#64748B] font-medium whitespace-nowrap overflow-hidden text-ellipsis">View all reports</span>
+                      </div>
                     </div>
-                  </button>
-                  
-                  {/* Secondary Action 3 (Manage Faculty, Spans 2 cols) */}
-                  <button className="col-span-2 bg-white border border-[#EEF2F7] rounded-[20px] h-[70px] px-6 py-0 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group text-left w-full overflow-hidden">
-                    <h4 className="font-bold text-[16px] text-[#0F172A] font-sans shrink-0">Manage Faculty</h4>
-                    
-                    <div className="w-8 h-8 shrink-0 rounded-full bg-slate-50 text-slate-600 border border-slate-100 flex items-center justify-center group-hover:translate-x-1 transition-transform group-hover:bg-blue-50 group-hover:text-blue-600 group-hover:border-blue-100 ml-2">
-                      <ArrowRight size={16} strokeWidth={2.5} />
-                    </div>
+                    <ArrowRight size={14} className="text-slate-400 group-hover:text-indigo-600 transition-colors ml-1 shrink-0" strokeWidth={2.5} />
                   </button>
                 </div>
 
@@ -1332,24 +1347,22 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    <div className="bg-[#F8FAFC] rounded-[14px] p-3 flex items-center gap-3 border border-[#F1F5F9]">
-                      <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600"><Sparkles size={14} strokeWidth={2.5} /></div>
-                      <div className="flex flex-col">
-                        <span className="text-[15px] font-bold text-[#0F172A] leading-tight">98%</span>
-                        <span className="text-[11px] font-medium text-[#64748B]">Avg Engagement</span>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#F8FAFC] rounded-[14px] p-3 flex items-center gap-3 border border-[#F1F5F9]">
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600"><Calendar size={14} strokeWidth={2.5} /></div>
-                      <div className="flex flex-col">
-                        <span className="text-[15px] font-bold text-[#0F172A] leading-tight">28 Days</span>
-                        <span className="text-[11px] font-medium text-[#64748B]">Tracked</span>
-                      </div>
-                    </div>
-
                   </div>
+                </div>
 
+                {/* Keep it up Banner */}
+                <div className="bg-gradient-to-r from-blue-700 to-indigo-800 rounded-[26px] p-6 shadow-[0_12px_35px_rgba(37,99,235,0.2)] flex justify-between items-center relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -ml-10 -mb-10"></div>
+                  <div className="relative z-10 flex flex-col w-[60%]">
+                    <h3 className="text-[20px] font-bold text-white mb-2 leading-tight">Keep it up!</h3>
+                    <p className="text-[13px] text-blue-100 font-medium leading-relaxed">Your academy performance is better than last month.</p>
+                  </div>
+                  <div className="relative z-10">
+                    <div className="w-20 h-20 bg-yellow-400 rounded-full flex items-center justify-center text-4xl shadow-[0_0_30px_rgba(250,204,21,0.4)] group-hover:scale-110 transition-transform">
+                      🏆
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -1756,7 +1769,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-3 overflow-hidden w-full">
                   <FileText size={24} className="text-[#1d4ed8] shrink-0" />
                   <div className="flex flex-col overflow-hidden w-full">
-                    <span className="text-xs font-bold text-slate-800 truncate">{selectedApp.resumeName || `Resume_${selectedApp.fullName.replace(/\s+/g, '_')}.pdf`}</span>
+                    <span className="text-xs font-bold text-white truncate">{selectedApp.resumeName || `Resume_${selectedApp.fullName.replace(/\s+/g, '_')}.pdf`}</span>
                     <span className="text-[10px] font-medium text-slate-400">Document</span>
                   </div>
                 </div>
