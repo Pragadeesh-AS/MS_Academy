@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
