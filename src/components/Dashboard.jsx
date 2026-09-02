@@ -9,6 +9,7 @@ import { ref, listAll, getDownloadURL } from 'firebase/storage';
 import StudentLiveClasses from './StudentLiveClasses';
 import StudentTests from './StudentTests';
 import PDFViewer from './PDFViewer';
+import { gateCoursesData } from './GateCourses';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -190,6 +191,7 @@ export default function Dashboard() {
             
             if (data.department) {
               setStudentDepartment(data.department);
+              localStorage.setItem('student_department', data.department);
             }
             if (data.isPro) {
               setIsPro(true);
@@ -227,6 +229,7 @@ export default function Dashboard() {
         onboardingCompleted: true
       });
       setStudentDepartment(formData.department);
+      localStorage.setItem('student_department', formData.department);
       setShowOnboarding(false);
     } catch (e) {
       console.error("Error updating onboarding details", e);
@@ -489,67 +492,42 @@ export default function Dashboard() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 
-                {/* Course Card 1 */}
-                <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-blue-500/5 hover:-translate-y-1 transition-all cursor-pointer group">
-                  <div className="flex items-start justify-between mb-5">
-                    <div className="w-12 h-12 rounded-[14px] flex items-center justify-center bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-inner">
-                      <BookOpen size={24} />
+                {/* Dynamic Course Card */}
+                {(() => {
+                  const match = studentDepartment?.match(/\(([^)]+)\)/);
+                  const deptCode = match ? match[1] : null;
+                  const course = gateCoursesData.find(c => c.code === deptCode);
+                  
+                  if (!course) return (
+                    <div className="col-span-full text-center text-slate-500 py-6">
+                      No specific courses found for your department.
                     </div>
-                    <span className="text-xs font-[900] text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">45%</span>
-                  </div>
-                  <h3 className="font-[900] text-slate-900 text-[17px] mb-4 group-hover:text-blue-600 transition-colors leading-snug">Computer Science & IT (GATE 2027)</h3>
+                  );
                   
-                  {/* Progress Bar */}
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full mb-4 overflow-hidden shadow-inner">
-                    <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full w-[45%] relative">
-                      <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]"></div>
+                  const Icon = course.icon || BookOpen;
+                  
+                  return (
+                    <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-blue-500/5 hover:-translate-y-1 transition-all cursor-pointer group" onClick={() => navigate(course.path)}>
+                      <div className="flex items-start justify-between mb-5">
+                        <div className="w-12 h-12 rounded-[14px] flex items-center justify-center bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-inner">
+                          <Icon size={24} />
+                        </div>
+                        <span className="text-xs font-[900] text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">0%</span>
+                      </div>
+                      <h3 className="font-[900] text-slate-900 text-[17px] mb-4 group-hover:text-blue-600 transition-colors leading-snug">{course.name}</h3>
+                      
+                      {/* Progress Bar */}
+                      <div className="w-full bg-slate-100 h-2.5 rounded-full mb-4 overflow-hidden shadow-inner">
+                        <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full w-[0%] relative">
+                        </div>
+                      </div>
+                      
+                      <p className="text-[13px] text-slate-500 font-bold flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span> Start Learning
+                      </p>
                     </div>
-                  </div>
-                  
-                  <p className="text-[13px] text-slate-500 font-bold flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span> Up next: Data Structures (Trees)
-                  </p>
-                </div>
-
-                {/* Course Card 2 */}
-                <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-indigo-500/5 hover:-translate-y-1 transition-all cursor-pointer group">
-                  <div className="flex items-start justify-between mb-5">
-                    <div className="w-12 h-12 rounded-[14px] flex items-center justify-center bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors shadow-inner">
-                      <BookOpen size={24} />
-                    </div>
-                    <span className="text-xs font-[900] text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">78%</span>
-                  </div>
-                  <h3 className="font-[900] text-slate-900 text-[17px] mb-4 group-hover:text-indigo-600 transition-colors leading-snug">Engineering Mathematics (Common)</h3>
-                  
-                  {/* Progress Bar */}
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full mb-4 overflow-hidden shadow-inner">
-                    <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full w-[78%]"></div>
-                  </div>
-                  
-                  <p className="text-[13px] text-slate-500 font-bold flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span> Up next: Linear Algebra Matrices
-                  </p>
-                </div>
-
-                {/* Course Card 3 */}
-                <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-emerald-500/5 hover:-translate-y-1 transition-all cursor-pointer group">
-                  <div className="flex items-start justify-between mb-5">
-                    <div className="w-12 h-12 rounded-[14px] flex items-center justify-center bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-colors shadow-inner">
-                      <BookOpen size={24} />
-                    </div>
-                    <span className="text-xs font-[900] text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">12%</span>
-                  </div>
-                  <h3 className="font-[900] text-slate-900 text-[17px] mb-4 group-hover:text-emerald-600 transition-colors leading-snug">General Aptitude (Common)</h3>
-                  
-                  {/* Progress Bar */}
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full mb-4 overflow-hidden shadow-inner">
-                    <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-full rounded-full w-[12%]"></div>
-                  </div>
-                  
-                  <p className="text-[13px] text-slate-500 font-bold flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Up next: Quantitative Aptitude 1
-                  </p>
-                </div>
+                  );
+                })()}
 
               </div>
             </div>

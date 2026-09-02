@@ -197,6 +197,7 @@ export default function App() {
                     localStorage.removeItem('auth_role');
                     localStorage.removeItem('auth_email');
                     localStorage.removeItem('auth_name');
+                    localStorage.removeItem('student_department');
                     setUserRole(null);
                     setUserName(null);
                     navigate('/login');

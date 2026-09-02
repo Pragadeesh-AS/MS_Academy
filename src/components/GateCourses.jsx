@@ -285,15 +285,27 @@ const postGateOpportunities = [
 
 export default function GateCourses() {
   const [coursesList] = React.useState(() => {
+    let baseList = gateCoursesData;
     const saved = localStorage.getItem('gate_courses_config');
     if (saved) {
       const overrides = JSON.parse(saved);
-      return gateCoursesData.map(c => {
+      baseList = gateCoursesData.map(c => {
         const override = overrides.find(o => o.code === c.code);
         return override ? { ...c, ...override } : c;
       });
     }
-    return gateCoursesData;
+    
+    // Filter by student department if logged in as student
+    const role = localStorage.getItem('auth_role');
+    const studentDept = localStorage.getItem('student_department');
+    if (role === 'student' && studentDept) {
+      const match = studentDept.match(/\(([^)]+)\)/);
+      if (match && match[1]) {
+        const deptCode = match[1];
+        return baseList.filter(c => c.code === deptCode);
+      }
+    }
+    return baseList;
   });
 
   return (
