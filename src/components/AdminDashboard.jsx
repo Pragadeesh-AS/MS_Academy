@@ -806,7 +806,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('queries')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'queries' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Users size={20} className=\"text-slate-400\" />
+                <Users size={20} className="text-slate-400" />
                 {!isCollapsed && <span>Students</span>}
               </button>
 
@@ -857,7 +857,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('attributes')}
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'attributes' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Tag size={20} className=\"text-slate-400\" />
+                <Tag size={20} className="text-slate-400" />
                 {!isCollapsed && <span>Attributes</span>}
               </button>
 
@@ -865,7 +865,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('analytics')}
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'analytics' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <BarChart2 size={20} className=\"text-slate-400\" />
+                <BarChart2 size={20} className="text-slate-400" />
                 {!isCollapsed && <span>Analytics</span>}
               </button>
 
@@ -897,7 +897,7 @@ export default function AdminDashboard() {
               </button>
 
               <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all`}>
-                <FileText size={20} className=\"text-slate-400\" />
+                <FileText size={20} className="text-slate-400" />
                 {!isCollapsed && <span>Blogs</span>}
               </button>
 
@@ -905,7 +905,7 @@ export default function AdminDashboard() {
                 onClick={() => setActiveTab('popup')}
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'popup' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <Megaphone size={20} className=\"text-slate-400\" />
+                <Megaphone size={20} className="text-slate-400" />
                 {!isCollapsed && <span>Popup</span>}
               </button>
 
