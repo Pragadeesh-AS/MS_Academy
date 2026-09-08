@@ -23,6 +23,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
 
   const timerRef = useRef(null);
+  const startTimeRef = useRef(null);
 
   useEffect(() => {
     fetchTestsAndAttempts();
@@ -80,6 +81,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         };
       });
 
+      startTimeRef.current = Date.now();
       setTestQuestions(matchedQuestions);
       setActiveTest(test);
       setTestMode('taking');
@@ -125,6 +127,9 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     setLoading(true);
     let correctCount = 0;
     
+    const timeTakenSeconds = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
+    const avgTimePerQuestion = questionsList.length > 0 ? timeTakenSeconds / questionsList.length : 0;
+    
     // Evaluate answers
     const evaluation = questionsList.map(q => {
       const studentAns = answers[q.id] || '';
@@ -144,7 +149,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         questionId: q.id,
         selectedAnswer: studentAns,
         isCorrect,
-        correctAnswer: q.questionType === 'Fill in the Blank' ? q.fillBlankAnswer : q.correctAnswer
+        correctAnswer: q.questionType === 'Fill in the Blank' ? q.fillBlankAnswer : q.correctAnswer,
+        timeSpent: avgTimePerQuestion
       };
     });
 
