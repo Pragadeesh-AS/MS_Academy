@@ -137,9 +137,34 @@ export default function LoginSignup() {
           window.dispatchEvent(new Event('storage'));
           navigate('/admin');
         } else {
-          const userName = user.displayName || user.email.split('@')[0];
           const isTeacher = await checkTeacherRole(user.email);
           const isTypist = await checkTypistRole(user.email);
+          
+          // Try to fetch existing name from database
+          let existingName = null;
+          try {
+            const studentQ = query(collection(db, 'joined_students'), where('email', '==', user.email));
+            const studentSnap = await getDocs(studentQ);
+            if (!studentSnap.empty && studentSnap.docs[0].data().name) {
+              existingName = studentSnap.docs[0].data().name;
+            } else if (isTeacher) {
+              const teacherQ = query(collection(db, 'invited_teachers'), where('email', '==', user.email));
+              const teacherSnap = await getDocs(teacherQ);
+              if (!teacherSnap.empty && teacherSnap.docs[0].data().name) {
+                existingName = teacherSnap.docs[0].data().name;
+              }
+            } else if (isTypist) {
+              const typistQ = query(collection(db, 'invited_typists'), where('typistEmail', '==', user.email));
+              const typistSnap = await getDocs(typistQ);
+              if (!typistSnap.empty && typistSnap.docs[0].data().typistName) {
+                existingName = typistSnap.docs[0].data().typistName;
+              }
+            }
+          } catch (e) {
+            console.error("Error fetching existing name", e);
+          }
+
+          const userName = existingName || user.displayName || user.email.split('@')[0];
           
           if (isTeacher) {
             localStorage.setItem('auth_role', 'teacher');
@@ -215,9 +240,34 @@ export default function LoginSignup() {
         return;
       }
 
-      const userName = user.displayName || userEmail.split('@')[0] || 'User';
       const isTeacher = await checkTeacherRole(userEmail);
       const isTypist = await checkTypistRole(userEmail);
+      
+      // Fetch existing name from database if it exists
+      let existingName = null;
+      try {
+        const studentQ = query(collection(db, 'joined_students'), where('email', '==', userEmail));
+        const studentSnap = await getDocs(studentQ);
+        if (!studentSnap.empty && studentSnap.docs[0].data().name) {
+          existingName = studentSnap.docs[0].data().name;
+        } else if (isTeacher) {
+          const teacherQ = query(collection(db, 'invited_teachers'), where('email', '==', userEmail));
+          const teacherSnap = await getDocs(teacherQ);
+          if (!teacherSnap.empty && teacherSnap.docs[0].data().name) {
+            existingName = teacherSnap.docs[0].data().name;
+          }
+        } else if (isTypist) {
+          const typistQ = query(collection(db, 'invited_typists'), where('typistEmail', '==', userEmail));
+          const typistSnap = await getDocs(typistQ);
+          if (!typistSnap.empty && typistSnap.docs[0].data().typistName) {
+            existingName = typistSnap.docs[0].data().typistName;
+          }
+        }
+      } catch (e) {
+        console.error("Error fetching existing name", e);
+      }
+
+      const userName = existingName || user.displayName || userEmail.split('@')[0] || 'User';
       
       if (isTeacher) {
         localStorage.setItem('auth_role', 'teacher');

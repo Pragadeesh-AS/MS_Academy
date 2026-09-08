@@ -11,7 +11,7 @@ import {
   Calendar,
   Plus,
   Clock,
-  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud, MoreHorizontal
+  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud, MoreHorizontal, Trophy
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import AgoraRTC, {
@@ -182,6 +182,54 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded, onAudioTrackRe
 };
 
 // Extracted TeacherCall component for custom Agora rendering
+const LeaderboardView = ({ participantNames, participantScores }) => {
+  const leaderboard = Object.keys(participantScores)
+    .map(uid => ({
+       uid,
+       name: participantNames[uid] || 'Student',
+       score: participantScores[uid]
+    }))
+    .filter(p => p.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
+
+  if (leaderboard.length === 0) {
+    return (
+      <div className="bg-white/80 rounded-2xl p-6 border border-slate-200 shadow-sm pointer-events-auto">
+         <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 mb-4">
+            <Trophy className="text-yellow-500" size={24} /> 
+            Live Leaderboard
+         </h3>
+         <div className="text-slate-500 text-sm font-medium">No scores yet. Answer correctly to get on the board!</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white/80 rounded-2xl p-6 border border-slate-200 shadow-sm pointer-events-auto">
+       <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 mb-4">
+          <Trophy className="text-yellow-500" size={24} /> 
+          Live Leaderboard
+       </h3>
+       <div className="space-y-3">
+         {leaderboard.map((student, idx) => (
+            <div key={student.uid} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+               <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-100 text-yellow-700' : idx === 1 ? 'bg-slate-200 text-slate-700' : idx === 2 ? 'bg-amber-100/50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                    #{idx + 1}
+                  </div>
+                  <span className="font-bold text-slate-700">{student.name}</span>
+               </div>
+               <div className="font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">
+                  {student.score} pts
+               </div>
+            </div>
+         ))}
+       </div>
+    </div>
+  )
+}
+
 const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, departmentQuestions, department }) => {
   const [activeTab, setActiveTab] = useState('chat');
   const [isRevealing, setIsRevealing] = useState(false);
@@ -195,6 +243,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   useEffect(() => { whiteboardOnRef.current = whiteboardOn; }, [whiteboardOn]);
   const [pinnedUid, setPinnedUid] = useState(null);
   const [participantNames, setParticipantNames] = useState({});
+  const [participantScores, setParticipantScores] = useState({});
   const client = useRTCClient();
   const connectionState = useConnectionState();
   const remoteUsers = useRemoteUsers();
@@ -241,8 +290,13 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     // Listen for participant names
     const unsubParticipants = onSnapshot(collection(db, 'live_sessions', sessionId, 'participants'), (snapshot) => {
       const names = {};
-      snapshot.forEach(d => { names[d.id] = d.data().name; });
+      const scores = {};
+      snapshot.forEach(d => { 
+        names[d.id] = d.data().name; 
+        scores[d.id] = d.data().score || 0;
+      });
       setParticipantNames(names);
+      setParticipantScores(scores);
     });
 
     // Listen for session state (Question Bank sync)
@@ -498,29 +552,36 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
               </div>
 
               {/* Bottom: Options (Left 40%) */}
-              <div id="qb-options-area" className="w-full md:w-[45%] flex flex-col">
-                {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
-                  <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
-                    <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[30vh]' : 'max-h-16'} object-contain`} />
+              <div className="flex flex-col md:flex-row w-full gap-8">
+                <div id="qb-options-area" className="w-full md:w-[45%] flex flex-col">
+                  {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
+                    <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
+                      <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[30vh]' : 'max-h-16'} object-contain`} />
+                    </div>
+                  )}
+
+                  <div className={`flex flex-col gap-4 md:gap-5 ${isPinned ? 'ml-20' : 'ml-10'}`}>
+                    {['A', 'B', 'C', 'D'].map(opt => {
+                      const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
+                      if (!text) return null;
+                      const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
+                      const isRevealed = activeQuestionState.isAnswerRevealed;
+
+                      return (
+                        <div id={`qb-opt-container-${opt}`} key={opt} className={`flex items-center text-base md:text-lg font-semibold transition-all ${isRevealed && isCorrect ? 'text-green-600 bg-green-50 p-4 rounded-xl inline-block w-max' : 'text-slate-800 p-3'}`}>
+                          <span id={`qb-opt-prefix-${opt}`} className="mr-4 font-bold shrink-0 whitespace-nowrap">( {opt} )</span>
+                          <span id={`qb-opt-text-${opt}`} dangerouslySetInnerHTML={{ __html: text }} />
+                          {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {activeQuestionState.isAnswerRevealed && (
+                  <div className="w-full md:w-[50%] flex flex-col pt-4 md:pt-0">
+                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} />
                   </div>
                 )}
-
-                <div className={`flex flex-col gap-4 md:gap-5 ${isPinned ? 'ml-20' : 'ml-10'}`}>
-                  {['A', 'B', 'C', 'D'].map(opt => {
-                    const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
-                    if (!text) return null;
-                    const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
-                    const isRevealed = activeQuestionState.isAnswerRevealed;
-
-                    return (
-                      <div id={`qb-opt-container-${opt}`} key={opt} className={`flex items-center text-base md:text-lg font-semibold transition-all ${isRevealed && isCorrect ? 'text-green-600 bg-green-50 p-4 rounded-xl inline-block w-max' : 'text-slate-800 p-3'}`}>
-                        <span id={`qb-opt-prefix-${opt}`} className="mr-4 font-bold shrink-0 whitespace-nowrap">( {opt} )</span>
-                        <span id={`qb-opt-text-${opt}`} dangerouslySetInnerHTML={{ __html: text }} />
-                        {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500" />}
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
             </div>
           </div>
@@ -1274,11 +1335,39 @@ export default function LiveClasses({ department }) {
     }
   };
 
+  const [dynamicToken, setDynamicToken] = useState(null);
+  const [tokenError, setTokenError] = useState(null);
+
+  useEffect(() => {
+    if (isInCall && currentSessionId) {
+      // Fetch dynamic token
+      const fetchToken = async () => {
+        try {
+          const response = await fetch(`https://us-central1-msgate-5bad9.cloudfunctions.net/generateAgoraToken?channelName=MS_ACADEMY&role=publisher&t=${Date.now()}`);
+          const data = await response.json();
+          if (data.token) {
+            console.log("Fetched new Agora token successfully", data.token.substring(0, 20) + "...");
+            setDynamicToken(data.token);
+          } else {
+            setTokenError("Failed to get token from server");
+          }
+        } catch (err) {
+          console.error("Error fetching token:", err);
+          setTokenError("Network error while fetching token");
+        }
+      };
+      fetchToken();
+    } else {
+      setDynamicToken(null);
+      setTokenError(null);
+    }
+  }, [isInCall, currentSessionId]);
+
   if (isInCall && currentSessionId) {
     const rtcProps = {
       appId: import.meta.env.VITE_AGORA_APP_ID || '',
       channel: 'MS_ACADEMY',
-      token: import.meta.env.VITE_AGORA_TEMP_TOKEN || null,
+      token: dynamicToken,
       role: 'host',
       layout: 0,
       enableScreensharing: true
@@ -1295,6 +1384,18 @@ export default function LiveClasses({ department }) {
             <h3 className="text-2xl font-bold text-red-400 mb-4">Agora App ID Missing</h3>
             <p className="text-slate-300 max-w-md">Please add your Agora App ID to the <code className="bg-slate-800 px-2 py-1 rounded">.env</code> file as <code className="bg-slate-800 px-2 py-1 rounded">VITE_AGORA_APP_ID</code> and restart the server.</p>
             <button onClick={handleEndMeet} className="mt-6 px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors">Go Back</button>
+          </div>
+        ) : tokenError ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-white p-8 text-center">
+            <h3 className="text-2xl font-bold text-red-400 mb-4">Connection Error</h3>
+            <p className="text-slate-300 max-w-md">{tokenError}</p>
+            <button onClick={handleEndMeet} className="mt-6 px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors">Go Back</button>
+          </div>
+        ) : !dynamicToken ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-white p-8 text-center">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <h3 className="text-xl font-bold text-white mb-2">Connecting securely...</h3>
+            <p className="text-slate-400 text-sm">Generating your session access token.</p>
           </div>
         ) : (
           <div className="flex-1 w-full h-full flex overflow-hidden">

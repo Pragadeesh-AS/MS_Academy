@@ -15,10 +15,11 @@ import {
   X,
   CheckCircle2,
   WifiOff,
-  Lock
+  Lock,
+  Trophy
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp, setDoc, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, serverTimestamp, setDoc, doc, updateDoc, increment } from 'firebase/firestore';
 import AgoraRTC, { 
   AgoraRTCProvider, 
   useRTCClient, 
@@ -42,6 +43,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   const [pinnedUid, setPinnedUid] = useState(null);
   const [participantNames, setParticipantNames] = useState({});
   const [participantRoles, setParticipantRoles] = useState({});
+  const [participantScores, setParticipantScores] = useState({});
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
   const client = useRTCClient();
@@ -58,7 +60,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   }, [client.uid, sessionId]);
 
   const [activeQuestionState, setActiveQuestionState] = useState(null);
-  const [studentGuess, setStudentGuess] = useState(null); // The option the student guessed
+  const [studentGuess, setStudentGuess] = useState(null);
+  const [guessProcessed, setGuessProcessed] = useState(false); // The option the student guessed
 
   useEffect(() => {
     if (!sessionId) return;
@@ -67,12 +70,15 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     const unsubParticipants = onSnapshot(collection(db, 'live_sessions', sessionId, 'participants'), (snapshot) => {
       const names = {};
       const roles = {};
+      const scores = {};
       snapshot.forEach(d => { 
         names[d.id] = d.data().name; 
         roles[d.id] = d.data().role;
+        scores[d.id] = d.data().score || 0;
       });
       setParticipantNames(names);
       setParticipantRoles(roles);
+      setParticipantScores(scores);
     });
 
     // Listen for session state (Question Bank sync)
@@ -84,12 +90,14 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
           setActiveQuestionState(prevState => {
             if (prevState && data.activeQuestionState && prevState.currentIndex !== data.activeQuestionState.currentIndex) {
               setStudentGuess(null);
+              setGuessProcessed(false);
             }
             return data.activeQuestionState;
           });
         } else {
           setActiveQuestionState(null);
           setStudentGuess(null);
+          setGuessProcessed(false);
         }
       }
     });
@@ -99,6 +107,19 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
       unsubSession();
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    if (activeQuestionState?.isAnswerRevealed && studentGuess && !guessProcessed) {
+      const currentQuestion = activeQuestionState.questions[activeQuestionState.currentIndex];
+      if (currentQuestion && studentGuess === currentQuestion.correctAnswer && client.uid && sessionId) {
+         const participantRef = doc(db, 'live_sessions', sessionId, 'participants', client.uid.toString());
+         updateDoc(participantRef, {
+             score: increment(1)
+         }).catch(console.error);
+      }
+      setGuessProcessed(true);
+    }
+  }, [activeQuestionState?.isAnswerRevealed, studentGuess, guessProcessed, activeQuestionState?.currentIndex, client.uid, sessionId]);
 
   const [localMicrophoneTrack, setLocalMicrophoneTrack] = useState(null);
   const [localCameraTrack, setLocalCameraTrack] = useState(null);
@@ -265,44 +286,51 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
               </div>
               
               {/* Bottom: Options (Left 40%) */}
-              <div id="qb-options-area" className="w-full md:w-[45%] flex flex-col">
-                {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
-                  <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
-                    <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[30vh]' : 'max-h-16'} object-contain`} />
+              <div className="flex flex-col md:flex-row w-full gap-8">
+                <div id="qb-options-area" className="w-full md:w-[45%] flex flex-col">
+                  {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
+                    <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
+                      <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[30vh]' : 'max-h-16'} object-contain`} />
+                    </div>
+                  )}
+                  <div className={`flex flex-col gap-4 md:gap-5 ${isPinned ? 'ml-20' : 'ml-10'}`}>
+                    {['A', 'B', 'C', 'D'].map(opt => {
+                      const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
+                      if (!text) return null;
+                      const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
+                      const isGuessed = studentGuess === opt;
+                      const isRevealed = activeQuestionState.isAnswerRevealed;
+
+                      let bgClass = 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200';
+                      if (isRevealed) {
+                        if (isCorrect) bgClass = 'bg-green-100 text-green-800 border-green-300 shadow-sm';
+                        else if (isGuessed) bgClass = 'bg-red-50 text-red-700 border-red-200';
+                        else bgClass = 'bg-slate-50/50 text-slate-400 border-slate-100';
+                      } else if (isGuessed) {
+                        bgClass = 'bg-indigo-100 text-indigo-800 border-indigo-300 shadow-sm';
+                      }
+
+                      return (
+                        <button
+                          id={`qb-opt-container-${opt}`}
+                          key={opt}
+                          onClick={() => !isRevealed && setStudentGuess(opt)}
+                          className={`flex items-center text-base md:text-lg font-semibold transition-all p-3 rounded-xl ${bgClass} pointer-events-auto text-left w-max`}
+                        >
+                          <span id={`qb-opt-prefix-${opt}`} className="mr-4 font-bold shrink-0 whitespace-nowrap">( {opt} )</span> 
+                          <span id={`qb-opt-text-${opt}`} dangerouslySetInnerHTML={{ __html: text }} />
+                          {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500 shrink-0" />}
+                          {isRevealed && isGuessed && !isCorrect && <X size={24} className="inline ml-4 text-red-500 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {activeQuestionState.isAnswerRevealed && (
+                  <div className="w-full md:w-[50%] flex flex-col pt-4 md:pt-0">
+                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} />
                   </div>
                 )}
-                <div className={`flex flex-col gap-4 md:gap-5 ${isPinned ? 'ml-20' : 'ml-10'}`}>
-                  {['A', 'B', 'C', 'D'].map(opt => {
-                    const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
-                    if (!text) return null;
-                    const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
-                    const isGuessed = studentGuess === opt;
-                    const isRevealed = activeQuestionState.isAnswerRevealed;
-
-                    let bgClass = 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200';
-                    if (isRevealed) {
-                      if (isCorrect) bgClass = 'bg-green-100 text-green-800 border-green-300 shadow-sm';
-                      else if (isGuessed) bgClass = 'bg-red-50 text-red-700 border-red-200';
-                      else bgClass = 'bg-slate-50/50 text-slate-400 border-slate-100';
-                    } else if (isGuessed) {
-                      bgClass = 'bg-indigo-100 text-indigo-800 border-indigo-300 shadow-sm';
-                    }
-
-                    return (
-                      <button
-                        id={`qb-opt-container-${opt}`}
-                        key={opt}
-                        onClick={() => !isRevealed && setStudentGuess(opt)}
-                        className={`flex items-center text-base md:text-lg font-semibold transition-all p-3 rounded-xl ${bgClass} pointer-events-auto text-left w-max`}
-                      >
-                        <span id={`qb-opt-prefix-${opt}`} className="mr-4 font-bold shrink-0 whitespace-nowrap">( {opt} )</span> 
-                        <span id={`qb-opt-text-${opt}`} dangerouslySetInnerHTML={{ __html: text }} />
-                        {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500 shrink-0" />}
-                        {isRevealed && isGuessed && !isCorrect && <X size={24} className="inline ml-4 text-red-500 shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             </div>
           </div>
@@ -501,6 +529,54 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   );
 };
 
+const LeaderboardView = ({ participantNames, participantScores }) => {
+  const leaderboard = Object.keys(participantScores)
+    .map(uid => ({
+       uid,
+       name: participantNames[uid] || 'Student',
+       score: participantScores[uid]
+    }))
+    .filter(p => p.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
+
+  if (leaderboard.length === 0) {
+    return (
+      <div className="bg-white/80 rounded-2xl p-6 border border-slate-200 shadow-sm pointer-events-auto">
+         <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 mb-4">
+            <Trophy className="text-yellow-500" size={24} /> 
+            Live Leaderboard
+         </h3>
+         <div className="text-slate-500 text-sm font-medium">No scores yet. Answer correctly to get on the board!</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white/80 rounded-2xl p-6 border border-slate-200 shadow-sm pointer-events-auto">
+       <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 mb-4">
+          <Trophy className="text-yellow-500" size={24} /> 
+          Live Leaderboard
+       </h3>
+       <div className="space-y-3">
+         {leaderboard.map((student, idx) => (
+            <div key={student.uid} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+               <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? 'bg-yellow-100 text-yellow-700' : idx === 1 ? 'bg-slate-200 text-slate-700' : idx === 2 ? 'bg-amber-100/50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                    #{idx + 1}
+                  </div>
+                  <span className="font-bold text-slate-700">{student.name}</span>
+               </div>
+               <div className="font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg">
+                  {student.score} pts
+               </div>
+            </div>
+         ))}
+       </div>
+    </div>
+  )
+}
+
 export default function StudentLiveClasses({ department, isPro, purchasedBundles = [], bundles = [] }) {
   const [agoraClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
   const [isInCall, setIsInCall] = useState(false);
@@ -635,12 +711,39 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     setIsInCall(false);
   };
 
+  const [dynamicToken, setDynamicToken] = useState(null);
+  const [tokenError, setTokenError] = useState(null);
+
+  useEffect(() => {
+    if (isInCall && currentSession) {
+      const fetchToken = async () => {
+        try {
+          const response = await fetch(`https://us-central1-msgate-5bad9.cloudfunctions.net/generateAgoraToken?channelName=MS_ACADEMY&role=subscriber&t=${Date.now()}`);
+          const data = await response.json();
+          if (data.token) {
+            console.log("Fetched new Agora token successfully", data.token.substring(0, 20) + "...");
+            setDynamicToken(data.token);
+          } else {
+            setTokenError("Failed to get token from server");
+          }
+        } catch (err) {
+          console.error("Error fetching token:", err);
+          setTokenError("Network error while fetching token");
+        }
+      };
+      fetchToken();
+    } else {
+      setDynamicToken(null);
+      setTokenError(null);
+    }
+  }, [isInCall, currentSession]);
+
   if (isInCall && currentSession) {
     const rtcProps = {
       appId: import.meta.env.VITE_AGORA_APP_ID || '',
       channel: 'MS_ACADEMY',
-      token: import.meta.env.VITE_AGORA_TEMP_TOKEN || null,
-      role: 'host',
+      token: dynamicToken,
+      role: 'audience',
       layout: 0,
       enableScreensharing: true
     };
@@ -666,23 +769,36 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
         </div>
 
         {!rtcProps.appId ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-white p-8 text-center z-40">
+          <div className="flex-1 flex flex-col items-center justify-center text-white p-8 text-center">
             <h3 className="text-2xl font-bold text-red-400 mb-4">Agora App ID Missing</h3>
-            <p className="text-slate-300 max-w-md">The teacher has not configured the live streaming service properly.</p>
+            <p className="text-slate-300 max-w-md">Please add your Agora App ID to the <code className="bg-slate-800 px-2 py-1 rounded">.env</code> file as <code className="bg-slate-800 px-2 py-1 rounded">VITE_AGORA_APP_ID</code> and restart the server.</p>
             <button onClick={handleLeaveMeet} className="mt-6 px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors">Go Back</button>
           </div>
+        ) : tokenError ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-white p-8 text-center">
+            <h3 className="text-2xl font-bold text-red-400 mb-4">Connection Error</h3>
+            <p className="text-slate-300 max-w-md">{tokenError}</p>
+            <button onClick={handleLeaveMeet} className="mt-6 px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors">Go Back</button>
+          </div>
+        ) : !dynamicToken ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-white p-8 text-center">
+            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <h3 className="text-xl font-bold text-white mb-2">Connecting securely...</h3>
+            <p className="text-slate-400 text-sm">Generating your session access token.</p>
+          </div>
         ) : (
-          <div className="absolute inset-0 z-50 flex flex-col bg-slate-900">
-          {chatToast.show && (
-            <div className="absolute top-6 right-6 bg-slate-800 border border-slate-700 text-white p-4 rounded-xl shadow-2xl z-50 flex flex-col gap-1 min-w-[280px] animate-in slide-in-from-top-4 duration-300">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-blue-400 text-sm">{chatToast.sender}</span>
-                <button onClick={() => setChatToast({ show: false })}><X size={14} className="text-slate-400 hover:text-white"/></button>
-              </div>
-              <p className="text-sm text-slate-300 truncate max-w-[240px]">{chatToast.message}</p>
-              <button onClick={() => { setChatToast({ show: false }); setIsChatOpen(true); }} className="text-xs text-blue-400 font-bold mt-2 text-left hover:text-blue-300 transition-colors uppercase tracking-wider">Reply</button>
-            </div>
-          )}
+          <div className="flex-1 w-full h-full flex overflow-hidden">
+            <div className="absolute inset-0 z-50 flex flex-col bg-slate-900">
+              {chatToast.show && (
+                <div className="absolute top-6 right-6 bg-slate-800 border border-slate-700 text-white p-4 rounded-xl shadow-2xl z-50 flex flex-col gap-1 min-w-[280px] animate-in slide-in-from-top-4 duration-300">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-blue-400 text-sm">{chatToast.sender}</span>
+                    <button onClick={() => setChatToast({ show: false })}><X size={14} className="text-slate-400 hover:text-white"/></button>
+                  </div>
+                  <p className="text-sm text-slate-300 truncate max-w-[240px]">{chatToast.message}</p>
+                  <button onClick={() => { setChatToast({ show: false }); setIsChatOpen(true); }} className="text-xs text-blue-400 font-bold mt-2 text-left hover:text-blue-300 transition-colors uppercase tracking-wider">Reply</button>
+                </div>
+              )}
           <div className="flex-1 flex overflow-hidden">
             <div className="flex-1 flex flex-col relative bg-black">
             <AgoraRTCProvider client={agoraClient}>
@@ -745,6 +861,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
               </form>
             </div>
             )}
+          </div>
           </div>
           </div>
         )}
