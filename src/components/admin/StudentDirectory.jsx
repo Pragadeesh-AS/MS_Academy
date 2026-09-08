@@ -458,7 +458,7 @@ const StudentDirectory = ({
                               if (window.confirm(`Are you sure you want to cancel ${bundleName} for ${selectedStudent.name}?`)) {
                                 try {
                                   const updatedBundles = selectedStudent.purchasedBundles.filter((_, i) => i !== idx);
-                                  const isPro = updatedBundles.length > 0 ? selectedStudent.isPro : false;
+                                  const isPro = updatedBundles.length > 0 ? !!selectedStudent.isPro : false;
                                   
                                   await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), { 
                                     purchasedBundles: updatedBundles,
