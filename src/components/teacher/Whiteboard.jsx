@@ -211,7 +211,6 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       let brush = new fabric.PencilBrush(fCanvas);
       
       if (activeTool === 'highlighter') {
-         // Create a translucent color
          let r = 0, g = 0, b = 0;
          if (activeColor.startsWith('#')) {
             const hex = activeColor.replace('#', '');
@@ -227,8 +226,12 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
          brush.color = activeColor;
          brush.width = penSize;
       }
-      
       fCanvas.freeDrawingBrush = brush;
+      fCanvas.defaultCursor = 'crosshair';
+    } else if (activeTool === 'eraser') {
+      fCanvas.defaultCursor = 'cell';
+    } else {
+      fCanvas.defaultCursor = 'default';
     }
   }, [activeTool, activeColor, penSize, eraserSize, isOverlay, boardColor]);
 
@@ -288,13 +291,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
           point.y >= bound.top - tolerance && 
           point.y <= bound.top + bound.height + tolerance
         ) {
-          // Additional exact point intersection check for more precision
-          if (fCanvas.containsPoint(e.e, obj)) {
-            fCanvas.remove(obj);
-          } else {
-            // For thin lines/paths where containsPoint might fail, bounding box with small tolerance is enough to delete
-            fCanvas.remove(obj);
-          }
+          fCanvas.remove(obj);
         }
       }
     };
