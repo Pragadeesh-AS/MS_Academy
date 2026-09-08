@@ -182,14 +182,14 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded, onAudioTrackRe
 };
 
 // Extracted TeacherCall component for custom Agora rendering
-const LeaderboardView = ({ participantNames, participantScores }) => {
+const LeaderboardView = ({ participantNames, participantScores, participantRoles }) => {
   const leaderboard = Object.keys(participantScores)
+    .filter(uid => participantRoles?.[uid] !== 'teacher')
     .map(uid => ({
        uid,
        name: participantNames[uid] || 'Student',
-       score: participantScores[uid]
+       score: participantScores[uid] || 0
     }))
-    .filter(p => p.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 
@@ -244,6 +244,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [pinnedUid, setPinnedUid] = useState(null);
   const [participantNames, setParticipantNames] = useState({});
   const [participantScores, setParticipantScores] = useState({});
+  const [participantRoles, setParticipantRoles] = useState({});
   const client = useRTCClient();
   const connectionState = useConnectionState();
   const remoteUsers = useRemoteUsers();
@@ -280,7 +281,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       setDoc(doc(db, 'live_sessions', sessionId, 'participants', client.uid.toString()), {
         name: userName,
         role: 'teacher'
-      }).catch(console.error);
+      }, { merge: true }).catch(console.error);
     }
   }, [client.uid, sessionId]);
 
@@ -291,12 +292,15 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     const unsubParticipants = onSnapshot(collection(db, 'live_sessions', sessionId, 'participants'), (snapshot) => {
       const names = {};
       const scores = {};
+      const roles = {};
       snapshot.forEach(d => { 
         names[d.id] = d.data().name; 
         scores[d.id] = d.data().score || 0;
+        roles[d.id] = d.data().role;
       });
       setParticipantNames(names);
       setParticipantScores(scores);
+      setParticipantRoles(roles);
     });
 
     // Listen for session state (Question Bank sync)
@@ -579,7 +583,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                 </div>
                 {activeQuestionState.isAnswerRevealed && (
                   <div className="w-full md:w-[50%] flex flex-col pt-4 md:pt-0">
-                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} />
+                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} />
                   </div>
                 )}
               </div>

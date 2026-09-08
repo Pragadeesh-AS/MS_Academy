@@ -55,7 +55,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
       setDoc(doc(db, 'live_sessions', sessionId, 'participants', client.uid.toString()), {
         name: userName,
         role: 'student'
-      }).catch(console.error);
+      }, { merge: true }).catch(console.error);
     }
   }, [client.uid, sessionId]);
 
@@ -328,7 +328,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
                 </div>
                 {activeQuestionState.isAnswerRevealed && (
                   <div className="w-full md:w-[50%] flex flex-col pt-4 md:pt-0">
-                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} />
+                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} />
                   </div>
                 )}
               </div>
@@ -529,14 +529,14 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   );
 };
 
-const LeaderboardView = ({ participantNames, participantScores }) => {
+const LeaderboardView = ({ participantNames, participantScores, participantRoles }) => {
   const leaderboard = Object.keys(participantScores)
+    .filter(uid => participantRoles?.[uid] !== 'teacher')
     .map(uid => ({
        uid,
        name: participantNames[uid] || 'Student',
-       score: participantScores[uid]
+       score: participantScores[uid] || 0
     }))
-    .filter(p => p.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 
