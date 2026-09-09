@@ -1150,6 +1150,7 @@ export default function LiveClasses({ department }) {
   // Modals
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+  const [classToDelete, setClassToDelete] = useState(null);
 
   const [newClass, setNewClass] = useState({ topic: '', time: '', selectedStudents: [], bundleId: '' });
   const [startClassData, setStartClassData] = useState({ topic: '', bundleId: '' });
@@ -1404,6 +1405,7 @@ export default function LiveClasses({ department }) {
         topic: newClass.topic,
         time: newClass.time,
         students: newClass.selectedStudents.length || departmentStudents.length,
+        selectedStudentNames: newClass.selectedStudents.length > 0 ? newClass.selectedStudents : [], // Store names to notify on cancellation
         duration: "1h 00m"
       }
     ]);
@@ -1412,6 +1414,54 @@ export default function LiveClasses({ department }) {
     
     // Optional user feedback
     alert('Class scheduled successfully and emails sent to students!');
+  };
+
+  const confirmCancelScheduledClass = async () => {
+    if (!classToDelete) return;
+    
+    // Determine which students to email
+    const studentsToEmail = classToDelete.selectedStudentNames && classToDelete.selectedStudentNames.length > 0 
+      ? departmentStudents.filter(s => classToDelete.selectedStudentNames.includes(s.name))
+      : departmentStudents;
+
+    const teacherName = localStorage.getItem('auth_name') || 'Your Teacher';
+
+    for (const student of studentsToEmail) {
+      if (student.email) {
+        const htmlMessage = `
+          <div style="font-family: sans-serif; padding: 20px;">
+            <h2>Hello ${student.name},</h2>
+            <p>The following live class has been <strong>cancelled</strong>:</p>
+            <table style="margin: 20px 0; border-collapse: collapse; width: 100%; max-width: 500px;">
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; width: 120px;">Topic</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${classToDelete.topic}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Date & Time</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${classToDelete.time}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Teacher</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${teacherName}</td>
+              </tr>
+            </table>
+            <p>Please disregard the previous invitation.</p>
+            <br/>
+            <p>Best regards,<br/>MS Academy</p>
+          </div>
+        `;
+        try {
+          await sendEmailViaGAS(student.email, `Cancelled Class: ${classToDelete.topic}`, htmlMessage);
+        } catch(err) {
+          console.error("Failed to email student", student.name, err);
+        }
+      }
+    }
+
+    setUpcomingClasses(upcomingClasses.filter(c => c.id !== classToDelete.id));
+    setClassToDelete(null);
+    alert('Class cancelled successfully and cancellation emails sent to students!');
   };
 
   const toggleStudentSelection = (studentName) => {
@@ -1658,8 +1708,11 @@ export default function LiveClasses({ department }) {
                     >
                       Start Class <Video size={16} />
                     </button>
-                    <button className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors">
-                      <MoreHorizontal size={18} />
+                    <button
+                      onClick={() => setClassToDelete(cls)}
+                      className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors flex items-center gap-1 font-bold text-[13px]"
+                    >
+                      <X size={16} /> Cancel
                     </button>
                   </div>
                 </div>
@@ -1832,6 +1885,37 @@ export default function LiveClasses({ department }) {
               >
                 Schedule Class
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Class Confirmation Modal */}
+      {classToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setClassToDelete(null)}></div>
+          <div className="relative bg-white rounded-3xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <X size={32} strokeWidth={2.5} />
+              </div>
+              <h2 className="text-2xl font-[900] text-slate-800 mb-2">Cancel Class?</h2>
+              <p className="text-slate-500 font-medium">Are you sure you want to cancel <strong className="text-slate-700">"{classToDelete.topic}"</strong>? Cancellation emails will be sent to the enrolled students.</p>
+              
+              <div className="mt-8 flex gap-3 w-full">
+                <button
+                  onClick={() => setClassToDelete(null)}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
+                >
+                  Keep Class
+                </button>
+                <button
+                  onClick={confirmCancelScheduledClass}
+                  className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-md shadow-red-500/20 transition-all flex items-center justify-center gap-2"
+                >
+                  Yes, Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
