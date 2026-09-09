@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [availableBundles, setAvailableBundles] = useState([]);
   const [activeTab, setActiveTab] = useState('learning');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [scheduledClasses, setScheduledClasses] = useState([]);
   
   // Onboarding State
   const [loading, setLoading] = useState(true);
@@ -105,6 +106,23 @@ export default function Dashboard() {
     });
     return () => unsubscribe();
   }, [studentDepartment]);
+
+  useEffect(() => {
+    if (!studentDepartment) return;
+    const q = query(
+      collection(db, 'scheduled_classes'),
+      where('department', '==', studentDepartment)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const classes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const myClasses = classes.filter(cls => 
+        !cls.selectedStudentNames || cls.selectedStudentNames.length === 0 || cls.selectedStudentNames.includes(studentName)
+      );
+      myClasses.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
+      setScheduledClasses(myClasses);
+    });
+    return () => unsubscribe();
+  }, [studentDepartment, studentName]);
 
   useEffect(() => {
     if (!studentDepartment) return;
@@ -726,14 +744,44 @@ export default function Dashboard() {
         )}
 
         {activeTab === 'schedule' && (
-          <div className="bg-white rounded-3xl p-12 border border-slate-200 shadow-sm text-center mt-6">
-             <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Calendar size={32} />
-            </div>
-            <h2 className="text-2xl font-[900] text-slate-900 mb-2">Your Calendar is Clear</h2>
-            <p className="text-slate-500 max-w-md mx-auto">
-              No upcoming tests or classes are scheduled in the next 7 days.
-            </p>
+          <div className="mt-6 space-y-6">
+            <h2 className="text-2xl font-[900] text-slate-800 flex items-center gap-2">
+              <Calendar className="text-blue-500" size={24} /> My Schedule
+            </h2>
+
+            {scheduledClasses.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {scheduledClasses.map(cls => (
+                  <div key={cls.id} className="p-6 border border-slate-200 rounded-3xl hover:border-blue-300 hover:shadow-lg transition-all group bg-white flex flex-col justify-between gap-4">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full mb-3">
+                        <Calendar size={12} /> Upcoming
+                      </div>
+                      <h4 className="text-[18px] leading-tight font-[900] text-slate-900 mb-2">{cls.topic}</h4>
+                      <div className="text-sm font-bold text-slate-700 mb-3">{cls.time}</div>
+                      
+                      <p className="text-sm text-slate-500 font-medium flex items-center gap-2 mt-2">
+                         <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">{cls.teacherName ? cls.teacherName[0] : 'T'}</span>
+                         {cls.teacherName || 'Teacher'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-[13px] font-semibold text-slate-400 border-t border-slate-100 pt-4">
+                      <span className="flex items-center gap-1.5"><Clock size={14} /> {cls.duration}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-3xl p-12 border border-slate-200 shadow-sm text-center">
+                <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Calendar size={32} />
+                </div>
+                <h2 className="text-2xl font-[900] text-slate-900 mb-2">Your Calendar is Clear</h2>
+                <p className="text-slate-500 max-w-md mx-auto">
+                  No upcoming tests or classes are scheduled in the next 7 days.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
