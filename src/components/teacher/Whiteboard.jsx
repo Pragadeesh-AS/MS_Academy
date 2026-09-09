@@ -152,15 +152,27 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     const resizeCanvas = () => {
       if (parent && fabricRef.current) {
         const rect = parent.getBoundingClientRect();
-        fabricRef.current.setWidth(rect.width);
-        fabricRef.current.setHeight(rect.height);
-        fabricRef.current.renderAll();
+        // Prevent unnecessary rerenders if size hasn't actually changed
+        if (rect.width === 0 || rect.height === 0) return;
+        if (rect.width !== fabricRef.current.width || rect.height !== fabricRef.current.height) {
+          fabricRef.current.setWidth(rect.width);
+          fabricRef.current.setHeight(rect.height);
+          fabricRef.current.renderAll();
+        }
       }
     };
+
     window.addEventListener('resize', resizeCanvas);
+    
+    // Also use ResizeObserver for when layout changes without window resize (e.g., sidebar toggles, flexbox changes)
+    const resizeObserver = new ResizeObserver(() => {
+      resizeCanvas();
+    });
+    resizeObserver.observe(parent);
 
     return () => {
       window.removeEventListener('resize', resizeCanvas);
+      resizeObserver.disconnect();
       clearTimeout(timeout);
       
       const activeCanvasEl = fCanvas?.lowerCanvasEl || canvasEl;
