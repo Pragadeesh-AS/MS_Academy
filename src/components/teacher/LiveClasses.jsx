@@ -1436,9 +1436,6 @@ export default function LiveClasses({ department }) {
 
     setIsScheduleModalOpen(false);
     setNewClass({ topic: "", time: "", selectedStudents: [] });
-    
-    // Optional user feedback
-    alert('Class scheduled successfully and emails sent to students!');
   };
 
   const confirmCancelScheduledClass = async () => {
@@ -1490,7 +1487,6 @@ export default function LiveClasses({ department }) {
       console.error("Failed to delete scheduled class from Firestore", err);
     }
     setClassToDelete(null);
-    alert('Class cancelled successfully and cancellation emails sent to students!');
   };
 
   const toggleStudentSelection = (studentName) => {
