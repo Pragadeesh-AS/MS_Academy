@@ -25,67 +25,70 @@ export default function NotesManager() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [departments, setDepartments] = useState(['General']);
 
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
   useEffect(() => {
     // Populate departments from the comprehensive list in gateCoursesData
     const fetchedDepts = ['General', ...gateCoursesData.map(c => c.name)];
     setDepartments(fetchedDepts);
 
-    // Fetch course bundles from Firestore
+    // Fetch bundles for dropdown
     const fetchBundles = async () => {
-      try {
-        const bSnapshot = await getDocs(collection(db, 'course_bundles'));
-        setBundles(bSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
-      } catch (e) {
-        console.error("Failed to fetch bundles:", e);
-      }
+      const q = query(collection(db, 'course_bundles'));
+      const snap = await getDocs(q);
+      setBundles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     fetchBundles();
 
-    // Real-time listener for notes
+    // Listen to notes
     const q = query(collection(db, 'notes'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       data.sort((a,b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
       setNotes(data);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching notes:", error);
-      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
+  const handleFileChange = (e) => {
+    if (e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
   const handleAddNote = async (e) => {
     e.preventDefault();
-    if (!title) return alert("Title is required");
-    
     if (uploadMode === 'file' && !selectedFile) {
-      return alert("Please select a PDF file.");
+      alert("Please select a file to upload");
+      return;
     }
-    if (uploadMode === 'url' && !fileUrl) {
-      return alert("Please enter a valid document URL.");
+    if (uploadMode === 'url' && !fileUrl.trim()) {
+      alert("Please provide a valid URL");
+      return;
     }
 
     setIsUploading(true);
-    let finalUrl = fileUrl;
 
     try {
+      let finalUrl = fileUrl;
+
       if (uploadMode === 'file' && selectedFile) {
         const storageRef = ref(storage, `notes/${Date.now()}_${selectedFile.name}`);
         const uploadTask = uploadBytesResumable(storageRef, selectedFile);
-        
-        await new Promise((resolve, reject) => {
+
+        finalUrl = await new Promise((resolve, reject) => {
           uploadTask.on(
             'state_changed',
             (snapshot) => {
-              const prog = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(prog);
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
             },
             (error) => reject(error),
             async () => {
-              finalUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve();
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(url);
             }
           );
         });
@@ -95,8 +98,9 @@ export default function NotesManager() {
         title,
         description,
         department,
-        bundleId: bundleId || '', // empty means applicable to dept
+        bundleId,
         url: finalUrl,
+        type: uploadMode === 'file' ? 'pdf' : 'link',
         fileName: uploadMode === 'file' && selectedFile ? selectedFile.name : 'External Link',
         fileSize: uploadMode === 'file' && selectedFile ? selectedFile.size : 0,
         createdAt: serverTimestamp()
@@ -121,8 +125,7 @@ export default function NotesManager() {
     }
   };
 
-  const handleDelete = async (note) => {
-    if (!window.confirm("Are you sure you want to delete this note?")) return;
+  const executeDelete = async (note) => {
     try {
       // If it's a file uploaded to Firebase Storage, delete the file first
       if (note.url && note.url.includes('firebasestorage.googleapis.com')) {
@@ -140,6 +143,16 @@ export default function NotesManager() {
       console.error(err);
       alert("Failed to delete note");
     }
+  };
+
+  const handleDelete = (note) => {
+    setConfirmDialog({
+      message: "Are you sure you want to delete this note?",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await executeDelete(note);
+      }
+    });
   };
 
   const getBundleName = (bId) => {
@@ -395,6 +408,23 @@ export default function NotesManager() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Generic Confirmation Modal */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Action</div>
+            <div className="p-6">
+              <p className="text-gray-800 text-base mb-6">{confirmDialog.message}</p>
+              
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
+                <button onClick={confirmDialog.onConfirm} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Confirm</button>
+              </div>
+            </div>
           </div>
         </div>
       )}

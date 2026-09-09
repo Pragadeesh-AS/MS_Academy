@@ -9,6 +9,7 @@ export default function RecordingsManager() {
   const [recordings, setRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
     // Real-time listener for recordings
@@ -27,8 +28,7 @@ export default function RecordingsManager() {
     return () => unsubscribe();
   }, []);
 
-  const handleDelete = async (recording) => {
-    if (!window.confirm("Are you sure you want to completely delete this recording? This will permanently remove the video file from storage.")) return;
+  const executeDelete = async (recording) => {
     try {
       // 1. Delete from Firebase Storage if it exists
       if (recording.url && recording.url.includes('firebasestorage.googleapis.com')) {
@@ -48,12 +48,22 @@ export default function RecordingsManager() {
         }
       }
       
-      // 2. Delete the Firestore document
+      // 2. Delete Firestore document
       await deleteDoc(doc(db, 'recordings', recording.id));
     } catch (err) {
-      console.error(err);
-      alert("Failed to delete recording");
+      console.error("Error deleting recording document:", err);
+      alert("Failed to delete recording metadata.");
     }
+  };
+
+  const handleDelete = (recording) => {
+    setConfirmDialog({
+      message: "Are you sure you want to completely delete this recording? This will permanently remove the video file from storage.",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await executeDelete(recording);
+      }
+    });
   };
 
   const filteredRecordings = recordings.filter(r => 
@@ -169,6 +179,23 @@ export default function RecordingsManager() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Generic Confirmation Modal */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Action</div>
+            <div className="p-6">
+              <p className="text-gray-800 text-base mb-6">{confirmDialog.message}</p>
+              
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
+                <button onClick={confirmDialog.onConfirm} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Confirm</button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

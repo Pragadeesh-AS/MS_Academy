@@ -201,69 +201,70 @@ const SalaryManager = ({ teachers, typists }) => {
     setIsUpdating(false);
   };
 
-  const markCurrentMonthPaid = async (staff) => {
+  const executeMarkCurrentMonthPaid = async (staff) => {
     const nameStr = staff.name || staff.fullName || 'Staff';
-    if (window.confirm(`Mark salary as paid for ${nameStr}?`)) {
-      try {
-        const currentDate = new Date();
-        const monthYear = currentDate.toLocaleString('default', { month: 'short', year: 'numeric' });
-        
-        let amountPaid = staff.baseSalary;
-        let updateData = {};
-        let newRecord = {
-          month: monthYear,
-          paidAt: currentDate.toISOString(),
-          status: 'Paid'
-        };
+    try {
+      const currentDate = new Date();
+      const monthYear = currentDate.toLocaleString('default', { month: 'short', year: 'numeric' });
+      
+      let amountPaid = staff.baseSalary;
+      let updateData = {};
+      let newRecord = {
+        month: monthYear,
+        paidAt: currentDate.toISOString(),
+        status: 'Paid'
+      };
 
-        if (staff.systemRole === 'Typist' || staff.systemRole === 'Reviewer') {
-          amountPaid = staff.pendingPayout;
-          const newPaidCount = (staff.paidQuestionsCount || 0) + staff.pendingQuestionsCount;
-          newRecord.amount = amountPaid;
-          newRecord.questionsPaid = staff.pendingQuestionsCount;
+      if (staff.systemRole === 'Typist' || staff.systemRole === 'Reviewer') {
+        amountPaid = staff.pendingPayout;
+        const newPaidCount = (staff.paidQuestionsCount || 0) + staff.pendingQuestionsCount;
+        newRecord.amount = amountPaid;
+        newRecord.questionsPaid = staff.pendingQuestionsCount;
 
-          if (staff.isSubRole === 'reviewer') {
-            updateData.reviewerPaidQuestionsCount = newPaidCount;
-          } else {
-            updateData.paidQuestionsCount = newPaidCount;
-          }
-        } else {
-          newRecord.amount = amountPaid;
-        }
-
-        const updatedHistory = [newRecord, ...(staff.salaryHistory || [])];
-        const staffRef = doc(db, staff.collection, staff.id);
-        
         if (staff.isSubRole === 'reviewer') {
-          updateData.reviewerSalaryHistory = updatedHistory;
+          updateData.reviewerPaidQuestionsCount = newPaidCount;
         } else {
-          updateData.salaryHistory = updatedHistory;
+          updateData.paidQuestionsCount = newPaidCount;
         }
-        
-        await updateDoc(staffRef, updateData);
-        
-        showToast(`Payment recorded successfully for ${nameStr}`);
-        
-        if (selectedStaff && selectedStaff.id === staff.id) {
-            setSelectedStaff(prev => ({ 
-              ...prev, 
-              salaryHistory: updatedHistory,
-              ...(staff.systemRole !== 'Teacher' ? { paidQuestionsCount: (staff.paidQuestionsCount || 0) + staff.pendingQuestionsCount, pendingQuestionsCount: 0, pendingPayout: 0 } : {})
-            }));
-        }
-        
-        // Optimistic UI update for the list
-        staff.salaryHistory = updatedHistory; 
-        if (staff.systemRole !== 'Teacher') {
-          staff.paidQuestionsCount = (staff.paidQuestionsCount || 0) + staff.pendingQuestionsCount;
-          staff.pendingQuestionsCount = 0;
-          staff.pendingPayout = 0;
-        }
-      } catch (error) {
-        console.error("Error updating payment history", error);
-        showToast('Failed to mark as paid', 'error');
+      } else {
+        newRecord.amount = amountPaid;
       }
+
+      const updatedHistory = [newRecord, ...(staff.salaryHistory || [])];
+      
+      if (staff.isSubRole === 'reviewer') {
+        updateData.reviewerSalaryHistory = updatedHistory;
+      } else {
+        updateData.salaryHistory = updatedHistory;
+      }
+      
+      const staffRef = doc(db, staff.collection, staff.id);
+      await updateDoc(staffRef, updateData);
+      showToast(`Payment recorded successfully for ${nameStr}`);
+      
+      // Local state update
+      if (selectedStaff && selectedStaff.id === staff.id) {
+          setSelectedStaff(prev => ({ 
+            ...prev, 
+            salaryHistory: updatedHistory,
+            ...(staff.systemRole !== 'Teacher' ? { paidQuestionsCount: (staff.paidQuestionsCount || 0) + staff.pendingQuestionsCount, pendingQuestionsCount: 0, pendingPayout: 0 } : {})
+          }));
+      }
+    } catch (error) {
+      console.error("Error updating payment history", error);
+      showToast('Failed to mark as paid', 'error');
     }
+  };
+
+  const markCurrentMonthPaid = (staff) => {
+    const nameStr = staff.name || staff.fullName || 'Staff';
+    setConfirmDialog({
+      message: `Mark salary as paid for ${nameStr}?`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await executeMarkCurrentMonthPaid(staff);
+      }
+    });
   };
 
   return (
@@ -594,6 +595,23 @@ const SalaryManager = ({ teachers, typists }) => {
                 </div>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generic Confirmation Modal */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Action</div>
+            <div className="p-6">
+              <p className="text-gray-800 text-base mb-6">{confirmDialog.message}</p>
+              
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
+                <button onClick={confirmDialog.onConfirm} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Confirm</button>
+              </div>
             </div>
           </div>
         </div>

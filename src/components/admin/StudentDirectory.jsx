@@ -66,18 +66,28 @@ const StudentDirectory = ({
     currentPage * studentsPerPage
   );
 
-  const handleDeleteStudent = async (studentId) => {
-    if (window.confirm("Are you sure you want to delete this student?")) {
-      try {
-        // Convert to string in case it's a numeric mock ID (1, 2, 3...)
-        const idString = String(studentId);
-        await deleteDoc(doc(db, 'joined_students', idString));
-        setJoinedStudents(joinedStudents.filter(s => s.id !== studentId));
-      } catch (error) {
-        console.error("Error deleting student:", error);
-        alert("Failed to delete student from the database.");
-      }
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  const executeDeleteStudent = async (studentId) => {
+    try {
+      // Convert to string in case it's a numeric mock ID (1, 2, 3...)
+      const idString = String(studentId);
+      await deleteDoc(doc(db, 'joined_students', idString));
+      setJoinedStudents(joinedStudents.filter(s => s.id !== studentId));
+    } catch (error) {
+      console.error("Error deleting student:", error);
+      alert("Failed to delete student from the database.");
     }
+  };
+
+  const handleDeleteStudent = (studentId) => {
+    setConfirmDialog({
+      message: "Are you sure you want to delete this student?",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await executeDeleteStudent(studentId);
+      }
+    });
   };
 
   return (
@@ -303,22 +313,26 @@ const StudentDirectory = ({
                               <Eye size={18} />
                             </button>
                             <button 
-                              onClick={async () => {
-                                if (window.confirm(`Are you sure you want to ${student.isPro ? 'downgrade' : 'upgrade'} ${student.name}?`)) {
-                                  try {
-                                    const updateData = { isPro: !student.isPro };
-                                    await updateDoc(doc(db, 'joined_students', String(student.id)), updateData);
-                                    setJoinedStudents(joinedStudents.map(s => 
-                                      s.id === student.id ? { ...s, isPro: !student.isPro } : s
-                                    ));
-                                  } catch (error) {
-                                    console.error('Error updating tier:', error);
-                                    alert(`Failed to update student tier. Error: ${error.message}`);
+                              onClick={() => {
+                                setConfirmDialog({
+                                  message: `Are you sure you want to ${student.isPro ? 'downgrade' : 'upgrade'} ${student.name}?`,
+                                  onConfirm: async () => {
+                                    setConfirmDialog(null);
+                                    try {
+                                      const updateData = { isPro: !student.isPro };
+                                      await updateDoc(doc(db, 'joined_students', String(student.id)), updateData);
+                                      setJoinedStudents(joinedStudents.map(s => 
+                                        s.id === student.id ? { ...s, isPro: !s.isPro } : s
+                                      ));
+                                    } catch (err) {
+                                      console.error("Failed to update status", err);
+                                      alert("Failed to update student status");
+                                    }
                                   }
-                                }
+                                });
                               }}
-                              className={`p-2 rounded-[10px] transition-colors ${student.isPro ? 'text-amber-600 hover:bg-amber-50' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`} 
-                              title={student.isPro ? "Downgrade to Normal" : "Upgrade to Pro"}
+                              className={`p-2 rounded-[10px] transition-colors ${student.isPro ? 'text-amber-500 hover:bg-amber-50' : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50'}`}
+                              title={student.isPro ? "Downgrade from Premium" : "Upgrade to Premium"}
                             >
                               <ShieldCheck size={18} />
                             </button>
@@ -454,27 +468,33 @@ const StudentDirectory = ({
                             </div>
                           </div>
                           <button
-                            onClick={async () => {
-                              if (window.confirm(`Are you sure you want to cancel ${bundleName} for ${selectedStudent.name}?`)) {
-                                try {
-                                  const updatedBundles = selectedStudent.purchasedBundles.filter((_, i) => i !== idx);
-                                  const isPro = updatedBundles.length > 0 ? !!selectedStudent.isPro : false;
-                                  
-                                  await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), { 
-                                    purchasedBundles: updatedBundles,
-                                    isPro: isPro
-                                  });
-                                  
-                                  const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles, isPro: isPro };
-                                  setSelectedStudent(updatedStudent);
-                                  setJoinedStudents(joinedStudents.map(s => s.id === selectedStudent.id ? updatedStudent : s));
-                                } catch (error) {
-                                  console.error('Error cancelling bundle:', error);
-                                  alert(`Failed to cancel bundle. Error: ${error.message}`);
+                            onClick={() => {
+                              setConfirmDialog({
+                                message: `Are you sure you want to cancel ${bundleName} for ${selectedStudent.name}?`,
+                                onConfirm: async () => {
+                                  setConfirmDialog(null);
+                                  try {
+                                    const updatedBundles = selectedStudent.purchasedBundles.filter((_, i) => i !== idx);
+                                    const isPro = updatedBundles.length > 0 ? !!selectedStudent.isPro : false;
+                                    
+                                    await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), { 
+                                      purchasedBundles: updatedBundles,
+                                      isPro: isPro
+                                    });
+                                    
+                                    const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles, isPro: isPro };
+                                    setSelectedStudent(updatedStudent);
+                                    setJoinedStudents(joinedStudents.map(s => 
+                                      s.id === selectedStudent.id ? updatedStudent : s
+                                    ));
+                                  } catch (error) {
+                                    console.error('Error canceling bundle:', error);
+                                    alert(`Failed to cancel bundle. Error: ${error.message}`);
+                                  }
                                 }
-                              }
+                              });
                             }}
-                            className="text-[#94A3B8] hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                            className="p-1.5 text-[#94A3B8] hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
                             title="Cancel Bundle"
                           >
                             <Trash2 size={16} />
@@ -490,6 +510,23 @@ const StudentDirectory = ({
               <button onClick={() => setSelectedStudent(null)} className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm">
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Generic Confirmation Modal */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
+            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Action</div>
+            <div className="p-6">
+              <p className="text-gray-800 text-base mb-6">{confirmDialog.message}</p>
+              
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
+                <button onClick={confirmDialog.onConfirm} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Confirm</button>
+              </div>
             </div>
           </div>
         </div>

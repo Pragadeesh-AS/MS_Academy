@@ -1612,7 +1612,7 @@ export default function AdminDashboard() {
 
         {/* Analytics Tab */}
         {activeTab === 'analytics' && (
-          <div className="h-full">
+          <div className="flex flex-col h-full w-full">
             <Analytics joinedStudents={joinedStudents} />
           </div>
         )}

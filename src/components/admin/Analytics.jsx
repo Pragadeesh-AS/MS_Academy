@@ -251,7 +251,7 @@ export default function Analytics({ joinedStudents = [], department = null }) {
   };
 
   return (
-    <div className="w-full h-full flex flex-col overflow-hidden bg-slate-50/50">
+    <div className="w-full flex flex-col bg-slate-50/50">
       
       {/* Header & Tab Switcher */}
       <div className="p-4 sm:p-6 lg:p-8 border-b border-slate-200 bg-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shrink-0 z-10">
@@ -278,8 +278,8 @@ export default function Analytics({ joinedStudents = [], department = null }) {
         </div>
       </div>
 
-      {/* Main Content Area (Scrollable) */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+      {/* Main Content Area */}
+      <div className="flex-1 p-4 sm:p-6 lg:p-8">
         
         {isLoading ? (
           <div className="flex flex-col items-center justify-center flex-1 min-h-[400px]">
