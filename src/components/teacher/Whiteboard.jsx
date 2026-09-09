@@ -272,8 +272,9 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     let isErasing = false;
 
     const eraseObject = (e) => {
-      if (!e.pointer) return;
-      const point = new fabric.Point(e.pointer.x, e.pointer.y);
+      const pointer = e.scenePoint || e.pointer || { x: e.e?.clientX, y: e.e?.clientY };
+      if (!pointer) return;
+      const point = new fabric.Point(pointer.x, pointer.y);
       const objects = fCanvas.getObjects();
       
       // Calculate hit tolerance based on eraserSize
@@ -291,7 +292,33 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
           point.y >= bound.top - tolerance && 
           point.y <= bound.top + bound.height + tolerance
         ) {
-          fCanvas.remove(obj);
+          let hit = false;
+          
+          if (obj.type === 'path' && obj.path) {
+             const pathOffset = obj.pathOffset || { x: 0, y: 0 };
+             const m = obj.calcTransformMatrix();
+             
+             for (let j = 0; j < obj.path.length; j++) {
+                const cmd = obj.path[j];
+                if (cmd.length >= 3) {
+                   const px = cmd[cmd.length - 2] - pathOffset.x;
+                   const py = cmd[cmd.length - 1] - pathOffset.y;
+                   
+                   const x = px * m[0] + py * m[2] + m[4];
+                   const y = px * m[1] + py * m[3] + m[5];
+                   
+                   const dist = Math.sqrt(Math.pow(point.x - x, 2) + Math.pow(point.y - y, 2));
+                   if (dist <= tolerance + (obj.strokeWidth || 0)) {
+                      hit = true;
+                      break;
+                   }
+                }
+             }
+          } else {
+             hit = true;
+          }
+          
+          if (hit) fCanvas.remove(obj);
         }
       }
     };
