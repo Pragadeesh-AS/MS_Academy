@@ -66,6 +66,41 @@ const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) 
   return null;
 };
 
+const sendEmailViaGAS = async (to, subject, htmlMessage, attachment = null) => {
+  const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
+  if (!webhookUrl) {
+    console.warn("VITE_GAS_WEBHOOK_URL is not set. Skipping email.");
+    return;
+  }
+  
+  const payload = {
+    to_email: to,
+    subject: subject,
+    message_html: htmlMessage
+  };
+
+  if (attachment) {
+    if (Array.isArray(attachment)) {
+      payload.attachments = attachment;
+    } else {
+      payload.attachment = attachment;
+    }
+  }
+
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify(payload)
+  });
+  
+  const result = await response.json();
+  if (result.status !== "success") {
+    throw new Error(result.message || "Failed to send email via Google Apps Script");
+  }
+};
+
 // Extracted component to handle screen sharing as an independent client
 const ScreenShareClient = ({ appId, channel, token, onTrackEnded, onAudioTrackReady, onTrackReady }) => {
   const [screenClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
@@ -1134,7 +1169,10 @@ export default function LiveClasses({ department }) {
           where('department', '==', department)
         );
         const snapshot = await getDocs(q);
-        const students = snapshot.docs.map(doc => doc.data().name);
+        const students = snapshot.docs.map(doc => ({
+          name: doc.data().name,
+          email: doc.data().email
+        }));
         setDepartmentStudents(students);
       } catch (err) {
         console.error("Error fetching students:", err);
@@ -1313,9 +1351,51 @@ export default function LiveClasses({ department }) {
     }
   };
 
-  const handleScheduleSubmit = (e) => {
+  const handleScheduleSubmit = async (e) => {
     e.preventDefault();
     if (!newClass.topic || !newClass.time) return;
+
+    // Determine which students to email
+    const studentsToEmail = newClass.selectedStudents.length > 0 
+      ? departmentStudents.filter(s => newClass.selectedStudents.includes(s.name))
+      : departmentStudents;
+
+    const teacherName = localStorage.getItem('auth_name') || 'Your Teacher';
+    const loginLink = window.location.hostname === 'localhost' ? 'http://localhost:5173/student' : window.location.origin + '/student';
+
+    for (const student of studentsToEmail) {
+      if (student.email) {
+        const htmlMessage = `
+          <div style="font-family: sans-serif; padding: 20px;">
+            <h2>Hello ${student.name},</h2>
+            <p>A new live class has been scheduled for you!</p>
+            <table style="margin: 20px 0; border-collapse: collapse; width: 100%; max-width: 500px;">
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; width: 120px;">Topic</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${newClass.topic}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Date & Time</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${newClass.time}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Teacher</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${teacherName}</td>
+              </tr>
+            </table>
+            <p>Please make sure to log in to the portal and join the class on time.</p>
+            <p><a href="${loginLink}" style="display:inline-block; padding:10px 20px; background:#2563EB; color:#fff; text-decoration:none; border-radius:5px;">Go to Dashboard</a></p>
+            <br/>
+            <p>Best regards,<br/>MS Academy</p>
+          </div>
+        `;
+        try {
+          await sendEmailViaGAS(student.email, `Scheduled Class: ${newClass.topic}`, htmlMessage);
+        } catch(err) {
+          console.error("Failed to email student", student.name, err);
+        }
+      }
+    }
 
     setUpcomingClasses([
       ...upcomingClasses,
@@ -1329,6 +1409,9 @@ export default function LiveClasses({ department }) {
     ]);
     setIsScheduleModalOpen(false);
     setNewClass({ topic: "", time: "", selectedStudents: [] });
+    
+    // Optional user feedback
+    alert('Class scheduled successfully and emails sent to students!');
   };
 
   const toggleStudentSelection = (studentName) => {
@@ -1719,11 +1802,11 @@ export default function LiveClasses({ department }) {
                       <p className="p-4 text-sm text-slate-500 text-center">No students found in your department ({department}).</p>
                     ) : (
                       departmentStudents.map((student, idx) => (
-                        <label key={idx} onClick={() => toggleStudentSelection(student)} className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors last:border-0">
-                          <div className={`w-5 h-5 rounded flex items-center justify-center border ${newClass.selectedStudents.includes(student) ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 bg-white'}`}>
-                            {newClass.selectedStudents.includes(student) && <Check size={14} strokeWidth={3} />}
+                        <label key={idx} onClick={() => toggleStudentSelection(student.name)} className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors last:border-0">
+                          <div className={`w-5 h-5 rounded flex items-center justify-center border ${newClass.selectedStudents.includes(student.name) ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 bg-white'}`}>
+                            {newClass.selectedStudents.includes(student.name) && <Check size={14} strokeWidth={3} />}
                           </div>
-                          <span className="text-[14px] font-medium text-slate-700">{student}</span>
+                          <span className="text-[14px] font-medium text-slate-700">{student.name}</span>
                         </label>
                       ))
                     )}
