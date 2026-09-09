@@ -326,7 +326,19 @@ export default function LoginSignup() {
       }
     } catch (err) {
       console.error(err);
-      setError(err.message);
+      // If the popup is blocked by COOP or closed by the user, fallback to redirect
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        try {
+          const provider = new GoogleAuthProvider();
+          await signInWithRedirect(auth, provider);
+          return; // Don't stop loading since we are redirecting
+        } catch (redirectErr) {
+          console.error("Redirect also failed:", redirectErr);
+          setError(redirectErr.message);
+        }
+      } else {
+        setError(err.message);
+      }
       setLoading(false);
     }
   };
