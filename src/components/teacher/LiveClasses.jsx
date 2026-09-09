@@ -1874,7 +1874,24 @@ export default function LiveClasses({ department }) {
                 </div>
 
                 <div>
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Invite Specific Students</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[13px] font-bold text-slate-700">Invite Specific Students</label>
+                    {departmentStudents.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newClass.selectedStudents.length === departmentStudents.length) {
+                            setNewClass({ ...newClass, selectedStudents: [] });
+                          } else {
+                            setNewClass({ ...newClass, selectedStudents: departmentStudents.map(s => s.name) });
+                          }
+                        }}
+                        className="text-[12px] font-bold text-blue-600 hover:text-blue-700"
+                      >
+                        {newClass.selectedStudents.length === departmentStudents.length ? 'Deselect All' : 'Select All'}
+                      </button>
+                    )}
+                  </div>
                   <div className="border border-slate-200 rounded-xl max-h-48 overflow-y-auto">
                     {departmentStudents.length === 0 ? (
                       <p className="p-4 text-sm text-slate-500 text-center">No students found in your department ({department}).</p>
