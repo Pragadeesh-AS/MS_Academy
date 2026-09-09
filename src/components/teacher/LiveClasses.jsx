@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { db } from '../../firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 import {
   Video,
   VideoOff,
@@ -1242,6 +1242,26 @@ export default function LiveClasses({ department }) {
   }, []);
 
   useEffect(() => {
+    const teacherEmail = localStorage.getItem('auth_email');
+    if (!teacherEmail) return;
+
+    const q = query(
+      collection(db, 'scheduled_classes'),
+      where('teacherEmail', '==', teacherEmail)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const classes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Sort by creation time so newest is first, or by scheduled time if parseable. 
+      // For now just sort by timestamp if it exists
+      classes.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+      setUpcomingClasses(classes);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     if (!isInCall || !currentSessionId) return;
     const q = query(collection(db, 'live_chats'), where('sessionId', '==', currentSessionId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -1398,17 +1418,22 @@ export default function LiveClasses({ department }) {
       }
     }
 
-    setUpcomingClasses([
-      ...upcomingClasses,
-      {
-        id: Date.now(),
+    try {
+      await addDoc(collection(db, 'scheduled_classes'), {
         topic: newClass.topic,
         time: newClass.time,
         students: newClass.selectedStudents.length || departmentStudents.length,
         selectedStudentNames: newClass.selectedStudents.length > 0 ? newClass.selectedStudents : [], // Store names to notify on cancellation
-        duration: "1h 00m"
-      }
-    ]);
+        duration: "1h 00m",
+        teacherEmail: localStorage.getItem('auth_email'),
+        teacherName: teacherName,
+        department: department,
+        createdAt: serverTimestamp()
+      });
+    } catch(err) {
+      console.error("Failed to add scheduled class to Firestore", err);
+    }
+
     setIsScheduleModalOpen(false);
     setNewClass({ topic: "", time: "", selectedStudents: [] });
     
@@ -1459,7 +1484,11 @@ export default function LiveClasses({ department }) {
       }
     }
 
-    setUpcomingClasses(upcomingClasses.filter(c => c.id !== classToDelete.id));
+    try {
+      await deleteDoc(doc(db, 'scheduled_classes', classToDelete.id));
+    } catch(err) {
+      console.error("Failed to delete scheduled class from Firestore", err);
+    }
     setClassToDelete(null);
     alert('Class cancelled successfully and cancellation emails sent to students!');
   };
