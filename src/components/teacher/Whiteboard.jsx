@@ -241,6 +241,12 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       fCanvas.freeDrawingBrush = brush;
       fCanvas.defaultCursor = 'crosshair';
     } else if (activeTool === 'eraser') {
+      fCanvas.isDrawingMode = true;
+      let brush = new fabric.PencilBrush(fCanvas);
+      // Visually acts as eraser while drawing. Will be converted to destination-out mask in path:created
+      brush.color = isOverlay ? '#ffffff' : boardColor; 
+      brush.width = eraserSize;
+      fCanvas.freeDrawingBrush = brush;
       fCanvas.defaultCursor = 'cell';
     } else {
       fCanvas.defaultCursor = 'default';
@@ -255,8 +261,16 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     const onPathCreated = (e) => {
       const path = e.path || e.object;
       if (path) {
-        path.selectable = (activeTool === 'select');
-        path.evented = (activeTool === 'select');
+        if (activeTool === 'eraser') {
+          path.globalCompositeOperation = 'destination-out';
+          // Force it to not be selectable
+          path.selectable = false;
+          path.evented = false;
+          fCanvas.renderAll();
+        } else {
+          path.selectable = (activeTool === 'select');
+          path.evented = (activeTool === 'select');
+        }
       }
     };
     
@@ -275,90 +289,6 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       fCanvas.off('mouse:down', onMouseDown);
     };
   }, [activeTool]);
-
-  // Object Eraser Logic
-  useEffect(() => {
-    const fCanvas = fabricRef.current;
-    if (!fCanvas || activeTool !== 'eraser') return;
-
-    let isErasing = false;
-
-    const eraseObject = (e) => {
-      const pointer = e.scenePoint || e.pointer || { x: e.e?.clientX, y: e.e?.clientY };
-      if (!pointer) return;
-      const point = new fabric.Point(pointer.x, pointer.y);
-      const objects = fCanvas.getObjects();
-      
-      // Calculate hit tolerance based on eraserSize
-      const tolerance = eraserSize / 2;
-
-      for (let i = objects.length - 1; i >= 0; i--) {
-        const obj = objects[i];
-        if (!obj.selectable && obj.type !== 'path' && obj.type !== 'rect' && obj.type !== 'circle' && obj.type !== 'triangle' && obj.type !== 'line') continue; // Only erase drawn objects
-        
-        // Simple bounding box check with tolerance
-        const bound = obj.getBoundingRect();
-        if (
-          point.x >= bound.left - tolerance && 
-          point.x <= bound.left + bound.width + tolerance &&
-          point.y >= bound.top - tolerance && 
-          point.y <= bound.top + bound.height + tolerance
-        ) {
-          let hit = false;
-          
-          if (obj.type === 'path' && obj.path) {
-             const pathOffset = obj.pathOffset || { x: 0, y: 0 };
-             const m = obj.calcTransformMatrix();
-             
-             for (let j = 0; j < obj.path.length; j++) {
-                const cmd = obj.path[j];
-                if (cmd.length >= 3) {
-                   const px = cmd[cmd.length - 2] - pathOffset.x;
-                   const py = cmd[cmd.length - 1] - pathOffset.y;
-                   
-                   const x = px * m[0] + py * m[2] + m[4];
-                   const y = px * m[1] + py * m[3] + m[5];
-                   
-                   const dist = Math.sqrt(Math.pow(point.x - x, 2) + Math.pow(point.y - y, 2));
-                   if (dist <= tolerance + (obj.strokeWidth || 0)) {
-                      hit = true;
-                      break;
-                   }
-                }
-             }
-          } else {
-             hit = true;
-          }
-          
-          if (hit) fCanvas.remove(obj);
-        }
-      }
-    };
-
-    const onMouseDown = (e) => {
-      isErasing = true;
-      eraseObject(e);
-    };
-
-    const onMouseMove = (e) => {
-      if (!isErasing) return;
-      eraseObject(e);
-    };
-
-    const onMouseUp = () => {
-      isErasing = false;
-    };
-
-    fCanvas.on('mouse:down', onMouseDown);
-    fCanvas.on('mouse:move', onMouseMove);
-    fCanvas.on('mouse:up', onMouseUp);
-
-    return () => {
-      fCanvas.off('mouse:down', onMouseDown);
-      fCanvas.off('mouse:move', onMouseMove);
-      fCanvas.off('mouse:up', onMouseUp);
-    };
-  }, [activeTool, eraserSize]);
 
   // Handle Shapes Drawing Logic
   useEffect(() => {
@@ -747,7 +677,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
   };
 
   return (
-    <div className={`relative w-full h-full flex flex-col ${isOverlay ? 'bg-transparent' : 'bg-slate-900'} whiteboard-container`}>
+    <div className={`relative w-full h-full flex flex-col whiteboard-container`} style={{ backgroundColor: isOverlay ? 'transparent' : boardColor }}>
       {/* Dynamic Canvas Container */}
       <div className="w-full h-full touch-none pointer-events-auto" ref={containerRef}></div>
       
