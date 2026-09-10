@@ -771,8 +771,21 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     const handleQuizSubmit = () => {
       let score = 0;
       postClassQuiz.questions.forEach((q, idx) => {
-        if (quizAnswers[idx] === q.correctAnswer) {
-          score += parseInt(q.marks) || 1;
+        if (q.questionType === 'Multiple Choice') {
+          const studentAns = quizAnswers[idx] || [];
+          const correctAns = q.correctAnswers || [];
+          if (studentAns.length === correctAns.length && studentAns.every(v => correctAns.includes(v))) {
+            score += parseInt(q.marks) || 1;
+          }
+        } else if (q.questionType === 'Fill in the Blanks') {
+          if ((quizAnswers[idx] || '').toString().trim().toLowerCase() === (q.correctAnswer || '').toString().trim().toLowerCase()) {
+            score += parseInt(q.marks) || 1;
+          }
+        } else {
+          // Single Choice / Match
+          if (quizAnswers[idx] === q.correctAnswer) {
+            score += parseInt(q.marks) || 1;
+          }
         }
       });
       setQuizScore(score);
@@ -805,32 +818,69 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                 <p className="text-lg text-slate-600 font-medium">You scored <span className="text-blue-600 font-bold">{quizScore}</span> marks.</p>
               </div>
             ) : (
-              postClassQuiz.questions.map((q, idx) => (
-                <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-lg font-bold text-slate-800 flex-1"><span className="text-blue-600 mr-2">Q{idx + 1}.</span> {q.question}</h3>
-                    <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-1 rounded-lg ml-4 flex-shrink-0">{q.marks || 1} Marks</span>
-                  </div>
-                  <div className="space-y-3">
-                    {q.options.map((opt, optIdx) => (
-                      <label key={optIdx} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${quizAnswers[idx] === opt ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${quizAnswers[idx] === opt ? 'border-blue-500' : 'border-slate-300'}`}>
-                          {quizAnswers[idx] === opt && <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>}
-                        </div>
-                        <input
-                          type="radio"
-                          className="hidden"
-                          name={`q-${idx}`}
-                          value={opt}
-                          checked={quizAnswers[idx] === opt}
+              postClassQuiz.questions.map((q, idx) => {
+                const qType = q.questionType || 'Single Choice';
+                const cleanText = q.questionText ? q.questionText.replace(/<[^>]+>/g, '') : '';
+                const optionsList = ['A', 'B', 'C', 'D'];
+
+                return (
+                  <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="text-lg font-bold text-slate-800 flex-1"><span className="text-blue-600 mr-2">Q{idx + 1}.</span> {cleanText}</h3>
+                      <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-1 rounded-lg ml-4 flex-shrink-0">{q.marks || 1} Marks</span>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {qType === 'Fill in the Blanks' ? (
+                        <input 
+                          type="text" 
+                          placeholder="Type your answer here..."
+                          className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                          value={quizAnswers[idx] || ''}
                           onChange={(e) => setQuizAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
                         />
-                        <span className="text-slate-700 font-medium">{opt}</span>
-                      </label>
-                    ))}
+                      ) : (
+                        optionsList.map((opt) => {
+                          if (!q[`option${opt}`]) return null;
+                          
+                          const isChecked = qType === 'Multiple Choice' 
+                            ? (quizAnswers[idx] || []).includes(opt)
+                            : quizAnswers[idx] === opt;
+
+                          const handleChange = () => {
+                            if (qType === 'Multiple Choice') {
+                              setQuizAnswers(prev => {
+                                const current = prev[idx] || [];
+                                return { ...prev, [idx]: current.includes(opt) ? current.filter(x => x !== opt) : [...current, opt] };
+                              });
+                            } else {
+                              setQuizAnswers(prev => ({ ...prev, [idx]: opt }));
+                            }
+                          };
+
+                          return (
+                            <label key={opt} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isChecked ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                              <div className={`w-5 h-5 rounded${qType === 'Multiple Choice' ? ' cursor-pointer' : '-full'} border-2 flex items-center justify-center ${isChecked ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
+                                {isChecked && <Check size={12} className="text-white" strokeWidth={4} />}
+                              </div>
+                              <input
+                                type={qType === 'Multiple Choice' ? 'checkbox' : 'radio'}
+                                className="hidden"
+                                checked={isChecked}
+                                onChange={handleChange}
+                              />
+                              <div className="text-slate-700 font-medium flex items-center gap-2">
+                                <span className="text-xs font-bold px-2 py-1 bg-slate-100 rounded-md text-slate-500">{opt}</span>
+                                {q[`option${opt}`]}
+                              </div>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
