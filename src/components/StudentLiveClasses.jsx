@@ -16,7 +16,8 @@ import {
   CheckCircle2,
   WifiOff,
   Lock,
-  Trophy
+  Trophy,
+  Check
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, serverTimestamp, setDoc, doc, updateDoc, increment } from 'firebase/firestore';
@@ -583,6 +584,12 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
   const [currentSession, setCurrentSession] = useState(null);
   const [activeClasses, setActiveClasses] = useState([]);
   
+  // Post-Class Quiz States
+  const [postClassQuiz, setPostClassQuiz] = useState(null);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
+  
   // Chat State
   const [chatMessages, setChatMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
@@ -621,6 +628,28 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
 
     return () => unsubscribe();
   }, [department]);
+
+  // Listen for the active class ending
+  useEffect(() => {
+    if (!isInCall || !currentSession?.id) return;
+    
+    const unsubscribe = onSnapshot(doc(db, 'live_sessions', currentSession.id), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.status === 'ended') {
+          handleLeaveMeet(true); // pass true to indicate it's forced by teacher
+          if (data.postClassQuiz && data.postClassQuiz.questions && data.postClassQuiz.questions.length > 0) {
+            setPostClassQuiz(data.postClassQuiz);
+            setQuizAnswers({});
+            setQuizSubmitted(false);
+            setQuizScore(0);
+          }
+        }
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [isInCall, currentSession?.id]);
 
   const canAccessClass = (cls) => {
     if (isPro) return true;
@@ -737,6 +766,89 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
       setTokenError(null);
     }
   }, [isInCall, currentSession]);
+
+  if (postClassQuiz) {
+    const handleQuizSubmit = () => {
+      let score = 0;
+      postClassQuiz.questions.forEach((q, idx) => {
+        if (quizAnswers[idx] === q.correctAnswer) {
+          score += parseInt(q.marks) || 1;
+        }
+      });
+      setQuizScore(score);
+      setQuizSubmitted(true);
+    };
+
+    const handleQuizClose = () => {
+      setPostClassQuiz(null);
+    };
+
+    return (
+      <div className="fixed inset-0 z-[100] bg-slate-50 w-full h-full flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <h2 className="text-2xl font-[900] text-slate-800">Post-Class Quiz</h2>
+            {quizSubmitted && (
+              <button onClick={handleQuizClose} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            )}
+          </div>
+          
+          <div className="p-6 overflow-y-auto flex-1 bg-slate-50 space-y-6">
+            {quizSubmitted ? (
+              <div className="text-center py-10">
+                <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                  <Check size={48} strokeWidth={3} />
+                </div>
+                <h3 className="text-3xl font-[900] text-slate-800 mb-2">Quiz Completed!</h3>
+                <p className="text-lg text-slate-600 font-medium">You scored <span className="text-blue-600 font-bold">{quizScore}</span> marks.</p>
+              </div>
+            ) : (
+              postClassQuiz.questions.map((q, idx) => (
+                <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-lg font-bold text-slate-800 flex-1"><span className="text-blue-600 mr-2">Q{idx + 1}.</span> {q.question}</h3>
+                    <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-1 rounded-lg ml-4 flex-shrink-0">{q.marks || 1} Marks</span>
+                  </div>
+                  <div className="space-y-3">
+                    {q.options.map((opt, optIdx) => (
+                      <label key={optIdx} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${quizAnswers[idx] === opt ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${quizAnswers[idx] === opt ? 'border-blue-500' : 'border-slate-300'}`}>
+                          {quizAnswers[idx] === opt && <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>}
+                        </div>
+                        <input
+                          type="radio"
+                          className="hidden"
+                          name={`q-${idx}`}
+                          value={opt}
+                          checked={quizAnswers[idx] === opt}
+                          onChange={(e) => setQuizAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                        />
+                        <span className="text-slate-700 font-medium">{opt}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {!quizSubmitted && (
+            <div className="p-6 border-t border-slate-100 bg-white rounded-b-3xl flex justify-end">
+              <button
+                onClick={handleQuizSubmit}
+                disabled={Object.keys(quizAnswers).length < postClassQuiz.questions.length}
+                className={`px-8 py-3 rounded-xl font-bold transition-all shadow-md ${Object.keys(quizAnswers).length < postClassQuiz.questions.length ? 'bg-blue-300 text-white cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+              >
+                Submit Quiz
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (isInCall && currentSession) {
     const rtcProps = {

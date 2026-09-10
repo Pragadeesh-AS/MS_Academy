@@ -1150,6 +1150,9 @@ export default function LiveClasses({ department }) {
   // Modals
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+  const [isEndClassModalOpen, setIsEndClassModalOpen] = useState(false);
+  const [sessionToEnd, setSessionToEnd] = useState(null);
+  const [selectedQuizQuestions, setSelectedQuizQuestions] = useState([]);
   const [classToDelete, setClassToDelete] = useState(null);
 
   const [newClass, setNewClass] = useState({ topic: '', time: '', selectedStudents: [], bundleId: '' });
@@ -1342,22 +1345,40 @@ export default function LiveClasses({ department }) {
     }
   };
 
-  const handleEndMeet = async (sessionIdToEnd = currentSessionId) => {
+  const handleEndMeet = (sessionIdToEnd = currentSessionId) => {
+    setSessionToEnd(sessionIdToEnd);
+    setIsEndClassModalOpen(true);
+    setSelectedQuizQuestions([]);
+  };
+
+  const confirmEndMeet = async (withQuiz = false) => {
+    const sessionIdToEnd = sessionToEnd;
+    if (!sessionIdToEnd) return;
+
+    setIsEndClassModalOpen(false);
+
     if (sessionIdToEnd === currentSessionId) setIsInCall(false);
 
-    if (sessionIdToEnd) {
-      try {
-        await updateDoc(doc(db, 'live_sessions', sessionIdToEnd), {
-          status: 'ended',
-          endedAt: serverTimestamp()
-        });
-        if (sessionIdToEnd === currentSessionId) setCurrentSessionId(null);
-      } catch (e) {
-        console.error("Failed to end live session in Firestore", e);
+    try {
+      const updateData = {
+        status: 'ended',
+        endedAt: serverTimestamp()
+      };
+      
+      if (withQuiz && selectedQuizQuestions.length > 0) {
+        // Map the selected question IDs back to the full question objects to save in the session
+        const quizQuestions = departmentQuestions.filter(q => selectedQuizQuestions.includes(q.id));
+        updateData.postClassQuiz = { questions: quizQuestions };
       }
+
+      await updateDoc(doc(db, 'live_sessions', sessionIdToEnd), updateData);
+      
+      if (sessionIdToEnd === currentSessionId) setCurrentSessionId(null);
+    } catch (e) {
+      console.error("Failed to end live session in Firestore", e);
     }
 
-    // Graceful unmount (hooks automatically close tracks on unmount)
+    // Graceful unmount
     if (sessionIdToEnd === currentSessionId) {
       if (agoraClient) {
         try {
@@ -1370,6 +1391,9 @@ export default function LiveClasses({ department }) {
       setIsInCall(false);
       setCurrentSessionId(null);
     }
+    
+    setSessionToEnd(null);
+    setSelectedQuizQuestions([]);
   };
 
   const handleScheduleSubmit = async (e) => {
@@ -1927,6 +1951,77 @@ export default function LiveClasses({ department }) {
               >
                 Schedule Class
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* End Class / Post-Class Quiz Modal */}
+      {isEndClassModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsEndClassModalOpen(false)}></div>
+          <div className="relative bg-white rounded-3xl w-full max-w-3xl shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-2xl font-[900] text-slate-800">End Class & Assign Quiz</h2>
+              <button onClick={() => setIsEndClassModalOpen(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
+              <p className="text-slate-600 mb-6 font-medium">Select questions from the question bank to assign as a short quiz for students to complete immediately after the class.</p>
+              
+              <div className="space-y-4">
+                {departmentQuestions.length === 0 ? (
+                  <p className="text-slate-500 text-center p-4">No questions available in the bank.</p>
+                ) : (
+                  departmentQuestions.map((q) => (
+                    <label key={q.id} className="flex items-start gap-4 p-4 border border-slate-200 rounded-xl bg-white hover:border-blue-300 cursor-pointer transition-all">
+                      <div className={`mt-1 flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border ${selectedQuizQuestions.includes(q.id) ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
+                        {selectedQuizQuestions.includes(q.id) && <Check size={16} className="text-white" />}
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        className="hidden" 
+                        checked={selectedQuizQuestions.includes(q.id)}
+                        onChange={() => {
+                          setSelectedQuizQuestions(prev => 
+                            prev.includes(q.id) ? prev.filter(id => id !== q.id) : [...prev, q.id]
+                          )
+                        }}
+                      />
+                      <div>
+                        <p className="font-semibold text-slate-800 mb-2">{q.question}</p>
+                        <div className="flex gap-2 flex-wrap text-sm text-slate-500">
+                          <span className="px-2 py-1 bg-slate-100 rounded-lg">Category: {q.category || 'General'}</span>
+                          <span className="px-2 py-1 bg-slate-100 rounded-lg">Marks: {q.marks || 1}</span>
+                        </div>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-sm font-bold text-blue-600">
+                {selectedQuizQuestions.length} questions selected
+              </p>
+              <div className="flex gap-3 w-full sm:w-auto">
+                <button
+                  onClick={() => confirmEndMeet(false)}
+                  className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors flex-1 sm:flex-none"
+                >
+                  End Without Quiz
+                </button>
+                <button
+                  onClick={() => confirmEndMeet(true)}
+                  disabled={selectedQuizQuestions.length === 0}
+                  className={`px-6 py-2.5 font-bold rounded-xl transition-all shadow-md flex-1 sm:flex-none ${selectedQuizQuestions.length === 0 ? 'bg-blue-300 text-white cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                >
+                  End & Assign Quiz
+                </button>
+              </div>
             </div>
           </div>
         </div>
