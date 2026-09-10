@@ -1153,6 +1153,7 @@ export default function LiveClasses({ department }) {
   const [isEndClassModalOpen, setIsEndClassModalOpen] = useState(false);
   const [sessionToEnd, setSessionToEnd] = useState(null);
   const [selectedQuizQuestions, setSelectedQuizQuestions] = useState([]);
+  const [endClassQTypeFilter, setEndClassQTypeFilter] = useState("ALL");
   const [classToDelete, setClassToDelete] = useState(null);
 
   const [newClass, setNewClass] = useState({ topic: '', time: '', selectedStudents: [], bundleId: '' });
@@ -1563,13 +1564,30 @@ export default function LiveClasses({ department }) {
           </div>
           
           <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
-            <p className="text-slate-600 mb-6 font-medium">Select questions from the question bank to assign as a short quiz for students to complete immediately after the class.</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <p className="text-slate-600 font-medium text-sm">Select questions from the question bank to assign as a short quiz for students to complete immediately after the class.</p>
+              <select 
+                value={endClassQTypeFilter}
+                onChange={(e) => setEndClassQTypeFilter(e.target.value)}
+                className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none min-w-[160px]"
+              >
+                <option value="ALL">All Types</option>
+                <option value="Single Choice">Single Choice (MCQ)</option>
+                <option value="Multiple Choice">Multiple Choice (MSQ)</option>
+                <option value="Match">Match</option>
+                <option value="Fill in the Blanks">Fill in the Blanks</option>
+              </select>
+            </div>
             
             <div className="space-y-4">
               {departmentQuestions.length === 0 ? (
                 <p className="text-slate-500 text-center p-4">No questions available in the bank.</p>
               ) : (
-                departmentQuestions.map((q) => (
+                departmentQuestions
+                  .filter(q => endClassQTypeFilter === "ALL" || q.questionType === endClassQTypeFilter)
+                  .map((q) => {
+                  const cleanText = q.questionText ? q.questionText.replace(/<[^>]+>/g, '') : '';
+                  return (
                   <label key={q.id} className="flex items-start gap-4 p-4 border border-slate-200 rounded-xl bg-white hover:border-blue-300 cursor-pointer transition-all">
                     <div className={`mt-1 flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border ${selectedQuizQuestions.includes(q.id) ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
                       {selectedQuizQuestions.includes(q.id) && <Check size={16} className="text-white" />}
@@ -1584,15 +1602,17 @@ export default function LiveClasses({ department }) {
                         )
                       }}
                     />
-                    <div>
-                      <p className="font-semibold text-slate-800 mb-2">{q.question}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-800 mb-2 line-clamp-3">{cleanText}</p>
                       <div className="flex gap-2 flex-wrap text-sm text-slate-500">
-                        <span className="px-2 py-1 bg-slate-100 rounded-lg">Category: {q.category || 'General'}</span>
-                        <span className="px-2 py-1 bg-slate-100 rounded-lg">Marks: {q.marks || 1}</span>
+                        {q.questionType && <span className="px-2 py-1 bg-blue-50 text-blue-700 font-semibold rounded-lg text-xs">{q.questionType}</span>}
+                        <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs">Category: {q.category || q.subject || 'General'}</span>
+                        <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs">Marks: {q.marks || 1}</span>
                       </div>
                     </div>
                   </label>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
