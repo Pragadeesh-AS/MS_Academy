@@ -299,6 +299,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [selectedQBIds, setSelectedQBIds] = useState([]);
   const [qbSearchFilter, setQbSearchFilter] = useState("");
   const [qbDifficultyFilter, setQbDifficultyFilter] = useState("ALL");
+  const [qbTypeFilter, setQbTypeFilter] = useState("ALL");
   const [activeQuestionState, setActiveQuestionState] = useState(null);
   const activeQuestionStateRef = useRef(activeQuestionState);
   const [newRecordingName, setNewRecordingName] = useState('');
@@ -982,6 +983,17 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                 />
               </div>
               <select 
+                value={qbTypeFilter}
+                onChange={(e) => setQbTypeFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-sm font-semibold rounded-xl px-4 py-3 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-all cursor-pointer"
+              >
+                <option value="ALL">All Types</option>
+                <option value="Single Choice">Single Choice</option>
+                <option value="Multiple Choice">Multiple Choice</option>
+                <option value="Fill in the Blanks">Fill in the Blanks</option>
+                <option value="Match">Match</option>
+              </select>
+              <select 
                 value={qbDifficultyFilter}
                 onChange={(e) => setQbDifficultyFilter(e.target.value)}
                 className="bg-slate-50 border border-slate-200 text-sm font-semibold rounded-xl px-4 py-3 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-all cursor-pointer"
@@ -999,7 +1011,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                   ((q.questionText || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                   (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                   (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
-                  (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase()))
+                  (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase())) &&
+                  (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase()))
                 )
                 .map((q, idx) => {
                   const isSelected = selectedQBIds.includes(q.id);
@@ -1028,6 +1041,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                             q.difficultyLevel.toLowerCase() === 'medium' ? 'bg-yellow-100 text-yellow-700' :
                             'bg-red-100 text-red-700'
                           }`}>{q.difficultyLevel}</span>}
+                          {q.questionType && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider bg-indigo-100 text-indigo-700">
+                            {q.questionType}
+                          </span>}
                         </div>
                         <p className="text-sm text-slate-800 line-clamp-2">{cleanText}</p>
                       </div>
@@ -1048,7 +1064,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                         ((q.questionText || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                         (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                         (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
-                        (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase()))
+                        (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase())) &&
+                        (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase()))
                       ).map(q => q.id);
                     
                     const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedQBIds.includes(id));
@@ -1065,12 +1082,14 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                     ((q.questionText || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                     (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                     (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
-                    (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase()))
+                    (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase())) &&
+                    (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase()))
                   ).every(q => selectedQBIds.includes(q.id)) && departmentQuestions.filter(q => 
                     ((q.questionText || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                     (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                     (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
-                    (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase()))
+                    (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase())) &&
+                    (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase()))
                   ).length > 0 ? "Deselect All" : "Select All"}
                 </button>
                 <span className="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">Selected: {selectedQBIds.length}</span>
