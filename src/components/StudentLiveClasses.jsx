@@ -68,8 +68,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
 
   useEffect(() => {
     if (client.uid && sessionId) {
-      const userName = localStorage.getItem('auth_name') || 'Student';
-      const userEmail = localStorage.getItem('auth_email') || '';
+      const userName = sessionStorage.getItem('auth_name') || 'Student';
+      const userEmail = sessionStorage.getItem('auth_email') || '';
       setDoc(doc(db, 'live_sessions', sessionId, 'participants', client.uid.toString()), {
         name: userName,
         email: userEmail,
@@ -707,7 +707,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
       if (!quizSubmitted || emailSent || totalParticipants === 0 || !postClassQuiz) return;
       if (quizResults.length === totalParticipants) {
         // Send email to myself only (each client handles their own email to avoid N^2 emails)
-        const myEmail = localStorage.getItem('auth_email');
+        const myEmail = sessionStorage.getItem('auth_email');
         if (!myEmail) return;
 
         try {
@@ -798,7 +798,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
       
       if (prevMessagesLength.current > 0 && messages.length > prevMessagesLength.current && !isChatOpen) {
         const lastMsg = messages[messages.length - 1];
-        if (lastMsg.senderEmail !== localStorage.getItem('auth_email')) {
+        if (lastMsg.senderEmail !== sessionStorage.getItem('auth_email')) {
           setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.message });
           setTimeout(() => setChatToast(prev => ({ ...prev, show: false })), 5000);
         }
@@ -818,8 +818,8 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     try {
       await addDoc(collection(db, 'live_chats'), {
         sessionId: currentSession.id,
-        senderName: localStorage.getItem('auth_name') || 'Student',
-        senderEmail: localStorage.getItem('auth_email') || '',
+        senderName: sessionStorage.getItem('auth_name') || 'Student',
+        senderEmail: sessionStorage.getItem('auth_email') || '',
         message: newMessage,
         timestamp: serverTimestamp()
       });
@@ -896,15 +896,15 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
         }
       });
       
-      let userEmail = localStorage.getItem('auth_email');
+      let userEmail = sessionStorage.getItem('auth_email');
       if (!userEmail) {
         userEmail = `student${Math.floor(Math.random() * 10000)}@test.com`;
-        localStorage.setItem('auth_email', userEmail);
+        sessionStorage.setItem('auth_email', userEmail);
       }
-      let userName = localStorage.getItem('auth_name');
+      let userName = sessionStorage.getItem('auth_name');
       if (!userName) {
         userName = 'Student';
-        localStorage.setItem('auth_name', userName);
+        sessionStorage.setItem('auth_name', userName);
       }
       
       if (postClassQuiz?.sessionId) {
@@ -967,7 +967,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                   </div>
                   <div className="divide-y divide-slate-100">
                     {quizResults.map((res, i) => {
-                      const userEmail = localStorage.getItem('auth_email') || '';
+                      const userEmail = sessionStorage.getItem('auth_email') || '';
                       return (
                       <div key={res.id} className={`p-4 flex items-center gap-4 ${res.id === userEmail ? 'bg-blue-50/50' : ''}`}>
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-slate-200 text-slate-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>
@@ -1168,7 +1168,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                   chatMessages.map(msg => (
                     <div key={msg.id} className="flex flex-col">
                       <span className="text-[11px] font-bold text-slate-500 mb-1">{msg.senderName}</span>
-                      <div className={`px-3 py-2 rounded-xl text-sm max-w-[90%] break-words ${msg.senderEmail === localStorage.getItem('auth_email') ? 'bg-blue-600 text-white self-end rounded-tr-sm' : 'bg-slate-800 text-slate-200 self-start rounded-tl-sm'}`}>
+                      <div className={`px-3 py-2 rounded-xl text-sm max-w-[90%] break-words ${msg.senderEmail === sessionStorage.getItem('auth_email') ? 'bg-blue-600 text-white self-end rounded-tr-sm' : 'bg-slate-800 text-slate-200 self-start rounded-tl-sm'}`}>
                         {msg.message}
                       </div>
                     </div>

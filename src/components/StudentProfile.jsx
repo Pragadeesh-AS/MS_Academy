@@ -67,8 +67,8 @@ export default function StudentProfile() {
   const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
-    const role = localStorage.getItem('auth_role');
-    const email = localStorage.getItem('auth_email');
+    const role = sessionStorage.getItem('auth_role');
+    const email = sessionStorage.getItem('auth_email');
     
     if (role !== 'student') {
       navigate('/login');
@@ -491,9 +491,9 @@ export default function StudentProfile() {
              <p className="text-sm font-semibold text-slate-500 mb-4">Done for the day?</p>
              <LogoutButton 
                 onClick={() => {
-                  localStorage.removeItem('auth_role');
-                  localStorage.removeItem('auth_email');
-                  localStorage.removeItem('auth_name');
+                  sessionStorage.removeItem('auth_role');
+                  sessionStorage.removeItem('auth_email');
+                  sessionStorage.removeItem('auth_name');
                   window.dispatchEvent(new Event('storage'));
                   navigate('/');
                 }}

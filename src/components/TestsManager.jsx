@@ -294,7 +294,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       questions: finalQuestionIds,
       allocations,
       bundleId: isTeacher ? '' : bundleId,
-      createdBy: localStorage.getItem('auth_name') || (isTeacher ? 'Teacher' : 'Admin'),
+      createdBy: sessionStorage.getItem('auth_name') || (isTeacher ? 'Teacher' : 'Admin'),
       createdAt: serverTimestamp()
     };
 

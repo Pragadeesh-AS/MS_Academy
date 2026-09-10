@@ -296,7 +296,7 @@ export default function GateCourses() {
     }
     
     // Filter by student department if logged in as student
-    const role = localStorage.getItem('auth_role');
+    const role = sessionStorage.getItem('auth_role');
     const studentDept = localStorage.getItem('student_department');
     if (role === 'student' && studentDept) {
       const match = studentDept.match(/\(([^)]+)\)/);

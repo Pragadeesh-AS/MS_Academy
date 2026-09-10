@@ -211,8 +211,8 @@ export default function AdminDashboard() {
 
   // Auth Guard
   useEffect(() => {
-    const role = localStorage.getItem('auth_role');
-    const name = localStorage.getItem('auth_name');
+    const role = sessionStorage.getItem('auth_role');
+    const name = sessionStorage.getItem('auth_name');
     if (role !== 'admin') {
       navigate('/login');
     } else {
@@ -285,9 +285,9 @@ export default function AdminDashboard() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('auth_role');
-    localStorage.removeItem('auth_email');
-    localStorage.removeItem('auth_name');
+    sessionStorage.removeItem('auth_role');
+    sessionStorage.removeItem('auth_email');
+    sessionStorage.removeItem('auth_name');
     window.dispatchEvent(new Event('storage'));
     navigate('/login');
   };

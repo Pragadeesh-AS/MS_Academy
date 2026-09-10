@@ -32,7 +32,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const fetchTestsAndAttempts = async () => {
     setLoading(true);
     try {
-      const email = auth.currentUser?.email || localStorage.getItem('auth_email') || '';
+      const email = auth.currentUser?.email || sessionStorage.getItem('auth_email') || '';
       if (!email) {
         console.warn('No email found for student');
       }
@@ -157,8 +157,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     const attemptPayload = {
       testId: test.id,
       testTitle: test.title,
-      studentEmail: auth.currentUser?.email || localStorage.getItem('auth_email') || '',
-      studentName: localStorage.getItem('auth_name') || 'Student',
+      studentEmail: auth.currentUser?.email || sessionStorage.getItem('auth_email') || '',
+      studentName: sessionStorage.getItem('auth_name') || 'Student',
       score: correctCount,
       totalQuestions: questionsList.length,
       responses: evaluation,
@@ -220,7 +220,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       <GateTestInterface 
         test={activeTest}
         testQuestions={testQuestions}
-        studentName={localStorage.getItem('auth_name') || 'Student'}
+        studentName={sessionStorage.getItem('auth_name') || 'Student'}
         onSubmit={(answers) => handleSubmitTest(testQuestions, activeTest, answers)}
         onCancel={() => setTestMode('list')}
       />

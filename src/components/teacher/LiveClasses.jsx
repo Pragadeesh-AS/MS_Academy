@@ -313,7 +313,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
 
   useEffect(() => {
     if (client.uid && sessionId) {
-      const userName = localStorage.getItem('auth_name') || 'Teacher';
+      const userName = sessionStorage.getItem('auth_name') || 'Teacher';
       setDoc(doc(db, 'live_sessions', sessionId, 'participants', client.uid.toString()), {
         name: userName,
         role: 'teacher'
@@ -465,7 +465,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     activeQuestionState,
     onUploadComplete: async (url, fileName) => {
       try {
-        const teacherName = localStorage.getItem('auth_name') || 'Teacher';
+        const teacherName = sessionStorage.getItem('auth_name') || 'Teacher';
         await addDoc(collection(db, 'recordings'), {
           fileName,
           url,
@@ -1247,7 +1247,7 @@ export default function LiveClasses({ department }) {
   }, [department]);
 
   useEffect(() => {
-    const teacherEmail = localStorage.getItem('auth_email');
+    const teacherEmail = sessionStorage.getItem('auth_email');
     if (!teacherEmail) return;
 
     const q = query(
@@ -1265,7 +1265,7 @@ export default function LiveClasses({ department }) {
   }, []);
 
   useEffect(() => {
-    const teacherEmail = localStorage.getItem('auth_email');
+    const teacherEmail = sessionStorage.getItem('auth_email');
     if (!teacherEmail) return;
 
     const q = query(
@@ -1293,7 +1293,7 @@ export default function LiveClasses({ department }) {
 
       if (prevMessagesLength.current > 0 && messages.length > prevMessagesLength.current && !isChatOpen) {
         const lastMsg = messages[messages.length - 1];
-        if (lastMsg.senderEmail !== localStorage.getItem('auth_email')) {
+        if (lastMsg.senderEmail !== sessionStorage.getItem('auth_email')) {
           setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.message });
           setTimeout(() => setChatToast(prev => ({ ...prev, show: false })), 5000);
         }
@@ -1313,8 +1313,8 @@ export default function LiveClasses({ department }) {
     try {
       await addDoc(collection(db, 'live_chats'), {
         sessionId: currentSessionId,
-        senderName: localStorage.getItem('auth_name') || 'Teacher',
-        senderEmail: localStorage.getItem('auth_email') || '',
+        senderName: sessionStorage.getItem('auth_name') || 'Teacher',
+        senderEmail: sessionStorage.getItem('auth_email') || '',
         message: newMessage,
         timestamp: serverTimestamp()
       });
@@ -1346,8 +1346,8 @@ export default function LiveClasses({ department }) {
     setIsStartModalOpen(false);
 
     try {
-      const teacherName = localStorage.getItem('auth_name') || 'Teacher';
-      const teacherEmail = localStorage.getItem('auth_email') || '';
+      const teacherName = sessionStorage.getItem('auth_name') || 'Teacher';
+      const teacherEmail = sessionStorage.getItem('auth_email') || '';
 
       const sessionData = {
         teacherName,
@@ -1425,7 +1425,7 @@ export default function LiveClasses({ department }) {
       ? departmentStudents.filter(s => newClass.selectedStudents.includes(s.name))
       : departmentStudents;
 
-    const teacherName = localStorage.getItem('auth_name') || 'Your Teacher';
+    const teacherName = sessionStorage.getItem('auth_name') || 'Your Teacher';
     const loginLink = window.location.hostname === 'localhost' ? 'http://localhost:5173/student' : window.location.origin + '/student';
 
     for (const student of studentsToEmail) {
@@ -1469,7 +1469,7 @@ export default function LiveClasses({ department }) {
         students: newClass.selectedStudents.length || departmentStudents.length,
         selectedStudentNames: newClass.selectedStudents.length > 0 ? newClass.selectedStudents : [], // Store names to notify on cancellation
         duration: "1h 00m",
-        teacherEmail: localStorage.getItem('auth_email'),
+        teacherEmail: sessionStorage.getItem('auth_email'),
         teacherName: teacherName,
         department: department,
         createdAt: serverTimestamp()
@@ -1490,7 +1490,7 @@ export default function LiveClasses({ department }) {
       ? departmentStudents.filter(s => classToDelete.selectedStudentNames.includes(s.name))
       : departmentStudents;
 
-    const teacherName = localStorage.getItem('auth_name') || 'Your Teacher';
+    const teacherName = sessionStorage.getItem('auth_name') || 'Your Teacher';
 
     for (const student of studentsToEmail) {
       if (student.email) {
@@ -1733,9 +1733,9 @@ export default function LiveClasses({ department }) {
                     </div>
                   ) : (
                     chatMessages.map((msg) => (
-                      <div key={msg.id} className={`flex flex-col ${msg.senderEmail === localStorage.getItem('auth_email') ? 'items-end' : 'items-start'}`}>
+                      <div key={msg.id} className={`flex flex-col ${msg.senderEmail === sessionStorage.getItem('auth_email') ? 'items-end' : 'items-start'}`}>
                         <span className="text-[10px] font-bold text-slate-500 mb-1 ml-1">{msg.senderName}</span>
-                        <div className={`px-4 py-2 rounded-2xl max-w-[85%] text-[13px] ${msg.senderEmail === localStorage.getItem('auth_email') ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-sm'}`}>
+                        <div className={`px-4 py-2 rounded-2xl max-w-[85%] text-[13px] ${msg.senderEmail === sessionStorage.getItem('auth_email') ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-sm'}`}>
                           {msg.message}
                         </div>
                       </div>

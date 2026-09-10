@@ -185,9 +185,9 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    const role = localStorage.getItem('auth_role');
-    const name = localStorage.getItem('auth_name');
-    const email = localStorage.getItem('auth_email');
+    const role = sessionStorage.getItem('auth_role');
+    const name = sessionStorage.getItem('auth_name');
+    const email = sessionStorage.getItem('auth_email');
     
     if (role !== 'student') {
       navigate('/login');

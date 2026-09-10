@@ -14,9 +14,9 @@ export default function TypistDashboard() {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
-    const role = localStorage.getItem('auth_role');
-    const name = localStorage.getItem('auth_name');
-    const email = localStorage.getItem('auth_email');
+    const role = sessionStorage.getItem('auth_role');
+    const name = sessionStorage.getItem('auth_name');
+    const email = sessionStorage.getItem('auth_email');
     
     const checkAccess = async () => {
       // Check if they are still an invited typist in the database
@@ -38,9 +38,9 @@ export default function TypistDashboard() {
       if (role !== 'typist' || !isStillTypist) {
         if (role === 'typist') {
           // They were a typist, but their access was revoked by the Admin. Sign them out completely.
-          localStorage.removeItem('auth_role');
-          localStorage.removeItem('auth_email');
-          localStorage.removeItem('auth_name');
+          sessionStorage.removeItem('auth_role');
+          sessionStorage.removeItem('auth_email');
+          sessionStorage.removeItem('auth_name');
           localStorage.removeItem('pair_id');
           localStorage.removeItem('pair_role');
           window.dispatchEvent(new Event('storage'));
@@ -54,9 +54,9 @@ export default function TypistDashboard() {
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem('auth_role');
-    localStorage.removeItem('auth_email');
-    localStorage.removeItem('auth_name');
+    sessionStorage.removeItem('auth_role');
+    sessionStorage.removeItem('auth_email');
+    sessionStorage.removeItem('auth_name');
     window.dispatchEvent(new Event('storage'));
     navigate('/');
   };

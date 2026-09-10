@@ -129,7 +129,7 @@ const RichTextEditor = ({ value, onChange, name, className, placeholder }) => {
 };
 
 export default function QuestionBank({ externalFilter = null, isPremiumView = false }) {
-  const userRole = localStorage.getItem('auth_role') || 'admin';
+  const userRole = sessionStorage.getItem('auth_role') || 'admin';
   const pairRole = localStorage.getItem('pair_role') || null;
   const pairId = localStorage.getItem('pair_id') || null;
   const [questions, setQuestions] = useState([]);
@@ -420,7 +420,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }
     
     const finalStatus = forcedStatus || formData.status || 'Approved';
-    const authName = localStorage.getItem('auth_name') || 'Unknown';
+    const authName = sessionStorage.getItem('auth_name') || 'Unknown';
     let payload = { ...formData, status: finalStatus, createdAt: formData.createdAt || new Date().toISOString() };
     
     if (!isEditing) payload.typedBy = authName;
@@ -476,7 +476,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }
     
     const finalStatus = forcedStatus || formData.status || 'Approved';
-    const authName = localStorage.getItem('auth_name') || 'Unknown';
+    const authName = sessionStorage.getItem('auth_name') || 'Unknown';
     let payload = { ...formData, status: finalStatus, createdAt: formData.createdAt || new Date().toISOString() };
     
     if (!isEditing) payload.typedBy = authName;

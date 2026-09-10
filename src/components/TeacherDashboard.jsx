@@ -20,9 +20,9 @@ export default function TeacherDashboard() {
   const [joinedStudents, setJoinedStudents] = useState([]);
 
   useEffect(() => {
-    const role = localStorage.getItem('auth_role');
-    const name = localStorage.getItem('auth_name');
-    const email = localStorage.getItem('auth_email');
+    const role = sessionStorage.getItem('auth_role');
+    const name = sessionStorage.getItem('auth_name');
+    const email = sessionStorage.getItem('auth_email');
     
     const checkAccess = async () => {
       // Check if they are still an invited teacher in the database
@@ -46,9 +46,9 @@ export default function TeacherDashboard() {
       if (role !== 'teacher' || !isStillTeacher) {
         if (role === 'teacher') {
           // They were a teacher, but their access was revoked by the Admin. Sign them out completely.
-          localStorage.removeItem('auth_role');
-          localStorage.removeItem('auth_email');
-          localStorage.removeItem('auth_name');
+          sessionStorage.removeItem('auth_role');
+          sessionStorage.removeItem('auth_email');
+          sessionStorage.removeItem('auth_name');
           window.dispatchEvent(new Event('storage'));
         }
         navigate('/login');
@@ -67,9 +67,9 @@ export default function TeacherDashboard() {
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem('auth_role');
-    localStorage.removeItem('auth_email');
-    localStorage.removeItem('auth_name');
+    sessionStorage.removeItem('auth_role');
+    sessionStorage.removeItem('auth_email');
+    sessionStorage.removeItem('auth_name');
     window.dispatchEvent(new Event('storage'));
     navigate('/');
   };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, TrendingUp, BookOpen, Trophy, Quote, Phone } from 'lucide-react';
 import signupImage from '../assets/signup2.png';
 import { auth, db } from '../firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, sendPasswordResetEmail, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import { collection, getDocs, query, where, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
@@ -92,6 +92,8 @@ export default function LoginSignup() {
     setError('');
     setResetMessage('');
     
+    await setPersistence(auth, browserSessionPersistence);
+
     if (!isLogin && password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
@@ -131,9 +133,9 @@ export default function LoginSignup() {
 
         // Check if the authenticated user has the registered admin email
         if (adminEmails.includes(user.email.toLowerCase())) {
-          localStorage.setItem('auth_role', 'admin');
-          localStorage.setItem('auth_email', user.email);
-          localStorage.setItem('auth_name', 'MS Academy Admin');
+          sessionStorage.setItem('auth_role', 'admin');
+          sessionStorage.setItem('auth_email', user.email);
+          sessionStorage.setItem('auth_name', 'MS Academy Admin');
           window.dispatchEvent(new Event('storage'));
           navigate('/admin');
         } else {
@@ -167,23 +169,23 @@ export default function LoginSignup() {
           const userName = existingName || user.displayName || user.email.split('@')[0];
           
           if (isTeacher) {
-            localStorage.setItem('auth_role', 'teacher');
-            localStorage.setItem('auth_email', user.email);
-            localStorage.setItem('auth_name', userName);
+            sessionStorage.setItem('auth_role', 'teacher');
+            sessionStorage.setItem('auth_email', user.email);
+            sessionStorage.setItem('auth_name', userName);
             window.dispatchEvent(new Event('storage'));
             navigate('/teacher-dashboard');
           } else if (isTypist) {
-            localStorage.setItem('auth_role', 'typist');
-            localStorage.setItem('auth_email', user.email);
-            localStorage.setItem('auth_name', userName);
+            sessionStorage.setItem('auth_role', 'typist');
+            sessionStorage.setItem('auth_email', user.email);
+            sessionStorage.setItem('auth_name', userName);
             window.dispatchEvent(new Event('storage'));
             navigate('/typist-dashboard');
           } else {
             // Regular student auth
             await markStudentAsActive(user.email, userName);
-            localStorage.setItem('auth_role', 'student');
-            localStorage.setItem('auth_email', user.email);
-            localStorage.setItem('auth_name', userName);
+            sessionStorage.setItem('auth_role', 'student');
+            sessionStorage.setItem('auth_email', user.email);
+            sessionStorage.setItem('auth_name', userName);
             window.dispatchEvent(new Event('storage'));
             navigate('/student');
           }
@@ -198,23 +200,23 @@ export default function LoginSignup() {
         const isTypist = await checkTypistRole(user.email);
         
         if (isTeacher) {
-          localStorage.setItem('auth_role', 'teacher');
-          localStorage.setItem('auth_email', user.email);
-          localStorage.setItem('auth_name', userName);
+          sessionStorage.setItem('auth_role', 'teacher');
+          sessionStorage.setItem('auth_email', user.email);
+          sessionStorage.setItem('auth_name', userName);
           window.dispatchEvent(new Event('storage'));
           navigate('/teacher-dashboard');
         } else if (isTypist) {
-          localStorage.setItem('auth_role', 'typist');
-          localStorage.setItem('auth_email', user.email);
-          localStorage.setItem('auth_name', userName);
+          sessionStorage.setItem('auth_role', 'typist');
+          sessionStorage.setItem('auth_email', user.email);
+          sessionStorage.setItem('auth_name', userName);
           window.dispatchEvent(new Event('storage'));
           navigate('/typist-dashboard');
         } else {
           // Always student if not an invited teacher
           await markStudentAsActive(user.email, userName, department, plan);
-          localStorage.setItem('auth_role', 'student');
-          localStorage.setItem('auth_email', user.email);
-          localStorage.setItem('auth_name', userName);
+          sessionStorage.setItem('auth_role', 'student');
+          sessionStorage.setItem('auth_email', user.email);
+          sessionStorage.setItem('auth_name', userName);
           window.dispatchEvent(new Event('storage'));
           navigate('/student');
         }
@@ -232,9 +234,9 @@ export default function LoginSignup() {
       const userEmail = user.email || '';
       const adminEmails = ['msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
       if (adminEmails.includes(userEmail.toLowerCase())) {
-        localStorage.setItem('auth_role', 'admin');
-        localStorage.setItem('auth_email', userEmail);
-        localStorage.setItem('auth_name', 'MS Academy Admin');
+        sessionStorage.setItem('auth_role', 'admin');
+        sessionStorage.setItem('auth_email', userEmail);
+        sessionStorage.setItem('auth_name', 'MS Academy Admin');
         window.dispatchEvent(new Event('storage'));
         navigate('/admin');
         return;
@@ -270,22 +272,22 @@ export default function LoginSignup() {
       const userName = existingName || user.displayName || userEmail.split('@')[0] || 'User';
       
       if (isTeacher) {
-        localStorage.setItem('auth_role', 'teacher');
-        localStorage.setItem('auth_email', userEmail);
-        localStorage.setItem('auth_name', userName);
+        sessionStorage.setItem('auth_role', 'teacher');
+        sessionStorage.setItem('auth_email', userEmail);
+        sessionStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
         navigate('/teacher-dashboard');
       } else if (isTypist) {
-        localStorage.setItem('auth_role', 'typist');
-        localStorage.setItem('auth_email', userEmail);
-        localStorage.setItem('auth_name', userName);
+        sessionStorage.setItem('auth_role', 'typist');
+        sessionStorage.setItem('auth_email', userEmail);
+        sessionStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
         navigate('/typist-dashboard');
       } else {
         await markStudentAsActive(userEmail, userName);
-        localStorage.setItem('auth_role', 'student');
-        localStorage.setItem('auth_email', userEmail);
-        localStorage.setItem('auth_name', userName);
+        sessionStorage.setItem('auth_role', 'student');
+        sessionStorage.setItem('auth_email', userEmail);
+        sessionStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
         navigate('/student');
       }
@@ -319,6 +321,7 @@ export default function LoginSignup() {
     setResetMessage('');
     try {
       setLoading(true);
+      await setPersistence(auth, browserSessionPersistence);
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       if (result && result.user) {

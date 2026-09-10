@@ -46,13 +46,13 @@ export default function App() {
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
 
-  const [userRole, setUserRole] = useState(() => localStorage.getItem('auth_role'));
-  const [userName, setUserName] = useState(() => localStorage.getItem('auth_name'));
+  const [userRole, setUserRole] = useState(() => sessionStorage.getItem('auth_role'));
+  const [userName, setUserName] = useState(() => sessionStorage.getItem('auth_name'));
 
   useEffect(() => {
     const handleStorageChange = () => {
-      setUserRole(localStorage.getItem('auth_role'));
-      setUserName(localStorage.getItem('auth_name'));
+      setUserRole(sessionStorage.getItem('auth_role'));
+      setUserName(sessionStorage.getItem('auth_name'));
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
@@ -194,9 +194,9 @@ export default function App() {
                 </Link>
                 <button
                   onClick={() => {
-                    localStorage.removeItem('auth_role');
-                    localStorage.removeItem('auth_email');
-                    localStorage.removeItem('auth_name');
+                    sessionStorage.removeItem('auth_role');
+                    sessionStorage.removeItem('auth_email');
+                    sessionStorage.removeItem('auth_name');
                     localStorage.removeItem('student_department');
                     setUserRole(null);
                     setUserName(null);
