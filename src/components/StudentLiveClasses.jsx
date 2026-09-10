@@ -37,6 +37,22 @@ import AgoraRTC, {
   useNetworkQuality
 } from "agora-rtc-react";
 
+const sendEmailViaGAS = async (to, subject, htmlMessage) => {
+  const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
+  if (!webhookUrl) return;
+  
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to_email: to, subject: subject, message_html: htmlMessage })
+    });
+  } catch (err) {
+    console.error("Error sending email:", err);
+  }
+};
+
 // Extracted StudentCall component for custom Agora rendering
 const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast }) => {
   const [micOn, setMicOn] = useState(false);
@@ -53,8 +69,10 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   useEffect(() => {
     if (client.uid && sessionId) {
       const userName = localStorage.getItem('auth_name') || 'Student';
+      const userEmail = localStorage.getItem('auth_email') || '';
       setDoc(doc(db, 'live_sessions', sessionId, 'participants', client.uid.toString()), {
         name: userName,
+        email: userEmail,
         role: 'student'
       }, { merge: true }).catch(console.error);
     }
@@ -589,6 +607,9 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
+  const [quizResults, setQuizResults] = useState([]);
+  const [totalParticipants, setTotalParticipants] = useState(0);
+  const [emailSent, setEmailSent] = useState(false);
   
   // Chat State
   const [chatMessages, setChatMessages] = useState([]);
@@ -650,6 +671,92 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     
     return () => unsubscribe();
   }, [isInCall, currentSession?.id]);
+
+  useEffect(() => {
+    if (!postClassQuiz || !currentSession?.id) return;
+
+    // Listen to participants to know how many students were in class
+    const unsubParticipants = onSnapshot(collection(db, 'live_sessions', currentSession.id, 'participants'), (snapshot) => {
+      let count = 0;
+      snapshot.forEach(doc => {
+        if (doc.data().role === 'student') count++;
+      });
+      setTotalParticipants(count);
+    });
+
+    // Listen to quiz results for the leaderboard
+    const unsubResults = onSnapshot(collection(db, 'live_sessions', currentSession.id, 'quiz_results'), (snapshot) => {
+      const results = [];
+      snapshot.forEach(doc => {
+        results.push({ id: doc.id, ...doc.data() });
+      });
+      // Sort by score descending
+      results.sort((a, b) => b.score - a.score);
+      setQuizResults(results);
+    });
+
+    return () => {
+      unsubParticipants();
+      unsubResults();
+    };
+  }, [postClassQuiz, currentSession?.id]);
+
+  useEffect(() => {
+    // Send email when everyone has finished
+    const checkAndSendEmail = async () => {
+      if (!quizSubmitted || emailSent || totalParticipants === 0 || !currentSession) return;
+      if (quizResults.length === totalParticipants) {
+        // Send email to myself only (each client handles their own email to avoid N^2 emails)
+        const myEmail = localStorage.getItem('auth_email');
+        if (!myEmail) return;
+
+        try {
+          let html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+              <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-bottom: 1px solid #e2e8f0;">
+                <h2 style="color: #1e293b; margin: 0;">Post-Class Quiz Leaderboard</h2>
+                <p style="color: #64748b; margin-top: 5px;">${currentSession.topic || 'Live Class'}</p>
+              </div>
+              <div style="padding: 20px;">
+                <h3 style="color: #0f172a; margin-top: 0;">Final Results</h3>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                  <thead>
+                    <tr style="background-color: #f1f5f9;">
+                      <th style="padding: 10px; text-align: left; border-bottom: 2px solid #cbd5e1; color: #475569;">Rank</th>
+                      <th style="padding: 10px; text-align: left; border-bottom: 2px solid #cbd5e1; color: #475569;">Student</th>
+                      <th style="padding: 10px; text-align: right; border-bottom: 2px solid #cbd5e1; color: #475569;">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+          `;
+          
+          quizResults.forEach((res, i) => {
+            html += `
+              <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: ${i === 0 ? '#ca8a04' : '#64748b'};">#${i + 1}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: #334155;">${res.name}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: #2563eb;">${res.score}</td>
+              </tr>
+            `;
+          });
+
+          html += `
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+
+          await sendEmailViaGAS(myEmail, `Leaderboard: ${currentSession.topic || 'Live Class'}`, html);
+          setEmailSent(true);
+        } catch (e) {
+          console.error("Failed to send leaderboard email", e);
+        }
+      }
+    };
+
+    checkAndSendEmail();
+  }, [quizResults.length, totalParticipants, quizSubmitted, emailSent, currentSession]);
 
   const canAccessClass = (cls) => {
     if (isPro) return true;
@@ -768,7 +875,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
   }, [isInCall, currentSession]);
 
   if (postClassQuiz) {
-    const handleQuizSubmit = () => {
+    const handleQuizSubmit = async () => {
       let score = 0;
       postClassQuiz.questions.forEach((q, idx) => {
         if (q.questionType === 'Multiple Choice') {
@@ -788,6 +895,23 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
           }
         }
       });
+      
+      const userEmail = localStorage.getItem('auth_email') || '';
+      const userName = localStorage.getItem('auth_name') || 'Student';
+      
+      if (currentSession?.id && client.uid) {
+        try {
+          await setDoc(doc(db, 'live_sessions', currentSession.id, 'quiz_results', client.uid.toString()), {
+            name: userName,
+            email: userEmail,
+            score: score,
+            submittedAt: serverTimestamp()
+          });
+        } catch (e) {
+          console.error("Error saving quiz result:", e);
+        }
+      }
+
       setQuizScore(score);
       setQuizSubmitted(true);
     };
@@ -810,12 +934,48 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
           
           <div className="p-6 overflow-y-auto flex-1 bg-slate-50 space-y-6">
             {quizSubmitted ? (
-              <div className="text-center py-10">
-                <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-                  <Check size={48} strokeWidth={3} />
+              <div className="flex flex-col gap-6">
+                <div className="text-center py-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                    <Trophy size={40} strokeWidth={2.5} />
+                  </div>
+                  <h3 className="text-2xl font-[900] text-slate-800 mb-2">Quiz Completed!</h3>
+                  <p className="text-lg text-slate-600 font-medium">Your Score: <span className="text-blue-600 font-bold">{quizScore}</span></p>
+                  
+                  {quizResults.length < totalParticipants && (
+                    <p className="text-sm text-yellow-600 mt-4 font-bold animate-pulse">Waiting for others to finish... ({quizResults.length}/{totalParticipants})</p>
+                  )}
+                  {quizResults.length >= totalParticipants && totalParticipants > 0 && (
+                    <p className="text-sm text-green-600 mt-4 font-bold flex items-center justify-center gap-2">
+                      <Check size={16} /> Everyone has finished! {emailSent && "Leaderboard emailed."}
+                    </p>
+                  )}
                 </div>
-                <h3 className="text-3xl font-[900] text-slate-800 mb-2">Quiz Completed!</h3>
-                <p className="text-lg text-slate-600 font-medium">You scored <span className="text-blue-600 font-bold">{quizScore}</span> marks.</p>
+
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h4 className="font-bold text-slate-800 flex items-center gap-2"><Trophy size={18} className="text-yellow-500" /> Live Leaderboard</h4>
+                    <span className="text-xs font-bold px-2 py-1 bg-blue-100 text-blue-700 rounded-lg">{quizResults.length} / {totalParticipants} submitted</span>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {quizResults.map((res, i) => (
+                      <div key={res.id} className={`p-4 flex items-center gap-4 ${res.id === client.uid?.toString() ? 'bg-blue-50/50' : ''}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-slate-200 text-slate-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>
+                          #{i + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-slate-800 truncate">{res.name} {res.id === client.uid?.toString() && <span className="text-xs font-bold text-blue-500 ml-2">(You)</span>}</p>
+                        </div>
+                        <div className="font-[900] text-blue-600">
+                          {res.score} <span className="text-xs text-slate-400 font-medium">pts</span>
+                        </div>
+                      </div>
+                    ))}
+                    {quizResults.length === 0 && (
+                      <div className="p-8 text-center text-slate-500 font-medium text-sm">No results yet.</div>
+                    )}
+                  </div>
+                </div>
               </div>
             ) : (
               postClassQuiz.questions.map((q, idx) => {
