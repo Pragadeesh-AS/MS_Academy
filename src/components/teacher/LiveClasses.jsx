@@ -1549,6 +1549,79 @@ export default function LiveClasses({ department }) {
     }
   }, [isInCall, currentSessionId]);
 
+  const renderEndClassModal = () => {
+    if (!isEndClassModalOpen) return null;
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsEndClassModalOpen(false)}></div>
+        <div className="relative bg-white rounded-3xl w-full max-w-3xl shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <h2 className="text-2xl font-[900] text-slate-800">End Class & Assign Quiz</h2>
+            <button onClick={() => setIsEndClassModalOpen(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors">
+              <X size={24} />
+            </button>
+          </div>
+          
+          <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
+            <p className="text-slate-600 mb-6 font-medium">Select questions from the question bank to assign as a short quiz for students to complete immediately after the class.</p>
+            
+            <div className="space-y-4">
+              {departmentQuestions.length === 0 ? (
+                <p className="text-slate-500 text-center p-4">No questions available in the bank.</p>
+              ) : (
+                departmentQuestions.map((q) => (
+                  <label key={q.id} className="flex items-start gap-4 p-4 border border-slate-200 rounded-xl bg-white hover:border-blue-300 cursor-pointer transition-all">
+                    <div className={`mt-1 flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border ${selectedQuizQuestions.includes(q.id) ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
+                      {selectedQuizQuestions.includes(q.id) && <Check size={16} className="text-white" />}
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      className="hidden" 
+                      checked={selectedQuizQuestions.includes(q.id)}
+                      onChange={() => {
+                        setSelectedQuizQuestions(prev => 
+                          prev.includes(q.id) ? prev.filter(id => id !== q.id) : [...prev, q.id]
+                        )
+                      }}
+                    />
+                    <div>
+                      <p className="font-semibold text-slate-800 mb-2">{q.question}</p>
+                      <div className="flex gap-2 flex-wrap text-sm text-slate-500">
+                        <span className="px-2 py-1 bg-slate-100 rounded-lg">Category: {q.category || 'General'}</span>
+                        <span className="px-2 py-1 bg-slate-100 rounded-lg">Marks: {q.marks || 1}</span>
+                      </div>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+          
+          <div className="p-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="text-sm font-bold text-blue-600">
+              {selectedQuizQuestions.length} questions selected
+            </p>
+            <div className="flex gap-3 w-full sm:w-auto">
+              <button
+                onClick={() => confirmEndMeet(false)}
+                className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors flex-1 sm:flex-none"
+              >
+                End Without Quiz
+              </button>
+              <button
+                onClick={() => confirmEndMeet(true)}
+                disabled={selectedQuizQuestions.length === 0}
+                className={`px-6 py-2.5 font-bold rounded-xl transition-all shadow-md flex-1 sm:flex-none ${selectedQuizQuestions.length === 0 ? 'bg-blue-300 text-white cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+              >
+                End & Assign Quiz
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (isInCall && currentSessionId) {
     const rtcProps = {
       appId: import.meta.env.VITE_AGORA_APP_ID || '',
@@ -1605,23 +1678,25 @@ export default function LiveClasses({ department }) {
             {isChatOpen && (
               <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300">
                 <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-white flex items-center gap-2"><MessageCircle size={18} className="text-blue-400" /> Class Chat</h3>
                   <div className="flex items-center gap-2">
-                    <MessageCircle size={18} className="text-blue-400" />
-                    <h3 className="text-white font-bold text-sm">Live Chat</h3>
+                    <span className="bg-slate-800 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-700">{chatMessages.length} msg</span>
+                    <button onClick={() => setIsChatOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors"><X size={16} /></button>
                   </div>
-                  <button onClick={() => setIsChatOpen(false)} className="text-slate-400 hover:text-white transition-colors">
-                    <X size={18} />
-                  </button>
                 </div>
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
                   {chatMessages.length === 0 ? (
-                    <div className="text-center text-slate-500 text-sm mt-10">No messages yet. Say hi!</div>
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-sm">
+                      <MessageCircle size={32} className="mb-2 opacity-20" />
+                      <p>No messages yet.</p>
+                      <p className="text-xs mt-1">Start the conversation!</p>
+                    </div>
                   ) : (
-                    chatMessages.map(msg => (
-                      <div key={msg.id} className="flex flex-col">
-                        <span className="text-[11px] font-bold text-slate-500 mb-1">{msg.senderName}</span>
-                        <div className={`px-3 py-2 rounded-xl text-sm max-w-[90%] break-words ${msg.senderEmail === localStorage.getItem('auth_email') ? 'bg-blue-600 text-white self-end rounded-tr-sm' : 'bg-slate-800 text-slate-200 self-start rounded-tl-sm'}`}>
+                    chatMessages.map((msg) => (
+                      <div key={msg.id} className={`flex flex-col ${msg.senderEmail === localStorage.getItem('auth_email') ? 'items-end' : 'items-start'}`}>
+                        <span className="text-[10px] font-bold text-slate-500 mb-1 ml-1">{msg.senderName}</span>
+                        <div className={`px-4 py-2 rounded-2xl max-w-[85%] text-[13px] ${msg.senderEmail === localStorage.getItem('auth_email') ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-sm'}`}>
                           {msg.message}
                         </div>
                       </div>
@@ -1629,18 +1704,22 @@ export default function LiveClasses({ department }) {
                   )}
                   <div ref={chatEndRef} />
                 </div>
-
-                <form onSubmit={sendMessage} className="p-3 border-t border-slate-800 bg-slate-900">
-                  <div className="flex gap-2">
+                
+                <form onSubmit={sendMessage} className="p-3 border-t border-slate-800 bg-slate-900/80">
+                  <div className="flex items-center gap-2 bg-slate-800 rounded-xl p-1 border border-slate-700 focus-within:border-blue-500/50 transition-colors">
                     <input
                       type="text"
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       placeholder="Type a message..."
-                      className="flex-1 bg-slate-800 border-none rounded-lg px-3 py-2 text-sm text-white placeholder-slate-400 focus:ring-1 focus:ring-blue-500 outline-none"
+                      className="flex-1 bg-transparent text-white text-sm px-3 py-2 focus:outline-none placeholder:text-slate-500"
                     />
-                    <button type="submit" disabled={!newMessage.trim()} className="p-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition-colors">
-                      <Send size={16} />
+                    <button 
+                      type="submit" 
+                      disabled={!newMessage.trim()}
+                      className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white disabled:opacity-50 disabled:bg-slate-700 transition-colors"
+                    >
+                      <Send size={14} />
                     </button>
                   </div>
                 </form>
@@ -1648,6 +1727,7 @@ export default function LiveClasses({ department }) {
             )}
           </div>
         )}
+        {renderEndClassModal()}
       </div>
     );
   }
@@ -1957,75 +2037,7 @@ export default function LiveClasses({ department }) {
       )}
 
       {/* End Class / Post-Class Quiz Modal */}
-      {isEndClassModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsEndClassModalOpen(false)}></div>
-          <div className="relative bg-white rounded-3xl w-full max-w-3xl shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-2xl font-[900] text-slate-800">End Class & Assign Quiz</h2>
-              <button onClick={() => setIsEndClassModalOpen(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors">
-                <X size={24} />
-              </button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
-              <p className="text-slate-600 mb-6 font-medium">Select questions from the question bank to assign as a short quiz for students to complete immediately after the class.</p>
-              
-              <div className="space-y-4">
-                {departmentQuestions.length === 0 ? (
-                  <p className="text-slate-500 text-center p-4">No questions available in the bank.</p>
-                ) : (
-                  departmentQuestions.map((q) => (
-                    <label key={q.id} className="flex items-start gap-4 p-4 border border-slate-200 rounded-xl bg-white hover:border-blue-300 cursor-pointer transition-all">
-                      <div className={`mt-1 flex-shrink-0 w-6 h-6 rounded flex items-center justify-center border ${selectedQuizQuestions.includes(q.id) ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-300'}`}>
-                        {selectedQuizQuestions.includes(q.id) && <Check size={16} className="text-white" />}
-                      </div>
-                      <input 
-                        type="checkbox" 
-                        className="hidden" 
-                        checked={selectedQuizQuestions.includes(q.id)}
-                        onChange={() => {
-                          setSelectedQuizQuestions(prev => 
-                            prev.includes(q.id) ? prev.filter(id => id !== q.id) : [...prev, q.id]
-                          )
-                        }}
-                      />
-                      <div>
-                        <p className="font-semibold text-slate-800 mb-2">{q.question}</p>
-                        <div className="flex gap-2 flex-wrap text-sm text-slate-500">
-                          <span className="px-2 py-1 bg-slate-100 rounded-lg">Category: {q.category || 'General'}</span>
-                          <span className="px-2 py-1 bg-slate-100 rounded-lg">Marks: {q.marks || 1}</span>
-                        </div>
-                      </div>
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
-            
-            <div className="p-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p className="text-sm font-bold text-blue-600">
-                {selectedQuizQuestions.length} questions selected
-              </p>
-              <div className="flex gap-3 w-full sm:w-auto">
-                <button
-                  onClick={() => confirmEndMeet(false)}
-                  className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors flex-1 sm:flex-none"
-                >
-                  End Without Quiz
-                </button>
-                <button
-                  onClick={() => confirmEndMeet(true)}
-                  disabled={selectedQuizQuestions.length === 0}
-                  className={`px-6 py-2.5 font-bold rounded-xl transition-all shadow-md flex-1 sm:flex-none ${selectedQuizQuestions.length === 0 ? 'bg-blue-300 text-white cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
-                >
-                  End & Assign Quiz
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderEndClassModal()}
 
       {/* Cancel Class Confirmation Modal */}
       {classToDelete && (
