@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Carousel_003 } from "./ui/swiper-carousel";
 import { ShinyButton } from "./ui/shiny-button";
 import { BookOpen, Target, Users, Star, Quote } from 'lucide-react';
@@ -227,6 +228,13 @@ function TestimonialCard({ testimonial, onReadMore }) {
 
 export default function Home() {
   const [activeTestimonial, setActiveTestimonial] = useState(null);
+  const [activeFAQ, setActiveFAQ] = useState(null);
+  const navigate = useNavigate();
+
+  const toggleFAQ = (index) => {
+    setActiveFAQ(activeFAQ === index ? null : index);
+  };
+  
   const swiperImages = courses.map(course => ({
     src: course.src,
     alt: course.title,
@@ -253,7 +261,7 @@ export default function Home() {
             Learn directly from Dr. M. Muthu Samy (NIT Trichy Alumnus). Go from average scores to your dream PSU or IIT with ease using MS Gate Academy, your favourite coaching platform.
           </p>
 
-          <ShinyButton className="px-8 py-4 text-[17px] font-semibold text-white rounded-xl bg-gradient-to-b from-[#4a4a4a] via-[#2a2a2a] to-[#111111] shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:scale-[1.02] transition-transform border border-[#333333]">
+          <ShinyButton onClick={() => navigate('/login')} className="px-8 py-4 text-[17px] font-semibold text-white rounded-xl bg-gradient-to-b from-[#4a4a4a] via-[#2a2a2a] to-[#111111] shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:scale-[1.02] transition-transform border border-[#333333]">
             Get Started
           </ShinyButton>
         </div>
