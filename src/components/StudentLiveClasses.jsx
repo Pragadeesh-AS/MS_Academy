@@ -899,9 +899,9 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
       const userEmail = localStorage.getItem('auth_email') || '';
       const userName = localStorage.getItem('auth_name') || 'Student';
       
-      if (currentSession?.id && client.uid) {
+      if (currentSession?.id && userEmail) {
         try {
-          await setDoc(doc(db, 'live_sessions', currentSession.id, 'quiz_results', client.uid.toString()), {
+          await setDoc(doc(db, 'live_sessions', currentSession.id, 'quiz_results', userEmail), {
             name: userName,
             email: userEmail,
             score: score,
@@ -958,19 +958,21 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                     <span className="text-xs font-bold px-2 py-1 bg-blue-100 text-blue-700 rounded-lg">{quizResults.length} / {totalParticipants} submitted</span>
                   </div>
                   <div className="divide-y divide-slate-100">
-                    {quizResults.map((res, i) => (
-                      <div key={res.id} className={`p-4 flex items-center gap-4 ${res.id === client.uid?.toString() ? 'bg-blue-50/50' : ''}`}>
+                    {quizResults.map((res, i) => {
+                      const userEmail = localStorage.getItem('auth_email') || '';
+                      return (
+                      <div key={res.id} className={`p-4 flex items-center gap-4 ${res.id === userEmail ? 'bg-blue-50/50' : ''}`}>
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${i === 0 ? 'bg-yellow-100 text-yellow-700' : i === 1 ? 'bg-slate-200 text-slate-700' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-500'}`}>
                           #{i + 1}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-bold text-slate-800 truncate">{res.name} {res.id === client.uid?.toString() && <span className="text-xs font-bold text-blue-500 ml-2">(You)</span>}</p>
+                          <p className="font-bold text-slate-800 truncate">{res.name} {res.id === userEmail && <span className="text-xs font-bold text-blue-500 ml-2">(You)</span>}</p>
                         </div>
                         <div className="font-[900] text-blue-600">
                           {res.score} <span className="text-xs text-slate-400 font-medium">pts</span>
                         </div>
                       </div>
-                    ))}
+                    )})}
                     {quizResults.length === 0 && (
                       <div className="p-8 text-center text-slate-500 font-medium text-sm">No results yet.</div>
                     )}
