@@ -896,10 +896,18 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
         }
       });
       
-      const userEmail = localStorage.getItem('auth_email') || '';
-      const userName = localStorage.getItem('auth_name') || 'Student';
+      let userEmail = localStorage.getItem('auth_email');
+      if (!userEmail) {
+        userEmail = `student${Math.floor(Math.random() * 10000)}@test.com`;
+        localStorage.setItem('auth_email', userEmail);
+      }
+      let userName = localStorage.getItem('auth_name');
+      if (!userName) {
+        userName = 'Student';
+        localStorage.setItem('auth_name', userName);
+      }
       
-      if (postClassQuiz?.sessionId && userEmail) {
+      if (postClassQuiz?.sessionId) {
         try {
           await setDoc(doc(db, 'live_sessions', postClassQuiz.sessionId, 'quiz_results', userEmail), {
             name: userName,
