@@ -658,13 +658,13 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.status === 'ended') {
-          handleLeaveMeet(true); // pass true to indicate it's forced by teacher
           if (data.postClassQuiz && data.postClassQuiz.questions && data.postClassQuiz.questions.length > 0) {
-            setPostClassQuiz(data.postClassQuiz);
+            setPostClassQuiz({ ...data.postClassQuiz, sessionId: currentSession.id });
             setQuizAnswers({});
             setQuizSubmitted(false);
             setQuizScore(0);
           }
+          handleLeaveMeet(true); // pass true to indicate it's forced by teacher
         }
       }
     });
@@ -673,10 +673,10 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
   }, [isInCall, currentSession?.id]);
 
   useEffect(() => {
-    if (!postClassQuiz || !currentSession?.id) return;
+    if (!postClassQuiz || !postClassQuiz.sessionId) return;
 
     // Listen to participants to know how many students were in class
-    const unsubParticipants = onSnapshot(collection(db, 'live_sessions', currentSession.id, 'participants'), (snapshot) => {
+    const unsubParticipants = onSnapshot(collection(db, 'live_sessions', postClassQuiz.sessionId, 'participants'), (snapshot) => {
       let count = 0;
       snapshot.forEach(doc => {
         if (doc.data().role === 'student') count++;
@@ -685,7 +685,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     });
 
     // Listen to quiz results for the leaderboard
-    const unsubResults = onSnapshot(collection(db, 'live_sessions', currentSession.id, 'quiz_results'), (snapshot) => {
+    const unsubResults = onSnapshot(collection(db, 'live_sessions', postClassQuiz.sessionId, 'quiz_results'), (snapshot) => {
       const results = [];
       snapshot.forEach(doc => {
         results.push({ id: doc.id, ...doc.data() });
@@ -699,12 +699,12 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
       unsubParticipants();
       unsubResults();
     };
-  }, [postClassQuiz, currentSession?.id]);
+  }, [postClassQuiz]);
 
   useEffect(() => {
     // Send email when everyone has finished
     const checkAndSendEmail = async () => {
-      if (!quizSubmitted || emailSent || totalParticipants === 0 || !currentSession) return;
+      if (!quizSubmitted || emailSent || totalParticipants === 0 || !postClassQuiz) return;
       if (quizResults.length === totalParticipants) {
         // Send email to myself only (each client handles their own email to avoid N^2 emails)
         const myEmail = localStorage.getItem('auth_email');
@@ -715,7 +715,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
               <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-bottom: 1px solid #e2e8f0;">
                 <h2 style="color: #1e293b; margin: 0;">Post-Class Quiz Leaderboard</h2>
-                <p style="color: #64748b; margin-top: 5px;">${currentSession.topic || 'Live Class'}</p>
+                <p style="color: #64748b; margin-top: 5px;">Live Class</p>
               </div>
               <div style="padding: 20px;">
                 <h3 style="color: #0f172a; margin-top: 0;">Final Results</h3>
@@ -747,7 +747,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
             </div>
           `;
 
-          await sendEmailViaGAS(myEmail, `Leaderboard: ${currentSession.topic || 'Live Class'}`, html);
+          await sendEmailViaGAS(myEmail, `Leaderboard: Live Class`, html);
           setEmailSent(true);
         } catch (e) {
           console.error("Failed to send leaderboard email", e);
@@ -899,9 +899,9 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
       const userEmail = localStorage.getItem('auth_email') || '';
       const userName = localStorage.getItem('auth_name') || 'Student';
       
-      if (currentSession?.id && userEmail) {
+      if (postClassQuiz?.sessionId && userEmail) {
         try {
-          await setDoc(doc(db, 'live_sessions', currentSession.id, 'quiz_results', userEmail), {
+          await setDoc(doc(db, 'live_sessions', postClassQuiz.sessionId, 'quiz_results', userEmail), {
             name: userName,
             email: userEmail,
             score: score,
