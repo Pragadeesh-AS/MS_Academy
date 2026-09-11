@@ -832,8 +832,10 @@ export default function Dashboard() {
                         </div>
                       )}
                       {bundle.imageUrl ? (
-                        <div className="w-full h-56 bg-slate-50 flex items-center justify-center overflow-hidden">
-                          <img src={bundle.imageUrl} alt={bundle.name} className="w-full h-full object-contain" />
+                        <div className="relative w-full h-56 bg-slate-900 flex items-center justify-center overflow-hidden group/img">
+                          <img src={bundle.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-60 blur-xl scale-110 group-hover/img:scale-125 transition-transform duration-500" />
+                          <div className="absolute inset-0 bg-black/20 z-10"></div>
+                          <img src={bundle.imageUrl} alt={bundle.name} className="relative z-20 w-full h-full object-contain drop-shadow-2xl group-hover/img:scale-105 transition-transform duration-500" />
                         </div>
                       ) : (
                         <div className="w-full h-56 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">

@@ -258,9 +258,16 @@ export default function CourseSetup() {
           {filteredBundles.map((bundle) => (
             <div key={bundle.id} className="bg-white border border-slate-200 rounded-[24px] overflow-hidden shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-300 group flex flex-col">
               
-              <div className="relative h-56 bg-slate-100 overflow-hidden flex items-center justify-center">
+              <div className="relative h-56 bg-slate-900 overflow-hidden flex items-center justify-center group/img">
                 {bundle.imageUrl ? (
-                  <img src={bundle.imageUrl} alt={bundle.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
+                  <>
+                    {/* Blurred Background to fill gaps */}
+                    <img src={bundle.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-60 blur-xl scale-110 group-hover/img:scale-125 transition-transform duration-500" />
+                    <div className="absolute inset-0 bg-black/20 z-10"></div>
+                    
+                    {/* Actual Image */}
+                    <img src={bundle.imageUrl} alt={bundle.name} className="relative z-20 w-full h-full object-contain drop-shadow-2xl group-hover/img:scale-105 transition-transform duration-500" />
+                  </>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-2">
                     <ImageIcon size={32} className="opacity-50" />
