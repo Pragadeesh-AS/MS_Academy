@@ -14,6 +14,7 @@ const SalaryManager = ({ teachers, typists }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [questions, setQuestions] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
     const fetchQuestions = async () => {
