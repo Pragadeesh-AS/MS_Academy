@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as fabric from 'fabric';
-import { PenTool, Eraser, Trash2, Highlighter, Plus, MousePointer2, Palette, X, Shapes, Square, Circle, Triangle, Minus, ArrowRight, Hexagon, Diamond, Pentagon, Octagon, Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PenTool, Eraser, Trash2, Highlighter, Plus, MousePointer2, Palette, X, Shapes, Square, Circle, Triangle, Minus, ArrowRight, Hexagon, Diamond, Pentagon, Octagon, Star, ChevronLeft, ChevronRight, Type } from 'lucide-react';
 import logoImg from '../../assets/msgate_logo.png';
 
 export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId = 'whiteboard-canvas' }) {
@@ -328,6 +328,15 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         obj.selectable = true;
         obj.evented = true;
       });
+    } else if (activeTool === 'text') {
+      fCanvas.selection = false;
+      fCanvas.forEachObject(obj => {
+        if (obj.type === 'i-text') {
+          obj.selectable = true;
+          obj.evented = true;
+        }
+      });
+      fCanvas.defaultCursor = 'text';
     } else if (activeTool === 'pen' || activeTool === 'highlighter') {
       fCanvas.isDrawingMode = true;
       let brush = new fabric.PencilBrush(fCanvas);
@@ -482,6 +491,47 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     };
   }, [activeTool, activeShape, activeColor, penSize]);
 
+  // Handle Text Tool Logic
+  useEffect(() => {
+    const fCanvas = fabricRef.current;
+    if (!fCanvas) return;
+
+    const onMouseDown = (o) => {
+      if (activeTool !== 'text') return;
+      
+      // If clicked on an existing text object, allow editing it
+      if (o.target && o.target.type === 'i-text') {
+        return;
+      }
+
+      const pointer = o.scenePoint || o.pointer || { x: o.e.clientX, y: o.e.clientY };
+      
+      const text = new fabric.IText('', {
+        left: pointer.x,
+        top: pointer.y,
+        fill: activeColor,
+        fontSize: Math.max(24, penSize * 8),
+        fontFamily: 'sans-serif',
+        selectable: true,
+        evented: true,
+        editingBorderColor: '#3b82f6',
+        padding: 5
+      });
+
+      fCanvas.add(text);
+      fCanvas.setActiveObject(text);
+      text.enterEditing();
+      text.selectAll();
+      fCanvas.renderAll();
+    };
+
+    fCanvas.on('mouse:down', onMouseDown);
+
+    return () => {
+      fCanvas.off('mouse:down', onMouseDown);
+    };
+  }, [activeTool, activeColor, penSize]);
+
   // Global drag handler for the menu
   useEffect(() => {
     const handlePointerMove = (e) => {
@@ -605,7 +655,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     setShowBoardColors(false);
     setShowShapeOptions(false);
     
-    if (activeTool === 'select' || isMenuOpen) return; // Disable drawing in select mode or when menu is open
+    if (activeTool === 'select' || activeTool === 'text' || isMenuOpen) return; // Disable manual drawing in select/text modes or when menu is open
 
     const { x, y } = getCoordinates(e);
     const canvas = canvasRef.current;
@@ -805,6 +855,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         <div className="bg-slate-800 rounded-2xl p-2 shadow-2xl border border-slate-700 flex flex-col items-center gap-2 pointer-events-auto">
           {[
             { id: 'select', icon: <MousePointer2 size={18} />, label: 'Select' },
+            { id: 'text', icon: <Type size={18} />, label: 'Text' },
             { id: 'shapes', icon: <Shapes size={18} />, label: 'Shapes' },
             { id: 'pen', icon: <PenTool size={18} />, label: 'Pen' },
             { id: 'highlighter', icon: <Highlighter size={18} />, label: 'Highlight' },
