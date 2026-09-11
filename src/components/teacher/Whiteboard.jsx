@@ -65,6 +65,42 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       fabricRef.current.renderAll();
     }
   };
+
+  const removeCurrentPage = () => {
+    if (pagesData.length <= 1) {
+      if (fabricRef.current) {
+        fabricRef.current.clear();
+        fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+        fabricRef.current.renderAll();
+      }
+      setPagesData([null]);
+      return;
+    }
+    
+    setPagesData(prev => {
+      const newPages = [...prev];
+      newPages.splice(currentPageIndex, 1);
+      
+      const newIndex = currentPageIndex >= newPages.length ? newPages.length - 1 : currentPageIndex;
+      setCurrentPageIndex(newIndex);
+      
+      const targetData = newPages[newIndex];
+      if (fabricRef.current) {
+        fabricRef.current.clear();
+        if (targetData) {
+          fabricRef.current.loadFromJSON(targetData, () => {
+            fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+            fabricRef.current.renderAll();
+          });
+        } else {
+          fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+          fabricRef.current.renderAll();
+        }
+      }
+      return newPages;
+    });
+  };
+
   const startPosRef = useRef({ x: 0, y: 0 });
   const lastPosRef = useRef({ x: 0, y: 0 });
   
@@ -835,6 +871,15 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
               title="New Blank Page"
             >
               <Plus size={18} />
+            </button>
+
+            <button
+              onClick={removeCurrentPage}
+              disabled={pagesData.length <= 1}
+              className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 mt-1 ${pagesData.length <= 1 ? 'text-slate-600 cursor-not-allowed hidden' : 'text-red-400 bg-red-500/10 hover:bg-red-500/20'}`}
+              title="Delete Page"
+            >
+              <Trash2 size={16} />
             </button>
           </div>
         </div>
