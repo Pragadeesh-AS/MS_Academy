@@ -9,7 +9,8 @@ import TeacherQuestionBank from './teacher/TeacherQuestionBank';
 import TestsManager from './TestsManager';
 import TeacherStudents from './teacher/TeacherStudents';
 import Analytics from './admin/Analytics';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, ShieldAlert } from 'lucide-react';
+import ReportedQuestions from './admin/ReportedQuestions';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
@@ -141,6 +142,13 @@ export default function TeacherDashboard() {
             <TrendingUp size={18} />
             {!isCollapsed && <span>Analytics</span>}
           </button>
+          <button 
+            onClick={() => setActiveTab('reported')}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'reported' ? 'bg-red-50 text-red-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+          >
+            <ShieldAlert size={18} />
+            {!isCollapsed && <span>Reported Q's</span>}
+          </button>
         </nav>
 
         <div className={`p-4 border-t border-slate-100 ${isCollapsed ? 'px-2' : ''}`}>
@@ -178,6 +186,7 @@ export default function TeacherDashboard() {
         {activeTab === 'questions' && <TeacherQuestionBank department={teacherDepartment} />}
         {activeTab === 'tests' && <TestsManager department={teacherDepartment} isTeacher={true} />}
         {activeTab === 'analytics' && <Analytics joinedStudents={joinedStudents} department={teacherDepartment} />}
+        {activeTab === 'reported' && <ReportedQuestions role="teacher" department={teacherDepartment} />}
       </main>
     </div>
   );

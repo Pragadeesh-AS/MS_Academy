@@ -26,6 +26,7 @@ import TeacherDirectory from './admin/TeacherDirectory';
 import FeesTracker from './admin/FeesTracker';
 import SalaryManager from './admin/SalaryManager';
 import TestsManager from './TestsManager';
+import ReportedQuestions from './admin/ReportedQuestions';
 
 // Default mock data to populate localStorage if empty
 const loadImage = (src) => new Promise((resolve, reject) => {
@@ -886,6 +887,14 @@ export default function AdminDashboard() {
               </button>
 
               <button
+                onClick={() => setActiveTab('reported')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'reported' ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+              >
+                <ShieldCheck size={20} className={activeTab === 'reported' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Reported Q's</span>}
+              </button>
+
+              <button
                 onClick={() => setActiveTab('premium_questions')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'premium_questions' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
@@ -1705,6 +1714,9 @@ export default function AdminDashboard() {
 
         {/* Tests Manager Tab */}
         {activeTab === 'tests' && <TestsManager department="" isTeacher={false} />}
+
+        {/* Reported Questions Tab */}
+        {activeTab === 'reported' && <ReportedQuestions role="admin" />}
 
       </main>
 

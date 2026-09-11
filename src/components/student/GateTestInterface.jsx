@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Clock, User, ChevronRight, ChevronLeft, Info, HelpCircle } from 'lucide-react';
+import { Clock, User, ChevronRight, ChevronLeft, Info, HelpCircle, AlertTriangle } from 'lucide-react';
+import { db } from '../../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function GateTestInterface({ test, testQuestions, onSubmit, onCancel, studentName }) {
   const [mode, setMode] = useState('login'); // login, instructions1, instructions2, taking
@@ -133,6 +135,39 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
     setShowConfirmModal(false);
     if (timerRef.current) clearInterval(timerRef.current);
     onSubmit(selectedAnswers);
+  };
+
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+
+  const handleReportSubmit = async () => {
+    if (!reportReason.trim()) return;
+    setReportSubmitting(true);
+    try {
+      const q = testQuestions[currentIdx];
+      await addDoc(collection(db, 'reported_questions'), {
+        questionId: q.id,
+        testId: test.id || 'unknown',
+        testTitle: test.title || 'Untitled Test',
+        department: test.department || localStorage.getItem('student_department') || 'General',
+        studentEmail: sessionStorage.getItem('auth_email') || 'unknown',
+        studentName: studentName || 'Student',
+        reason: reportReason,
+        questionText: q.questionText || '',
+        teacher: q.teacher || 'Unknown',
+        status: 'pending',
+        timestamp: serverTimestamp()
+      });
+      setShowReportModal(false);
+      setReportReason('');
+      alert("Question reported successfully. Our team will review it.");
+    } catch (e) {
+      console.error("Error reporting question:", e);
+      alert("Failed to report question. Please try again.");
+    } finally {
+      setReportSubmitting(false);
+    }
   };
 
   const formatTimer = (seconds) => {
@@ -502,7 +537,15 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 flex flex-col">
-              <div className="font-bold mb-4 text-base">Question No. {currentIdx + 1}</div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-bold text-base">Question No. {currentIdx + 1}</div>
+                <button 
+                  onClick={() => setShowReportModal(true)}
+                  className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <AlertTriangle size={14} /> Report Error
+                </button>
+              </div>
               <div className="mb-6">
                 {isEmptyHtml(currentQ?.questionText) && !currentQ?.questionImageUrl ? (
                   <div className="text-red-500 italic p-4 bg-red-50 border border-red-200 rounded">
@@ -652,6 +695,46 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                 <div className="flex justify-end gap-3">
                   <button onClick={() => setShowConfirmModal(false)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
                   <button onClick={confirmSubmit} className="px-4 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition">Yes, Submit Exam</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Report Question Modal */}
+        {showReportModal && (
+          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+            <div className="bg-white rounded-md shadow-xl w-full max-w-lg overflow-hidden">
+              <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b flex items-center gap-2">
+                <AlertTriangle size={20} /> Report Error in Question {currentIdx + 1}
+              </div>
+              <div className="p-6">
+                <p className="text-gray-800 text-sm mb-4">
+                  Please describe the issue with this question (e.g., incorrect options, spelling mistakes, missing data). 
+                  Our team will review it.
+                </p>
+                <textarea
+                  className="w-full border border-gray-300 rounded p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 min-h-[120px]"
+                  placeholder="Type your reason here..."
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  disabled={reportSubmitting}
+                />
+                <div className="flex justify-end gap-3 mt-6">
+                  <button 
+                    onClick={() => { setShowReportModal(false); setReportReason(''); }} 
+                    className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition"
+                    disabled={reportSubmitting}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleReportSubmit} 
+                    className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition flex items-center justify-center disabled:opacity-50"
+                    disabled={!reportReason.trim() || reportSubmitting}
+                  >
+                    {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+                  </button>
                 </div>
               </div>
             </div>
