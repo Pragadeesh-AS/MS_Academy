@@ -827,18 +827,16 @@ export default function Dashboard() {
                     return (
                     <div key={bundle.id} className={`bg-white rounded-[24px] border ${isPurchased ? 'border-emerald-200 shadow-emerald-500/10' : 'border-amber-200 shadow-amber-500/10'} shadow-xl overflow-hidden flex flex-col relative`}>
                       {isPurchased && (
-                        <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full z-10 flex items-center gap-1 shadow-md">
+                        <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full z-30 flex items-center gap-1 shadow-md">
                            ✓ Purchased
                         </div>
                       )}
                       {bundle.imageUrl ? (
-                        <div className="relative w-full h-56 bg-slate-900 flex items-center justify-center overflow-hidden group/img">
-                          <img src={bundle.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-60 blur-xl scale-110 group-hover/img:scale-125 transition-transform duration-500" />
-                          <div className="absolute inset-0 bg-black/20 z-10"></div>
-                          <img src={bundle.imageUrl} alt={bundle.name} className="relative z-20 w-full h-full object-contain drop-shadow-2xl group-hover/img:scale-105 transition-transform duration-500" />
+                        <div className="relative w-full h-56 bg-slate-50 flex items-center justify-center overflow-hidden p-2">
+                          <img src={bundle.imageUrl} alt={bundle.name} className="relative z-10 w-full h-full object-contain transition-transform duration-500 hover:scale-105" />
                         </div>
                       ) : (
-                        <div className="w-full h-56 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+                        <div className="w-full h-56 bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center relative z-10">
                           <BookOpen size={48} className="text-slate-300" />
                         </div>
                       )}
