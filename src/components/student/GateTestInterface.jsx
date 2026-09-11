@@ -615,7 +615,17 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
               </div>
             </div>
             <div className="p-3 bg-[#C5EAF8] border-t border-[#86B4D6]">
-              <button onClick={submitExam} className="w-full bg-[#5BC0DE] hover:bg-[#31B0D5] text-white font-bold py-2 rounded-sm shadow-sm border border-[#46B8DA]">Submit</button>
+              <button 
+                onClick={submitExam} 
+                disabled={Object.keys(selectedAnswers).length === 0}
+                className={`w-full font-bold py-2 rounded-sm shadow-sm border transition-colors ${
+                  Object.keys(selectedAnswers).length > 0
+                    ? 'bg-[#5CB85C] hover:bg-[#449d44] border-[#4CAE4C] text-white'
+                    : 'bg-gray-300 border-gray-400 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Submit
+              </button>
             </div>
           </div>
         </div>
@@ -629,8 +639,14 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
               <div className="bg-blue-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Submission</div>
               <div className="p-6">
                 <p className="text-gray-800 text-base mb-2">
-                  You have answered {Object.keys(selectedAnswers).length} of {testQuestions.length} questions.
+                  You have answered <strong>{Object.keys(selectedAnswers).length}</strong> of <strong>{testQuestions.length}</strong> questions.
                 </p>
+                {flagged.length > 0 && (
+                  <div className="bg-orange-50 border border-orange-200 text-orange-800 p-3 rounded mb-4 text-sm font-semibold">
+                    <span className="block mb-1">⚠️ Warning</span>
+                    You have <strong>{flagged.length}</strong> question(s) currently marked for review. 
+                  </div>
+                )}
                 <p className="font-bold text-gray-900 mb-6">Are you sure you want to submit the exam?</p>
                 
                 <div className="flex justify-end gap-3">
