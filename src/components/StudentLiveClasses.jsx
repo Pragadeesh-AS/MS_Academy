@@ -650,6 +650,38 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     return () => unsubscribe();
   }, [department]);
 
+  // ── Anti-Screenshot: Active ONLY during live class ──────────────────────
+  useEffect(() => {
+    if (!isInCall) return; // Only activate when inside a call
+
+    const studentName = sessionStorage.getItem('auth_name') || 'Student';
+
+    const blockContextMenu = (e) => e.preventDefault();
+    const blockKeys = (e) => {
+      const key = e.key?.toLowerCase();
+      if (key === 'printscreen') { e.preventDefault(); navigator.clipboard?.writeText('').catch(() => {}); return false; }
+      if (e.shiftKey && e.metaKey && key === 's') { e.preventDefault(); return false; }
+      if (e.metaKey && e.shiftKey && ['3','4','5','6'].includes(key)) { e.preventDefault(); return false; }
+      if ((e.ctrlKey || e.metaKey) && key === 'p') { e.preventDefault(); return false; }
+    };
+    const handleVisibility = () => {
+      if (document.hidden) document.body.style.filter = 'blur(10px)';
+      else document.body.style.filter = '';
+    };
+
+    document.addEventListener('contextmenu', blockContextMenu);
+    document.addEventListener('keydown', blockKeys);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      document.removeEventListener('contextmenu', blockContextMenu);
+      document.removeEventListener('keydown', blockKeys);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      document.body.style.filter = '';
+    };
+  }, [isInCall]);
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Listen for the active class ending
   useEffect(() => {
     if (!isInCall || !currentSession?.id) return;
@@ -1087,7 +1119,31 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     return (
       <div className="fixed inset-0 z-[100] bg-[#111827] w-full h-full flex overflow-hidden">
         
-
+        {/* ── Live Class Watermark ── */}
+        {(() => {
+          const sName = sessionStorage.getItem('auth_name') || 'Student';
+          return (
+            <div aria-hidden="true" className="absolute inset-0 z-[9999] pointer-events-none overflow-hidden">
+              {Array.from({ length: 20 }).map((_, i) => (
+                <div key={i} style={{
+                  position: 'absolute',
+                  left: `${(i % 4) * 28}%`,
+                  top: `${Math.floor(i / 4) * 22}%`,
+                  transform: 'rotate(-30deg)',
+                  opacity: 0.07,
+                  fontSize: '14px',
+                  fontWeight: '900',
+                  color: '#ffffff',
+                  whiteSpace: 'nowrap',
+                  fontFamily: 'sans-serif',
+                  pointerEvents: 'none',
+                }}>
+                  MS Academy · {sName}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Top Header overlay for aesthetics */}
         <div className="absolute top-0 inset-x-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">

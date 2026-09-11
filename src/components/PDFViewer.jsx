@@ -104,8 +104,58 @@ export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
 
   const isLocked = previewLimit !== null && numPages > previewLimit;
 
+  // ── Anti-Screenshot Protection (PDF only) ──────────────────────
+  useEffect(() => {
+    const blockContextMenu = (e) => e.preventDefault();
+    const blockKeys = (e) => {
+      const key = e.key?.toLowerCase();
+      if (key === 'printscreen') { e.preventDefault(); navigator.clipboard?.writeText('').catch(() => {}); return false; }
+      if (e.shiftKey && e.metaKey && key === 's') { e.preventDefault(); return false; }
+      if (e.metaKey && e.shiftKey && ['3','4','5','6'].includes(key)) { e.preventDefault(); return false; }
+      if ((e.ctrlKey || e.metaKey) && key === 'p') { e.preventDefault(); return false; }
+    };
+    const handleVisibility = () => {
+      if (document.hidden) document.body.style.filter = 'blur(10px)';
+      else document.body.style.filter = '';
+    };
+    document.addEventListener('contextmenu', blockContextMenu);
+    document.addEventListener('keydown', blockKeys);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('contextmenu', blockContextMenu);
+      document.removeEventListener('keydown', blockKeys);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      document.body.style.filter = '';
+    };
+  }, []);
+  // ────────────────────────────────────────────────────────────────
+
+  const studentName = sessionStorage.getItem('auth_name') || 'Student';
+
   return (
-    <div className="flex flex-col h-full bg-[#f1f5f9] relative font-sans">
+    <div className="flex flex-col h-full bg-[#f1f5f9] relative font-sans select-none">
+
+      {/* ── PDF Watermark ── */}
+      <div aria-hidden="true" className="absolute inset-0 z-[9999] pointer-events-none overflow-hidden">
+        {Array.from({ length: 20 }).map((_, i) => (
+          <div key={i} style={{
+            position: 'absolute',
+            left: `${(i % 4) * 28}%`,
+            top: `${Math.floor(i / 4) * 22}%`,
+            transform: 'rotate(-30deg)',
+            opacity: 0.06,
+            fontSize: '14px',
+            fontWeight: '900',
+            color: '#1e3a8a',
+            whiteSpace: 'nowrap',
+            fontFamily: 'sans-serif',
+            pointerEvents: 'none',
+          }}>
+            MS Academy · {studentName}
+          </div>
+        ))}
+      </div>
+
       <div className="absolute top-0 left-0 right-0 h-14 bg-white flex items-center justify-between px-6 border-b border-slate-200 z-10 shadow-sm">
         <span className="font-bold text-slate-800 text-[15px] flex items-center gap-2">
           <FileText size={18} className="text-blue-600" /> MS Academy Document Viewer {isLocked && <span className="ml-2 text-[10px] uppercase tracking-wider bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-[900]">Preview</span>}
