@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as fabric from 'fabric';
 import { PenTool, Eraser, Trash2, Highlighter, Plus, MousePointer2, Palette, X, Shapes, Square, Circle, Triangle, Minus, ArrowRight, Hexagon, Diamond, Pentagon, Octagon, Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import logoImg from '../../assets/msgate_logo.png';
 
 export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId = 'whiteboard-canvas' }) {
   const canvasRef = useRef(null);
@@ -45,11 +46,11 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       fabricRef.current.clear();
       if (targetData) {
         fabricRef.current.loadFromJSON(targetData, () => {
-          fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+          fabricRef.current.backgroundColor = 'transparent';
           fabricRef.current.renderAll();
         });
       } else {
-        fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+        fabricRef.current.backgroundColor = 'transparent';
         fabricRef.current.renderAll();
       }
     }
@@ -61,7 +62,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     setCurrentPageIndex(pagesData.length);
     if (fabricRef.current) {
       fabricRef.current.clear();
-      fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+      fabricRef.current.backgroundColor = 'transparent';
       fabricRef.current.renderAll();
     }
   };
@@ -70,7 +71,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     if (pagesData.length <= 1) {
       if (fabricRef.current) {
         fabricRef.current.clear();
-        fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+        fabricRef.current.backgroundColor = 'transparent';
         fabricRef.current.renderAll();
       }
       setPagesData([null]);
@@ -89,11 +90,11 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         fabricRef.current.clear();
         if (targetData) {
           fabricRef.current.loadFromJSON(targetData, () => {
-            fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+            fabricRef.current.backgroundColor = 'transparent';
             fabricRef.current.renderAll();
           });
         } else {
-          fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+          fabricRef.current.backgroundColor = 'transparent';
           fabricRef.current.renderAll();
         }
       }
@@ -110,6 +111,10 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     { name: 'Chalkboard', value: '#064e3b' }
   ];
   const [boardColor, setBoardColor] = useState('#FFFFFF');
+  const boardColorRef = useRef(boardColor);
+  useEffect(() => {
+    boardColorRef.current = boardColor;
+  }, [boardColor]);
 
   // Drag state for the menu
   const [menuOffset, setMenuOffset] = useState({ x: 0, y: 0 });
@@ -174,7 +179,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       width: width || 1280,
       height: height || 720,
       isDrawingMode: false,
-      backgroundColor: isOverlay ? 'transparent' : boardColor,
+      backgroundColor: 'transparent',
       selection: true
     });
     
@@ -184,36 +189,45 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     // Start capture stream for recording
     const timeout = setTimeout(() => {
       try {
-        // Find the actual canvas element fabric is rendering to (lower-canvas)
+        // ALWAYS use mixCanvas to inject watermark and background for the stream
         const activeCanvasEl = fCanvas.lowerCanvasEl || canvasEl;
         
-        let streamTargetCanvas = activeCanvasEl;
-        let mixCanvasInterval = null;
+        const mixCanvas = document.createElement('canvas');
+        mixCanvas.width = activeCanvasEl.width;
+        mixCanvas.height = activeCanvasEl.height;
+        const mixCtx = mixCanvas.getContext('2d');
+        
+        const watermarkImg = new Image();
+        watermarkImg.src = logoImg;
 
-        // If it's an overlay, WebRTC will turn transparent pixels black.
-        // We mix it down to a white canvas before capturing the stream.
-        if (isOverlay) {
-          const mixCanvas = document.createElement('canvas');
-          mixCanvas.width = activeCanvasEl.width;
-          mixCanvas.height = activeCanvasEl.height;
-          const mixCtx = mixCanvas.getContext('2d');
+        const drawMixFrame = () => {
+          if (mixCanvas.width !== activeCanvasEl.width || mixCanvas.height !== activeCanvasEl.height) {
+            mixCanvas.width = activeCanvasEl.width;
+            mixCanvas.height = activeCanvasEl.height;
+          }
           
-          const drawMixFrame = () => {
-            if (mixCanvas.width !== activeCanvasEl.width || mixCanvas.height !== activeCanvasEl.height) {
-              mixCanvas.width = activeCanvasEl.width;
-              mixCanvas.height = activeCanvasEl.height;
-            }
-            mixCtx.fillStyle = '#ffffff';
-            mixCtx.fillRect(0, 0, mixCanvas.width, mixCanvas.height);
-            mixCtx.drawImage(activeCanvasEl, 0, 0);
-          };
+          if (!isOverlay) {
+             mixCtx.fillStyle = boardColorRef.current || '#FFFFFF';
+             mixCtx.fillRect(0, 0, mixCanvas.width, mixCanvas.height);
+             
+             if (watermarkImg.complete && watermarkImg.naturalWidth > 0) {
+                 mixCtx.globalAlpha = 0.05; 
+                 const w = 300;
+                 const h = (300 / watermarkImg.naturalWidth) * watermarkImg.naturalHeight;
+                 mixCtx.drawImage(watermarkImg, (mixCanvas.width - w) / 2, (mixCanvas.height - h) / 2, w, h);
+                 mixCtx.globalAlpha = 1.0;
+             }
+          } else {
+             mixCtx.fillStyle = '#ffffff';
+             mixCtx.fillRect(0, 0, mixCanvas.width, mixCanvas.height);
+          }
           
-          // Draw initially and then every frame
-          drawMixFrame();
-          mixCanvasInterval = setInterval(drawMixFrame, 1000 / 30); // 30fps
-          
-          streamTargetCanvas = mixCanvas;
-        }
+          mixCtx.drawImage(activeCanvasEl, 0, 0);
+        };
+        
+        drawMixFrame();
+        const mixCanvasInterval = setInterval(drawMixFrame, 1000 / 30); // 30fps
+        const streamTargetCanvas = mixCanvas;
 
         const stream = streamTargetCanvas.captureStream(30);
         
@@ -276,7 +290,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
   // Handle Board Color changes
   useEffect(() => {
     if (fabricRef.current && !isOverlay) {
-      fabricRef.current.backgroundColor = boardColor;
+      fabricRef.current.backgroundColor = 'transparent';
       fabricRef.current.renderAll();
     }
   }, [boardColor, isOverlay]);
@@ -500,7 +514,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
   const clearBoard = () => {
     if (fabricRef.current) {
       fabricRef.current.clear();
-      fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+      fabricRef.current.backgroundColor = 'transparent';
       fabricRef.current.renderAll();
     }
   };
@@ -760,8 +774,15 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
 
   return (
     <div className={`relative w-full h-full flex flex-col whiteboard-container`} style={{ backgroundColor: isOverlay ? 'transparent' : boardColor }}>
+      {/* Watermark for teacher view */}
+      {!isOverlay && (
+        <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none opacity-[0.05]">
+          <img src={logoImg} alt="Academy Logo" className="w-[300px] object-contain" />
+        </div>
+      )}
+      
       {/* Dynamic Canvas Container */}
-      <div className="w-full h-full touch-none pointer-events-auto" ref={containerRef}></div>
+      <div className="w-full h-full touch-none pointer-events-auto z-10" ref={containerRef}></div>
       
       {/* Static Left Sidebar Menu */}
       <div className="absolute left-4 top-1/2 -translate-y-1/2 z-50 flex items-start gap-4 pointer-events-none">
