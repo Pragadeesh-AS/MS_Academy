@@ -283,7 +283,7 @@ export default function CourseSetup() {
                   )}
                 </div>
 
-                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-30">
                   <button 
                     onClick={() => handleEdit(bundle)}
                     className="w-8 h-8 bg-white text-blue-600 rounded-full flex items-center justify-center shadow-md hover:bg-blue-50 transition-colors"
