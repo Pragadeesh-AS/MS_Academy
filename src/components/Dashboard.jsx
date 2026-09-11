@@ -234,6 +234,56 @@ export default function Dashboard() {
     checkOnboarding();
   }, [navigate]);
 
+  // ── Anti-Screenshot Protection ──────────────────────────────────────────
+  useEffect(() => {
+    const studentEmail = sessionStorage.getItem('auth_email') || '';
+    const studentNameVal = sessionStorage.getItem('auth_name') || 'Student';
+
+    // 1. Block right-click
+    const blockContextMenu = (e) => e.preventDefault();
+
+    // 2. Block keyboard screenshot shortcuts
+    const blockKeys = (e) => {
+      const key = e.key?.toLowerCase();
+      // PrintScreen
+      if (key === 'printscreen') {
+        e.preventDefault();
+        navigator.clipboard?.writeText('').catch(() => {});
+        return false;
+      }
+      // Windows Snipping Tool: Win+Shift+S (can't fully block but we deter)
+      if (e.shiftKey && e.metaKey && key === 's') { e.preventDefault(); return false; }
+      // Mac screenshot: Cmd+Shift+3 / Cmd+Shift+4 / Cmd+Shift+5
+      if (e.metaKey && e.shiftKey && ['3','4','5','6'].includes(key)) { e.preventDefault(); return false; }
+      // Ctrl+P (print)
+      if ((e.ctrlKey || e.metaKey) && key === 'p') { e.preventDefault(); return false; }
+      // F12 DevTools
+      if (key === 'f12') { e.preventDefault(); return false; }
+    };
+
+    // 3. Detect visibility changes (Alt+Tab to screenshot tool)
+    const handleVisibility = () => {
+      if (document.hidden) {
+        // Blur sensitive content when switching away
+        document.body.style.filter = 'blur(8px)';
+      } else {
+        document.body.style.filter = '';
+      }
+    };
+
+    document.addEventListener('contextmenu', blockContextMenu);
+    document.addEventListener('keydown', blockKeys);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      document.removeEventListener('contextmenu', blockContextMenu);
+      document.removeEventListener('keydown', blockKeys);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      document.body.style.filter = '';
+    };
+  }, []);
+  // ────────────────────────────────────────────────────────────────────────
+
   const handleOnboardingSubmit = async (e) => {
     e.preventDefault();
     if (!docId) return;
@@ -286,8 +336,37 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex relative overflow-hidden select-none">
       
+      {/* ── Watermark Overlay ── */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden"
+        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+      >
+        {Array.from({ length: 30 }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `${(i % 5) * 22}%`,
+              top: `${Math.floor(i / 5) * 20}%`,
+              transform: 'rotate(-30deg)',
+              opacity: 0.045,
+              fontSize: '15px',
+              fontWeight: '900',
+              color: '#1e3a8a',
+              whiteSpace: 'nowrap',
+              fontFamily: 'sans-serif',
+              letterSpacing: '0.05em',
+              pointerEvents: 'none',
+            }}
+          >
+            MS Academy · {studentName}
+          </div>
+        ))}
+      </div>
+
       {/* Onboarding Modal Overlay */}
       {showOnboarding && (
         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
