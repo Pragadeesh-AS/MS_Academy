@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { db, storage } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { gateCoursesData } from '../GateCourses';
 
 export default function CourseSetup() {
@@ -65,35 +65,24 @@ export default function CourseSetup() {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    if (file.size > 2 * 1024 * 1024) { // Increased limit to 2MB since it's going to storage
-      showToast("Image is too large. Please upload an image under 2MB.", "error");
-      return;
-    }
-    
     setIsUploadingImage(true);
+    setImageUploadProgress(50); // Fake progress for UX
     const storageRef = ref(storage, `bundles/${Date.now()}_${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
     
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const prog = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setImageUploadProgress(prog);
-      },
-      (error) => {
-        console.error(error);
-        showToast("Image upload failed", "error");
-        setIsUploadingImage(false);
-      },
-      async () => {
-        const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+    uploadBytes(storageRef, file)
+      .then(async (snapshot) => {
+        const downloadUrl = await getDownloadURL(snapshot.ref);
         setFormData({ ...formData, imageUrl: downloadUrl });
         setIsUploadingImage(false);
         setImageUploadProgress(0);
         showToast("Image uploaded successfully!", "success");
-      }
-    );
+      })
+      .catch((error) => {
+        console.error("Upload error:", error);
+        showToast(`Upload failed: ${error.message}`, "error");
+        setIsUploadingImage(false);
+        setImageUploadProgress(0);
+      });
   };
 
   const openAddCreator = () => {
