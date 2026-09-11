@@ -366,7 +366,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
     const mcq = testQuestions.filter(q => q.questionType === 'Single Choice').length;
     const msq = testQuestions.filter(q => q.questionType === 'Multiple Choice').length;
     const nat = testQuestions.filter(q => q.questionType === 'Fill in the Blank').length;
-    const totalMarks = testQuestions.reduce((sum, q) => sum + Number(q.mark || 1), 0);
+    const totalMarks = testQuestions.reduce((sum, q) => sum + (parseFloat(q.mark) || 1), 0);
 
     return (
       <InstructionsLayout title="Other Important Instructions" onPrev={() => setMode('instructions1')} onReady={() => setMode('taking')} showPrev isReady>
@@ -394,10 +394,10 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                     <td className="border border-gray-300 px-4 py-2">Multiple Choice Questions (MCQ)</td>
                     <td className="border border-gray-300 px-4 py-2 text-center font-bold">{mcq}</td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => q.mark || 1))].join('/')}
+                      {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => parseFloat(q.mark) || 1))].join('/')}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-red-600">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => q.negativeMark || 0))].join('/')}
+                      {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => parseFloat(q.negativeMark) || 0))].join('/')}
                     </td>
                   </tr>
                 )}
@@ -406,7 +406,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                     <td className="border border-gray-300 px-4 py-2">Multiple Select Questions (MSQ)</td>
                     <td className="border border-gray-300 px-4 py-2 text-center font-bold">{msq}</td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Multiple Choice').map(q => q.mark || 1))].join('/')}
+                      {[...new Set(testQuestions.filter(q => q.questionType === 'Multiple Choice').map(q => parseFloat(q.mark) || 1))].join('/')}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-red-600">Nil</td>
                   </tr>
@@ -416,7 +416,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                     <td className="border border-gray-300 px-4 py-2">Numerical Answer Type (NAT)</td>
                     <td className="border border-gray-300 px-4 py-2 text-center font-bold">{nat}</td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Fill in the Blank').map(q => q.mark || 1))].join('/')}
+                      {[...new Set(testQuestions.filter(q => q.questionType === 'Fill in the Blank').map(q => parseFloat(q.mark) || 1))].join('/')}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-red-600">Nil</td>
                   </tr>
