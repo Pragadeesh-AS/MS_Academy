@@ -20,12 +20,45 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
   const [timeRemaining, setTimeRemaining] = useState(0);
 
   const timerRef = useRef(null);
+  const fsWarningsRef = useRef(0);
+  const [fsWarningCount, setFsWarningCount] = useState(0);
+  const [showFsWarning, setShowFsWarning] = useState(false);
+
+  // Enter fullscreen when test starts
+  const enterFullscreen = () => {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
+  };
 
   useEffect(() => {
     // Do not start timer until mode === 'taking'
     if (mode === 'taking') {
       setTimeRemaining(test.duration * 60);
       setVisited([testQuestions[0]?.id]);
+      enterFullscreen();
+
+      const handleFsChange = () => {
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+        if (!isFs) {
+          fsWarningsRef.current += 1;
+          setFsWarningCount(fsWarningsRef.current);
+          setShowFsWarning(true);
+          if (fsWarningsRef.current >= 3) {
+            // Auto submit after 3 violations
+            setTimeout(() => {
+              clearInterval(timerRef.current);
+              onSubmit(selectedAnswers);
+            }, 2000);
+          }
+        }
+      };
+
+      document.addEventListener('fullscreenchange', handleFsChange);
+      document.addEventListener('webkitfullscreenchange', handleFsChange);
+      document.addEventListener('mozfullscreenchange', handleFsChange);
+
       timerRef.current = setInterval(() => {
         setTimeRemaining(prev => {
           if (prev <= 1) {
@@ -36,6 +69,15 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
           return prev - 1;
         });
       }, 1000);
+
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        document.removeEventListener('fullscreenchange', handleFsChange);
+        document.removeEventListener('webkitfullscreenchange', handleFsChange);
+        document.removeEventListener('mozfullscreenchange', handleFsChange);
+        // Exit fullscreen on cleanup
+        if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
+      };
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -320,13 +362,83 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
   );
 
   const Instructions2 = () => {
+    // Build question split-up
+    const mcq = testQuestions.filter(q => q.questionType === 'Single Choice').length;
+    const msq = testQuestions.filter(q => q.questionType === 'Multiple Choice').length;
+    const nat = testQuestions.filter(q => q.questionType === 'Fill in the Blank').length;
+    const totalMarks = testQuestions.reduce((sum, q) => sum + Number(q.mark || 1), 0);
+
     return (
       <InstructionsLayout title="Other Important Instructions" onPrev={() => setMode('instructions1')} onReady={() => setMode('taking')} showPrev isReady>
-        <div className="max-w-4xl mx-auto space-y-4 text-sm text-gray-900 pb-10">
-          <h2 className="text-center font-bold text-lg mb-6">{test?.subject || 'Paper'}-specific instructions</h2>
-          <p className="font-bold mt-4">Please read the following carefully.</p>
-          <p>This question paper has {testQuestions?.length || 0} questions. The marks distribution is as specified in each question.</p>
-          <p className="mt-4 text-red-600 font-bold">Warning: Do not click refresh or back button during the examination.</p>
+        <div className="max-w-4xl mx-auto space-y-6 text-sm text-gray-900 pb-10">
+          <h2 className="text-center font-bold text-lg mb-4">{test?.subject || 'Paper'}-specific instructions</h2>
+          
+          <p className="font-bold">Please read the following carefully.</p>
+          <p>This question paper has <strong>{testQuestions?.length || 0}</strong> questions. The marks distribution is as specified in each question.</p>
+
+          {/* Question Split-up Table */}
+          <div className="border border-gray-300 rounded overflow-hidden">
+            <div className="bg-[#2D66B3] text-white text-center font-bold py-2 text-sm">Question Paper Split-up</div>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-[#EAF2FA] text-[#1a3a6b] font-bold">
+                  <th className="border border-gray-300 px-4 py-2 text-left">Question Type</th>
+                  <th className="border border-gray-300 px-4 py-2 text-center">No. of Questions</th>
+                  <th className="border border-gray-300 px-4 py-2 text-center">Marks per Question</th>
+                  <th className="border border-gray-300 px-4 py-2 text-center">Negative Marking</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mcq > 0 && (
+                  <tr className="hover:bg-blue-50">
+                    <td className="border border-gray-300 px-4 py-2">Multiple Choice Questions (MCQ)</td>
+                    <td className="border border-gray-300 px-4 py-2 text-center font-bold">{mcq}</td>
+                    <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
+                      {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => q.mark || 1))].join('/')}
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-center text-red-600">
+                      {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => q.negativeMark || 0))].join('/')}
+                    </td>
+                  </tr>
+                )}
+                {msq > 0 && (
+                  <tr className="hover:bg-blue-50">
+                    <td className="border border-gray-300 px-4 py-2">Multiple Select Questions (MSQ)</td>
+                    <td className="border border-gray-300 px-4 py-2 text-center font-bold">{msq}</td>
+                    <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
+                      {[...new Set(testQuestions.filter(q => q.questionType === 'Multiple Choice').map(q => q.mark || 1))].join('/')}
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-center text-red-600">Nil</td>
+                  </tr>
+                )}
+                {nat > 0 && (
+                  <tr className="hover:bg-blue-50">
+                    <td className="border border-gray-300 px-4 py-2">Numerical Answer Type (NAT)</td>
+                    <td className="border border-gray-300 px-4 py-2 text-center font-bold">{nat}</td>
+                    <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
+                      {[...new Set(testQuestions.filter(q => q.questionType === 'Fill in the Blank').map(q => q.mark || 1))].join('/')}
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-center text-red-600">Nil</td>
+                  </tr>
+                )}
+                <tr className="bg-[#EAF2FA] font-bold">
+                  <td className="border border-gray-300 px-4 py-2">Total</td>
+                  <td className="border border-gray-300 px-4 py-2 text-center">{testQuestions?.length || 0}</td>
+                  <td className="border border-gray-300 px-4 py-2 text-center">{totalMarks}</td>
+                  <td className="border border-gray-300 px-4 py-2 text-center">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Fullscreen Notice */}
+          <div className="border border-orange-300 bg-orange-50 rounded p-4">
+            <p className="font-bold text-orange-800 mb-1">⚠ Fullscreen Mode Required</p>
+            <p className="text-orange-700">This examination must be taken in <strong>fullscreen mode</strong>. The browser will automatically enter fullscreen when you click "I am ready to begin".</p>
+            <p className="text-orange-700 mt-1">Exiting fullscreen will generate a warning. <strong>After 3 warnings, the exam will be automatically submitted.</strong></p>
+          </div>
+
+          <p className="mt-2 text-red-600 font-bold">⚠ Warning: Do not click refresh or back button during the examination.</p>
         </div>
       </InstructionsLayout>
     );
@@ -539,6 +651,37 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
       {mode === 'instructions1' && <Instructions1 />}
       {mode === 'instructions2' && <Instructions2 />}
       {mode === 'taking' && <TakingScreen />}
+
+      {/* Fullscreen Warning Modal */}
+      {showFsWarning && mode === 'taking' && (
+        <div className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center font-sans">
+          <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center border-4 ${fsWarningCount >= 3 ? 'border-red-600' : 'border-orange-400'}`}>
+            <div className={`text-6xl mb-4 ${fsWarningCount >= 3 ? 'text-red-600' : 'text-orange-500'}`}>
+              {fsWarningCount >= 3 ? '🚫' : '⚠️'}
+            </div>
+            <h2 className={`text-2xl font-black mb-2 ${fsWarningCount >= 3 ? 'text-red-700' : 'text-orange-700'}`}>
+              {fsWarningCount >= 3 ? 'Exam Auto-Submitted!' : `Warning ${fsWarningCount} of 3`}
+            </h2>
+            {fsWarningCount >= 3 ? (
+              <p className="text-gray-700 font-semibold">You have exited fullscreen mode 3 times. Your exam has been <strong>automatically submitted</strong>.</p>
+            ) : (
+              <>
+                <p className="text-gray-700 font-semibold mb-2">You exited fullscreen mode. This is not allowed during the exam.</p>
+                <p className="text-orange-700 font-bold">You have <strong>{3 - fsWarningCount}</strong> warning(s) remaining before your exam is automatically submitted.</p>
+                <button
+                  onClick={() => {
+                    setShowFsWarning(false);
+                    enterFullscreen();
+                  }}
+                  className="mt-6 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl text-lg transition-colors shadow-lg"
+                >
+                  Return to Fullscreen
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>,
     document.body
   );
