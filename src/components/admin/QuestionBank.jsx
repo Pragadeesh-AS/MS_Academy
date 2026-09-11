@@ -644,21 +644,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   return (
     <>
-      <style>
-        {`
-          .qb-canvas {
-            background-color: #F8FAFC;
-            background-image: radial-gradient(#CBD5E1 1px, transparent 1px);
-            background-size: 24px 24px;
-          }
-        `}
-      </style>
-      
-      <div className="qb-canvas relative flex flex-col xl:flex-row gap-8 w-full h-full min-h-[900px] p-8 overflow-x-hidden overflow-y-auto z-0">
-        
-        {/* Soft Radial Gradients */}
-        <div className="absolute top-[-10%] left-[-5%] w-[600px] h-[600px] bg-blue-200/40 rounded-full blur-[100px] pointer-events-none -z-10"></div>
-        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-blue-100/30 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+      <div className="relative flex flex-col xl:flex-row gap-8 w-full h-full min-h-[900px] p-8 overflow-x-hidden overflow-y-auto z-0 bg-[#F8FAFC]">
 
         {/* ==================== MAIN CONTENT PANEL ==================== */}
         <div className="flex-1 flex flex-col gap-6 relative z-10 w-full min-w-0">
@@ -705,22 +691,34 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         </div>
 
           {!selectedFolder ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 mt-4">
+            <div className="mt-4">
+              {/* Folder grid header */}
+              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200">
+                <span className="text-[13px] font-[700] text-slate-400 uppercase tracking-widest">Departments</span>
+                <div className="flex-1 h-px bg-slate-200"></div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
               {[
                 ...departments.filter(d => d !== 'All Departments').map(dept => ({ name: dept, count: filteredQuestions.filter(q => q.department === dept).length })),
                 { name: 'Uncategorized', count: filteredQuestions.filter(q => !q.department || q.department.trim() === '').length }
               ].filter(dept => dept.count > 0).map((dept, i) => (
-                  <div key={i} onClick={() => setSelectedFolder(dept.name)} className="bg-white rounded-2xl border border-[#EEF2F7] shadow-[0_8px_24px_rgba(15,23,42,0.03)] p-6 cursor-pointer hover:shadow-[0_12px_32px_rgba(15,23,42,0.08)] hover:-translate-y-1 transition-all duration-300 group">
-                    <div className="w-[54px] h-[54px] bg-blue-50 text-blue-600 rounded-[18px] flex items-center justify-center mb-5 group-hover:bg-blue-600 group-hover:text-white transition-colors border border-blue-100 group-hover:border-blue-600">
-                      <FolderOpen size={26} strokeWidth={2} />
+                  <div key={i} onClick={() => setSelectedFolder(dept.name)} className="bg-white rounded-2xl border border-slate-200 p-5 cursor-pointer hover:border-blue-300 hover:shadow-lg transition-all duration-200 group flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors border border-blue-100 group-hover:border-blue-600">
+                      <FolderOpen size={22} strokeWidth={2} />
                     </div>
-                    <h3 className="font-[800] text-[18px] text-[#0F172A] mb-1.5 truncate" title={dept.name}>{dept.name}</h3>
-                    <div className="flex items-center gap-2 text-slate-500 font-semibold text-sm">
-                      <FileText size={14} className="text-slate-400" />
-                      {dept.count} Questions
+                    <div className="flex flex-col min-w-0">
+                      <h3 className="font-[700] text-[15px] text-slate-800 truncate" title={dept.name}>{dept.name}</h3>
+                      <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[13px] mt-0.5">
+                        <FileText size={12} />
+                        {dept.count} Questions
+                      </div>
+                    </div>
+                    <div className="ml-auto text-slate-300 group-hover:text-blue-400 transition-colors">
+                      <ArrowLeft size={16} className="rotate-180" />
                     </div>
                   </div>
                 ))}
+              </div>
             </div>
           ) : (
             <>
