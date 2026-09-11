@@ -274,7 +274,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
     if (hasQbWhiteboard && qbWhiteboardUser && pinnedUid === 'question-bank') {
       return (
         <div className="absolute inset-0 z-20 pointer-events-none mix-blend-multiply">
-          <RemoteUser user={qbWhiteboardUser} playVideo={true} playAudio={false} style={{ objectFit: 'none', objectPosition: 'top left' }} />
+          <RemoteUser user={qbWhiteboardUser} playVideo={true} playAudio={false} style={{ width: '100%', height: '100%' }} />
         </div>
       );
     }
