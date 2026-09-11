@@ -45,7 +45,14 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     if (fabricRef.current) {
       fabricRef.current.clear();
       if (targetData) {
-        fabricRef.current.loadFromJSON(targetData, () => {
+        // Prevent WebRTC glitch by keeping dimensions constant and forcing transparent background
+        const safeData = { 
+          ...targetData, 
+          background: 'transparent',
+          width: fabricRef.current.width,
+          height: fabricRef.current.height
+        };
+        fabricRef.current.loadFromJSON(safeData, () => {
           fabricRef.current.backgroundColor = 'transparent';
           fabricRef.current.renderAll();
         });
@@ -89,7 +96,14 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       if (fabricRef.current) {
         fabricRef.current.clear();
         if (targetData) {
-          fabricRef.current.loadFromJSON(targetData, () => {
+          // Prevent WebRTC glitch by keeping dimensions constant
+          const safeData = { 
+            ...targetData, 
+            background: 'transparent',
+            width: fabricRef.current.width,
+            height: fabricRef.current.height
+          };
+          fabricRef.current.loadFromJSON(safeData, () => {
             fabricRef.current.backgroundColor = 'transparent';
             fabricRef.current.renderAll();
           });
