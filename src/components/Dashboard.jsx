@@ -832,9 +832,11 @@ export default function Dashboard() {
                         </div>
                       )}
                       {bundle.imageUrl ? (
-                        <img src={bundle.imageUrl} alt={bundle.name} className="w-full h-auto object-contain" />
+                        <div className="w-full h-56 bg-slate-50 flex items-center justify-center overflow-hidden">
+                          <img src={bundle.imageUrl} alt={bundle.name} className="w-full h-full object-contain" />
+                        </div>
                       ) : (
-                        <div className="w-full aspect-video bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+                        <div className="w-full h-56 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
                           <BookOpen size={48} className="text-slate-300" />
                         </div>
                       )}
