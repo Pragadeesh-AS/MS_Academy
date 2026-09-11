@@ -445,13 +445,18 @@ const StudentDirectory = ({
                 </div>
               </div>
               
-              {selectedStudent.purchasedBundles && selectedStudent.purchasedBundles.length > 0 && (
-                <div className="pt-6 border-t border-[#EEF2F7]">
-                  <div className="flex items-center justify-between mb-4">
-                    <h5 className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Purchased Bundles</h5>
-                    <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{selectedStudent.purchasedBundles.length}</span>
-                  </div>
-                  <div className="space-y-2.5 max-h-[160px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full">
+              <div className="pt-6 border-t border-[#EEF2F7]">
+                <div className="flex items-center justify-between mb-4">
+                  <h5 className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Purchased Bundles</h5>
+                  {(selectedStudent.purchasedBundles || []).length > 0 && (
+                    <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{(selectedStudent.purchasedBundles || []).length}</span>
+                  )}
+                </div>
+                
+                {(!selectedStudent.purchasedBundles || selectedStudent.purchasedBundles.length === 0) ? (
+                  <p className="text-[13px] font-medium text-[#64748B] mb-4">No active bundles for this student.</p>
+                ) : (
+                  <div className="space-y-2.5 max-h-[160px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full mb-4">
                     {selectedStudent.purchasedBundles.map((bundle, idx) => {
                       const b = bundles.find(bItem => bItem.id === bundle);
                       const bundleName = b ? b.name : (typeof bundle === 'string' ? bundle : (bundle.title || bundle.name || `Bundle ${idx + 1}`));
@@ -503,8 +508,37 @@ const StudentDirectory = ({
                       );
                     })}
                   </div>
+                )}
+                
+                <div className="mt-2">
+                  <select 
+                    className="w-full border border-[#EEF2F7] rounded-[12px] px-4 py-2.5 text-[14px] font-medium text-[#0F172A] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-[#F8FAFC]"
+                    onChange={async (e) => {
+                      const bundleId = e.target.value;
+                      if (!bundleId) return;
+                      try {
+                        const updatedBundles = [...(selectedStudent.purchasedBundles || []), bundleId];
+                        await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), { 
+                          purchasedBundles: updatedBundles,
+                          isPro: true
+                        });
+                        const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles, isPro: true };
+                        setSelectedStudent(updatedStudent);
+                        setJoinedStudents(joinedStudents.map(s => s.id === selectedStudent.id ? updatedStudent : s));
+                      } catch (error) {
+                        console.error('Error adding bundle:', error);
+                        alert(`Failed to add bundle. Error: ${error.message}`);
+                      }
+                      e.target.value = '';
+                    }}
+                  >
+                    <option value="">+ Assign New Bundle...</option>
+                    {bundles.filter(b => !(selectedStudent.purchasedBundles || []).includes(b.id)).map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
+              </div>
             </div>
             <div className="p-6 bg-[#F8FAFC] border-t border-[#EEF2F7] flex justify-end">
               <button onClick={() => setSelectedStudent(null)} className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm">
