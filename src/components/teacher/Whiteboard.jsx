@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as fabric from 'fabric';
-import { PenTool, Eraser, Trash2, Highlighter, Plus, MousePointer2, Palette, X, Shapes, Square, Circle, Triangle, Minus, ArrowRight, Hexagon, Diamond, Pentagon, Octagon, Star } from 'lucide-react';
+import { PenTool, Eraser, Trash2, Highlighter, Plus, MousePointer2, Palette, X, Shapes, Square, Circle, Triangle, Minus, ArrowRight, Hexagon, Diamond, Pentagon, Octagon, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId = 'whiteboard-canvas' }) {
   const canvasRef = useRef(null);
@@ -19,6 +19,52 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
   const [activeShape, setActiveShape] = useState('rectangle');
   const [showShapeOptions, setShowShapeOptions] = useState(false);
   const snapshotRef = useRef(null);
+  
+  // Pagination State
+  const [pagesData, setPagesData] = useState([null]);
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+
+  const saveCurrentPage = () => {
+    if (fabricRef.current) {
+      const json = fabricRef.current.toJSON();
+      setPagesData(prev => {
+        const newPages = [...prev];
+        newPages[currentPageIndex] = json;
+        return newPages;
+      });
+    }
+  };
+
+  const goToPage = (index) => {
+    if (index < 0 || index >= pagesData.length) return;
+    if (index === currentPageIndex) return;
+    saveCurrentPage();
+    setCurrentPageIndex(index);
+    const targetData = pagesData[index];
+    if (fabricRef.current) {
+      fabricRef.current.clear();
+      if (targetData) {
+        fabricRef.current.loadFromJSON(targetData, () => {
+          fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+          fabricRef.current.renderAll();
+        });
+      } else {
+        fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+        fabricRef.current.renderAll();
+      }
+    }
+  };
+
+  const addNewPage = () => {
+    saveCurrentPage();
+    setPagesData(prev => [...prev, null]);
+    setCurrentPageIndex(pagesData.length);
+    if (fabricRef.current) {
+      fabricRef.current.clear();
+      fabricRef.current.backgroundColor = isOverlay ? 'transparent' : boardColor;
+      fabricRef.current.renderAll();
+    }
+  };
   const startPosRef = useRef({ x: 0, y: 0 });
   const lastPosRef = useRef({ x: 0, y: 0 });
   
@@ -757,6 +803,40 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
               </div>
             );
           })}
+          
+          {/* Pagination Controls */}
+          <div className="w-8 h-px bg-slate-700 my-1 shrink-0"></div>
+          <div className="flex flex-col items-center gap-1.5 shrink-0 pb-1">
+            <button
+              onClick={() => goToPage(currentPageIndex - 1)}
+              disabled={currentPageIndex === 0}
+              className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 ${currentPageIndex === 0 ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+              title="Previous Page"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            
+            <span className="text-[10px] text-slate-400 font-bold select-none tracking-widest">
+              {currentPageIndex + 1}/{pagesData.length}
+            </span>
+
+            <button
+              onClick={() => goToPage(currentPageIndex + 1)}
+              disabled={currentPageIndex === pagesData.length - 1}
+              className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 ${currentPageIndex === pagesData.length - 1 ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+              title="Next Page"
+            >
+              <ChevronRight size={18} />
+            </button>
+
+            <button
+              onClick={addNewPage}
+              className="flex items-center justify-center w-9 h-9 rounded-xl text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 transition-all duration-200 mt-1"
+              title="New Blank Page"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Popout Panels Container */}
