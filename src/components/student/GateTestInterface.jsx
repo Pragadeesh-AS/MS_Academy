@@ -668,9 +668,9 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
             <div className="p-3 bg-[#C5EAF8] border-t border-[#86B4D6]">
               <button 
                 onClick={submitExam} 
-                disabled={Object.keys(selectedAnswers).length === 0}
+                disabled={Object.keys(selectedAnswers).length < testQuestions.length}
                 className={`w-full font-bold py-2 rounded-sm shadow-sm border transition-colors ${
-                  Object.keys(selectedAnswers).length > 0
+                  Object.keys(selectedAnswers).length === testQuestions.length
                     ? 'bg-[#5CB85C] hover:bg-[#449d44] border-[#4CAE4C] text-white'
                     : 'bg-gray-300 border-gray-400 text-gray-500 cursor-not-allowed'
                 }`}
