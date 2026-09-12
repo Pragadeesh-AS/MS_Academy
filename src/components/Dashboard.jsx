@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -136,6 +136,45 @@ export default function Dashboard() {
       setNotes(fetchedNotes);
     });
     return () => unsubscribe();
+  }, [studentDepartment]);
+
+  const [courseProgress, setCourseProgress] = useState(0);
+  
+  useEffect(() => {
+    if (!studentDepartment) return;
+    const email = sessionStorage.getItem('auth_email');
+    if (!email) return;
+
+    const fetchProgress = async () => {
+      try {
+        // Fetch all tests for this department
+        const tQuery = query(collection(db, 'tests'), where('department', '==', studentDepartment));
+        const tSnap = await getDocs(tQuery);
+        const totalTests = tSnap.docs.length;
+
+        // Fetch student attempts
+        const aQuery = query(collection(db, 'test_attempts'), where('studentEmail', '==', email));
+        const aSnap = await getDocs(aQuery);
+        
+        // Match unique tests attempted that belong to this dept
+        const attemptedIds = new Set(aSnap.docs.map(d => d.data().testId));
+        
+        let validAttempts = 0;
+        tSnap.docs.forEach(doc => {
+          if (attemptedIds.has(doc.id)) validAttempts++;
+        });
+        
+        if (totalTests === 0) {
+           setCourseProgress(0);
+        } else {
+           const prog = Math.round((validAttempts / totalTests) * 100);
+           setCourseProgress(prog > 100 ? 100 : prog);
+        }
+      } catch(err) {
+        console.error('Error fetching progress', err);
+      }
+    };
+    fetchProgress();
   }, [studentDepartment]);
 
   // One-time sync to pull orphaned recordings from storage into firestore
@@ -484,9 +523,9 @@ export default function Dashboard() {
             <div className="pt-4 mt-4 border-t border-slate-200">
               <button 
                 onClick={() => setActiveTab('upgrade')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'upgrade' ? 'bg-amber-50 text-amber-600' : isPro ? 'text-amber-500 hover:bg-amber-50' : 'bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5'}`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'upgrade' ? 'pro-badge border border-[#F2C94C] text-[#B8860B] shadow-sm' : isPro ? 'text-[#B8860B] hover:bg-[#FFF9E6]' : 'pro-badge border border-[#F2C94C] text-[#B8860B] shadow-md hover:shadow-lg hover:-translate-y-0.5'}`}
               >
-                <Crown size={18} className={isPro && activeTab !== 'upgrade' ? 'text-amber-500' : ''} />
+                <Crown size={18} className={isPro && activeTab !== 'upgrade' ? 'text-[#B8860B]' : 'text-[#B8860B]'} />
                 {!isCollapsed && <span>{isPro ? 'Pro Benefits' : 'Upgrade to Pro'}</span>}
               </button>
             </div>
@@ -501,8 +540,8 @@ export default function Dashboard() {
             <h1 className="text-2xl sm:text-3xl font-[900] text-slate-900 tracking-tight flex items-center gap-3">
               Welcome back, {studentName.split(' ')[0]} 👋
               {isPro && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-100 to-orange-100 border border-amber-200 text-[12px] text-amber-700 font-bold uppercase tracking-wider shadow-sm">
-                  <Crown size={14} className="text-amber-500" /> Pro
+                <span className="pro-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#F2C94C] text-[#B8860B] text-[12px] font-[900] uppercase tracking-widest shadow-sm hover:scale-105 transition-transform cursor-default">
+                  <Crown size={14} className="text-[#B8860B]" strokeWidth={2.5} /> PRO
                 </span>
               )}
             </h1>
@@ -550,18 +589,27 @@ export default function Dashboard() {
                         <div className="w-12 h-12 rounded-[14px] flex items-center justify-center bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-inner">
                           <Icon size={24} />
                         </div>
-                        <span className="text-xs font-[900] text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">0%</span>
+                        <span className="text-xs font-[900] text-blue-700 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">{courseProgress}%</span>
                       </div>
                       <h3 className="font-[900] text-slate-900 text-[17px] mb-4 group-hover:text-blue-600 transition-colors leading-snug">{course.name}</h3>
                       
                       {/* Progress Bar */}
                       <div className="w-full bg-slate-100 h-2.5 rounded-full mb-4 overflow-hidden shadow-inner">
-                        <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full w-[0%] relative">
+                        <div 
+                          className="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full relative transition-all duration-1000"
+                          style={{ width: `${courseProgress}%` }}
+                        >
                         </div>
                       </div>
                       
                       <p className="text-[13px] text-slate-500 font-bold flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span> Start Learning
+                        {courseProgress === 100 ? (
+                          <><CheckCircle size={14} className="text-green-500" /> Completed</>
+                        ) : courseProgress > 0 ? (
+                          <><span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> Continue Learning</>
+                        ) : (
+                          <><span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span> Start Learning</>
+                        )}
                       </p>
                     </div>
                   );
@@ -574,7 +622,7 @@ export default function Dashboard() {
             <div>
               <h2 className="text-xl font-[900] text-slate-900 mb-5 mt-4 flex items-center gap-2">
                 Recent Study Materials
-                {!isPro && <Lock size={16} className="text-amber-500" />}
+                {!isPro && <Lock size={16} className="text-slate-400" />}
               </h2>
               <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm overflow-hidden relative">
 
@@ -605,7 +653,7 @@ export default function Dashboard() {
                               <Eye size={16} /> <span className="hidden sm:inline">View Full</span>
                             </button>
                           ) : (
-                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(false); }} className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
+                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(false); }} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
                               <Eye size={16} /> <span className="hidden sm:inline">Preview</span>
                             </button>
                           )}
@@ -662,7 +710,7 @@ export default function Dashboard() {
                       <p className="text-sm text-slate-500 font-medium">By {rec.teacherName}</p>
                       
                       {!canAccessRecording(rec) ? (
-                        <button disabled className="w-full mt-4 py-2.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-xl font-bold flex items-center justify-center gap-2 cursor-not-allowed">
+                        <button disabled className="w-full mt-4 py-2.5 bg-slate-50 text-slate-400 border border-slate-200 rounded-xl font-bold flex items-center justify-center gap-2 cursor-not-allowed">
                           <Lock size={16} /> Locked (Pro)
                         </button>
                       ) : (
@@ -729,7 +777,7 @@ export default function Dashboard() {
                               <Eye size={16} /> View Full Note
                             </button>
                           ) : (
-                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(false); }} className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(false); }} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
                               <Eye size={16} /> Preview (3 Pages)
                             </button>
                           )}
@@ -758,7 +806,9 @@ export default function Dashboard() {
                         <Calendar size={12} /> Upcoming
                       </div>
                       <h4 className="text-[18px] leading-tight font-[900] text-slate-900 mb-2">{cls.topic}</h4>
-                      <div className="text-sm font-bold text-slate-700 mb-3">{cls.time}</div>
+                      <div className="text-sm font-bold text-slate-700 mb-3">
+                        {cls.time.includes('T') ? new Date(cls.time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : cls.time}
+                      </div>
                       
                       <p className="text-sm text-slate-500 font-medium flex items-center gap-2 mt-2">
                          <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">{cls.teacherName ? cls.teacherName[0] : 'T'}</span>
@@ -792,7 +842,7 @@ export default function Dashboard() {
         {activeTab === 'upgrade' && (
           <div className="max-w-6xl mx-auto py-10 px-4">
             <div className="text-center mb-10">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 text-amber-500 mb-6 shadow-sm border border-amber-200">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-500 mb-6 shadow-sm border border-blue-100">
                 <Crown size={40} />
               </div>
               <h2 className="text-4xl font-[900] text-slate-900 tracking-tight mb-4">
@@ -825,7 +875,7 @@ export default function Dashboard() {
                   return filteredBundles.map(bundle => {
                     const isPurchased = purchasedBundles.includes(bundle.id);
                     return (
-                    <div key={bundle.id} className={`bg-white rounded-[24px] border ${isPurchased ? 'border-emerald-200 shadow-emerald-500/10' : 'border-amber-200 shadow-amber-500/10'} shadow-xl overflow-hidden flex flex-col relative`}>
+                    <div key={bundle.id} className={`bg-white rounded-[24px] border ${isPurchased ? 'border-emerald-200 shadow-emerald-500/10' : 'border-blue-200 shadow-blue-500/10'} shadow-xl overflow-hidden flex flex-col relative`}>
                       {isPurchased && (
                         <div className="absolute top-4 right-4 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full z-30 flex items-center gap-1 shadow-md">
                            ✓ Purchased
@@ -857,7 +907,7 @@ export default function Dashboard() {
                           <ul className="space-y-3 mb-6">
                             {(bundle.features || []).map((feature, idx) => (
                               <li key={idx} className="flex items-start gap-3">
-                                <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${isPurchased ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${isPurchased ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
                                   <span className="text-[10px] font-bold">✓</span>
                                 </div>
                                 <span className="text-sm text-slate-600 font-medium">{feature}</span>
@@ -876,7 +926,7 @@ export default function Dashboard() {
                         ) : (
                           <button 
                             onClick={() => handleUpgradeToPro(bundle.id)}
-                            className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-[900] rounded-xl shadow-md transition-transform hover:-translate-y-0.5"
+                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-[900] rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] transition-all hover:-translate-y-0.5"
                           >
                             Buy Now
                           </button>

@@ -14,6 +14,8 @@ import {
   BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud, MoreHorizontal, Trophy
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import tkModule from '@axelixlabs/react-timepicker';
+const TimeKeeper = tkModule.default || tkModule;
 import AgoraRTC, {
   AgoraRTCProvider,
   useRTCClient,
@@ -1175,7 +1177,28 @@ export default function LiveClasses({ department }) {
   const [endClassQTypeFilter, setEndClassQTypeFilter] = useState("ALL");
   const [classToDelete, setClassToDelete] = useState(null);
 
-  const [newClass, setNewClass] = useState({ topic: '', time: '', selectedStudents: [], bundleId: '' });
+  const formatDisplayTime = (timeStr) => {
+    if (!timeStr) return '';
+    if (timeStr.includes('T')) {
+      try {
+        const date = new Date(timeStr);
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+        }
+      } catch(e) {}
+    }
+    return timeStr;
+  };
+
+  const [newClass, setNewClass] = useState({ topic: '', date: '', time: '', selectedStudents: [], bundleId: '' });
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [startClassData, setStartClassData] = useState({ topic: '', bundleId: '' });
   const [availableBundles, setAvailableBundles] = useState([]);
 
@@ -1418,7 +1441,9 @@ export default function LiveClasses({ department }) {
 
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
-    if (!newClass.topic || !newClass.time) return;
+    if (!newClass.topic || !newClass.date || !newClass.time) return;
+
+    const combinedDateTime = `${newClass.date}T${newClass.time}`;
 
     // Determine which students to email
     const studentsToEmail = newClass.selectedStudents.length > 0 
@@ -1428,7 +1453,8 @@ export default function LiveClasses({ department }) {
     const teacherName = sessionStorage.getItem('auth_name') || 'Your Teacher';
     const loginLink = window.location.hostname === 'localhost' ? 'http://localhost:5173/student' : window.location.origin + '/student';
 
-    for (const student of studentsToEmail) {
+    // Send emails asynchronously without blocking the UI
+    const emailPromises = studentsToEmail.map(student => {
       if (student.email) {
         const htmlMessage = `
           <div style="font-family: sans-serif; padding: 20px;">
@@ -1441,7 +1467,7 @@ export default function LiveClasses({ department }) {
               </tr>
               <tr>
                 <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Date & Time</td>
-                <td style="padding: 10px; border: 1px solid #ddd;">${newClass.time}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${formatDisplayTime(combinedDateTime)}</td>
               </tr>
               <tr>
                 <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Teacher</td>
@@ -1454,18 +1480,19 @@ export default function LiveClasses({ department }) {
             <p>Best regards,<br/>MS Academy</p>
           </div>
         `;
-        try {
-          await sendEmailViaGAS(student.email, `Scheduled Class: ${newClass.topic}`, htmlMessage);
-        } catch(err) {
-          console.error("Failed to email student", student.name, err);
-        }
+        return sendEmailViaGAS(student.email, `Scheduled Class: ${newClass.topic}`, htmlMessage)
+          .catch(err => console.error("Failed to email student", student.name, err));
       }
-    }
+      return Promise.resolve();
+    });
+    
+    // Execute all emails concurrently
+    Promise.all(emailPromises);
 
     try {
       await addDoc(collection(db, 'scheduled_classes'), {
         topic: newClass.topic,
-        time: newClass.time,
+        time: combinedDateTime,
         students: newClass.selectedStudents.length || departmentStudents.length,
         selectedStudentNames: newClass.selectedStudents.length > 0 ? newClass.selectedStudents : [], // Store names to notify on cancellation
         duration: "1h 00m",
@@ -1492,7 +1519,7 @@ export default function LiveClasses({ department }) {
 
     const teacherName = sessionStorage.getItem('auth_name') || 'Your Teacher';
 
-    for (const student of studentsToEmail) {
+    const emailPromises = studentsToEmail.map(student => {
       if (student.email) {
         const htmlMessage = `
           <div style="font-family: sans-serif; padding: 20px;">
@@ -1505,7 +1532,7 @@ export default function LiveClasses({ department }) {
               </tr>
               <tr>
                 <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Date & Time</td>
-                <td style="padding: 10px; border: 1px solid #ddd;">${classToDelete.time}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${formatDisplayTime(classToDelete.time)}</td>
               </tr>
               <tr>
                 <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Teacher</td>
@@ -1517,13 +1544,13 @@ export default function LiveClasses({ department }) {
             <p>Best regards,<br/>MS Academy</p>
           </div>
         `;
-        try {
-          await sendEmailViaGAS(student.email, `Cancelled Class: ${classToDelete.topic}`, htmlMessage);
-        } catch(err) {
-          console.error("Failed to email student", student.name, err);
-        }
+        return sendEmailViaGAS(student.email, `Cancelled Class: ${classToDelete.topic}`, htmlMessage)
+          .catch(err => console.error("Failed to email student", student.name, err));
       }
-    }
+      return Promise.resolve();
+    });
+    
+    Promise.all(emailPromises);
 
     try {
       await deleteDoc(doc(db, 'scheduled_classes', classToDelete.id));
@@ -1857,7 +1884,7 @@ export default function LiveClasses({ department }) {
               {upcomingClasses.map((cls) => (
                 <div key={cls.id} className="p-5 border border-slate-200 rounded-2xl hover:border-blue-300 hover:shadow-md transition-all group bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <div className="text-sm font-bold text-blue-600 mb-1">{cls.time}</div>
+                    <div className="text-sm font-bold text-blue-600 mb-1">{formatDisplayTime(cls.time)}</div>
                     <h4 className="text-lg font-[800] text-slate-900 mb-1">{cls.topic}</h4>
 
                     <div className="flex items-center gap-4 mt-4 text-[13px] font-semibold text-slate-400">
@@ -2003,17 +2030,49 @@ export default function LiveClasses({ department }) {
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Date & Time</label>
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Date</label>
                     <input
-                      type="text"
+                      type="date"
                       required
-                      value={newClass.time}
-                      onChange={(e) => setNewClass({ ...newClass, time: e.target.value })}
-                      placeholder="e.g. Tomorrow, 4:00 PM"
-                      className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                      value={newClass.date || ''}
+                      onChange={(e) => setNewClass({ ...newClass, date: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-slate-700 font-medium"
                     />
                   </div>
+                  {newClass.date && (
+                    <div className="col-span-2 sm:col-span-1 animate-in fade-in zoom-in-95 duration-200">
+                      <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Time</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          readOnly
+                          required
+                          value={newClass.time || ''}
+                          onClick={() => setShowTimePicker(true)}
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-slate-700 font-medium cursor-pointer bg-white"
+                          placeholder="Select time"
+                        />
+                        {showTimePicker && (
+                          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+                            <div className="bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                              <TimeKeeper
+                                time={newClass.time || '12:00'}
+                                onChange={(data) => setNewClass({ ...newClass, time: data.formatted24 })}
+                                switchToMinuteOnHourSelect={true}
+                                onDoneClick={() => setShowTimePicker(false)}
+                                config={{
+                                  TIME_BACKGROUND: '#2563EB',
+                                  DONE_BUTTON_COLOR: '#2563EB',
+                                  CLOCK_WRAPPER_BACKGROUND: '#F8FAFC'
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>

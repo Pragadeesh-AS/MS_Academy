@@ -1281,7 +1281,9 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                       <Clock size={12} /> Scheduled
                     </span>
                   )}
-                  <div className={`text-sm font-bold ${cls.isLive ? 'text-red-600' : 'text-slate-500'}`}>{cls.time}</div>
+                  <div className={`text-sm font-bold ${cls.isLive ? 'text-red-600' : 'text-slate-500'}`}>
+                    {cls.time.includes('T') ? new Date(cls.time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : cls.time}
+                  </div>
                 </div>
                 
                 <h4 className="text-lg font-[800] text-slate-900 mb-1">{cls.topic}</h4>

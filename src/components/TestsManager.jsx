@@ -3,6 +3,9 @@ import { db } from '../firebase';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
 import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock } from 'lucide-react';
 
+import tkModule from '@axelixlabs/react-timepicker';
+const TimeKeeper = tkModule.default || tkModule;
+
 export default function TestsManager({ department = '', isTeacher = false }) {
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,6 +15,12 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [editBundleTest, setEditBundleTest] = useState(null);
   const [editBundleValue, setEditBundleValue] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
+  };
 
   // Wizard Step State
   const [step, setStep] = useState(1); // 1: Specs, 2: Hierarchy, 3: Allocations
@@ -23,7 +32,9 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   const [targetMarks, setTargetMarks] = useState(100);
   const [total1Mark, setTotal1Mark] = useState(30);
   const [total2Mark, setTotal2Mark] = useState(35);
-  const [scheduledTime, setScheduledTime] = useState('');
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTimeStr, setScheduledTimeStr] = useState('');
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [bundleId, setBundleId] = useState(''); // '' means dept level, 'free' means free, 'specific_id' means exclusive
   const [bundles, setBundles] = useState([]);
 
@@ -230,8 +241,10 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     try {
       await deleteDoc(doc(db, 'tests', deleteConfirmId));
       fetchTests();
+      showToast("Test deleted successfully", "success");
     } catch (err) {
       console.error("Failed to delete test:", err);
+      showToast("Failed to delete test.", "error");
     }
     setDeleteConfirmId(null);
   };
@@ -239,7 +252,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (getStep1Warning() || getStep2Warning() || getStep3Warning()) {
-      alert("Please resolve all warnings before saving.");
+      showToast("Please resolve all warnings before saving.", "error");
       return;
     }
 
@@ -294,6 +307,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       questions: finalQuestionIds,
       allocations,
       bundleId: isTeacher ? '' : bundleId,
+      solutionsUnlocked: false,
       createdBy: sessionStorage.getItem('auth_name') || (isTeacher ? 'Teacher' : 'Admin'),
       createdAt: serverTimestamp()
     };
@@ -303,9 +317,10 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       setIsCreatorOpen(false);
       resetForm();
       fetchTests();
+      showToast("Test template created successfully!", "success");
     } catch (err) {
       console.error("Failed to save test template:", err);
-      alert("Error saving test template. Please try again.");
+      showToast("Error saving test template. Please try again.", "error");
     }
   };
 
@@ -331,9 +346,10 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       await updateDoc(doc(db, 'tests', editBundleTest.id), { bundleId: editBundleValue });
       setTests(prev => prev.map(t => t.id === editBundleTest.id ? { ...t, bundleId: editBundleValue } : t));
       setEditBundleTest(null);
+      showToast("Access control updated successfully!", "success");
     } catch (err) {
       console.error('Failed to update bundle:', err);
-      alert('Failed to update access control. Please try again.');
+      showToast('Failed to update access control. Please try again.', 'error');
     }
   };
 
@@ -345,36 +361,53 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       
       if (newStatus) {
         // Send email to students who took the test
-        const attemptsSnapshot = await getDocs(query(collection(db, 'test_attempts'), where('testId', '==', test.id)));
-        const uniqueEmails = [...new Set(attemptsSnapshot.docs.map(doc => doc.data().studentEmail).filter(Boolean))];
-        
-        if (uniqueEmails.length > 0) {
-          const emailSubject = `Solutions Unlocked: ${test.title}`;
-          const emailBody = `
-            <div style="font-family: sans-serif; padding: 20px;">
-              <h2>Solutions are now available!</h2>
-              <p>The solutions and explanations for the test <strong>${test.title}</strong> have been unlocked by your teacher.</p>
-              <p>You can now log in to your dashboard and review your detailed performance.</p>
-            </div>
-          `;
+        try {
+          const attemptsSnapshot = await getDocs(query(collection(db, 'test_attempts'), where('testId', '==', test.id)));
+          const uniqueEmails = [...new Set(attemptsSnapshot.docs.map(doc => doc.data().studentEmail).filter(Boolean))];
           
-          const webhookUrl = "https://script.google.com/macros/s/AKfycby5tF-3a213XJ2bB5h1Qn2TfTIfC_Gg_N5VvQhM_0c/exec";
-          const payload = { to: uniqueEmails.join(','), subject: emailSubject, htmlBody: emailBody };
-          
-          await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(payload)
-          });
-          
-          alert(`Solutions unlocked and email sent to ${uniqueEmails.length} student(s).`);
-        } else {
-          alert('Solutions unlocked, but no students have taken this test yet.');
+          if (uniqueEmails.length > 0) {
+            const emailSubject = `Solutions Unlocked: ${test.title}`;
+            const emailBody = `
+              <div style="font-family: sans-serif; padding: 20px;">
+                <h2>Solutions are now available!</h2>
+                <p>The solutions and explanations for the test <strong>${test.title}</strong> have been unlocked by your teacher.</p>
+                <p>You can now log in to your dashboard and review your detailed performance.</p>
+              </div>
+            `;
+            
+            const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
+            if (!webhookUrl) {
+              console.warn("VITE_GAS_WEBHOOK_URL is not set. Skipping email.");
+            } else {
+              // Send individual emails to protect student privacy (no group CCs)
+              uniqueEmails.forEach(email => {
+                const payload = { 
+                  to_email: email, 
+                  subject: emailSubject, 
+                  message_html: emailBody 
+                };
+                fetch(webhookUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "text/plain;charset=utf-8" },
+                  body: JSON.stringify(payload)
+                }).catch(e => console.error("Email fetch failed for", email, e));
+              });
+            }
+            
+            showToast(`Solutions unlocked & emailed ${uniqueEmails.length} students!`, 'success');
+          } else {
+            showToast('Solutions unlocked (no students attempted yet).', 'success');
+          }
+        } catch (emailErr) {
+          console.error("Failed to process unlock emails:", emailErr);
+          showToast('Solutions unlocked, but failed to send emails.', 'error');
         }
+      } else {
+        showToast('Solutions locked successfully.', 'success');
       }
     } catch (err) {
       console.error("Failed to toggle solutions", err);
-      alert("Failed to update solutions status.");
+      showToast("Failed to update solutions status.", "error");
     }
   };
 
@@ -388,8 +421,18 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 font-sans">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 font-sans relative">
       
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className={`fixed top-4 right-4 z-[999] px-6 py-3 rounded-xl shadow-lg border text-sm font-bold flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-300 ${
+          toast.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        }`}>
+          {toast.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
+          {toast.message}
+        </div>
+      )}
+
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
         <div>
@@ -472,7 +515,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[13px]">
                         <Calendar size={14} />
-                        {test.scheduledTime}
+                        {test.scheduledTime?.includes('T') ? new Date(test.scheduledTime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : test.scheduledTime}
                       </div>
                     </td>
                     <td className="px-6 py-5 text-right">
@@ -777,10 +820,9 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                   <div className="space-y-1.5">
                     <label className="text-[13px] font-[800] text-slate-800">Schedule Date & Time</label>
                     <input 
-                      type="text" 
+                      type="datetime-local" 
                       value={scheduledTime} 
                       onChange={e => setScheduledTime(e.target.value)}
-                      placeholder="e.g. Tomorrow, 10:00 AM"
                       className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
                     />
                   </div>

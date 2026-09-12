@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { db, auth } from '../firebase';
 import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock } from 'lucide-react';
+import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
 import logoImg from '../assets/msgate_logo.png';
 
@@ -304,35 +304,45 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                         )}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                        {['A', 'B', 'C', 'D'].map((opt) => {
-                          const optionText = q[`option${opt}`];
-                          if (!optionText) return null;
-
-                          const isSelectedByStudent = studentResp.selectedAnswer === opt;
-                          const isCorrectOpt = q.correctAnswer === opt;
-
-                          let cardClass = 'border-slate-200 bg-white text-slate-600';
-                          let badgeClass = 'border-slate-350 text-slate-400';
-
-                          if (isCorrectOpt) {
-                            cardClass = 'border-green-300 bg-green-50/30 text-green-800';
-                            badgeClass = 'bg-green-500 border-green-500 text-white';
-                          } else if (isSelectedByStudent && !isCorrectOpt) {
-                            cardClass = 'border-red-300 bg-red-50/30 text-red-800';
-                            badgeClass = 'bg-red-500 border-red-500 text-white';
-                          }
-
-                          return (
-                            <div key={opt} className={`p-3.5 border rounded-xl flex items-center gap-3 text-xs font-semibold ${cardClass}`}>
-                              <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold shrink-0 ${badgeClass}`}>
-                                {opt}
-                              </span>
-                              <span className="leading-snug">{optionText}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                          {['A', 'B', 'C', 'D'].map((opt) => {
+                            const optionText = q[`option${opt}`];
+                            if (!optionText) return null;
+  
+                            const isSelectedByStudent = studentResp.selectedAnswer === opt;
+                            const isCorrectOpt = q.correctAnswer === opt;
+  
+                            let cardClass = 'border-slate-200 bg-white text-slate-600';
+                            let badgeClass = 'border-slate-350 text-slate-400';
+  
+                            if (isCorrectOpt) {
+                              cardClass = 'border-green-300 bg-green-50/30 text-green-800';
+                              badgeClass = 'bg-green-500 border-green-500 text-white';
+                            } else if (isSelectedByStudent && !isCorrectOpt) {
+                              cardClass = 'border-red-300 bg-red-50/30 text-red-800';
+                              badgeClass = 'bg-red-500 border-red-500 text-white';
+                            }
+  
+                            return (
+                              <div key={opt} className={`p-3.5 border rounded-xl flex items-center gap-3 text-xs font-semibold ${cardClass}`}>
+                                <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold shrink-0 ${badgeClass}`}>
+                                  {opt}
+                                </span>
+                                <span className="leading-snug">{optionText}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {!isCorrect && q.correctAnswer && (
+                          <div className="flex items-center justify-between text-sm bg-green-50/50 px-4 py-3 rounded-xl border border-green-100 mb-4 mt-2">
+                            <span className="font-semibold text-green-700">Correct Answer:</span>
+                            <span className="font-bold text-green-600">
+                              Option {q.correctAnswer} - <span dangerouslySetInnerHTML={{ __html: q[`option${q.correctAnswer}`] || '' }} />
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
 
                     {/* Explanation Block */}
@@ -359,7 +369,6 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
             </p>
           </div>
         )}
-        </div>
 
         {/* Finish Review Button */}
         <div className="flex justify-end pt-4">
@@ -440,57 +449,91 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
             return (
               <div 
                 key={test.id} 
-                className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between h-56 border-l-4 border-l-blue-600"
+                className="group relative bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:shadow-blue-500/5 hover:-translate-y-1 transition-all duration-300 flex flex-col h-full"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2.5 py-1 text-xs font-bold bg-slate-100 text-slate-600 rounded-lg">
-                      {test.subject}
-                    </span>
-                    
-                    {isCompleted ? (
-                      <span className="px-2.5 py-1 text-xs font-[800] bg-green-50 text-green-600 rounded-lg flex items-center gap-1">
-                        <CheckCircle size={12} /> Score: {userAttempt.score}/{userAttempt.totalQuestions}
+                {/* Status Badge & Title */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1.5 text-[11px] uppercase tracking-wider font-bold bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
+                        {test.subject || 'Subject'}
                       </span>
-                    ) : (
-                      <span className="px-2.5 py-1 text-xs font-[800] bg-blue-50 text-blue-600 rounded-lg flex items-center gap-1">
-                        <Clock size={12} /> Active
-                      </span>
-                    )}
+                      {test.topic && (
+                        <span className="px-3 py-1.5 text-[11px] font-bold bg-slate-50 text-slate-500 rounded-xl border border-slate-100">
+                          {test.topic}
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="text-xl font-[900] text-slate-900 leading-tight mt-1 group-hover:text-blue-600 transition-colors line-clamp-2">
+                      {test.title}
+                    </h4>
                   </div>
-
-                  <h4 className="text-[17px] font-[900] text-slate-900 leading-tight mb-2">{test.title}</h4>
-                  <p className="text-xs text-slate-400 font-semibold mb-3">Topic: {test.topic}</p>
+                  
+                  {isCompleted ? (
+                    <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center border border-emerald-100 shadow-sm text-emerald-600 shrink-0 ml-4">
+                       <div className="text-center">
+                         <div className="text-[9px] font-black uppercase tracking-wider opacity-60">Score</div>
+                         <div className="text-xl font-black leading-none">{userAttempt.score}<span className="text-sm opacity-60">/{userAttempt.totalQuestions}</span></div>
+                       </div>
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center border border-blue-100 text-blue-500 shrink-0 ml-4">
+                      <FileText size={24} strokeWidth={2.5} />
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex items-center justify-between border-t border-slate-150 pt-4 mt-2">
-                  <div className="text-[12px] font-semibold text-slate-400 flex flex-col">
-                    <span>Questions: {test.questions?.length || 0} ({test.total1Mark || 0} × 1M + {test.total2Mark || 0} × 2M)</span>
-                    <span className="mt-0.5">Duration: {test.duration} mins • Target: {test.targetMarks || 100} Marks</span>
+                {/* Stats Grid */}
+                <div className="mt-auto pt-6 space-y-5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2.5 text-slate-500 bg-slate-50 px-3.5 py-2.5 rounded-2xl border border-slate-100">
+                      <HelpCircle size={18} className="text-blue-400 shrink-0" />
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Questions</span>
+                        <span className="text-xs font-bold text-slate-700">{test.questions?.length || 0} Qs</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-slate-500 bg-slate-50 px-3.5 py-2.5 rounded-2xl border border-slate-100">
+                      <Clock size={18} className="text-amber-400 shrink-0" />
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Duration</span>
+                        <span className="text-xs font-bold text-slate-700">{test.duration} mins</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-slate-500 bg-slate-50 px-3.5 py-2.5 rounded-2xl border border-slate-100 col-span-2">
+                      <Target size={18} className="text-emerald-400 shrink-0" />
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Target Score</span>
+                        <span className="text-xs font-bold text-slate-700">{test.targetMarks || 100} Marks (1M: {test.total1Mark||0}, 2M: {test.total2Mark||0})</span>
+                      </div>
+                    </div>
                   </div>
 
-                  {!canAccessTest(test) ? (
-                    <button 
-                      disabled
-                      className="px-4 py-2 bg-amber-50 text-amber-600 font-bold text-xs rounded-xl flex items-center gap-1.5 opacity-80 cursor-not-allowed border border-amber-200"
-                    >
-                      <Lock size={14} /> Locked (Pro)
-                    </button>
-                  ) : isCompleted ? (
-                    <button 
-                      onClick={() => viewAttemptResult(test.id)}
-                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5"
-                    >
-                      Review Test <Eye size={14} />
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => startTest(test)}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-blue-500/10 flex items-center gap-1.5"
-                    >
-                      Start Test <ArrowRight size={14} />
-                    </button>
-                  )}
+                  {/* Action Button */}
+                  <div className="pt-2">
+                    {!canAccessTest(test) ? (
+                      <button 
+                        disabled
+                        className="w-full py-4 bg-slate-50 text-slate-400 font-bold text-sm rounded-2xl flex items-center justify-center gap-2 cursor-not-allowed border border-slate-200"
+                      >
+                        <Lock size={18} /> Locked (Pro Required)
+                      </button>
+                    ) : isCompleted ? (
+                      <button 
+                        onClick={() => viewAttemptResult(test.id)}
+                        className="w-full py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm border border-emerald-200 hover:border-emerald-300"
+                      >
+                        Review Results <ArrowRight size={18} />
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => startTest(test)}
+                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-[800] text-sm rounded-2xl transition-all shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                      >
+                        Start Test Now <ArrowRight size={18} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
