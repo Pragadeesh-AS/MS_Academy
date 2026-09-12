@@ -11,12 +11,14 @@ import TeacherStudents from './teacher/TeacherStudents';
 import Analytics from './admin/Analytics';
 import { TrendingUp, ShieldAlert } from 'lucide-react';
 import ReportedQuestions from './admin/ReportedQuestions';
+import QuestionBank from './admin/QuestionBank';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [teacherName, setTeacherName] = useState('Teacher');
   const [teacherDepartment, setTeacherDepartment] = useState('');
   const [activeTab, setActiveTab] = useState('courses');
+  const [editQuestionId, setEditQuestionId] = useState(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [joinedStudents, setJoinedStudents] = useState([]);
 
@@ -183,10 +185,23 @@ export default function TeacherDashboard() {
 
         {activeTab === 'live' && <LiveClasses department={teacherDepartment} />}
         {activeTab === 'students' && <TeacherStudents department={teacherDepartment} />}
-        {activeTab === 'questions' && <TeacherQuestionBank department={teacherDepartment} />}
+        {activeTab === 'questions' && (
+          <div className="h-[800px]">
+             <QuestionBank lockedDepartment={teacherDepartment} initialEditQuestionId={editQuestionId} onClearEdit={() => setEditQuestionId(null)} />
+          </div>
+        )}
         {activeTab === 'tests' && <TestsManager department={teacherDepartment} isTeacher={true} />}
         {activeTab === 'analytics' && <Analytics joinedStudents={joinedStudents} department={teacherDepartment} />}
-        {activeTab === 'reported' && <ReportedQuestions role="teacher" department={teacherDepartment} />}
+        {activeTab === 'reported' && (
+          <ReportedQuestions 
+            role="teacher" 
+            department={teacherDepartment}
+            onViewQuestion={(qId) => {
+              setEditQuestionId(qId);
+              setActiveTab('questions');
+            }}
+          />
+        )}
       </main>
     </div>
   );

@@ -3,7 +3,7 @@ import { db } from '../../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, orderBy } from 'firebase/firestore';
 import { AlertTriangle, CheckCircle2, Search, Clock, Check, X, ShieldAlert } from 'lucide-react';
 
-export default function ReportedQuestions({ role = 'admin', department = '' }) {
+export default function ReportedQuestions({ role = 'admin', department = '', onViewQuestion }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -116,14 +116,26 @@ export default function ReportedQuestions({ role = 'admin', department = '' }) {
                     </div>
                   </div>
 
-                  {report.status !== 'resolved' && (
-                    <button 
-                      onClick={() => markResolved(report.id)}
-                      className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors shadow-md"
-                    >
-                      Mark as Resolved
-                    </button>
-                  )}
+                  <div className="flex flex-col gap-3">
+                    {report.status !== 'resolved' && (
+                      <button 
+                        onClick={() => markResolved(report.id)}
+                        className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors shadow-md"
+                      >
+                        Mark as Resolved
+                      </button>
+                    )}
+                    
+                    {onViewQuestion && (
+                      <button 
+                        onClick={() => onViewQuestion(report.questionId)}
+                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-md flex items-center justify-center gap-2"
+                      >
+                        <Search size={18} />
+                        View / Edit in Question Bank
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

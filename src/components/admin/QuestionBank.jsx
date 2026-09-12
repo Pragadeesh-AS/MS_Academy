@@ -128,7 +128,7 @@ const RichTextEditor = ({ value, onChange, name, className, placeholder }) => {
   );
 };
 
-export default function QuestionBank({ externalFilter = null, isPremiumView = false }) {
+export default function QuestionBank({ externalFilter = null, isPremiumView = false, initialEditQuestionId = null, onClearEdit = null, lockedDepartment = null }) {
   const userRole = sessionStorage.getItem('auth_role') || 'admin';
   const pairRole = localStorage.getItem('pair_role') || null;
   const pairId = localStorage.getItem('pair_id') || null;
@@ -140,6 +140,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const [expandedId, setExpandedId] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [hasOpenedInitial, setHasOpenedInitial] = useState(false);
   
   const [isSymbolPaletteOpen, setIsSymbolPaletteOpen] = useState(false);
   const [palettePos, setPalettePos] = useState({ x: window.innerWidth > 800 ? window.innerWidth - 350 : 20, y: 80 });
@@ -168,24 +169,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   const insertSymbol = (symbol) => {
     const activeEl = document.activeElement;
-    if (activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT')) {
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
       const start = activeEl.selectionStart;
       const end = activeEl.selectionEnd;
       const val = activeEl.value;
-      const newVal = val.substring(0, start) + symbol + val.substring(end);
-      
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-      const nativeInputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-      const setter = activeEl.tagName === 'TEXTAREA' ? nativeInputValueSetter : nativeInputSetter;
-      
-      if (setter) {
-        setter.call(activeEl, newVal);
-        const ev = new Event('input', { bubbles: true});
-        activeEl.dispatchEvent(ev);
-      }
-      
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(activeEl, val.substring(0, start) + symbol + val.substring(end));
+      activeEl.dispatchEvent(new Event('input', { bubbles: true }));
       setTimeout(() => {
-        activeEl.focus();
         activeEl.selectionStart = activeEl.selectionEnd = start + symbol.length;
       }, 0);
     } else if (activeEl && activeEl.isContentEditable) {
@@ -200,7 +191,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [search, setSearch] = useState('');
-  const [filterDept, setFilterDept] = useState('All');
+  const [filterDept, setFilterDept] = useState(lockedDepartment || 'All');
   const [filterSubject, setFilterSubject] = useState('All');
   const [filterTopic, setFilterTopic] = useState('All');
   const [filterYear, setFilterYear] = useState('All');
@@ -236,7 +227,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     fillBlankRangeEnd: '',
     matchColumn1: ['', ''],
     matchColumn2: ['', ''],
-    department: '',
+    department: lockedDepartment || '',
     subject: '',
     topic: '',
     year: '',
@@ -301,6 +292,17 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   useEffect(() => {
     fetchQuestions();
   }, []);
+
+  useEffect(() => {
+    if (initialEditQuestionId && questions.length > 0 && !hasOpenedInitial) {
+      const q = questions.find(q => q.id === initialEditQuestionId);
+      if (q) {
+        handleEdit(q);
+        setHasOpenedInitial(true);
+        if (onClearEdit) onClearEdit();
+      }
+    }
+  }, [initialEditQuestionId, questions, hasOpenedInitial]);
 
   // Cascading logic to get parent IDs
   const selectedDeptObj = filterDept !== 'All' 

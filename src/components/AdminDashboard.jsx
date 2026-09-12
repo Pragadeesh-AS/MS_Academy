@@ -160,6 +160,7 @@ const defaultCourseOverrides = [
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
+  const [editQuestionId, setEditQuestionId] = useState(null);
   const [adminName, setAdminName] = useState('Admin');
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -1596,14 +1597,27 @@ export default function AdminDashboard() {
         {/* Question Bank Tab */}
         {activeTab === 'questions' && (
           <div className="h-full">
-            <QuestionBank />
+            <QuestionBank initialEditQuestionId={editQuestionId} onClearEdit={() => setEditQuestionId(null)} />
           </div>
         )}
 
         {/* Premium Question Bank Tab */}
         {activeTab === 'premium_questions' && (
           <div className="h-full">
-            <QuestionBank isPremiumView={true} />
+            <QuestionBank isPremiumView={true} initialEditQuestionId={editQuestionId} onClearEdit={() => setEditQuestionId(null)} />
+          </div>
+        )}
+        
+        {/* Reported Questions Tab */}
+        {activeTab === 'reported' && (
+          <div className="flex flex-col h-full w-full max-w-6xl mx-auto pb-12 animate-in fade-in duration-300">
+            <ReportedQuestions 
+              role="admin" 
+              onViewQuestion={(qId) => {
+                setEditQuestionId(qId);
+                setActiveTab('questions');
+              }}
+            />
           </div>
         )}
         
