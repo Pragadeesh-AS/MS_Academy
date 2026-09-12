@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2 } from 'lucide-react';
+import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock } from 'lucide-react';
 
 export default function TestsManager({ department = '', isTeacher = false }) {
   const [tests, setTests] = useState([]);
@@ -337,6 +337,47 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     }
   };
 
+  const handleToggleSolutions = async (test) => {
+    try {
+      const newStatus = !test.solutionsUnlocked;
+      await updateDoc(doc(db, 'tests', test.id), { solutionsUnlocked: newStatus });
+      setTests(prev => prev.map(t => t.id === test.id ? { ...t, solutionsUnlocked: newStatus } : t));
+      
+      if (newStatus) {
+        // Send email to students who took the test
+        const attemptsSnapshot = await getDocs(query(collection(db, 'test_attempts'), where('testId', '==', test.id)));
+        const uniqueEmails = [...new Set(attemptsSnapshot.docs.map(doc => doc.data().studentEmail).filter(Boolean))];
+        
+        if (uniqueEmails.length > 0) {
+          const emailSubject = `Solutions Unlocked: ${test.title}`;
+          const emailBody = `
+            <div style="font-family: sans-serif; padding: 20px;">
+              <h2>Solutions are now available!</h2>
+              <p>The solutions and explanations for the test <strong>${test.title}</strong> have been unlocked by your teacher.</p>
+              <p>You can now log in to your dashboard and review your detailed performance.</p>
+            </div>
+          `;
+          
+          const webhookUrl = "https://script.google.com/macros/s/AKfycby5tF-3a213XJ2bB5h1Qn2TfTIfC_Gg_N5VvQhM_0c/exec";
+          const payload = { to: uniqueEmails.join(','), subject: emailSubject, htmlBody: emailBody };
+          
+          await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
+          });
+          
+          alert(`Solutions unlocked and email sent to ${uniqueEmails.length} student(s).`);
+        } else {
+          alert('Solutions unlocked, but no students have taken this test yet.');
+        }
+      }
+    } catch (err) {
+      console.error("Failed to toggle solutions", err);
+      alert("Failed to update solutions status.");
+    }
+  };
+
   const getBundleLabel = (test) => {
     if (test.bundleId === 'free') return { text: 'Free', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
     if (test.bundleId && test.bundleId !== '') {
@@ -436,6 +477,17 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                     </td>
                     <td className="px-6 py-5 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleToggleSolutions(test)}
+                          className={`p-2 rounded-xl transition-colors inline-flex ${
+                            test.solutionsUnlocked 
+                              ? 'text-green-600 bg-green-50 hover:bg-green-100' 
+                              : 'text-amber-500 bg-amber-50 hover:bg-amber-100'
+                          }`}
+                          title={test.solutionsUnlocked ? "Lock Solutions" : "Unlock Solutions"}
+                        >
+                          {test.solutionsUnlocked ? <Unlock size={18} /> : <Lock size={18} />}
+                        </button>
                         {!isTeacher && (
                           <button 
                             onClick={() => { setEditBundleTest(test); setEditBundleValue(test.bundleId || ''); }}

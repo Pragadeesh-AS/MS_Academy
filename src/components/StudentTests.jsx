@@ -255,99 +255,110 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         </div>
 
         {/* Detailed Question Review List */}
-        <div className="space-y-6">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Eye size={20} className="text-blue-500" /> Review Questions
-          </h3>
+        {activeTest.solutionsUnlocked ? (
+          <div className="space-y-6">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <Eye size={20} className="text-blue-500" /> Review Questions
+            </h3>
 
-          <div className="space-y-5">
-            {testQuestions.map((q, idx) => {
-              const studentResp = activeAttempt.responses?.find(r => r.questionId === q.id) || { selectedAnswer: '', isCorrect: false };
-              const isCorrect = studentResp.isCorrect;
+            <div className="space-y-5">
+              {testQuestions.map((q, idx) => {
+                const studentResp = activeAttempt.responses?.find(r => r.questionId === q.id) || { selectedAnswer: '', isCorrect: false };
+                const isCorrect = studentResp.isCorrect;
 
-              return (
-                <div key={q.id} className={`p-6 border rounded-3xl bg-white shadow-sm transition-all ${isCorrect ? 'border-green-100 hover:border-green-200' : 'border-red-100 hover:border-red-200'}`}>
-                  
-                  {/* Header Row */}
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                    <span className="px-2.5 py-1 bg-slate-50 text-slate-500 rounded-lg text-xs font-bold">
-                      Question {idx + 1}
-                    </span>
-                    <span className={`px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 ${isCorrect ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                      {isCorrect ? (
-                        <><CheckCircle size={14} /> Correct</>
-                      ) : (
-                        <><XCircle size={14} /> Incorrect</>
-                      )}
-                    </span>
-                  </div>
+                return (
+                  <div key={q.id} className={`p-6 border rounded-3xl bg-white shadow-sm transition-all ${isCorrect ? 'border-green-100 hover:border-green-200' : 'border-red-100 hover:border-red-200'}`}>
+                    
+                    {/* Header Row */}
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                      <span className="px-2.5 py-1 bg-slate-50 text-slate-500 rounded-lg text-xs font-bold">
+                        Question {idx + 1}
+                      </span>
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 ${isCorrect ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                        {isCorrect ? (
+                          <><CheckCircle size={14} /> Correct</>
+                        ) : (
+                          <><XCircle size={14} /> Incorrect</>
+                        )}
+                      </span>
+                    </div>
 
-                  {/* Question Text */}
-                  <p className="font-bold text-slate-800 leading-relaxed mb-4 whitespace-pre-wrap">{q.questionText}</p>
-                  {q.questionImageUrl && (
-                    <img src={q.questionImageUrl} alt="Question Graphic" className="max-h-52 object-contain rounded-xl border border-slate-100 p-2 mb-4 bg-slate-50" />
-                  )}
+                    {/* Question Text */}
+                    <p className="font-bold text-slate-800 leading-relaxed mb-4 whitespace-pre-wrap">{q.questionText}</p>
+                    {q.questionImageUrl && (
+                      <img src={q.questionImageUrl} alt="Question Graphic" className="max-h-52 object-contain rounded-xl border border-slate-100 p-2 mb-4 bg-slate-50" />
+                    )}
 
-                  {/* Options List */}
-                  {q.questionType === 'Fill in the Blank' ? (
-                    <div className="space-y-3 max-w-md pt-2">
-                      <div className="flex items-center justify-between text-sm bg-slate-50 px-4 py-3 rounded-xl border border-slate-150">
-                        <span className="font-semibold text-slate-500">Your Answer:</span>
-                        <span className={`font-bold font-mono ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>{studentResp.selectedAnswer || '(Blank)'}</span>
-                      </div>
-                      {!isCorrect && (
-                        <div className="flex items-center justify-between text-sm bg-green-50/50 px-4 py-3 rounded-xl border border-green-100">
-                          <span className="font-semibold text-green-700">Correct Answer:</span>
-                          <span className="font-bold font-mono text-green-600">{q.fillBlankAnswer}</span>
+                    {/* Options List */}
+                    {q.questionType === 'Fill in the Blank' ? (
+                      <div className="space-y-3 max-w-md pt-2">
+                        <div className="flex items-center justify-between text-sm bg-slate-50 px-4 py-3 rounded-xl border border-slate-150">
+                          <span className="font-semibold text-slate-500">Your Answer:</span>
+                          <span className={`font-bold font-mono ${isCorrect ? 'text-green-600' : 'text-red-500'}`}>{studentResp.selectedAnswer || '(Blank)'}</span>
                         </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                      {['A', 'B', 'C', 'D'].map((opt) => {
-                        const optionText = q[`option${opt}`];
-                        if (!optionText) return null;
-
-                        const isSelectedByStudent = studentResp.selectedAnswer === opt;
-                        const isCorrectOpt = q.correctAnswer === opt;
-
-                        let cardClass = 'border-slate-200 bg-white text-slate-600';
-                        let badgeClass = 'border-slate-350 text-slate-400';
-
-                        if (isCorrectOpt) {
-                          cardClass = 'border-green-300 bg-green-50/30 text-green-800';
-                          badgeClass = 'bg-green-500 border-green-500 text-white';
-                        } else if (isSelectedByStudent && !isCorrectOpt) {
-                          cardClass = 'border-red-300 bg-red-50/30 text-red-800';
-                          badgeClass = 'bg-red-500 border-red-500 text-white';
-                        }
-
-                        return (
-                          <div key={opt} className={`p-3.5 border rounded-xl flex items-center gap-3 text-xs font-semibold ${cardClass}`}>
-                            <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold shrink-0 ${badgeClass}`}>
-                              {opt}
-                            </span>
-                            <span className="leading-snug">{optionText}</span>
+                        {!isCorrect && (
+                          <div className="flex items-center justify-between text-sm bg-green-50/50 px-4 py-3 rounded-xl border border-green-100">
+                            <span className="font-semibold text-green-700">Correct Answer:</span>
+                            <span className="font-bold font-mono text-green-600">{q.fillBlankAnswer}</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Explanation Block */}
-                  {q.explanation && (
-                    <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-xs leading-relaxed text-slate-600 mt-4">
-                      <div className="font-bold text-slate-800 mb-1 flex items-center gap-1.5">
-                        <AlertTriangle size={14} className="text-orange-500" /> Explanation:
+                        )}
                       </div>
-                      <p className="whitespace-pre-wrap font-medium">{q.explanation}</p>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                        {['A', 'B', 'C', 'D'].map((opt) => {
+                          const optionText = q[`option${opt}`];
+                          if (!optionText) return null;
 
-                </div>
-              );
-            })}
+                          const isSelectedByStudent = studentResp.selectedAnswer === opt;
+                          const isCorrectOpt = q.correctAnswer === opt;
+
+                          let cardClass = 'border-slate-200 bg-white text-slate-600';
+                          let badgeClass = 'border-slate-350 text-slate-400';
+
+                          if (isCorrectOpt) {
+                            cardClass = 'border-green-300 bg-green-50/30 text-green-800';
+                            badgeClass = 'bg-green-500 border-green-500 text-white';
+                          } else if (isSelectedByStudent && !isCorrectOpt) {
+                            cardClass = 'border-red-300 bg-red-50/30 text-red-800';
+                            badgeClass = 'bg-red-500 border-red-500 text-white';
+                          }
+
+                          return (
+                            <div key={opt} className={`p-3.5 border rounded-xl flex items-center gap-3 text-xs font-semibold ${cardClass}`}>
+                              <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold shrink-0 ${badgeClass}`}>
+                                {opt}
+                              </span>
+                              <span className="leading-snug">{optionText}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Explanation Block */}
+                    {q.explanation && (
+                      <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl text-xs leading-relaxed text-slate-600 mt-4">
+                        <div className="font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                          <AlertTriangle size={14} className="text-orange-500" /> Explanation:
+                        </div>
+                        <p className="whitespace-pre-wrap font-medium">{q.explanation}</p>
+                      </div>
+                    )}
+
+                  </div>
+                );
+              })}
+            </div>
           </div>
+        ) : (
+          <div className="mt-8 bg-blue-50 border border-blue-100 rounded-3xl p-12 text-center flex flex-col items-center shadow-sm">
+            <Lock className="text-blue-500 mb-4" size={48} />
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Solutions Locked</h3>
+            <p className="text-slate-500 max-w-md font-medium leading-relaxed">
+              Your score has been successfully recorded. Detailed solutions and explanations will be unlocked once your teacher reviews and releases them for this test.
+            </p>
+          </div>
+        )}
         </div>
 
         {/* Finish Review Button */}
