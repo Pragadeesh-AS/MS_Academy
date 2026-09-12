@@ -100,7 +100,9 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm max-h-48 overflow-y-auto">
                       <div dangerouslySetInnerHTML={{ __html: report.questionText || '<i class="text-slate-400">No text provided</i>' }} />
                       <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs font-bold text-slate-500">
-                        <span>Question ID: {report.questionId}</span>
+                        <span className="flex items-center gap-1" title={report.questionId}>
+                          Question Ref: <span className="text-slate-700 bg-slate-200 px-2 py-0.5 rounded uppercase">{report.questionId.substring(0, 6)}</span>
+                        </span>
                         <span>Author: {report.teacher}</span>
                       </div>
                     </div>
