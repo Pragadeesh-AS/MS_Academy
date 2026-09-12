@@ -746,10 +746,10 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
 
   return createPortal(
     <>
-      {mode === 'login' && <LoginScreen />}
-      {mode === 'instructions1' && <Instructions1 />}
-      {mode === 'instructions2' && <Instructions2 />}
-      {mode === 'taking' && <TakingScreen />}
+      {mode === 'login' && LoginScreen()}
+      {mode === 'instructions1' && Instructions1()}
+      {mode === 'instructions2' && Instructions2()}
+      {mode === 'taking' && TakingScreen()}
 
       {/* Fullscreen Warning Modal */}
       {showFsWarning && mode === 'taking' && (
