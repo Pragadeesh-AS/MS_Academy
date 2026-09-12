@@ -140,6 +140,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState(false);
 
   const handleReportSubmit = async () => {
     if (!reportReason.trim()) return;
@@ -159,12 +160,19 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
         status: 'pending',
         timestamp: serverTimestamp()
       });
-      setShowReportModal(false);
       setReportReason('');
-      alert("Question reported successfully. Our team will review it.");
+      setReportSuccess(true);
+      
+      // Auto close success message after 2.5s
+      setTimeout(() => {
+        setShowReportModal(false);
+        setReportSuccess(false);
+      }, 2500);
+      
     } catch (e) {
       console.error("Error reporting question:", e);
-      alert("Failed to report question. Please try again.");
+      // We log the error but avoid alert to not break fullscreen. 
+      // In a real app we might show an error toast here.
     } finally {
       setReportSubmitting(false);
     }
@@ -704,39 +712,57 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
         {/* Report Question Modal */}
         {showReportModal && (
           <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
-            <div className="bg-white rounded-md shadow-xl w-full max-w-lg overflow-hidden">
-              <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b flex items-center gap-2">
-                <AlertTriangle size={20} /> Report Error in Question {currentIdx + 1}
-              </div>
-              <div className="p-6">
-                <p className="text-gray-800 text-sm mb-4">
-                  Please describe the issue with this question (e.g., incorrect options, spelling mistakes, missing data). 
-                  Our team will review it.
-                </p>
-                <textarea
-                  className="w-full border border-gray-300 rounded p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 min-h-[120px]"
-                  placeholder="Type your reason here..."
-                  value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
-                  disabled={reportSubmitting}
-                />
-                <div className="flex justify-end gap-3 mt-6">
+            <div className="bg-white rounded-md shadow-xl w-full max-w-lg overflow-hidden transition-all">
+              {reportSuccess ? (
+                <div className="p-8 text-center bg-white flex flex-col items-center">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                    <div className="text-green-600 text-3xl">✓</div>
+                  </div>
+                  <h3 className="text-2xl font-black text-slate-800 mb-2">Report Submitted</h3>
+                  <p className="text-slate-500 font-medium mb-6">Thank you. Our team will review the question shortly.</p>
                   <button 
-                    onClick={() => { setShowReportModal(false); setReportReason(''); }} 
-                    className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition"
-                    disabled={reportSubmitting}
+                    onClick={() => { setShowReportModal(false); setReportSuccess(false); }} 
+                    className="px-8 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition shadow-md"
                   >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={handleReportSubmit} 
-                    className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition flex items-center justify-center disabled:opacity-50"
-                    disabled={!reportReason.trim() || reportSubmitting}
-                  >
-                    {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+                    Continue Test
                   </button>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b flex items-center gap-2">
+                    <AlertTriangle size={20} /> Report Error in Question {currentIdx + 1}
+                  </div>
+                  <div className="p-6">
+                    <p className="text-gray-800 text-sm mb-4">
+                      Please describe the issue with this question (e.g., incorrect options, spelling mistakes, missing data). 
+                      Our team will review it.
+                    </p>
+                    <textarea
+                      className="w-full border border-gray-300 rounded p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 min-h-[120px]"
+                      placeholder="Type your reason here..."
+                      value={reportReason}
+                      onChange={(e) => setReportReason(e.target.value)}
+                      disabled={reportSubmitting}
+                    />
+                    <div className="flex justify-end gap-3 mt-6">
+                      <button 
+                        onClick={() => { setShowReportModal(false); setReportReason(''); }} 
+                        className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition"
+                        disabled={reportSubmitting}
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={handleReportSubmit} 
+                        className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition flex items-center justify-center disabled:opacity-50"
+                        disabled={!reportReason.trim() || reportSubmitting}
+                      >
+                        {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
