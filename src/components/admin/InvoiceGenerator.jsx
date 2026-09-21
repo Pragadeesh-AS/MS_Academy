@@ -239,7 +239,10 @@ export default function InvoiceGenerator() {
                 <img src={logoImg} alt="Academy Logo" className="w-16 h-16 object-contain" />
                 <div>
                   <h1 className="text-3xl font-black text-[#1e40af] tracking-tight mb-1 uppercase">MS Gate Academy</h1>
-                  <p className="text-[#475569] font-medium">Coimbatore, Tamil Nadu</p>
+                  <p className="text-[#475569] font-medium text-sm max-w-xs leading-relaxed">
+                    9 Vinayagar Koil Street, RC Nagar,<br />
+                    Othakkalmandapam (P.O), Coimbatore - 641032
+                  </p>
                   <p className="text-[#64748b] text-sm mt-1">contact@msacademy.example.com</p>
                 </div>
               </div>
