@@ -34,10 +34,14 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
 
   const markResolved = async (id) => {
     try {
+      const resolverName = sessionStorage.getItem('auth_name') || (role === 'admin' ? 'Admin' : 'Teacher');
+      const now = new Date();
       await updateDoc(doc(db, 'reported_questions', id), {
-        status: 'resolved'
+        status: 'resolved',
+        resolvedBy: resolverName,
+        resolvedAt: now
       });
-      setReports(reports.map(r => r.id === id ? { ...r, status: 'resolved' } : r));
+      setReports(reports.map(r => r.id === id ? { ...r, status: 'resolved', resolvedBy: resolverName, resolvedAt: now } : r));
     } catch (err) {
       console.error("Error updating status:", err);
     }
@@ -117,6 +121,20 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
                       <div className="text-sm text-slate-500">{report.studentEmail}</div>
                     </div>
                   </div>
+
+                  {report.status === 'resolved' && (
+                    <div className="bg-green-50/50 p-5 rounded-xl border border-green-100">
+                      <div className="text-xs font-bold text-green-600 uppercase tracking-wider mb-2">Resolution Details</div>
+                      <div className="flex flex-col gap-1">
+                        <div className="text-sm text-slate-600 font-medium">Resolved by: <span className="font-bold text-slate-900">{report.resolvedBy || 'Admin'}</span></div>
+                        {report.resolvedAt && (
+                          <div className="text-xs text-slate-500 font-medium">
+                            On: {report.resolvedAt.toDate ? report.resolvedAt.toDate().toLocaleString() : new Date(report.resolvedAt).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-3">
                     {report.status !== 'resolved' && (
