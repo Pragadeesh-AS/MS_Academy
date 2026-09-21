@@ -583,7 +583,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       const qbContentNode = (
         <>
           {/* Base Layer: Question Content */}
-          <div id="qb-content" className={`absolute inset-0 h-full flex flex-col w-full z-10 pointer-events-none bg-white md:bg-white/90 p-6 md:p-12`}>
+          <div id="qb-content" className={`absolute inset-0 h-full flex flex-col w-full z-10 pointer-events-none bg-white md:bg-white/90 py-6 pr-6 pl-20 md:py-12 md:pr-12 md:pl-28`}>
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 flex flex-col">
               {/* Top: Full Width Question */}
               <div className={`w-full flex font-bold text-slate-900 ${isPinned ? 'text-base md:text-lg mb-6' : 'text-sm mb-4'}`}>
@@ -597,8 +597,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
               <div className="flex flex-col md:flex-row w-full gap-8">
                 <div id="qb-options-area" className="w-full md:w-[45%] flex flex-col">
                   {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
-                    <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
-                      <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[30vh]' : 'max-h-16'} object-contain`} />
+                    <div className="mb-6">
+                      <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className="max-h-16 object-contain" />
                     </div>
                   )}
 
@@ -606,7 +606,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                     {['A', 'B', 'C', 'D'].map(opt => {
                       const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
                       if (!text) return null;
-                      const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
+                      const currentQ = activeQuestionState.questions[activeQuestionState.currentIndex];
+                      const isCorrect = currentQ.correctAnswers ? currentQ.correctAnswers.includes(opt) : currentQ.correctAnswer === opt;
                       const isRevealed = activeQuestionState.isAnswerRevealed;
 
                       return (
@@ -619,10 +620,12 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                     })}
                   </div>
                 </div>
-                {activeQuestionState.isAnswerRevealed && (
+                {activeQuestionState.isAnswerRevealed ? (
                   <div className="w-full md:w-[50%] flex flex-col pt-4 md:pt-0">
                     <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} />
                   </div>
+                ) : (
+                  <div className="hidden md:flex md:w-[55%]"></div>
                 )}
               </div>
             </div>
@@ -635,7 +638,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
               <WhiteboardShareClient appId={appId} channel={channel} token={token} stream={qbWhiteboardStream} uid={999997} />
               
               {/* Top Layer: Interactive Controls Overlay (aligned with Q.1) */}
-              <div className="absolute inset-0 p-6 md:p-12 pointer-events-none flex flex-col">
+              <div className="absolute inset-0 py-6 pr-6 pl-20 md:py-12 md:pr-12 md:pl-28 pointer-events-none flex flex-col z-[100]">
                 <div className={`w-full flex font-bold ${isPinned ? 'text-base md:text-lg mb-8' : 'text-sm mb-4'}`}>
                   <div className="shrink-0 flex flex-col items-center gap-4 mt-1 w-16 mr-4">
                     <span className="invisible pointer-events-none">Q.{activeQuestionState.currentIndex + 1}</span>
@@ -1195,6 +1198,18 @@ export default function LiveClasses({ department }) {
       } catch(e) {}
     }
     return timeStr;
+  };
+
+  const isStartingSoon = (timeStr) => {
+    if (!timeStr || !timeStr.includes('T')) return false;
+    try {
+      const classTime = new Date(timeStr).getTime();
+      const now = new Date().getTime();
+      const diffMins = (classTime - now) / (1000 * 60);
+      return diffMins > 0 && diffMins <= 60;
+    } catch(e) {
+      return false;
+    }
   };
 
   const [newClass, setNewClass] = useState({ topic: '', date: '', time: '', selectedStudents: [], bundleId: '' });
@@ -1884,7 +1899,14 @@ export default function LiveClasses({ department }) {
               {upcomingClasses.map((cls) => (
                 <div key={cls.id} className="p-5 border border-slate-200 rounded-2xl hover:border-blue-300 hover:shadow-md transition-all group bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <div className="text-sm font-bold text-blue-600 mb-1">{formatDisplayTime(cls.time)}</div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="text-sm font-bold text-blue-600">{formatDisplayTime(cls.time)}</div>
+                      {isStartingSoon(cls.time) && (
+                        <div className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded uppercase tracking-wider animate-pulse">
+                          <Clock size={10} /> Starting Soon
+                        </div>
+                      )}
+                    </div>
                     <h4 className="text-lg font-[800] text-slate-900 mb-1">{cls.topic}</h4>
 
                     <div className="flex items-center gap-4 mt-4 text-[13px] font-semibold text-slate-400">

@@ -11,6 +11,18 @@ import StudentTests from './StudentTests';
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
 
+const isStartingSoon = (timeStr) => {
+  if (!timeStr || !timeStr.includes('T')) return false;
+  try {
+    const classTime = new Date(timeStr).getTime();
+    const now = new Date().getTime();
+    const diffMins = (classTime - now) / (1000 * 60);
+    return diffMins > 0 && diffMins <= 60;
+  } catch(e) {
+    return false;
+  }
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [studentName, setStudentName] = useState('Student');
@@ -802,9 +814,15 @@ export default function Dashboard() {
                 {scheduledClasses.map(cls => (
                   <div key={cls.id} className="p-6 border border-slate-200 rounded-3xl hover:border-blue-300 hover:shadow-lg transition-all group bg-white flex flex-col justify-between gap-4">
                     <div>
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full mb-3">
-                        <Calendar size={12} /> Upcoming
-                      </div>
+                      {isStartingSoon(cls.time) ? (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full mb-3 animate-pulse uppercase tracking-wide">
+                          <Clock size={12} /> Starting Soon
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full mb-3 uppercase tracking-wide">
+                          <Calendar size={12} /> Scheduled
+                        </div>
+                      )}
                       <h4 className="text-[18px] leading-tight font-[900] text-slate-900 mb-2">{cls.topic}</h4>
                       <div className="text-sm font-bold text-slate-700 mb-3">
                         {cls.time.includes('T') ? new Date(cls.time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : cls.time}

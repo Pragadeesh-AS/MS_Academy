@@ -316,7 +316,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
                     {['A', 'B', 'C', 'D'].map(opt => {
                       const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
                       if (!text) return null;
-                      const isCorrect = activeQuestionState.questions[activeQuestionState.currentIndex].correctAnswer === opt;
+                      const currentQ = activeQuestionState.questions[activeQuestionState.currentIndex];
+                      const isCorrect = currentQ.correctAnswers ? currentQ.correctAnswers.includes(opt) : currentQ.correctAnswer === opt;
                       const isGuessed = studentGuess === opt;
                       const isRevealed = activeQuestionState.isAnswerRevealed;
 
@@ -595,6 +596,18 @@ const LeaderboardView = ({ participantNames, participantScores, participantRoles
     </div>
   )
 }
+
+const isStartingSoon = (timeStr) => {
+  if (!timeStr || !timeStr.includes('T')) return false;
+  try {
+    const classTime = new Date(timeStr).getTime();
+    const now = new Date().getTime();
+    const diffMins = (classTime - now) / (1000 * 60);
+    return diffMins > 0 && diffMins <= 60;
+  } catch(e) {
+    return false;
+  }
+};
 
 export default function StudentLiveClasses({ department, isPro, purchasedBundles = [], bundles = [] }) {
   const [agoraClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
@@ -1273,8 +1286,12 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
               <div>
                 <div className="flex items-center gap-3 mb-1">
                   {cls.isLive ? (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-600 rounded-md text-xs font-bold uppercase tracking-wider">
-                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Live Now
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-100 text-red-600 rounded-md text-xs font-bold uppercase tracking-wider animate-pulse">
+                      <div className="w-2 h-2 rounded-full bg-red-500"></div> Live Now
+                    </span>
+                  ) : isStartingSoon(cls.time) ? (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 text-amber-700 rounded-md text-xs font-bold uppercase tracking-wider animate-pulse">
+                      <Clock size={12} /> Starting Soon
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md text-xs font-bold uppercase tracking-wider">

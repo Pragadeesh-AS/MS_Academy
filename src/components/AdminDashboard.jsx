@@ -27,6 +27,7 @@ import FeesTracker from './admin/FeesTracker';
 import SalaryManager from './admin/SalaryManager';
 import TestsManager from './TestsManager';
 import ReportedQuestions from './admin/ReportedQuestions';
+import InvoiceGenerator from './admin/InvoiceGenerator';
 
 // Default mock data to populate localStorage if empty
 const loadImage = (src) => new Promise((resolve, reject) => {
@@ -834,6 +835,14 @@ export default function AdminDashboard() {
               >
                 <Package size={20} className={activeTab === 'courses' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Course Setup</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('invoice')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'invoice' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+              >
+                <FileText size={20} className={activeTab === 'invoice' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Invoice</span>}
               </button>
 
               {/* Decorative Placeholders */}
@@ -1720,6 +1729,7 @@ export default function AdminDashboard() {
 
         {/* Active Tab: Course Bundles */}
         {activeTab === 'courses' && <CourseSetup />}
+        {activeTab === 'invoice' && <InvoiceGenerator />}
         {activeTab === 'fees' && <FeesTracker />}
         {activeTab === 'salary' && <SalaryManager teachers={invitedTeachers} typists={invitedTypists} />}
 
