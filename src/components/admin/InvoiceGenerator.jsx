@@ -213,8 +213,14 @@ export default function InvoiceGenerator() {
         <div className="bg-[#f1f5f9] p-4 sm:p-8 rounded-2xl overflow-x-auto print:bg-[#ffffff] print:p-0">
           <div 
             ref={invoiceRef}
-            className="bg-[#ffffff] p-8 sm:p-10 shadow-lg print:shadow-none mx-auto w-full max-w-[210mm] min-h-[297mm] text-black flex flex-col relative"
+            className="bg-[#ffffff] p-8 sm:p-10 shadow-lg print:shadow-none mx-auto w-full max-w-[210mm] min-h-[297mm] text-black flex flex-col relative z-0 overflow-hidden"
           >
+            {/* Watermark */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-[0.04] pointer-events-none select-none -z-10">
+              <img src={logoImg} alt="Watermark Logo" className="w-[400px] h-[400px] object-contain mb-8" />
+              <h2 className="text-6xl font-black text-[#1e293b] uppercase tracking-[0.2em] text-center w-full whitespace-nowrap">MS GATE ACADEMY</h2>
+            </div>
+
             {/* Header */}
             <div className="flex justify-between items-start border-b-2 border-[#1e293b] pb-6 mb-8">
               <div className="flex items-start gap-4">
