@@ -13,7 +13,8 @@ import {
   Banknote,
   CheckCircle2,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 
 // Mock Data
@@ -127,6 +128,16 @@ export default function FeesTracker() {
     
     setIsRecordPaymentOpen(false);
     setPaymentData({ amount: '', date: new Date().toISOString().split('T')[0], method: 'Cash' });
+  };
+
+  const handleDeleteStudent = (e, id) => {
+    e.stopPropagation();
+    if (window.confirm("Are you sure you want to delete this student from the fees tracker?")) {
+      setFeesData(prev => prev.filter(s => s.id !== id));
+      if (selectedStudent && selectedStudent.id === id) {
+        setSelectedStudent(null);
+      }
+    }
   };
 
   // Calculate KPIs
@@ -276,13 +287,25 @@ export default function FeesTracker() {
                       {getStatusBadge(student.status)}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <button 
-                        onClick={() => setSelectedStudent(student)}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-flex"
-                        title="View Details"
-                      >
-                        <Eye size={18} />
-                      </button>
+                      <div className="flex justify-center items-center gap-2">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedStudent(student);
+                          }}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-flex"
+                          title="View Details"
+                        >
+                          <Eye size={18} />
+                        </button>
+                        <button 
+                          onClick={(e) => handleDeleteStudent(e, student.id)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors inline-flex"
+                          title="Delete Student"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )) : (
