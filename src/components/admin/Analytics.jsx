@@ -67,6 +67,8 @@ export default function Analytics({ joinedStudents = [], department = null }) {
             id: test.id,
             title: test.title || 'Untitled Test',
             category: test.subject || test.department || 'General',
+            department: test.department || 'General',
+            subject: test.subject || 'General',
             date: test.createdAt ? new Date(test.createdAt.seconds * 1000).toLocaleDateString() : 'Unknown Date',
             avgScore: 0,
             highestScore: 0,
@@ -308,71 +310,118 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                   </div>
                 </div>
 
-                  <div className="flex flex-col gap-4">
-                    {Object.keys(Object.values(computedTestAnalytics).reduce((acc, test) => {
-                      const dept = test.category || 'General';
-                      if (!acc[dept]) acc[dept] = [];
-                      acc[dept].push(test);
-                      return acc;
-                    }, {})).sort().map(folder => {
-                      const testsInFolder = Object.values(computedTestAnalytics).filter(t => (t.category || 'General') === folder);
-                      const isExpanded = expandedFolders[folder];
+                    <div className="flex flex-col gap-4">
+                      {Object.keys(Object.values(computedTestAnalytics).reduce((acc, test) => {
+                        const dept = test.department || 'General';
+                        const subj = test.subject || 'General';
+                        if (!acc[dept]) acc[dept] = {};
+                        if (!acc[dept][subj]) acc[dept][subj] = [];
+                        acc[dept][subj].push(test);
+                        return acc;
+                      }, {})).sort().map(dept => {
+                        const grouped = Object.values(computedTestAnalytics).reduce((acc, test) => {
+                          const d = test.department || 'General';
+                          const s = test.subject || 'General';
+                          if (!acc[d]) acc[d] = {};
+                          if (!acc[d][s]) acc[d][s] = [];
+                          acc[d][s].push(test);
+                          return acc;
+                        }, {});
+                        const subjects = grouped[dept];
+                        const isDeptExpanded = expandedFolders[dept];
+                        
+                        // Calculate total tests in department
+                        const totalDeptTests = Object.values(subjects).reduce((sum, testsArr) => sum + testsArr.length, 0);
 
-                      return (
-                        <div key={folder} className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
-                          {/* Folder Header */}
-                          <div 
-                            onClick={() => toggleFolder(folder)}
-                            className="p-5 flex items-center justify-between cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
-                                <Target size={20} />
-                              </div>
-                              <span className="font-bold text-slate-800 text-lg">{folder}</span>
-                              <span className="bg-white border border-slate-200 text-slate-500 text-xs px-2 py-0.5 rounded-full font-bold">
-                                {testsInFolder.length} Tests
-                              </span>
-                            </div>
-                            <div className={`text-slate-400 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}>
-                              <ChevronRight size={20} />
-                            </div>
-                          </div>
-
-                          {/* Folder Contents */}
-                          {isExpanded && (
-                            <div className="p-4 flex flex-col gap-3 bg-white border-t border-slate-100">
-                              {testsInFolder.map(test => (
-                                <div 
-                                  key={test.id} 
-                                  onClick={() => openGlobalTestDetail(test.id)}
-                                  className="group border border-slate-100 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden p-4 flex items-center justify-between"
-                                >
-                                  <div className="flex flex-col gap-1.5">
-                                    <span className="font-bold text-slate-800 text-[16px] group-hover:text-blue-600 transition-colors tracking-tight">{test.title}</span>
-                                    <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
-                                      <span>{test.date}</span>
-                                      <span>•</span>
-                                      <span>{test.participants} Attempts</span>
-                                    </div>
-                                  </div>
-                                  <div className="p-2 rounded-full bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors text-slate-400">
-                                    <ChevronRight size={18} />
-                                  </div>
+                        return (
+                          <div key={dept} className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
+                            {/* Department Header */}
+                            <div 
+                              onClick={() => toggleFolder(dept)}
+                              className="p-5 flex items-center justify-between cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                                  <Target size={20} />
                                 </div>
-                              ))}
+                                <span className="font-bold text-slate-800 text-lg">{dept}</span>
+                                <span className="bg-white border border-slate-200 text-slate-500 text-xs px-2 py-0.5 rounded-full font-bold">
+                                  {totalDeptTests} Tests
+                                </span>
+                              </div>
+                              <div className={`text-slate-400 transition-transform duration-300 ${isDeptExpanded ? 'rotate-90' : ''}`}>
+                                <ChevronRight size={20} />
+                              </div>
                             </div>
-                          )}
+
+                            {/* Department Contents (Subjects) */}
+                            {isDeptExpanded && (
+                              <div className="p-4 flex flex-col gap-4 bg-white border-t border-slate-100">
+                                {Object.keys(subjects).sort().map(subj => {
+                                  const subjKey = `${dept}-${subj}`;
+                                  const isSubjExpanded = expandedFolders[subjKey];
+                                  const tests = subjects[subj];
+
+                                  return (
+                                    <div key={subjKey} className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-sm">
+                                      {/* Subject Header */}
+                                      <div 
+                                        onClick={() => toggleFolder(subjKey)}
+                                        className="p-4 flex items-center justify-between cursor-pointer bg-slate-50/50 hover:bg-slate-50 transition-colors border-b border-slate-100"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
+                                            <Target size={16} />
+                                          </div>
+                                          <span className="font-bold text-slate-700 text-md">{subj}</span>
+                                          <span className="bg-white border border-slate-200 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                                            {tests.length} Tests
+                                          </span>
+                                        </div>
+                                        <div className={`text-slate-400 transition-transform duration-300 ${isSubjExpanded ? 'rotate-90' : ''}`}>
+                                          <ChevronRight size={18} />
+                                        </div>
+                                      </div>
+
+                                      {/* Tests inside Subject */}
+                                      {isSubjExpanded && (
+                                        <div className="p-3 flex flex-col gap-2 bg-white">
+                                          {tests.map(test => (
+                                            <div 
+                                              key={test.id} 
+                                              onClick={() => openGlobalTestDetail(test.id)}
+                                              className="group border border-slate-100 rounded-lg bg-white hover:border-blue-300 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden p-3 flex items-center justify-between"
+                                            >
+                                              <div className="flex flex-col gap-1.5">
+                                                <span className="font-bold text-slate-800 text-[15px] group-hover:text-blue-600 transition-colors tracking-tight">{test.title}</span>
+                                                <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                  <span>{test.date}</span>
+                                                  <span>•</span>
+                                                  <span>{test.participants} Attempts</span>
+                                                </div>
+                                              </div>
+                                              <div className="p-1.5 rounded-full bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors text-slate-400">
+                                                <ChevronRight size={16} />
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      
+                      {Object.values(computedTestAnalytics).length === 0 && (
+                        <div className="text-center py-12 text-slate-400 font-bold bg-slate-50 rounded-2xl">
+                          No tests found.
                         </div>
-                      );
-                    })}
-                    
-                    {Object.values(computedTestAnalytics).length === 0 && (
-                      <div className="text-center py-12 text-slate-400 font-bold bg-slate-50 rounded-2xl">
-                        No tests found.
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
               </div>
             ) : (
               // DRILLED-DOWN VIEW
