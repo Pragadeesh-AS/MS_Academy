@@ -53,13 +53,29 @@ export default function InvoiceGenerator() {
     if (!element) return;
 
     try {
+      const originalWidth = element.style.width;
+      const originalMaxWidth = element.style.maxWidth;
+      element.style.width = '210mm';
+      element.style.maxWidth = 'none';
+
       const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+
+      element.style.width = originalWidth;
+      element.style.maxWidth = originalMaxWidth;
+
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      const ratio = Math.min(pdfWidth / canvas.width, pdfHeight / canvas.height);
+      const imgWidth = canvas.width * ratio;
+      const finalPdfHeight = canvas.height * ratio;
+      
+      const marginX = (pdfWidth - imgWidth) / 2;
+      
+      pdf.addImage(imgData, 'PNG', marginX, 0, imgWidth, finalPdfHeight);
       pdf.save(`Invoice_${date}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
