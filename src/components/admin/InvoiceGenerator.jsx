@@ -48,9 +48,9 @@ export default function InvoiceGenerator() {
     return items.reduce((total, item) => total + (Number(item.rate) * Number(item.quantity)), 0);
   };
 
-  const handleDownloadPDF = async () => {
+  const generatePDF = async () => {
     const element = invoiceRef.current;
-    if (!element) return;
+    if (!element) return null;
 
     try {
       const originalWidth = element.style.width;
@@ -76,15 +76,27 @@ export default function InvoiceGenerator() {
       const marginX = (pdfWidth - imgWidth) / 2;
       
       pdf.addImage(imgData, 'PNG', marginX, 0, imgWidth, finalPdfHeight);
-      pdf.save(`Invoice_${date}.pdf`);
+      return pdf;
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert(`Failed to generate PDF: ${error.message || error}`);
+      return null;
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleDownloadPDF = async () => {
+    const pdf = await generatePDF();
+    if (pdf) {
+      pdf.save(`Invoice_${date}.pdf`);
+    }
+  };
+
+  const handlePrint = async () => {
+    const pdf = await generatePDF();
+    if (pdf) {
+      pdf.autoPrint();
+      window.open(pdf.output('bloburl'), '_blank');
+    }
   };
 
   const totalAmount = calculateSubTotal();
@@ -92,13 +104,13 @@ export default function InvoiceGenerator() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-bold text-[#1e293b] flex items-center gap-2">
+        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
           <FileText className="text-[#2563eb]" /> Invoice Generator
         </h2>
         <div className="flex gap-3">
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 bg-[#f1f5f9] hover:bg-slate-200 text-[#334155] font-semibold rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg transition-colors"
           >
             <Printer size={18} /> Print
           </button>
@@ -318,46 +330,6 @@ export default function InvoiceGenerator() {
           </div>
         </div>
       </div>
-      
-      {/* Hide elements when printing */}
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          #root, #root * {
-            visibility: hidden;
-          }
-          .print\\:bg-[#ffffff] {
-            background-color: white !important;
-          }
-          .print\\:p-0 {
-            padding: 0 !important;
-          }
-          .print\\:shadow-none {
-            box-shadow: none !important;
-          }
-          .min-h-\\[297mm\\] {
-             min-height: auto !important;
-          }
-          
-          /* The actual invoice container to print */
-          .text-black { 
-             color: black !important;
-          }
-          div[style*="max-width: 210mm"], div[class*="max-w-[210mm]"] {
-            visibility: visible;
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-          }
-          div[style*="max-width: 210mm"] *, div[class*="max-w-[210mm]"] * {
-            visibility: visible;
-          }
-        }
-      `}</style>
     </div>
   );
 }
-
