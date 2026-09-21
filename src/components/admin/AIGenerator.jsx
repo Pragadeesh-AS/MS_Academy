@@ -3,6 +3,9 @@ import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit } f
 import { db } from '../../firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+import { GoogleGenAI } from '@google/genai';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 // Configure the worker for PDF.js using a CDN
 pdfjsLib.GlobalWorkerOptions.workerSrc = '//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -105,6 +108,35 @@ export default function AIGenerator() {
     });
   };
 
+  const renderLatexToHTML = (text) => {
+    if (!text) return text;
+    // Keep old pdf.js fallbacks just in case
+    let processed = text
+      .replace(/1\s*U\s*=\s*1\s*h\s*i\s*\+\s*1\s*h\s*o\s*\.?/gi, '1/U = 1/h<sub>i</sub> + 1/h<sub>o</sub>.')
+      .replace(/Q\s*hot/gi, 'Q<sub>hot</sub>')
+      .replace(/Q\s*cold/gi, 'Q<sub>cold</sub>')
+      .replace(/m\s*2\s*K/g, 'm²K')
+      .replace(/10\s*3\b/g, '10³')
+      .replace(/10\s*-\s*3\b/g, '10⁻³')
+      .replace(/m\s*2\b/g, 'm²')
+      .replace(/mm\s*2\b/g, 'mm²')
+      .replace(/cm\s*2\b/g, 'cm²')
+      .replace(/m\s*3\b/g, 'm³')
+      .replace(/mm\s*3\b/g, 'mm³')
+      .replace(/cm\s*3\b/g, 'cm³');
+
+    // Convert any $...$ LaTeX blocks directly to HTML using KaTeX
+    processed = processed.replace(/\$([^\$]+)\$/g, (match, math) => {
+      try {
+        return katex.renderToString(math, { throwOnError: false, output: 'html' });
+      } catch (e) {
+        return match;
+      }
+    });
+    
+    return processed;
+  };
+
   const parseQuestionsFromText = (text) => {
     const questions = [];
     
@@ -130,6 +162,12 @@ export default function AIGenerator() {
       let difficultyForThisQuestion = currentDifficulty;
 
       if (isQuestion) {
+        let qNum = '';
+        const qNumMatch = block.match(/^(Q\d+)/i);
+        if (qNumMatch) {
+            qNum = qNumMatch[1];
+        }
+
         // 1. Extract Header
         // Now that we have real newlines, the header is on the first line(s) of the block until the first newline that separates it from the body.
         // Sometimes the title might wrap, but usually it's one line.
@@ -255,10 +293,10 @@ export default function AIGenerator() {
           return optStr;
         };
         
-        optA = checkAndClean(optA, 'A');
-        optB = checkAndClean(optB, 'B');
-        optC = checkAndClean(optC, 'C');
-        optD = checkAndClean(optD, 'D');
+        optA = cleanMathText(checkAndClean(optA, 'A'));
+        optB = cleanMathText(checkAndClean(optB, 'B'));
+        optC = cleanMathText(checkAndClean(optC, 'C'));
+        optD = cleanMathText(checkAndClean(optD, 'D'));
       } else {
         // For NAT, try to find the last number in the calculation as the answer
         const calcMatch = explanation.match(/Calculation:[\s\S]*=\s*([\d,.]+)\s*[a-zA-Z]*\.*$/i);
@@ -280,8 +318,12 @@ export default function AIGenerator() {
          }).join('<br/>');
       };
       
-      qText = preserveWhitespace(qText);
-      explanation = preserveWhitespace(explanation);
+      qText = preserveWhitespace(renderLatexToHTML(qText));
+      explanation = preserveWhitespace(renderLatexToHTML(explanation));
+      
+      if (qNum) {
+          qText = `<strong>${qNum}.</strong> ` + qText;
+      }
       
       questions.push({
         questionType: questionType,
@@ -306,17 +348,114 @@ export default function AIGenerator() {
     return questions;
   };
 
+  const fileToGenerativePart = async (fileObj) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Data = reader.result.split(',')[1];
+        resolve({
+          inlineData: { data: base64Data, mimeType: fileObj.type }
+        });
+      };
+      reader.readAsDataURL(fileObj);
+    });
+  };
+
   const startAnalysis = async () => {
     if (!file) return;
     setStatus('uploading');
     
     try {
       setStatus('analyzing');
-      const text = await extractTextFromPDF(file);
-      const parsedQuestions = parseQuestionsFromText(text);
+      let parsedQuestions = [];
+      
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (apiKey) {
+        let apiSuccess = false;
+        const modelsToTry = [
+          "gemini-3.5-flash-lite",
+          "gemini-2.5-flash",
+          "gemini-2.0-flash",
+          "gemini-1.5-flash",
+          "gemini-1.5-flash-8b",
+          "gemini-1.0-pro"
+        ];
+        
+        console.log("Attempting to use Gemini API for extraction...");
+        const ai = new GoogleGenAI({ apiKey });
+        const pdfPart = await fileToGenerativePart(file);
+        
+        const prompt = `You are a specialized AI that extracts multiple-choice and numerical questions from PDF documents.
+Read the attached PDF and extract all questions. 
+Respond ONLY with a valid JSON array of objects. Do not include markdown code blocks (\`\`\`json) or any other text.
+Each object must have exactly these fields:
+{
+  "questionType": "Single Choice" | "Multiple Choice" | "Fill in the Blanks" | "Match",
+  "questionText": "Text of the question (prepend with question number e.g., '<strong>Q1.</strong> ...'). Use LaTeX inside $...$ for all math/equations.",
+  "optionA": "Option A text",
+  "optionB": "Option B text",
+  "optionC": "Option C text",
+  "optionD": "Option D text",
+  "correctAnswer": "A", "B", "C", or "D" (For Single Choice/Match. Auto-detect if checked/marked),
+  "correctAnswers": ["A", "B"] (Array of strings for Multiple Choice. Auto-detect if checked/marked),
+  "fillBlankAnswer": "Numerical answer for NAT",
+  "topic": "Extracted Topic",
+  "difficultyLevel": "Easy" | "Medium" | "Hard",
+  "explanation": "Explanation or calculation (use LaTeX inside $...$ for all math/equations)",
+  "matchColumn1": ["Item P", "Item Q", "Item R", "Item S"], (Only for Match questions, array of exactly 4 strings. Fill empty strings if less than 4)
+  "matchColumn2": ["Item 1", "Item 2", "Item 3", "Item 4"] (Only for Match questions, array of exactly 4 strings. Fill empty strings if less than 4)
+}
+IMPORTANT: 
+- For equations, fractions, subscripts, or math symbols, use standard LaTeX formatting enclosed in $...$ (e.g., $m^2K$, $\frac{1}{U}$).
+- For Match type questions, extract the columns accurately.
+- The response MUST be a pure JSON array parseable by JSON.parse().`;
+
+        for (const modelName of modelsToTry) {
+          if (apiSuccess) break;
+          try {
+            console.log(`Trying model: ${modelName}...`);
+            const interaction = await ai.interactions.create({
+                model: modelName,
+                input: [
+                    { type: "text", text: prompt },
+                    { type: "document", data: pdfPart.inlineData.data, mime_type: pdfPart.inlineData.mimeType }
+                ]
+            });
+            const responseText = interaction.output_text;
+            
+            const cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            parsedQuestions = JSON.parse(cleanJson);
+            parsedQuestions = parsedQuestions.map(q => ({
+              ...q, 
+              isImported: true,
+              questionText: renderLatexToHTML(q.questionText),
+              optionA: renderLatexToHTML(q.optionA),
+              optionB: renderLatexToHTML(q.optionB),
+              optionC: renderLatexToHTML(q.optionC),
+              optionD: renderLatexToHTML(q.optionD),
+              explanation: renderLatexToHTML(q.explanation)
+            }));
+            
+            console.log(`Successfully extracted via Gemini API using ${modelName}.`);
+            apiSuccess = true;
+          } catch (modelError) {
+            console.warn(`Model ${modelName} failed:`, modelError.message || modelError);
+          }
+        }
+        
+        if (!apiSuccess) {
+          alert("All Gemini AI models failed (check console for details). Falling back to manual text extraction, which may break math formatting.");
+          const text = await extractTextFromPDF(file);
+          parsedQuestions = parseQuestionsFromText(text);
+        }
+      } else {
+        console.log("No VITE_GEMINI_API_KEY found. Using pdf.js fallback...");
+        const text = await extractTextFromPDF(file);
+        parsedQuestions = parseQuestionsFromText(text);
+      }
       
       if (parsedQuestions.length === 0) {
-        alert("We couldn't detect any structured questions in this PDF. Please ensure it follows a standard format (1. Question... A) Option...).");
+        alert("We couldn't detect any structured questions in this PDF. Please ensure it follows a standard format.");
         setStatus('idle');
         return;
       }
