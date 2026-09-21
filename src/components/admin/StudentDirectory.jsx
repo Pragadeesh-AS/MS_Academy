@@ -29,6 +29,9 @@ const StudentDirectory = ({
   children
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterDepartment, setFilterDepartment] = useState('');
+  const [filterYear, setFilterYear] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [bundles, setBundles] = useState([]);
@@ -47,18 +50,29 @@ const StudentDirectory = ({
     fetchBundles();
   }, []);
 
-  // Enhance existing students with mock data for the premium view
-  const enhancedStudents = joinedStudents.map(student => ({
-    ...student,
-    department: student.department || ['Computer Science', 'Mechanical Engineering', 'Electronics', 'Civil Engineering'][Math.floor(Math.random() * 4)],
-    year: student.year || ['1st Year', '2nd Year', '3rd Year', '4th Year'][Math.floor(Math.random() * 4)],
-    lastLogin: student.lastLogin || ['2 hours ago', '1 day ago', '3 days ago', 'Just now'][Math.floor(Math.random() * 4)],
-  }));
+  // Enhance existing students with mock data deterministically
+  const enhancedStudents = React.useMemo(() => {
+    return joinedStudents.map((student, idx) => {
+      const seed = (student.id ? String(student.id).length : 0) + idx;
+      return {
+        ...student,
+        department: student.department || ['Computer Science', 'Mechanical Engineering', 'Electronics', 'Civil Engineering'][seed % 4],
+        year: student.year || ['1st Year', '2nd Year', '3rd Year', '4th Year'][seed % 4],
+        lastLogin: student.lastLogin || ['2 hours ago', '1 day ago', '3 days ago', 'Just now'][seed % 4],
+        status: student.status || ['Active', 'Pending', 'Inactive'][seed % 3]
+      };
+    });
+  }, [joinedStudents]);
 
-  const filteredStudents = enhancedStudents.filter(student => 
-    student.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    student.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredStudents = enhancedStudents.filter(student => {
+    const matchesSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          student.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesDept = filterDepartment ? student.department === filterDepartment : true;
+    const matchesYear = filterYear ? student.year === filterYear : true;
+    const matchesStatus = filterStatus ? student.status === filterStatus : true;
+    
+    return matchesSearch && matchesDept && matchesYear && matchesStatus;
+  });
 
   const totalPages = Math.ceil(filteredStudents.length / studentsPerPage);
   const paginatedStudents = filteredStudents.slice(
@@ -217,14 +231,52 @@ const StudentDirectory = ({
             </div>
             
             <div className="flex flex-wrap items-center gap-3">
-              {['Department', 'Year', 'Status', 'Joined Date', 'Sort By'].map((filter) => (
-                <button key={filter} className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm">
-                  <Filter size={16} className="text-[#94A3B8]" />
-                  <span>{filter}</span>
-                  <ChevronDown size={16} className="text-[#94A3B8] ml-1" />
-                </button>
-              ))}
-              <button className="h-[48px] w-[48px] flex items-center justify-center ml-auto text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 rounded-full transition-colors">
+              <select 
+                value={filterDepartment} 
+                onChange={e => { setFilterDepartment(e.target.value); setCurrentPage(1); }}
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none "
+              >
+                <option value="">All Departments</option>
+                <option value="Computer Science">Computer Science</option>
+                <option value="Mechanical Engineering">Mechanical Engineering</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Civil Engineering">Civil Engineering</option>
+              </select>
+
+              <select 
+                value={filterYear} 
+                onChange={e => { setFilterYear(e.target.value); setCurrentPage(1); }}
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none "
+              >
+                <option value="">All Years</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
+                <option value="3rd Year">3rd Year</option>
+                <option value="4th Year">4th Year</option>
+              </select>
+
+              <select 
+                value={filterStatus} 
+                onChange={e => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none "
+              >
+                <option value="">All Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Pending">Pending</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+
+              <button 
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilterDepartment('');
+                  setFilterYear('');
+                  setFilterStatus('');
+                  setCurrentPage(1);
+                }}
+                className="h-[48px] w-[48px] flex items-center justify-center ml-auto text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 rounded-full transition-colors"
+                title="Reset Filters"
+              >
                 <RotateCcw size={20} />
               </button>
             </div>
