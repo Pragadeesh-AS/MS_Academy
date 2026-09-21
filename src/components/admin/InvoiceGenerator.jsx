@@ -2,9 +2,30 @@ import React, { useState, useRef } from 'react';
 import { Download, Plus, Trash2, Printer, FileText } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import logoImg from '../../assets/msgate_logo.png';
+
+const amountToWords = (amount) => {
+  if (amount === 0) return "Zero Rupees Only";
+  const a = ["", "One ", "Two ", "Three ", "Four ", "Five ", "Six ", "Seven ", "Eight ", "Nine ", "Ten ", "Eleven ", "Twelve ", "Thirteen ", "Fourteen ", "Fifteen ", "Sixteen ", "Seventeen ", "Eighteen ", "Nineteen "];
+  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const inWords = (num) => {
+      if ((num = num.toString()).length > 9) return "overflow";
+      const n = ("000000000" + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+      if (!n) return;
+      let str = "";
+      str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + " " + a[n[1][1]]) + "Crore " : "";
+      str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + " " + a[n[2][1]]) + "Lakh " : "";
+      str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + " " + a[n[3][1]]) + "Thousand " : "";
+      str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + " " + a[n[4][1]]) + "Hundred " : "";
+      str += (n[5] != 0) ? ((str != "") ? "and " : "") + (a[Number(n[5])] || b[n[5][0]] + " " + a[n[5][1]]) : "";
+      return str.trim();
+  };
+  return inWords(Math.floor(amount)) + " Rupees Only";
+};
 
 export default function InvoiceGenerator() {
   const [toAddress, setToAddress] = useState('');
+  const [department, setDepartment] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [items, setItems] = useState([{ id: 1, particulars: '', rate: 0, quantity: 1 }]);
   const invoiceRef = useRef(null);
@@ -80,14 +101,26 @@ export default function InvoiceGenerator() {
           <h3 className="text-lg font-semibold text-slate-800 mb-4 border-b pb-2">Invoice Details</h3>
           
           <div className="space-y-4 mb-6">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-1">Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1">Department</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Chemical"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1">To Address</label>
@@ -164,14 +197,17 @@ export default function InvoiceGenerator() {
         <div className="bg-slate-100 p-4 sm:p-8 rounded-2xl overflow-x-auto print:bg-white print:p-0">
           <div 
             ref={invoiceRef}
-            className="bg-white p-8 sm:p-10 shadow-lg print:shadow-none mx-auto w-full max-w-[210mm] min-h-[297mm] text-black"
+            className="bg-white p-8 sm:p-10 shadow-lg print:shadow-none mx-auto w-full max-w-[210mm] min-h-[297mm] text-black flex flex-col relative"
           >
             {/* Header */}
             <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-8">
-              <div>
-                <h1 className="text-3xl font-black text-blue-800 tracking-tight mb-1 uppercase">MS Gate Academy</h1>
-                <p className="text-slate-600 font-medium">Coimbatore, Tamil Nadu</p>
-                <p className="text-slate-500 text-sm mt-1">contact@msacademy.example.com</p>
+              <div className="flex items-start gap-4">
+                <img src={logoImg} alt="Academy Logo" className="w-16 h-16 object-contain" />
+                <div>
+                  <h1 className="text-3xl font-black text-blue-800 tracking-tight mb-1 uppercase">MS Gate Academy</h1>
+                  <p className="text-slate-600 font-medium">Coimbatore, Tamil Nadu</p>
+                  <p className="text-slate-500 text-sm mt-1">contact@msacademy.example.com</p>
+                </div>
               </div>
               <div className="text-right">
                 <h2 className="text-4xl font-bold text-slate-200 tracking-wider uppercase">Invoice</h2>
@@ -188,6 +224,11 @@ export default function InvoiceGenerator() {
               <div className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed min-h-[60px]">
                 {toAddress || <span className="text-slate-300 italic">Recipient details will appear here...</span>}
               </div>
+              {department && (
+                <div className="mt-2 text-slate-800 font-medium">
+                  <span className="text-slate-500">Department:</span> {department}
+                </div>
+              )}
             </div>
 
             {/* Table */}
@@ -214,22 +255,41 @@ export default function InvoiceGenerator() {
               </tbody>
             </table>
 
-            {/* Total */}
-            <div className="flex justify-end mb-16">
-              <div className="w-72">
-                <div className="flex justify-between items-center py-2 border-b border-slate-200">
-                  <span className="text-slate-600 font-medium">Subtotal</span>
-                  <span className="text-slate-800 font-bold">₹{totalAmount.toFixed(2)}</span>
+            {/* Total and Words */}
+            <div className="flex flex-col mb-16">
+              <div className="flex justify-end mb-6">
+                <div className="w-72">
+                  <div className="flex justify-between items-center py-2 border-b border-slate-200">
+                    <span className="text-slate-600 font-medium">Subtotal</span>
+                    <span className="text-slate-800 font-bold">₹{totalAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-4 bg-slate-50 px-4 mt-2 rounded-lg">
+                    <span className="text-lg font-bold text-slate-800">Total</span>
+                    <span className="text-xl font-black text-blue-600">₹{totalAmount.toFixed(2)}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center py-4 bg-slate-50 px-4 mt-2 rounded-lg">
-                  <span className="text-lg font-bold text-slate-800">Total</span>
-                  <span className="text-xl font-black text-blue-600">₹{totalAmount.toFixed(2)}</span>
+              </div>
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 w-full">
+                <p className="text-sm text-slate-500 font-semibold mb-1 uppercase tracking-wider">Amount in Words:</p>
+                <p className="text-slate-800 font-bold capitalize">{amountToWords(totalAmount)}</p>
+              </div>
+            </div>
+
+            {/* Signature & Stamp */}
+            <div className="mt-auto pt-10 flex justify-end">
+              <div className="text-center w-64">
+                <div className="h-24 border-b-2 border-slate-300 relative mb-2">
+                  <div className="absolute inset-0 flex items-center justify-center opacity-10">
+                    <img src={logoImg} alt="Stamp Placeholder" className="w-20 h-20 object-contain" />
+                  </div>
                 </div>
+                <p className="font-bold text-slate-800">Authorized Signature</p>
+                <p className="text-sm text-slate-500">MS Gate Academy</p>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="pt-8 border-t border-slate-200 mt-auto text-center">
+            <div className="pt-8 border-t border-slate-200 mt-10 text-center">
               <p className="text-slate-500 font-medium mb-1">Thank you for your business!</p>
               <p className="text-slate-400 text-sm">For any inquiries, please contact us at support@msacademy.example.com</p>
             </div>
@@ -278,3 +338,4 @@ export default function InvoiceGenerator() {
     </div>
   );
 }
+
