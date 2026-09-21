@@ -1739,9 +1739,6 @@ export default function AdminDashboard() {
         {/* Tests Manager Tab */}
         {activeTab === 'tests' && <TestsManager department="" isTeacher={false} />}
 
-        {/* Reported Questions Tab */}
-        {activeTab === 'reported' && <ReportedQuestions role="admin" />}
-
       </main>
 
       {/* Details Modal Overlay for applications */}
