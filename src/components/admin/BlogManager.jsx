@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { Plus, Edit2, Trash2, X, Image as ImageIcon, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Image as ImageIcon, Check, FileText } from 'lucide-react';
 
 export default function BlogManager() {
   const [blogs, setBlogs] = useState([]);
