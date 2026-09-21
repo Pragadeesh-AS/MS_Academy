@@ -315,12 +315,13 @@ export default function InvoiceGenerator() {
             {/* Signature & Stamp */}
             <div className="mt-auto pt-10 flex justify-end">
               <div className="text-center w-64">
-                <div className="h-24 border-b-2 border-[#cbd5e1] relative mb-2">
+                <div className="h-24 border-b-2 border-[#cbd5e1] relative mb-2 flex items-end justify-center pb-1">
                   <div className="absolute inset-0 flex items-center justify-center opacity-10">
                     <img src={logoImg} alt="Stamp Placeholder" className="w-20 h-20 object-contain" />
                   </div>
+                  <img src="/signature.png" alt="Signature" className="relative z-10 w-48 max-h-20 object-contain mix-blend-multiply -mb-4" />
                 </div>
-                <p className="font-bold text-[#1e293b]">Authorized Signature</p>
+                <p className="font-bold text-[#1e293b] mt-2">Authorized Signature</p>
                 <p className="text-sm text-[#64748b]">MS Gate Academy</p>
               </div>
             </div>
