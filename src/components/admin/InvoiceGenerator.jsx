@@ -53,7 +53,7 @@ export default function InvoiceGenerator() {
     if (!element) return;
 
     try {
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true, allowTaint: true });
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -63,7 +63,7 @@ export default function InvoiceGenerator() {
       pdf.save(`Invoice_${date}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF');
+      alert(`Failed to generate PDF: ${error.message || error}`);
     }
   };
 
