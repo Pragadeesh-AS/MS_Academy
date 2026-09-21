@@ -65,11 +65,23 @@ const StudentDirectory = ({
   }, [joinedStudents]);
 
   const filteredStudents = enhancedStudents.filter(student => {
-    const matchesSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          student.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDept = filterDepartment ? student.department === filterDepartment : true;
-    const matchesYear = filterYear ? student.year === filterYear : true;
-    const matchesStatus = filterStatus ? student.status === filterStatus : true;
+    const searchLow = searchQuery.toLowerCase();
+    const nameLow = (student.name || '').toLowerCase();
+    const emailLow = (student.email || '').toLowerCase();
+    
+    const matchesSearch = nameLow.includes(searchLow) || emailLow.includes(searchLow);
+    
+    const deptLow = (student.department || '').toLowerCase();
+    const filterDeptLow = filterDepartment.toLowerCase();
+    const matchesDept = filterDepartment ? deptLow === filterDeptLow || deptLow.includes(filterDeptLow) || filterDeptLow.includes(deptLow) : true;
+    
+    const yearLow = (student.year || '').toLowerCase();
+    const filterYearLow = filterYear.toLowerCase();
+    const matchesYear = filterYear ? yearLow === filterYearLow || yearLow.includes(filterYearLow) : true;
+    
+    const statusLow = (student.status || '').toLowerCase();
+    const filterStatusLow = filterStatus.toLowerCase();
+    const matchesStatus = filterStatus ? statusLow === filterStatusLow || statusLow.includes(filterStatusLow) : true;
     
     return matchesSearch && matchesDept && matchesYear && matchesStatus;
   });
@@ -234,36 +246,34 @@ const StudentDirectory = ({
               <select 
                 value={filterDepartment} 
                 onChange={e => { setFilterDepartment(e.target.value); setCurrentPage(1); }}
-                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none "
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
               >
                 <option value="">All Departments</option>
-                <option value="Computer Science">Computer Science</option>
-                <option value="Mechanical Engineering">Mechanical Engineering</option>
-                <option value="Electronics">Electronics</option>
-                <option value="Civil Engineering">Civil Engineering</option>
+                {Array.from(new Set(enhancedStudents.map(s => s.department).filter(Boolean))).sort().map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
               </select>
 
               <select 
                 value={filterYear} 
                 onChange={e => { setFilterYear(e.target.value); setCurrentPage(1); }}
-                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none "
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
               >
                 <option value="">All Years</option>
-                <option value="1st Year">1st Year</option>
-                <option value="2nd Year">2nd Year</option>
-                <option value="3rd Year">3rd Year</option>
-                <option value="4th Year">4th Year</option>
+                {Array.from(new Set(enhancedStudents.map(s => s.year).filter(Boolean))).sort().map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
               </select>
 
               <select 
                 value={filterStatus} 
                 onChange={e => { setFilterStatus(e.target.value); setCurrentPage(1); }}
-                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none "
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
               >
                 <option value="">All Statuses</option>
-                <option value="Active">Active</option>
-                <option value="Pending">Pending</option>
-                <option value="Inactive">Inactive</option>
+                {Array.from(new Set(enhancedStudents.map(s => s.status).filter(Boolean))).sort().map(status => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
               </select>
 
               <button 
