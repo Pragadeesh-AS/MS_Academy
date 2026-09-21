@@ -81,7 +81,16 @@ export default function FeesTracker() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedStudent, setSelectedStudent] = useState(null);
   
-  const [feesData, setFeesData] = useState(MOCK_FEES_DATA);
+  const [feesData, setFeesData] = useState(() => {
+    const saved = localStorage.getItem('ms_academy_fees_data');
+    if (saved) return JSON.parse(saved);
+    return MOCK_FEES_DATA;
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('ms_academy_fees_data', JSON.stringify(feesData));
+  }, [feesData]);
+
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [newStudent, setNewStudent] = useState({
     name: '',
