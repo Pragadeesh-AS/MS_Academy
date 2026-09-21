@@ -28,6 +28,7 @@ import SalaryManager from './admin/SalaryManager';
 import TestsManager from './TestsManager';
 import ReportedQuestions from './admin/ReportedQuestions';
 import InvoiceGenerator from './admin/InvoiceGenerator';
+import BlogManager from './admin/BlogManager';
 
 // Default mock data to populate localStorage if empty
 const loadImage = (src) => new Promise((resolve, reject) => {
@@ -915,8 +916,11 @@ export default function AdminDashboard() {
                 {!isCollapsed && <span>Premium Questions</span>}
               </button>
 
-              <button className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all`}>
-                <FileText size={20} className="text-slate-400" />
+              <button 
+                onClick={() => setActiveTab('blogs')}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'blogs' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+              >
+                <FileText size={20} className={activeTab === 'blogs' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Blogs</span>}
               </button>
 
@@ -1738,6 +1742,9 @@ export default function AdminDashboard() {
 
         {/* Tests Manager Tab */}
         {activeTab === 'tests' && <TestsManager department="" isTeacher={false} />}
+        
+        {/* Blogs Tab */}
+        {activeTab === 'blogs' && <BlogManager />}
 
       </main>
 
