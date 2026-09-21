@@ -27,6 +27,8 @@ export default function Analytics({ joinedStudents = [], department = null }) {
   const [selectedStudentName, setSelectedStudentName] = useState(null);
   const [detailedTestId, setDetailedTestId] = useState(null);
   const [filterStatus, setFilterStatus] = useState('All'); 
+  const [expandedFolders, setExpandedFolders] = useState({});
+  const toggleFolder = (folder) => setExpandedFolders(prev => ({ ...prev, [folder]: !prev[folder] }));
   
   const [isLoading, setIsLoading] = React.useState(true);
   const [realTests, setRealTests] = React.useState([]);
@@ -306,35 +308,71 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-4">
-                  {Object.values(computedTestAnalytics).map(test => (
-                    <div 
-                      key={test.id} 
-                      onClick={() => openGlobalTestDetail(test.id)}
-                      className="group border border-slate-200 rounded-2xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden p-5 flex items-center justify-between"
-                    >
-                      <div className="flex flex-col gap-1.5">
-                        <span className="font-[800] text-slate-800 text-[17px] group-hover:text-blue-600 transition-colors tracking-tight">{test.title}</span>
-                        <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
-                          <span className="bg-slate-100 px-2.5 py-1 rounded-md">{test.category}</span>
-                          <span>•</span>
-                          <span>{test.date}</span>
-                          <span>•</span>
-                          <span>{test.participants} Attempts</span>
+                  <div className="flex flex-col gap-4">
+                    {Object.keys(Object.values(computedTestAnalytics).reduce((acc, test) => {
+                      const dept = test.category || 'General';
+                      if (!acc[dept]) acc[dept] = [];
+                      acc[dept].push(test);
+                      return acc;
+                    }, {})).sort().map(folder => {
+                      const testsInFolder = Object.values(computedTestAnalytics).filter(t => (t.category || 'General') === folder);
+                      const isExpanded = expandedFolders[folder];
+
+                      return (
+                        <div key={folder} className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
+                          {/* Folder Header */}
+                          <div 
+                            onClick={() => toggleFolder(folder)}
+                            className="p-5 flex items-center justify-between cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                                <Target size={20} />
+                              </div>
+                              <span className="font-bold text-slate-800 text-lg">{folder}</span>
+                              <span className="bg-white border border-slate-200 text-slate-500 text-xs px-2 py-0.5 rounded-full font-bold">
+                                {testsInFolder.length} Tests
+                              </span>
+                            </div>
+                            <div className={`text-slate-400 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}>
+                              <ChevronRight size={20} />
+                            </div>
+                          </div>
+
+                          {/* Folder Contents */}
+                          {isExpanded && (
+                            <div className="p-4 flex flex-col gap-3 bg-white border-t border-slate-100">
+                              {testsInFolder.map(test => (
+                                <div 
+                                  key={test.id} 
+                                  onClick={() => openGlobalTestDetail(test.id)}
+                                  className="group border border-slate-100 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden p-4 flex items-center justify-between"
+                                >
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className="font-bold text-slate-800 text-[16px] group-hover:text-blue-600 transition-colors tracking-tight">{test.title}</span>
+                                    <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
+                                      <span>{test.date}</span>
+                                      <span>•</span>
+                                      <span>{test.participants} Attempts</span>
+                                    </div>
+                                  </div>
+                                  <div className="p-2 rounded-full bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors text-slate-400">
+                                    <ChevronRight size={18} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
+                      );
+                    })}
+                    
+                    {Object.values(computedTestAnalytics).length === 0 && (
+                      <div className="text-center py-12 text-slate-400 font-bold bg-slate-50 rounded-2xl">
+                        No tests found.
                       </div>
-                      <div className="p-3 rounded-full bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors text-slate-400">
-                        <ChevronRight size={20} />
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {Object.values(computedTestAnalytics).length === 0 && (
-                    <div className="text-center py-12 text-slate-400 font-bold bg-slate-50 rounded-2xl">
-                      No tests found.
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
               </div>
             ) : (
               // DRILLED-DOWN VIEW
