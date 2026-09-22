@@ -331,7 +331,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     setTargetMarks(100);
     setTotal1Mark(30);
     setTotal2Mark(35);
-    setScheduledTime('');
+    setScheduledDate('');
+    setScheduledTimeStr('');
     setSelectedDept(department || '');
     setSelectedSubject('');
     setSelectedTopics([]);
