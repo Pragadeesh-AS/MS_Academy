@@ -41,6 +41,12 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedTopics, setSelectedTopics] = useState([]); // Array support for multiple topics
   const [allocations, setAllocations] = useState({}); // { topicName: { q1: count, q2: count } }
+  const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'manual'
+  const [manualSelectedIds, setManualSelectedIds] = useState([]);
+  const [manualFilters, setManualFilters] = useState({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All' });
+  const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'manual'
+  const [manualSelectedIds, setManualSelectedIds] = useState([]);
+  const [manualFilters, setManualFilters] = useState({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All' });
 
   // Department mapping for pills
   const deptMapping = {
@@ -196,6 +202,11 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   const getStep3Warning = () => {
     if (!scheduledTime.trim()) return "Please enter a valid schedule time/date";
     
+    if (selectionMode === 'manual') {
+      if (manualSelectedIds.length === 0) return "Please manually select at least one question.";
+      return null;
+    }
+
     // Check if sums match target counts
     if (!is1MarkMatch) return `1-Mark sum (${sum1Mark}) does not match target (${total1Mark})`;
     if (!is2MarkMatch) return `2-Mark sum (${sum2Mark}) does not match target (${total2Mark})`;
@@ -257,8 +268,15 @@ export default function TestsManager({ department = '', isTeacher = false }) {
 
     let finalQuestionIds = [];
 
-    // Auto-pick matching questions topic-by-topic
-    selectedTopics.forEach(topic => {
+    if (selectionMode === 'manual') {
+      finalQuestionIds = [...manualSelectedIds];
+      if (finalQuestionIds.length === 0) {
+        showToast("Please select at least one question manually.", "error");
+        return;
+      }
+    } else {
+      // Auto-pick matching questions topic-by-topic
+      selectedTopics.forEach(topic => {
       const alloc = allocations[topic] || { q1: 0, q2: 0 };
       
       const topicPool = questions.filter(q => 
@@ -284,7 +302,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       const final2MarkIds = shuffled2Mark.slice(0, pick2MarkCount);
 
       finalQuestionIds.push(...final1MarkIds, ...final2MarkIds);
-    });
+      });
+    }
 
     if (finalQuestionIds.length === 0) {
       alert("No matching questions found in the database. Please add questions under this subject/topic first.");
@@ -335,6 +354,9 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     setSelectedSubject('');
     setSelectedTopics([]);
     setAllocations({});
+    setSelectionMode('auto');
+    setManualSelectedIds([]);
+    setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All' });
     setBundleId('');
     setStep(1);
   };
@@ -811,24 +833,65 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                 </div>
               )}
 
-              {/* STEP 3: Allocations (Dynamic per-topic counts matching mockup) */}
-              {step === 3 && (
-                <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+              {/* STEP 3: Allocations & Selection Mode */}
+              {step === 3 && (() => {
+                
+                // --- MANUAL MODE LOGIC ---
+                const topicPool = questions.filter(q => 
+                  (q.department || '').trim().toLowerCase() === (selectedDept || '').trim().toLowerCase() &&
+                  (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
+                  selectedTopics.map(t => t.toLowerCase()).includes((q.topic || '').trim().toLowerCase())
+                );
+                
+                const filteredPool = topicPool.filter(q => {
+                  if (manualFilters.topic !== 'All' && q.topic !== manualFilters.topic) return false;
+                  if (manualFilters.type !== 'All' && q.questionType !== manualFilters.type) return false;
+                  if (manualFilters.difficulty !== 'All' && q.difficultyLevel !== manualFilters.difficulty) return false;
+                  if (manualFilters.mark !== 'All' && q.mark !== manualFilters.mark) return false;
+                  return true;
+                });
+                
+                const manuallySelectedQuestions = topicPool.filter(q => manualSelectedIds.includes(q.id));
+                const currentManualMarks = manuallySelectedQuestions.reduce((sum, q) => sum + (parseInt(q.mark) || 1), 0);
+                
+                const handleToggleQuestion = (id) => {
+                  if (manualSelectedIds.includes(id)) {
+                    setManualSelectedIds(manualSelectedIds.filter(x => x !== id));
+                  } else {
+                    setManualSelectedIds([...manualSelectedIds, id]);
+                  }
+                };
+                
+                const uniqueTypes = [...new Set(topicPool.map(q => q.questionType).filter(Boolean))];
+                const uniqueDifficulties = [...new Set(topicPool.map(q => q.difficultyLevel).filter(Boolean))];
+                const uniqueMarks = [...new Set(topicPool.map(q => q.mark).filter(Boolean))];
+
+                return (
+                <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 flex flex-col max-h-[60vh]">
                   
-                  {/* Schedule date input */}
-                  <div className="space-y-1.5">
-                    <label className="text-[13px] font-[800] text-slate-800">Schedule Date & Time</label>
-                    <input 
-                      type="datetime-local" 
-                      value={scheduledTime} 
-                      onChange={e => setScheduledTime(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
-                    />
+                  <div className="flex gap-4 items-end shrink-0">
+                    {/* Schedule date input */}
+                    <div className="space-y-1.5 flex-1">
+                      <label className="text-[13px] font-[800] text-slate-800">Schedule Date & Time</label>
+                      <input 
+                        type="datetime-local" 
+                        value={scheduledTime} 
+                        onChange={e => setScheduledTime(e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5 flex-1">
+                      <label className="text-[13px] font-[800] text-slate-800">Selection Mode</label>
+                      <div className="flex bg-slate-100 p-1 rounded-xl">
+                        <button type="button" onClick={() => setSelectionMode('auto')} className={`flex-1 py-2 text-[13px] font-[800] rounded-lg transition-all ${selectionMode === 'auto' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}>Auto-Select</button>
+                        <button type="button" onClick={() => setSelectionMode('manual')} className={`flex-1 py-2 text-[13px] font-[800] rounded-lg transition-all ${selectionMode === 'manual' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}>Manual Select</button>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Scrollable list of topics allocation cards */}
-                  <div className="space-y-4 max-h-[36vh] overflow-y-auto pr-1">
-                    {selectedTopics.map(topic => {
+                  {selectionMode === 'auto' ? (
+                    <div className="space-y-4 overflow-y-auto pr-1 flex-1">
+                      {selectedTopics.map(topic => {
                       const counts = getTopicCounts(topic);
                       const alloc = allocations[topic] || { q1: 0, q2: 0 };
                       
