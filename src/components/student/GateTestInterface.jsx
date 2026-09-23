@@ -408,7 +408,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
     // Build question split-up
     const mcq = testQuestions.filter(q => q.questionType === 'Single Choice').length;
     const msq = testQuestions.filter(q => q.questionType === 'Multiple Choice').length;
-    const nat = testQuestions.filter(q => q.questionType === 'Fill in the Blank').length;
+    const nat = testQuestions.filter(q => q.questionType === 'Fill in Blanks').length;
     const totalMarks = testQuestions.reduce((sum, q) => sum + (parseFloat(q.mark) || 1), 0);
 
     return (
@@ -459,7 +459,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                     <td className="border border-gray-300 px-4 py-2">Numerical Answer Type (NAT)</td>
                     <td className="border border-gray-300 px-4 py-2 text-center font-bold">{nat}</td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Fill in the Blank').map(q => parseFloat(q.mark) || 1))].join('/')}
+                      {[...new Set(testQuestions.filter(q => q.questionType === 'Fill in Blanks').map(q => parseFloat(q.mark) || 1))].join('/')}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-red-600">Nil</td>
                   </tr>
@@ -540,7 +540,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
             </div>
             
             <div className="flex items-center justify-between px-4 py-1.5 border-b border-gray-300 text-sm font-bold">
-              <div>Question Type: {currentQ?.questionType === 'Fill in the Blank' ? 'NAT' : 'MCQ'}</div>
+              <div>Question Type: {currentQ?.questionType === 'Fill in Blanks' ? 'NAT' : 'MCQ'}</div>
               <div className="font-normal text-gray-600">Marks for correct answer: <span className="text-green-600">{currentQ?.mark || '1'}</span> | Negative Marks: <span className="text-red-500">{currentQ?.negativeMark || '0'}</span></div>
             </div>
             
@@ -568,7 +568,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
               </div>
               
               <div className="space-y-4">
-                {currentQ?.questionType === 'Fill in the Blank' ? (
+                {currentQ?.questionType === 'Fill in Blanks' ? (
                   <div className="flex gap-2 items-center">
                     <input 
                       type="text" 

@@ -131,28 +131,41 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     const avgTimePerQuestion = questionsList.length > 0 ? timeTakenSeconds / questionsList.length : 0;
     
     // Evaluate answers
-    const evaluation = questionsList.map(q => {
-      const studentAns = answers[q.id] || '';
-      
-      let isCorrect = false;
-      if (q.questionType === 'Fill in the Blank') {
-        const cleanStudent = studentAns.trim().toLowerCase();
-        const cleanCorrect = (q.fillBlankAnswer || '').trim().toLowerCase();
-        isCorrect = cleanStudent === cleanCorrect;
-      } else {
-        isCorrect = studentAns === q.correctAnswer;
-      }
-
-      if (isCorrect) correctCount++;
-      
-      return {
-        questionId: q.id,
-        selectedAnswer: studentAns,
-        isCorrect,
-        correctAnswer: q.questionType === 'Fill in the Blank' ? q.fillBlankAnswer : q.correctAnswer,
-        timeSpent: avgTimePerQuestion
-      };
-    });
+      const evaluation = questionsList.map(q => {
+        const studentAns = answers[q.id] || '';
+        
+        let isCorrect = false;
+        let correctAnswerDisplay = q.correctAnswer;
+        
+        if (q.questionType === 'Fill in Blanks') {
+          const cleanStudent = studentAns.trim();
+          if (q.fillBlankMode === 'Numeric Range') {
+             const studentNum = parseFloat(cleanStudent);
+             const min = parseFloat(q.fillBlankRangeStart);
+             const max = parseFloat(q.fillBlankRangeEnd);
+             if (!isNaN(studentNum) && !isNaN(min) && !isNaN(max)) {
+                isCorrect = studentNum >= min && studentNum <= max;
+             }
+             correctAnswerDisplay = q.fillBlankRangeStart + ' to ' + q.fillBlankRangeEnd;
+          } else {
+             const cleanCorrect = (q.fillBlankAnswer || '').trim().toLowerCase();
+             isCorrect = cleanStudent.toLowerCase() === cleanCorrect;
+             correctAnswerDisplay = q.fillBlankAnswer;
+          }
+        } else {
+          isCorrect = studentAns === q.correctAnswer;
+        }
+  
+        if (isCorrect) correctCount++;
+        
+        return {
+          questionId: q.id,
+          selectedAnswer: studentAns,
+          isCorrect,
+          correctAnswer: correctAnswerDisplay,
+          timeSpent: avgTimePerQuestion
+        };
+      });
 
     const attemptPayload = {
       testId: test.id,
@@ -290,7 +303,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                     )}
 
                     {/* Options List */}
-                    {q.questionType === 'Fill in the Blank' ? (
+                    {q.questionType === 'Fill in Blanks' ? (
                       <div className="space-y-3 max-w-md pt-2">
                         <div className="flex items-center justify-between text-sm bg-slate-50 px-4 py-3 rounded-xl border border-slate-150">
                           <span className="font-semibold text-slate-500">Your Answer:</span>
@@ -563,3 +576,4 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     </div>
   );
 }
+
