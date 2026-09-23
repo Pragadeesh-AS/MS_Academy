@@ -297,7 +297,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                     </div>
 
                     {/* Question Text */}
-                    <p className="font-bold text-slate-800 leading-relaxed mb-4 whitespace-pre-wrap">{q.questionText}</p>
+                    <p className="font-bold text-slate-800 leading-relaxed mb-4" dangerouslySetInnerHTML={{ __html: q.questionText || '' }} />
                     {q.questionImageUrl && (
                       <img src={q.questionImageUrl} alt="Question Graphic" className="max-h-52 object-contain rounded-xl border border-slate-100 p-2 mb-4 bg-slate-50" />
                     )}
@@ -342,7 +342,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                                 <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold shrink-0 ${badgeClass}`}>
                                   {opt}
                                 </span>
-                                <span className="leading-snug">{optionText}</span>
+                                <span className="leading-snug" dangerouslySetInnerHTML={{ __html: optionText }} />
                               </div>
                             );
                           })}
@@ -364,7 +364,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                         <div className="font-bold text-slate-800 mb-1 flex items-center gap-1.5">
                           <AlertTriangle size={14} className="text-orange-500" /> Explanation:
                         </div>
-                        <p className="whitespace-pre-wrap font-medium">{q.explanation}</p>
+                        <p className="font-medium" dangerouslySetInnerHTML={{ __html: q.explanation }} />
                       </div>
                     )}
 
