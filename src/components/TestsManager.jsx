@@ -41,10 +41,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedTopics, setSelectedTopics] = useState([]); // Array support for multiple topics
   const [allocations, setAllocations] = useState({}); // { topicName: { q1: count, q2: count } }
-  const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'manual'
-  const [manualSelectedIds, setManualSelectedIds] = useState([]);
-  const [manualFilters, setManualFilters] = useState({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All' });
-  const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'manual'
+  const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'manual' | 'both'
   const [manualSelectedIds, setManualSelectedIds] = useState([]);
   const [manualFilters, setManualFilters] = useState({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All' });
 
@@ -207,6 +204,13 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       return null;
     }
 
+    if (selectionMode === 'both') {
+      if (manualSelectedIds.length === 0 && sum1Mark === 0 && sum2Mark === 0) {
+        return "Please select questions manually or set auto allocations.";
+      }
+      return null;
+    }
+
     // Check if sums match target counts
     if (!is1MarkMatch) return `1-Mark sum (${sum1Mark}) does not match target (${total1Mark})`;
     if (!is2MarkMatch) return `2-Mark sum (${sum2Mark}) does not match target (${total2Mark})`;
@@ -267,14 +271,18 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     }
 
     let finalQuestionIds = [];
+    let manualIdsSet = new Set();
 
-    if (selectionMode === 'manual') {
+    if (selectionMode === 'manual' || selectionMode === 'both') {
       finalQuestionIds = [...manualSelectedIds];
-      if (finalQuestionIds.length === 0) {
+      manualIdsSet = new Set(manualSelectedIds);
+      if (selectionMode === 'manual' && finalQuestionIds.length === 0) {
         showToast("Please select at least one question manually.", "error");
         return;
       }
-    } else {
+    }
+
+    if (selectionMode === 'auto' || selectionMode === 'both') {
       // Auto-pick matching questions topic-by-topic
       selectedTopics.forEach(topic => {
       const alloc = allocations[topic] || { q1: 0, q2: 0 };
@@ -282,7 +290,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       const topicPool = questions.filter(q => 
         (q.department || '').trim().toLowerCase() === (selectedDept || '').trim().toLowerCase() &&
         (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
-        (q.topic || '').trim().toLowerCase() === topic.trim().toLowerCase()
+        (q.topic || '').trim().toLowerCase() === topic.trim().toLowerCase() &&
+        !manualIdsSet.has(q.id) // exclude manually selected ones
       );
 
       // Pick 1-mark questions randomly
@@ -885,11 +894,13 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                       <div className="flex bg-slate-100 p-1 rounded-xl">
                         <button type="button" onClick={() => setSelectionMode('auto')} className={`flex-1 py-2 text-[13px] font-[800] rounded-lg transition-all ${selectionMode === 'auto' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}>Auto-Select</button>
                         <button type="button" onClick={() => setSelectionMode('manual')} className={`flex-1 py-2 text-[13px] font-[800] rounded-lg transition-all ${selectionMode === 'manual' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}>Manual Select</button>
+                        <button type="button" onClick={() => setSelectionMode('both')} className={`flex-1 py-2 text-[13px] font-[800] rounded-lg transition-all ${selectionMode === 'both' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}>Both</button>
                       </div>
                     </div>
                   </div>
 
-                  {selectionMode === 'auto' ? (
+                  {(selectionMode === 'auto' || selectionMode === 'both') && (
+                    <>
                     <div className="space-y-4 overflow-y-auto pr-1 flex-1">
                       {selectedTopics.map(topic => {
                       const counts = getTopicCounts(topic);
@@ -953,9 +964,72 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                       </span>
                     </div>
                   </div>
+                  </>
+                  )}
 
+                  {(selectionMode === 'manual' || selectionMode === 'both') && (
+                    <div className="flex flex-col h-full overflow-hidden space-y-4">
+                      
+                      {/* Manual Mode Filters */}
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 shrink-0 flex flex-wrap gap-3">
+                        <select className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none text-slate-700" value={manualFilters.topic} onChange={e => setManualFilters({...manualFilters, topic: e.target.value})}>
+                          <option value="All">All Topics</option>
+                          {selectedTopics.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <select className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none text-slate-700" value={manualFilters.type} onChange={e => setManualFilters({...manualFilters, type: e.target.value})}>
+                          <option value="All">All Types</option>
+                          {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <select className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none text-slate-700" value={manualFilters.difficulty} onChange={e => setManualFilters({...manualFilters, difficulty: e.target.value})}>
+                          <option value="All">All Difficulties</option>
+                          {uniqueDifficulties.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <select className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none text-slate-700" value={manualFilters.mark} onChange={e => setManualFilters({...manualFilters, mark: e.target.value})}>
+                          <option value="All">All Marks</option>
+                          {uniqueMarks.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        
+                        <div className="ml-auto flex items-center gap-3">
+                           <div className="text-xs font-bold text-slate-500">Selected: <span className="text-indigo-600">{manualSelectedIds.length}</span></div>
+                           <div className="text-xs font-bold text-slate-500">Marks: <span className={`${currentManualMarks === parseInt(targetMarks) ? 'text-green-600' : currentManualMarks > parseInt(targetMarks) ? 'text-red-500' : 'text-amber-500'}`}>{currentManualMarks} / {targetMarks}</span></div>
+                        </div>
+                      </div>
+                      
+                      {/* Question List */}
+                      <div className="flex-1 overflow-y-auto pr-1 space-y-3 pb-8">
+                        {filteredPool.length === 0 ? (
+                          <div className="text-center py-8 text-slate-400 font-medium text-sm">No questions match the current filters.</div>
+                        ) : (
+                          filteredPool.map(q => {
+                            const isSelected = manualSelectedIds.includes(q.id);
+                            return (
+                              <div key={q.id} onClick={() => handleToggleQuestion(q.id)} className={`cursor-pointer border rounded-xl p-4 transition-all flex gap-4 ${isSelected ? 'border-indigo-500 bg-indigo-50/30 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                                <div className="mt-1">
+                                  <div className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}>
+                                    {isSelected && <Check size={14} strokeWidth={3} />}
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-500">{q.topic}</span>
+                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">{q.questionType}</span>
+                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">{q.difficultyLevel || 'Easy'}</span>
+                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{q.mark}</span>
+                                  </div>
+                                  <div className="text-[13px] text-slate-700 font-medium line-clamp-2" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                    </div>
+                  )}
+                  
                 </div>
-              )}
+                );
+              })()}
 
             </div>
 
