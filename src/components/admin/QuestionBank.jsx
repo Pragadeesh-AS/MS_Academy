@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Loader from '../Loader';
 import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 
 const stripHtmlAndNormalize = (htmlString) => {
   if (!htmlString) return '';
@@ -189,7 +189,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
   
-  const [selectedFolder, setSelectedFolder] = useState(null);
+  const [selectedFolder, setSelectedFolder] = useState(lockedDepartment || null);
   const [search, setSearch] = useState('');
   const [filterDept, setFilterDept] = useState(lockedDepartment || 'All');
   const [filterSubject, setFilterSubject] = useState('All');
@@ -244,7 +244,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const fetchQuestions = async () => {
     setLoading(true);
     try {
-      const qSnapshot = await getDocs(collection(db, 'question_bank'));
+      // Teachers are locked to their own department: scope the query at the
+      // Firestore level (not just client-side filtering) so other departments'
+      // question content is never sent to their browser at all.
+      const questionsRef = collection(db, 'question_bank');
+      const qSnapshot = await getDocs(
+        lockedDepartment ? query(questionsRef, where('department', '==', lockedDepartment)) : questionsRef
+      );
       let qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       // Deduplication Logic
@@ -292,7 +298,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   useEffect(() => {
     fetchQuestions();
-  }, []);
+  }, [lockedDepartment]);
+
+  // If lockedDepartment resolves after mount (async fetch upstream), keep the
+  // folder locked to it rather than leaving an admin-style department picker open.
+  useEffect(() => {
+    if (lockedDepartment) setSelectedFolder(lockedDepartment);
+  }, [lockedDepartment]);
 
   useEffect(() => {
     if (initialEditQuestionId && questions.length > 0 && !hasOpenedInitial) {
@@ -656,13 +668,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           
           {/* Main Header */}
           <div className="flex flex-col gap-4">
-            {selectedFolder && (
-              <button 
-                onClick={() => setSelectedFolder(null)} 
+            {selectedFolder && !lockedDepartment && (
+              <button
+                onClick={() => setSelectedFolder(null)}
                 className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-all w-fit font-semibold text-sm group"
               >
                 <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm group-hover:border-slate-300 group-hover:shadow group-hover:-translate-x-1 transition-all">
-                  <ArrowLeft size={16} strokeWidth={2.5} /> 
+                  <ArrowLeft size={16} strokeWidth={2.5} />
                 </div>
                 Back to Departments
               </button>
