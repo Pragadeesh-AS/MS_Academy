@@ -166,12 +166,12 @@ export default function FeesTracker() {
   };
 
   return (
-    <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.03) 0%, transparent 70%)' }}>
-      
+    <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-4 sm:px-6 lg:px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.03) 0%, transparent 70%)' }}>
+
       {/* Page Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 relative z-10">
         <div>
-          <h2 className="text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
+          <h2 className="text-[26px] sm:text-[30px] lg:text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
             Fees Tracker
           </h2>
           <p className="text-[#64748B] text-[15px] font-medium mt-1">
@@ -254,7 +254,7 @@ export default function FeesTracker() {
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[760px]">
               <thead>
                 <tr className="bg-white border-b border-slate-100">
                   <th className="px-6 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider">Student & Course</th>
@@ -345,7 +345,7 @@ export default function FeesTracker() {
             <div className="p-8 overflow-y-auto">
               
               {/* Summary Strip */}
-              <div className="flex gap-4 mb-8">
+              <div className="flex flex-col sm:flex-row gap-4 mb-8">
                 <div className="flex-1 bg-slate-50 rounded-2xl p-4 border border-slate-100">
                   <div className="text-[13px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Fee</div>
                   <div className="text-[20px] font-black text-slate-800">₹{selectedStudent.totalFee.toLocaleString('en-IN')}</div>

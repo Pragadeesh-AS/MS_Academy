@@ -369,7 +369,7 @@ export default function ProgrammingCourses() {
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-[#1d4ed8] font-semibold text-sm w-fit border border-blue-100">
           Professional Programming Courses
         </div>
-        <h1 className="text-[44px] md:text-[60px] font-[900] text-slate-900 leading-[1.1] tracking-tight">
+        <h1 className="text-[32px] sm:text-[44px] md:text-[60px] font-[900] text-slate-900 leading-[1.1] tracking-tight">
           Enhance Your <span className="text-[#1d4ed8]">Coding Skills</span>
         </h1>
         <p className="text-[18px] text-slate-500 leading-relaxed max-w-[650px]">
@@ -546,14 +546,14 @@ export default function ProgrammingCourses() {
 
         {/* Syllabus Table Container */}
         <div className="w-full bg-white border border-slate-100 rounded-[32px] overflow-hidden shadow-[0_10px_35px_rgba(0,0,0,0.015)]">
-          <div 
-            className="max-h-[480px] overflow-y-auto pr-1"
+          <div
+            className="max-h-[480px] overflow-auto pr-1"
             style={{
               scrollbarWidth: 'thin',
               scrollbarColor: 'rgba(243, 107, 43, 0.2) transparent'
             }}
           >
-            <table className="w-full border-collapse text-left">
+            <table className="w-full min-w-[640px] border-collapse text-left">
               <thead className="sticky top-0 bg-white z-10 shadow-[0_2px_10px_rgba(0,0,0,0.01)]">
                 <tr className="border-b border-slate-100">
                   <th className="px-6 py-4.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 w-[15%]">

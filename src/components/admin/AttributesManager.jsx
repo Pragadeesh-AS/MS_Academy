@@ -203,7 +203,7 @@ export default function AttributesManager() {
               <activeAttribute.icon size={30} className="text-white" strokeWidth={2} />
             </div>
             <div className="flex flex-col gap-1.5 pt-1">
-              <h2 className="text-[28px] font-[800] text-[#0F172A] leading-none tracking-tight">
+              <h2 className="text-[22px] sm:text-[28px] font-[800] text-[#0F172A] leading-none tracking-tight">
                 {activeAttribute.name} Configuration
               </h2>
               <div className="flex flex-col gap-1 mt-1">

@@ -608,7 +608,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
       {/* Custom Confirmation Modal */}
       {showConfirmSubmit && (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black p-4">
           <div className="bg-white rounded-md shadow-xl w-full max-w-md overflow-hidden">
             <div className="bg-blue-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Submission</div>
             <div className="p-6">

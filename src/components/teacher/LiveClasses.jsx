@@ -848,13 +848,13 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           boxShadow: "rgba(0, 0, 0, 0.3) 0px 20px 40px -10px, inset 0px 1px 1px rgba(255, 255, 255, 0.4), inset 0px 0px 0px 1px rgba(255, 255, 255, 0.15)"
         }}
       >
-        <div className="flex items-center gap-6 pr-6 border-r border-white/20">
+        <div className="flex items-center gap-1.5 sm:gap-3 md:gap-6 pr-2.5 sm:pr-4 md:pr-6 border-r border-white/20 shrink-0">
 
           {/* Record Button */}
           {isUploading ? (
-            <div className="flex items-center gap-3 bg-blue-600/20 rounded-full p-2 pr-4 border border-blue-500/30 shadow-[0_0_15px_rgba(37,99,235,0.2)]">
-              <div className="relative w-8 h-8 flex items-center justify-center">
-                <svg className="w-8 h-8 transform -rotate-90">
+            <div className="flex items-center gap-1.5 sm:gap-3 bg-blue-600/20 rounded-full p-1.5 sm:p-2 pr-2.5 sm:pr-4 border border-blue-500/30 shadow-[0_0_15px_rgba(37,99,235,0.2)] shrink-0">
+              <div className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center">
+                <svg className="w-7 h-7 sm:w-8 sm:h-8 transform -rotate-90">
                   <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="3" fill="none" className="text-blue-500/30" />
                   <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="3" fill="none" className="text-blue-500 transition-all duration-300" strokeDasharray="88" strokeDashoffset={88 - (88 * uploadProgress) / 100} />
                 </svg>
@@ -868,26 +868,26 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           ) : !isRecording ? (
             <button
               onClick={startRecording}
-              className="w-12 h-12 rounded-full flex items-center justify-center text-white bg-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all"
+              className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center text-white bg-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-all"
               title="Record Session"
             >
               <div className="w-3 h-3 bg-white rounded-full"></div>
             </button>
           ) : (
-            <div className="flex items-center gap-2 bg-red-600/20 rounded-full p-1 pr-4 border border-red-500/30 shadow-[0_0_15px_rgba(220,38,38,0.2)]">
+            <div className="flex items-center gap-1 sm:gap-2 bg-red-600/20 rounded-full p-1 pr-2.5 sm:pr-4 border border-red-500/30 shadow-[0_0_15px_rgba(220,38,38,0.2)] shrink-0">
               <div className="flex gap-1">
-                <button onClick={togglePauseRecording} className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${isPaused ? 'bg-yellow-500' : 'bg-slate-700 hover:bg-slate-600'}`} title={isPaused ? "Resume" : "Pause"}>
+                <button onClick={togglePauseRecording} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white ${isPaused ? 'bg-yellow-500' : 'bg-slate-700 hover:bg-slate-600'}`} title={isPaused ? "Resume" : "Pause"}>
                   {isPaused ? (
                     <div className="w-0 h-0 border-t-[4px] border-t-transparent border-l-[6px] border-l-white border-b-[4px] border-b-transparent"></div>
                   ) : (
                     <div className="flex gap-[3px]"><div className="w-1 h-3 bg-white rounded-full"></div><div className="w-1 h-3 bg-white rounded-full"></div></div>
                   )}
                 </button>
-                <button onClick={stopRecording} className={`w-10 h-10 rounded-full flex items-center justify-center text-white bg-red-600 hover:bg-red-700 ${isPaused ? '' : 'animate-pulse'}`} title="Stop Recording">
+                <button onClick={stopRecording} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white bg-red-600 hover:bg-red-700 ${isPaused ? '' : 'animate-pulse'}`} title="Stop Recording">
                   <div className="w-2.5 h-2.5 bg-white rounded-sm"></div>
                 </button>
               </div>
-              <div className={`font-mono font-bold text-sm tracking-wider ${!isPaused ? 'text-red-400 animate-pulse' : 'text-yellow-500'}`}>
+              <div className={`font-mono font-bold text-xs sm:text-sm tracking-wider ${!isPaused ? 'text-red-400 animate-pulse' : 'text-yellow-500'}`}>
                 {formatTime(recordingTime)}
               </div>
             </div>
@@ -896,68 +896,68 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           {/* Camera Button */}
           <button
             onClick={() => setCameraOn(!cameraOn)}
-            className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${cameraOn ? 'control-btn' : 'control-btn off'}`}
+            className={`w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center text-white ${cameraOn ? 'control-btn' : 'control-btn off'}`}
             title={cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
           >
-            {cameraOn ? <Video size={22} strokeWidth={1.5} /> : <VideoOff size={22} strokeWidth={1.5} />}
+            {cameraOn ? <Video size={18} strokeWidth={1.5} /> : <VideoOff size={18} strokeWidth={1.5} />}
           </button>
 
           {/* Mic Button */}
           <button
             onClick={() => setMicOn(!micOn)}
-            className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${micOn ? 'control-btn' : 'control-btn off'}`}
+            className={`w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center text-white ${micOn ? 'control-btn' : 'control-btn off'}`}
             title={micOn ? 'Mute' : 'Unmute'}
           >
-            {micOn ? <Mic size={22} strokeWidth={1.5} /> : <MicOff size={22} strokeWidth={1.5} />}
+            {micOn ? <Mic size={18} strokeWidth={1.5} /> : <MicOff size={18} strokeWidth={1.5} />}
           </button>
 
           {/* Question Bank Button */}
           <button
             onClick={() => activeQuestionState?.isActive ? handleCloseQB() : setIsQBModalOpen(true)}
-            className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-full transition-all shadow-lg ${activeQuestionState?.isActive ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
+            className={`flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 shrink-0 rounded-full transition-all shadow-lg ${activeQuestionState?.isActive ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
             title={activeQuestionState?.isActive ? "Close Question Bank" : "Open Question Bank"}
           >
-            <BookOpen size={20} className="md:w-6 md:h-6" />
+            <BookOpen size={16} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
           </button>
 
-          {/* Screen Share Button */}
+          {/* Whiteboard Button */}
           <button
             onClick={() => setWhiteboardOn(!whiteboardOn)}
-            className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-full transition-all shadow-lg ${whiteboardOn ? 'bg-purple-600 text-white' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
+            className={`flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 shrink-0 rounded-full transition-all shadow-lg ${whiteboardOn ? 'bg-purple-600 text-white' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
             title={whiteboardOn ? "Stop Whiteboard" : "Start Whiteboard"}
           >
-            <PenTool size={20} className="md:w-6 md:h-6" />
+            <PenTool size={16} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
           </button>
 
           {/* Screen Share Button */}
           <button
             onClick={() => setScreenShareOn(!screenShareOn)}
-            className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-full transition-all shadow-lg ${screenShareOn ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
+            className={`flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 shrink-0 rounded-full transition-all shadow-lg ${screenShareOn ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
             title={screenShareOn ? 'Stop Sharing' : 'Share Screen'}
           >
-            <MonitorUp size={20} className="md:w-6 md:h-6" />
+            <MonitorUp size={16} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
           </button>
 
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1.5 sm:gap-3 md:gap-4 shrink-0">
           {/* Chat Button */}
           <button
             onClick={toggleChat}
-            className={`w-12 h-12 rounded-full flex items-center justify-center relative text-white ${isChatOpen ? 'control-btn' : 'control-btn off'}`}
+            className={`w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center relative text-white ${isChatOpen ? 'control-btn' : 'control-btn off'}`}
             title={isChatOpen ? 'Close Chat' : 'Open Chat'}
           >
-            <MessageCircle size={22} strokeWidth={1.5} />
+            <MessageCircle size={18} strokeWidth={1.5} />
           </button>
 
           {/* End Call Button */}
           <button
             onClick={() => handleEndMeet()}
             disabled={isUploading}
-            className={`w-12 h-12 rounded-full text-white flex items-center justify-center ${isUploading ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'control-btn-danger'}`}
+            className={`w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0 rounded-full text-white flex items-center justify-center ${isUploading ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'control-btn-danger'}`}
             title={isUploading ? "Wait for upload to finish" : "End Call"}
           >
-            <PhoneOff size={22} strokeWidth={1.5} />
+            <PhoneOff size={18} strokeWidth={1.5} />
           </button>
         </div>
 
@@ -1738,7 +1738,7 @@ export default function LiveClasses({ department }) {
             <p className="text-slate-400 text-sm">Generating your session access token.</p>
           </div>
         ) : (
-          <div className="flex-1 w-full h-full flex overflow-hidden">
+          <div className="relative flex-1 w-full h-full flex overflow-hidden">
             <AgoraRTCProvider client={agoraClient}>
               <TeacherCall
                 appId={rtcProps.appId}
@@ -1757,7 +1757,7 @@ export default function LiveClasses({ department }) {
 
             {/* CHAT SIDEBAR */}
             {isChatOpen && (
-              <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300">
+              <div className="absolute inset-0 sm:relative sm:inset-auto z-20 w-full sm:w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300">
                 <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between gap-2">
                   <h3 className="font-bold text-white flex items-center gap-2"><MessageCircle size={18} className="text-blue-400" /> Class Chat</h3>
                   <div className="flex items-center gap-2">
@@ -1815,7 +1815,7 @@ export default function LiveClasses({ department }) {
 
   // Regular Dashboard View
   return (
-    <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm min-h-[calc(100vh-140px)] flex flex-col relative">
+    <div className="bg-white rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-200 shadow-sm min-h-[calc(100vh-140px)] flex flex-col relative">
 
       {/* Header & Quick Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
@@ -1826,7 +1826,7 @@ export default function LiveClasses({ department }) {
           </h2>
           <p className="text-slate-500 font-medium mt-1">Manage your virtual classrooms and recordings.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center flex-wrap gap-3">
           <button
             onClick={() => setIsScheduleModalOpen(true)}
             className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors flex items-center gap-2"

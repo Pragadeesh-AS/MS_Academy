@@ -489,8 +489,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
       </div>
 
       {/* Custom Control Bar (Glassmorphic Theme mimicking Navbar) */}
-      <div 
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-6 px-8 py-4 rounded-full z-[100] transition-all duration-500 hover:scale-[1.02]"
+      <div
+        className="absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 sm:gap-6 px-4 sm:px-8 py-3 sm:py-4 rounded-full z-[100] transition-all duration-500 hover:scale-[1.02] max-w-[95vw]"
         style={{
           backgroundColor: "rgba(255, 255, 255, 0.15)",
           backdropFilter: "blur(24px) saturate(180%)",
@@ -502,7 +502,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
           {/* Camera Button */}
           <button 
             onClick={() => setCameraOn(!cameraOn)} 
-            className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${cameraOn ? 'control-btn' : 'control-btn off'}`}
+            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white ${cameraOn ? 'control-btn' : 'control-btn off'}`}
             title={cameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
           >
             {cameraOn ? <Video size={22} strokeWidth={1.5} /> : <VideoOff size={22} strokeWidth={1.5} />}
@@ -511,7 +511,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
           {/* Mic Button */}
           <button 
             onClick={() => setMicOn(!micOn)} 
-            className={`w-12 h-12 rounded-full flex items-center justify-center text-white ${micOn ? 'control-btn' : 'control-btn off'}`}
+            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white ${micOn ? 'control-btn' : 'control-btn off'}`}
             title={micOn ? 'Mute' : 'Unmute'}
           >
             {micOn ? <Mic size={22} strokeWidth={1.5} /> : <MicOff size={22} strokeWidth={1.5} />}
@@ -522,7 +522,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
           {/* Chat Button */}
           <button 
             onClick={toggleChat} 
-            className={`w-12 h-12 rounded-full flex items-center justify-center relative text-white ${isChatOpen ? 'control-btn' : 'control-btn off'}`}
+            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center relative text-white ${isChatOpen ? 'control-btn' : 'control-btn off'}`}
             title={isChatOpen ? 'Close Chat' : 'Open Chat'}
           >
             <MessageCircle size={22} strokeWidth={1.5} />
@@ -531,7 +531,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
           {/* End Call Button */}
           <button 
             onClick={() => handleLeaveMeet()} 
-            className="w-12 h-12 rounded-full text-white flex items-center justify-center control-btn-danger"
+            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full text-white flex items-center justify-center control-btn-danger"
             title="Leave Class"
           >
             <PhoneOff size={22} strokeWidth={1.5} />
@@ -1219,7 +1219,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
             
             {/* CHAT SIDEBAR */}
             {isChatOpen && (
-            <div className="w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="fixed sm:relative inset-0 sm:inset-auto w-full sm:w-80 border-l border-slate-800 bg-slate-900 flex flex-col animate-in slide-in-from-right duration-300 z-[60] sm:z-auto">
               <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <MessageCircle size={18} className="text-blue-400"/>

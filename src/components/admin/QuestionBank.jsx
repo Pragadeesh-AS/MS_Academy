@@ -646,7 +646,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   return (
     <>
-      <div className="relative flex flex-col xl:flex-row gap-8 w-full h-full min-h-[900px] p-8 overflow-x-hidden overflow-y-auto z-0 bg-[#F8FAFC]">
+      <div className="relative flex flex-col xl:flex-row gap-8 w-full h-full min-h-[900px] p-4 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto z-0 bg-[#F8FAFC]">
 
         {/* ==================== MAIN CONTENT PANEL ==================== */}
         <div className="flex-1 flex flex-col gap-6 relative z-10 w-full min-w-0">
@@ -671,7 +671,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   <BookOpen size={28} className="text-[#2563EB]" strokeWidth={2} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <h1 className="text-[36px] font-[800] text-[#0F172A] leading-none tracking-tight font-sans">
+                  <h1 className="text-[24px] sm:text-[30px] lg:text-[36px] font-[800] text-[#0F172A] leading-none tracking-tight font-sans">
                     {selectedFolder ? `${selectedFolder} Questions` : 'Question Bank'}
                   </h1>
                   <p className="text-[15px] font-[500] text-[#64748B] mt-1">
@@ -796,8 +796,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
           {/* QUESTION TABLE */}
           <div className="bg-white border border-[#EEF2F7] rounded-[24px] shadow-[0_10px_28px_rgba(15,23,42,0.05)] flex flex-col mb-8">
-            <div className="w-full">
-              <table className="w-full text-left border-collapse table-fixed">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-left border-collapse table-fixed min-w-[900px]">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
                     <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[5%]">ID</th>
@@ -956,8 +956,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
             
             {/* Pagination Placeholder */}
             {!loading && filteredQuestions.length > 0 && (
-              <div className="p-5 border-t border-[#EEF2F7] flex items-center justify-between bg-[#F8FAFC]/50">
-                <span className="text-[13px] font-[500] text-[#64748B]">
+              <div className="p-5 border-t border-[#EEF2F7] flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#F8FAFC]/50">
+                <span className="text-[13px] font-[500] text-[#64748B] text-center sm:text-left">
                   Showing 1 to {filteredQuestions.length} of {filteredQuestions.length} questions
                 </span>
                 <div className="flex items-center gap-2">
@@ -985,11 +985,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         <div className="fixed inset-0 bg-[#f4f7fb] z-[99999] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
           
           {/* TOP BAR */}
-          <div className="h-[60px] bg-white px-4 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-4">
+          <div className="min-h-[60px] bg-white px-4 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
               <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-lg">
                 <BookOpen size={16} className="text-indigo-600" />
-                <span className="font-[800] text-indigo-900 text-[13px] tracking-wide">Standalone Question Creator</span>
+                <span className="font-[800] text-indigo-900 text-[13px] tracking-wide hidden sm:inline">Standalone Question Creator</span>
+                <span className="font-[800] text-indigo-900 text-[13px] tracking-wide sm:hidden">Question Creator</span>
               </div>
               <div className="bg-slate-100 px-3 py-1 rounded-full text-[12px] font-[700] text-slate-500">
                 1 Saved
@@ -1015,7 +1016,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           </div>
 
           {/* SECOND TOOLBAR */}
-          <div className="h-[60px] bg-white border-b border-slate-100 px-4 flex items-center justify-between shrink-0">
+          <div className="min-h-[60px] bg-white border-b border-slate-100 px-4 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-3">
               <span className="text-[13px] font-[900] text-[#111827]">Questions:</span>
               <div className="w-7 h-7 rounded-full bg-[#059669] text-white flex items-center justify-center font-[800] text-[13px] shadow-sm">1</div>
@@ -1631,7 +1632,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
       {/* Toast Notification */}
       {toast.show && createPortal(
-        <div className="fixed bottom-6 right-6 z-[999999] animate-in slide-in-from-bottom-4 fade-in duration-300">
+        <div className="fixed bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-[999999] max-w-sm mx-auto sm:mx-0 animate-in slide-in-from-bottom-4 fade-in duration-300">
           <div className={`flex items-center gap-3 px-5 py-3 rounded-xl shadow-lg border ${toast.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
             {toast.type === 'error' ? <X size={20} className="text-red-500" /> : <CheckCircle2 size={20} className="text-emerald-500" />}
             <span className="text-[14px] font-[800]">{toast.message}</span>

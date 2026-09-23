@@ -455,7 +455,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       
       {/* Toast Notification */}
       {toast.show && (
-        <div className={`fixed top-4 right-4 z-[999] px-6 py-3 rounded-xl shadow-lg border text-sm font-bold flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-300 ${
+        <div className={`fixed top-4 right-4 left-4 sm:left-auto max-w-full sm:max-w-md z-[999] px-6 py-3 rounded-xl shadow-lg border text-sm font-bold flex items-center gap-2 animate-in slide-in-from-top-4 fade-in duration-300 ${
           toast.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
         }`}>
           {toast.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
@@ -662,7 +662,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                   </div>
 
                   {/* Duration & Target total Marks */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[13px] font-[800] text-slate-800">Duration (Minutes)</label>
                       <input 
@@ -704,7 +704,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                   )}
 
                   {/* Total 1-Mark and 2-Mark questions count */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5 bg-blue-50/35 border border-blue-100 rounded-2xl p-4">
                       <label className="text-[12px] font-[900] text-blue-800 uppercase tracking-wide">Total 1-Mark Questions</label>
                       <input 
@@ -878,7 +878,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                 return (
                 <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 flex flex-col max-h-[60vh]">
                   
-                  <div className="flex gap-4 items-end shrink-0">
+                  <div className="flex flex-col sm:flex-row gap-4 sm:items-end shrink-0">
                     {/* Schedule date input */}
                     <div className="space-y-1.5 flex-1">
                       <label className="text-[13px] font-[800] text-slate-800">Schedule Date & Time</label>
@@ -921,7 +921,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                           </div>
 
                           {/* Inputs Row */}
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                               <label className="text-[11px] font-[800] text-slate-500">1-Mark Questions</label>
                               <input 
@@ -1016,7 +1016,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">{q.difficultyLevel || 'Easy'}</span>
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{q.mark}</span>
                                   </div>
-                                  <div className="text-[13px] text-slate-700 font-medium line-clamp-2" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
+                                  <div className="text-[13px] text-slate-700 font-medium line-clamp-2 break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
                                 </div>
                               </div>
                             );
@@ -1094,7 +1094,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center font-sans text-black">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center font-sans text-black p-4">
           <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
             <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Delete Test</div>
             <div className="p-6">

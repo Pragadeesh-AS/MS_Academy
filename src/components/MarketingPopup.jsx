@@ -47,7 +47,7 @@ export default function MarketingPopup() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-300">
-      <div className="relative max-w-3xl w-full rounded-[2rem] overflow-hidden shadow-2xl bg-white flex flex-col items-center justify-center animate-in zoom-in-95 duration-500 border border-white/10">
+      <div className="relative max-w-3xl w-full max-h-[90vh] overflow-y-auto rounded-[2rem] shadow-2xl bg-white flex flex-col items-center justify-center animate-in zoom-in-95 duration-500 border border-white/10">
         
         {/* Close Button */}
         <button 

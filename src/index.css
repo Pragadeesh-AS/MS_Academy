@@ -36,6 +36,27 @@ code {
     monospace;
 }
 
+/* Safety net for teacher/admin-authored HTML content (questions, options, notes)
+   rendered via dangerouslySetInnerHTML — prevents wide embedded images/tables
+   from forcing horizontal overflow on narrow screens. */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+table {
+  max-width: 100%;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @layer components {
   .control-btn {
     border: none;

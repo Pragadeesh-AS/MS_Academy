@@ -269,11 +269,11 @@ const SalaryManager = ({ teachers, typists }) => {
   };
 
   return (
-    <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.04) 0%, transparent 70%)' }}>
+    <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-4 sm:px-6 lg:px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.04) 0%, transparent 70%)' }}>
       <div className="absolute inset-0 z-0 opacity-40 mix-blend-overlay pointer-events-none" style={{ backgroundImage: 'radial-gradient(#94A3B8 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
 
       {toast.show && (
-        <div className={`fixed top-6 right-6 z-[100] flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl transition-all animate-in fade-in slide-in-from-top-5 ${
+        <div className={`fixed top-6 right-4 left-4 sm:left-auto sm:right-6 z-[100] max-w-sm mx-auto sm:mx-0 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl transition-all animate-in fade-in slide-in-from-top-5 ${
           toast.type === 'success' ? 'bg-[#ECFDF5] text-[#047857] border border-[#A7F3D0]' : 'bg-[#FEF2F2] text-[#B91C1C] border border-[#FECACA]'
         }`}>
           {toast.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
@@ -284,7 +284,7 @@ const SalaryManager = ({ teachers, typists }) => {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 relative z-10 pt-8">
         <div>
-          <h2 className="text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
+          <h2 className="text-[26px] sm:text-[30px] lg:text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
             Staff Salary Management
           </h2>
           <p className="text-[#64748B] text-[15px] font-medium mt-1">
@@ -297,19 +297,19 @@ const SalaryManager = ({ teachers, typists }) => {
         {/* Filters and Search */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="relative">
+            <div className="relative w-full md:w-[300px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-              <input 
+              <input
                 type="text"
                 placeholder="Search staff by name or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 w-[300px]"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
           </div>
-          
-          <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
+
+          <div className="flex gap-2 bg-slate-100 p-1 rounded-xl flex-wrap">
             {['All', 'Teacher', 'Typist'].map(role => (
               <button 
                 key={role}
@@ -325,7 +325,7 @@ const SalaryManager = ({ teachers, typists }) => {
         {/* Staff Table */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[820px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Member</th>
@@ -499,7 +499,7 @@ const SalaryManager = ({ teachers, typists }) => {
                   <Wallet size={16} className="text-blue-600" />
                   {selectedStaff.systemRole === 'Typist' ? 'Per Question Rate Configuration' : 'Base Salary Configuration'}
                 </h3>
-                <div className="flex gap-4 items-end">
+                <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
                   <div className="flex-1">
                     <label className="block text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wide">
                       {selectedStaff.systemRole === 'Typist' ? 'Rate per Question (₹)' : 'Monthly Salary (₹)'}
@@ -529,18 +529,18 @@ const SalaryManager = ({ teachers, typists }) => {
 
               {/* Typist Stats Box */}
               {selectedStaff.systemRole === 'Typist' && (
-                <div className="mb-10 p-6 bg-indigo-50 border border-indigo-100 rounded-2xl flex gap-6">
-                  <div className="flex-1">
+                <div className="mb-10 p-6 bg-indigo-50 border border-indigo-100 rounded-2xl flex flex-wrap gap-6">
+                  <div className="flex-1 min-w-[100px]">
                     <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">Total Typed</div>
                     <div className="text-2xl font-black text-indigo-900">{selectedStaff.totalTyped || 0}</div>
                   </div>
-                  <div className="w-px bg-indigo-200"></div>
-                  <div className="flex-1">
+                  <div className="w-px bg-indigo-200 hidden sm:block"></div>
+                  <div className="flex-1 min-w-[100px]">
                     <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">Total Paid</div>
                     <div className="text-2xl font-black text-indigo-900">{selectedStaff.paidQuestionsCount || 0}</div>
                   </div>
-                  <div className="w-px bg-indigo-200"></div>
-                  <div className="flex-1">
+                  <div className="w-px bg-indigo-200 hidden sm:block"></div>
+                  <div className="flex-1 min-w-[100px]">
                     <div className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-1">Unpaid</div>
                     <div className="text-2xl font-black text-emerald-600">{selectedStaff.pendingQuestionsCount || 0}</div>
                   </div>
@@ -553,8 +553,8 @@ const SalaryManager = ({ teachers, typists }) => {
                   <History size={16} className="text-indigo-600" />
                   Payment History
                 </h3>
-                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-                  <table className="w-full text-left">
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-x-auto">
+                  <table className="w-full text-left min-w-[520px]">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
                         <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Month</th>
@@ -603,7 +603,7 @@ const SalaryManager = ({ teachers, typists }) => {
 
       {/* Generic Confirmation Modal */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black p-4">
           <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
             <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Action</div>
             <div className="p-6">

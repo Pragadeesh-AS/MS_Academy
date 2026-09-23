@@ -156,13 +156,15 @@ export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
         ))}
       </div>
 
-      <div className="absolute top-0 left-0 right-0 h-14 bg-white flex items-center justify-between px-6 border-b border-slate-200 z-10 shadow-sm">
-        <span className="font-bold text-slate-800 text-[15px] flex items-center gap-2">
-          <FileText size={18} className="text-blue-600" /> MS Academy Document Viewer {isLocked && <span className="ml-2 text-[10px] uppercase tracking-wider bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-[900]">Preview</span>}
+      <div className="absolute top-0 left-0 right-0 h-14 bg-white flex items-center justify-between gap-2 px-3 sm:px-6 border-b border-slate-200 z-10 shadow-sm">
+        <span className="font-bold text-slate-800 text-[13px] sm:text-[15px] flex items-center gap-2 min-w-0 truncate">
+          <FileText size={18} className="text-blue-600 flex-shrink-0" />
+          <span className="truncate"><span className="hidden sm:inline">MS Academy </span>Document Viewer</span>
+          {isLocked && <span className="ml-1 sm:ml-2 text-[10px] uppercase tracking-wider bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-[900] flex-shrink-0">Preview</span>}
         </span>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
           <button onClick={zoomOut} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"><ZoomOut size={18} /></button>
-          <span className="text-sm font-[900] text-slate-500 w-12 text-center">{Math.round(scale * 100)}%</span>
+          <span className="text-sm font-[900] text-slate-500 w-10 sm:w-12 text-center">{Math.round(scale * 100)}%</span>
           <button onClick={zoomIn} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"><ZoomIn size={18} /></button>
         </div>
       </div>
@@ -187,7 +189,7 @@ export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
         ))}
 
         {!loading && isLocked && (
-          <div className="w-full max-w-3xl shrink-0 bg-white border-2 border-amber-100 rounded-[32px] p-12 text-center shadow-2xl my-8 relative overflow-hidden flex flex-col items-center">
+          <div className="w-full max-w-3xl shrink-0 bg-white border-2 border-amber-100 rounded-[32px] p-6 sm:p-12 text-center shadow-2xl my-8 relative overflow-hidden flex flex-col items-center">
             {/* Decorative background elements */}
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500"></div>
             <div className="absolute -top-24 -right-24 w-48 h-48 bg-amber-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>

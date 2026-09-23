@@ -377,7 +377,7 @@ export default function LoginSignup() {
       {/* ==================================================
           LEFT PANEL (55%) 
           ================================================== */}
-      <div className="w-full lg:w-[55%] min-h-screen flex flex-col justify-center px-8 lg:px-16 xl:px-24 py-6 relative overflow-hidden">
+      <div className="w-full lg:w-[55%] min-h-screen flex flex-col justify-center px-5 sm:px-8 lg:px-16 xl:px-24 py-6 relative overflow-hidden">
         
         <div className="w-full max-w-[500px] mx-auto">
           {/* Logo */}

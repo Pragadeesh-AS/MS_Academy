@@ -575,7 +575,7 @@ export default function CourseSetup() {
 
       {/* Toast Notification */}
       {toast.show && createPortal(
-        <div className="fixed bottom-6 right-6 z-[999999] animate-in slide-in-from-bottom-4 fade-in duration-300">
+        <div className="fixed bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-[999999] max-w-sm mx-auto sm:mx-0 animate-in slide-in-from-bottom-4 fade-in duration-300">
           <div className={`flex items-center gap-3 px-5 py-3 rounded-xl shadow-lg border ${toast.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
             {toast.type === 'error' ? <X size={20} className="text-red-500" /> : <CheckCircle2 size={20} className="text-emerald-500" />}
             <span className="text-[14px] font-[800]">{toast.message}</span>

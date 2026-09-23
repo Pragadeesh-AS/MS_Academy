@@ -15,12 +15,29 @@ const SPEED_FACTOR = 1
 const FormContext = React.createContext({})
 const useFormContext = () => React.useContext(FormContext)
 
+function useResponsiveFormSize() {
+  const getSize = () => ({
+    width: Math.min(400, window.innerWidth - 48),
+    height: Math.min(720, window.innerHeight - 96),
+  })
+  const [size, setSize] = React.useState(getSize)
+
+  React.useEffect(() => {
+    const onResize = () => setSize(getSize())
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [])
+
+  return size
+}
+
 export function EnquiryForm() {
   const wrapperRef = React.useRef(null)
   const firstInputRef = React.useRef(null)
 
   const [showForm, setShowForm] = React.useState(false)
   const [successFlag, setSuccessFlag] = React.useState(false)
+  const { width: FORM_WIDTH, height: FORM_HEIGHT } = useResponsiveFormSize()
 
   const triggerClose = React.useCallback(() => {
     setShowForm(false)
@@ -57,7 +74,7 @@ export function EnquiryForm() {
   )
 
   return (
-    <div className="fixed bottom-6 right-6 z-[120] flex items-center justify-center pointer-events-auto" style={{ width: showForm ? FORM_WIDTH : 'auto', height: showForm ? FORM_HEIGHT : 'auto' }}>
+    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[120] flex items-center justify-center pointer-events-auto" style={{ width: showForm ? FORM_WIDTH : 'auto', height: showForm ? FORM_HEIGHT : 'auto' }}>
       <motion.div
         ref={wrapperRef}
         data-panel
@@ -81,7 +98,7 @@ export function EnquiryForm() {
       >
         <FormContext.Provider value={ctx}>
           <DockBar />
-          <InputForm ref={firstInputRef} onSuccess={handleSuccess} />
+          <InputForm ref={firstInputRef} onSuccess={handleSuccess} formWidth={FORM_WIDTH} formHeight={FORM_HEIGHT} />
         </FormContext.Provider>
       </motion.div>
     </div>
@@ -125,10 +142,7 @@ function DockBar() {
   )
 }
 
-const FORM_WIDTH = 400
-const FORM_HEIGHT = 720
-
-const InputForm = React.forwardRef(({ onSuccess }, ref) => {
+const InputForm = React.forwardRef(({ onSuccess, formWidth, formHeight }, ref) => {
   const { triggerClose, showForm, successFlag } = useFormContext()
 
   const [formData, setFormData] = React.useState({
@@ -210,7 +224,7 @@ const InputForm = React.forwardRef(({ onSuccess }, ref) => {
     <form
       onSubmit={handleSubmit}
       className="absolute bottom-0 w-full"
-      style={{ width: FORM_WIDTH, height: FORM_HEIGHT, pointerEvents: showForm ? "all" : "none" }}
+      style={{ width: formWidth, height: formHeight, pointerEvents: showForm ? "all" : "none" }}
     >
       <AnimatePresence>
         {showForm && !successFlag && (

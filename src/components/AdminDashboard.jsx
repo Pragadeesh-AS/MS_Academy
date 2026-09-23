@@ -1206,7 +1206,7 @@ export default function AdminDashboard() {
               
               {/* Left Section: Interactive List-View (Col span 7 or 8) */}
               <div className="xl:col-span-8 flex flex-col">
-                <div className="bg-white border border-[#EEF2F7] rounded-[26px] shadow-[0_12px_35px_rgba(15,23,42,0.06)] p-8">
+                <div className="bg-white border border-[#EEF2F7] rounded-[26px] shadow-[0_12px_35px_rgba(15,23,42,0.06)] p-4 sm:p-6 md:p-8">
                   {/* Header */}
                   <div className="flex justify-between items-center mb-8">
                     <div className="flex items-center gap-3">
@@ -1224,7 +1224,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Test List */}
-                  <div className="flex flex-col gap-[14px]">
+                  <div className="flex flex-col gap-[14px] overflow-x-auto">
                     {[
                       { title: "Practice Test: ME2023.pdf", sub: "Mechanical Engineering", diff: "Medium", color: "orange", time: "60", marks: "100", date: "2 Jul 2025" },
                       { title: "CS Foundations: Q1.pdf", sub: "Computer Science", diff: "Easy", color: "green", time: "45", marks: "50", date: "1 Jul 2025" },
@@ -1242,7 +1242,7 @@ export default function AdminDashboard() {
                       }[test.color];
 
                       return (
-                        <div key={idx} className="group flex flex-col bg-white border border-[#EEF2F7] rounded-[18px] px-5 py-4 shadow-[0_3px_12px_rgba(15,23,42,0.04)] hover:bg-[#F8FAFF] hover:-translate-y-1 hover:shadow-[0_16px_35px_rgba(37,99,235,0.12)] transition-all duration-300 z-10 hover:z-20 overflow-hidden">
+                        <div key={idx} className="group flex flex-col bg-white border border-[#EEF2F7] rounded-[18px] px-5 py-4 shadow-[0_3px_12px_rgba(15,23,42,0.04)] hover:bg-[#F8FAFF] hover:-translate-y-1 hover:shadow-[0_16px_35px_rgba(37,99,235,0.12)] transition-all duration-300 z-10 hover:z-20 overflow-hidden min-w-[640px]">
                           
                           {/* Main Row Content (Always visible) */}
                           <div className="flex items-center justify-between">
@@ -1488,15 +1488,15 @@ export default function AdminDashboard() {
                   <h3 className="text-[20px] font-bold text-[#0F172A]">Recruitment Applications</h3>
                   <p className="text-[#64748B] text-[14px]">Review and manage incoming faculty applications</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="relative">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative w-full sm:w-auto">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
+                    <input
                       type="text"
                       placeholder="Search applications..."
                       value={appSearch}
                       onChange={(e) => setAppSearch(e.target.value)}
-                      className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 w-[250px]"
+                      className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 w-full sm:w-[250px]"
                     />
                   </div>
                   <div className="relative">
@@ -1610,8 +1610,8 @@ export default function AdminDashboard() {
           >
             {studentSubTab === 'queries' && (
               <>
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                  <div className="flex flex-wrap gap-2">
                     {['All', 'Pending', 'Resolved'].map((status) => (
                       <button
                         key={status}
@@ -1644,7 +1644,7 @@ export default function AdminDashboard() {
             {/* Queries Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredQueries.length === 0 ? (
-                <div className="bg-white border border-slate-100 p-10 text-center text-slate-400 font-semibold rounded-3xl md:col-span-2">
+                <div className="bg-white border border-slate-100 p-6 sm:p-8 md:p-10 text-center text-slate-400 font-semibold rounded-3xl md:col-span-2">
                   No inquiries found.
                 </div>
               ) : (
@@ -1746,13 +1746,13 @@ export default function AdminDashboard() {
 
         {/* Popup Configuration Tab */}
         {activeTab === 'popup' && (
-          <div className="max-w-4xl mx-auto flex flex-col gap-8 pb-12 animate-in fade-in duration-300">
+          <div className="max-w-4xl mx-auto flex flex-col gap-6 sm:gap-8 pb-12 animate-in fade-in duration-300">
             <div className="flex flex-col gap-2">
-              <h2 className="text-3xl font-[900] text-slate-800 tracking-tight">Marketing Popup</h2>
+              <h2 className="text-2xl sm:text-3xl font-[900] text-slate-800 tracking-tight">Marketing Popup</h2>
               <p className="text-slate-500 font-medium">Configure the global announcement popup that greets visitors on the home page.</p>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm flex flex-col gap-8">
+            <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm flex flex-col gap-6 sm:gap-8">
               
               {/* Status Toggle */}
               <div className="flex items-center justify-between p-6 rounded-2xl bg-slate-50 border border-slate-100">
@@ -1842,7 +1842,7 @@ export default function AdminDashboard() {
       {/* Details Modal Overlay for applications */}
       {selectedApp && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-[600px] max-h-[90vh] overflow-y-auto shadow-2xl p-8 relative space-y-6">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-[600px] max-h-[90vh] overflow-y-auto shadow-2xl p-5 sm:p-6 md:p-8 relative space-y-6">
             <button
               onClick={() => setSelectedApp(null)}
               className="absolute right-6 top-6 p-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors focus:outline-none"
@@ -1970,7 +1970,7 @@ export default function AdminDashboard() {
       {/* Details Modal Overlay for queries */}
       {selectedQuery && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-[600px] max-h-[90vh] overflow-y-auto shadow-2xl p-8 relative space-y-6">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-[600px] max-h-[90vh] overflow-y-auto shadow-2xl p-5 sm:p-6 md:p-8 relative space-y-6">
             <button
               onClick={() => setSelectedQuery(null)}
               className="absolute right-6 top-6 p-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors focus:outline-none"
@@ -2021,7 +2021,7 @@ export default function AdminDashboard() {
       {/* Invite Student Modal */}
       {isInviteModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-[500px] shadow-2xl p-8 relative">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-[500px] max-h-[90vh] overflow-y-auto shadow-2xl p-5 sm:p-6 md:p-8 relative">
             <button
               onClick={() => setIsInviteModalOpen(false)}
               className="absolute right-6 top-6 p-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors focus:outline-none"
@@ -2120,7 +2120,7 @@ export default function AdminDashboard() {
       {/* Teacher Invite Modal */}
       {isTeacherInviteModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-[500px] shadow-2xl p-8 relative">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-[500px] max-h-[90vh] overflow-y-auto shadow-2xl p-5 sm:p-6 md:p-8 relative">
             <button
               onClick={() => setIsTeacherInviteModalOpen(false)}
               className="absolute right-6 top-6 p-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors focus:outline-none"
@@ -2231,8 +2231,8 @@ export default function AdminDashboard() {
       {/* Typist Invite Modal */}
       {isTypistInviteModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-[0_20px_60px_rgba(0,0,0,0.15)] overflow-hidden animate-in fade-in zoom-in-95 duration-200 relative">
-            <div className="p-6">
+          <div className="bg-white rounded-[24px] w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(0,0,0,0.15)] animate-in fade-in zoom-in-95 duration-200 relative">
+            <div className="p-5 sm:p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-[24px] font-[800] text-slate-800 tracking-tight flex items-center gap-2">
                   <MailPlus size={24} className="text-blue-600" />
@@ -2264,7 +2264,7 @@ export default function AdminDashboard() {
                 }
                 setIsTypistInviting(false);
               }} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[13px] font-bold text-slate-700 mb-2">Typist Name</label>
                     <input type="text" required value={typistInviteForm.typistName} onChange={(e) => setTypistInviteForm({...typistInviteForm, typistName: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="e.g. John Doe" />
@@ -2275,7 +2275,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                   <div>
                     <label className="block text-[13px] font-bold text-slate-700 mb-2">Reviewer Name</label>
                     <input type="text" required value={typistInviteForm.reviewerName} onChange={(e) => setTypistInviteForm({...typistInviteForm, reviewerName: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="e.g. Jane Smith" />
@@ -2302,7 +2302,7 @@ export default function AdminDashboard() {
 
       {/* Generic Confirmation Modal */}
       {confirmDeleteObj && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center font-sans text-black">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 font-sans text-black">
           <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
             <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Deletion</div>
             <div className="p-6">

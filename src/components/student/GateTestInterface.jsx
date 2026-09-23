@@ -667,17 +667,17 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
             </div>
 
             {/* Bottom Actions */}
-            <div className="border-t border-gray-300 p-3 flex justify-between bg-gray-50">
-              <div className="flex gap-3">
+            <div className="border-t border-gray-300 p-3 flex flex-col sm:flex-row gap-2 sm:justify-between bg-gray-50">
+              <div className="flex flex-wrap gap-2 sm:gap-3">
                 <button onClick={handleMarkReviewNext} className="border border-gray-400 px-4 py-1.5 text-sm hover:bg-gray-100 bg-white shadow-sm font-bold text-gray-700">Mark for Review & Next</button>
                 <button onClick={handleClearResponse} className="border border-gray-400 px-4 py-1.5 text-sm hover:bg-gray-100 bg-white shadow-sm font-bold text-gray-700">Clear Response</button>
               </div>
               <button onClick={handleSaveNext} className="bg-[#1589C9] hover:bg-[#1070A6] text-white px-6 py-1.5 text-sm font-bold shadow-sm">Save & Next</button>
             </div>
           </div>
-          
+
           {/* Right Panel */}
-          <div className="w-[280px] bg-[#EAF2FA] flex flex-col">
+          <div className="w-full lg:w-[280px] bg-[#EAF2FA] flex flex-col border-t lg:border-t-0 border-gray-400">
             <div className="flex p-3 bg-white border-b border-gray-300 gap-3">
               <div className="w-16 h-16 border border-gray-300 bg-gray-50 flex items-center justify-center"><User className="text-gray-400 w-12 h-12"/></div>
               <div>
@@ -747,7 +747,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
         
         {/* Custom Confirmation Modal */}
         {showConfirmModal && (
-          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black p-4">
             <div className="bg-white rounded-md shadow-xl w-full max-w-md overflow-hidden">
               <div className="bg-blue-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Submission</div>
               <div className="p-6">
@@ -773,7 +773,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
 
         {/* Report Question Modal */}
         {showReportModal && (
-          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black p-4">
             <div className="bg-white rounded-md shadow-xl w-full max-w-lg overflow-hidden transition-all">
               {reportSuccess ? (
                 <div className="p-8 text-center bg-white flex flex-col items-center">
@@ -841,7 +841,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
 
       {/* Fullscreen Warning Modal */}
       {showFsWarning && mode === 'taking' && (
-        <div className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center font-sans">
+        <div className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center font-sans p-4">
           <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center border-4 ${fsWarningCount >= 3 ? 'border-red-600' : 'border-orange-400'}`}>
             <div className={`text-6xl mb-4 ${fsWarningCount >= 3 ? 'text-red-600' : 'text-orange-500'}`}>
               {fsWarningCount >= 3 ? '🚫' : '⚠️'}

@@ -257,7 +257,7 @@ export default function Careers() {
             <Sparkles size={14} className="animate-pulse" />
             <span>We are hiring</span>
           </div>
-          <h1 className="text-[46px] md:text-[64px] font-[900] text-slate-900 leading-[1.1] tracking-[-0.03em] mb-6">
+          <h1 className="text-[34px] sm:text-[46px] md:text-[64px] font-[900] text-slate-900 leading-[1.1] tracking-[-0.03em] mb-6">
             Teach at <span className="text-[#1d4ed8]">MS Academy</span>
           </h1>
           <p className="text-[18px] md:text-[20px] text-slate-500 leading-relaxed max-w-[600px] mb-10 font-medium">

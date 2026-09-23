@@ -20,7 +20,7 @@ export default function Contact() {
         {/* Contact Information */}
         <div className="flex flex-col justify-center space-y-12">
           <div>
-            <h1 className="text-[42px] md:text-[56px] font-[900] text-slate-900 mb-6 tracking-tight leading-[1.1]">Contact Information</h1>
+            <h1 className="text-[32px] sm:text-[42px] md:text-[56px] font-[900] text-slate-900 mb-6 tracking-tight leading-[1.1]">Contact Information</h1>
             <p className="text-[18px] md:text-[20px] text-slate-500 leading-relaxed max-w-[500px]">
               We're here to help and answer any question you might have. We look forward to hearing from you.
             </p>
@@ -29,7 +29,7 @@ export default function Contact() {
           <div className="space-y-10">
             {/* Phone */}
             <div className="flex items-start gap-6 group">
-              <div className="w-16 h-16 rounded-2xl bg-[#eff6ff] text-[#1d4ed8] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-[#ffeadd]">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-[#eff6ff] text-[#1d4ed8] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-[#ffeadd]">
                 <Phone size={30} strokeWidth={1.5} />
               </div>
               <div className="flex flex-col justify-center">
@@ -40,7 +40,7 @@ export default function Contact() {
 
             {/* Email */}
             <div className="flex items-start gap-6 group">
-              <div className="w-16 h-16 rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-slate-100">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-slate-100">
                 <Mail size={30} strokeWidth={1.5} />
               </div>
               <div className="flex flex-col justify-center">
@@ -51,7 +51,7 @@ export default function Contact() {
 
             {/* Address */}
             <div className="flex items-start gap-6 group">
-              <div className="w-16 h-16 rounded-2xl bg-[#eff6ff] text-[#1d4ed8] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-[#ffeadd]">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-[#eff6ff] text-[#1d4ed8] flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-[#ffeadd]">
                 <MapPin size={30} strokeWidth={1.5} />
               </div>
               <div className="flex flex-col justify-center">
@@ -64,7 +64,7 @@ export default function Contact() {
 
             {/* Startup Registration */}
             <div className="flex items-start gap-6 group">
-              <div className="w-16 h-16 rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-slate-100">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-slate-50 text-slate-700 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300 shadow-sm border border-slate-100">
                 <Award size={30} strokeWidth={1.5} />
               </div>
               <div className="flex flex-col justify-center">

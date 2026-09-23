@@ -526,9 +526,9 @@ IMPORTANT:
   return (
     <div className="max-w-5xl mx-auto">
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-xl sm:text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
             <BrainCircuit className="text-purple-600" size={28} />
             AI Question Extractor
           </h2>
@@ -656,7 +656,7 @@ IMPORTANT:
                   <h4 className="text-lg font-bold text-slate-900 mb-4" dangerouslySetInnerHTML={{ __html: q.questionText }}></h4>
                   
                   {q.questionType === 'Match' && q.matchColumn1 && (
-                    <div className="grid grid-cols-2 gap-6 mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
                       <div className="space-y-2 border border-slate-200 rounded-xl p-4 bg-slate-50">
                         <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Column 1</h5>
                         {q.matchColumn1.filter(item => item.trim()).map((item, i) => (
