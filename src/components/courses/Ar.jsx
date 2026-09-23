@@ -78,17 +78,17 @@ export default function ArCourse() {
         
         {/* Left Side: Text */}
         <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left">
-          <h1 className="text-[46px] md:text-[64px] font-[900] text-slate-900 leading-[1.1] tracking-[-0.03em] mb-6">
+          <h1 className="text-[34px] sm:text-[46px] md:text-[64px] font-[900] text-slate-900 leading-[1.1] tracking-[-0.03em] mb-6">
             GATE <span className="text-[#1d4ed8]">Architecture</span> & Planning (AR)
           </h1>
           <p className="text-[18px] md:text-[20px] text-slate-500 leading-relaxed max-w-[600px] mb-10">
             Master architectural design, graphics, urban design, housing, environmental planning, structural systems, and town planning with our specialized GATE AR program. Designed for top ranks.
           </p>
-          <div className="flex gap-4">
-            <ShinyButton className="px-8 py-4 text-[17px] font-semibold text-white rounded-xl bg-gradient-to-b from-[#4a4a4a] via-[#2a2a2a] to-[#111111] shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:scale-[1.02] transition-transform border border-[#333333]">
+          <div className="flex flex-wrap gap-4 justify-center lg:justify-start">
+            <ShinyButton className="px-6 sm:px-8 py-3.5 sm:py-4 text-[15px] sm:text-[17px] font-semibold text-white rounded-xl bg-gradient-to-b from-[#4a4a4a] via-[#2a2a2a] to-[#111111] shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:scale-[1.02] transition-transform border border-[#333333]">
               Enroll Now
             </ShinyButton>
-            <button className="px-8 py-4 text-[17px] font-semibold text-slate-700 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors">
+            <button className="px-6 sm:px-8 py-3.5 sm:py-4 text-[15px] sm:text-[17px] font-semibold text-slate-700 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors">
               Download Syllabus
             </button>
           </div>

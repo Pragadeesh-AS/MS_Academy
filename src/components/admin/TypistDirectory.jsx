@@ -41,7 +41,7 @@ const TypistDirectory = ({
   );
 
   return (
-    <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.04) 0%, transparent 70%)' }}>
+    <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-4 sm:px-6 lg:px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.04) 0%, transparent 70%)' }}>
       
       {/* Background Texture Overlay */}
       <div className="absolute inset-0 z-0 opacity-40 mix-blend-overlay pointer-events-none" style={{ backgroundImage: 'radial-gradient(#94A3B8 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
@@ -49,7 +49,7 @@ const TypistDirectory = ({
       {/* Page Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 relative z-10 pt-8">
         <div>
-          <h2 className="text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
+          <h2 className="text-[26px] sm:text-[30px] lg:text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
             Data Entry Pairs
           </h2>
           <p className="text-[#64748B] text-[15px] font-medium mt-1">
@@ -211,8 +211,8 @@ const TypistDirectory = ({
           
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="px-6 py-4 border-t border-[#EEF2F7] flex items-center justify-between bg-slate-50/50">
-              <span className="text-[#64748B] text-[13px] font-medium">
+            <div className="px-4 sm:px-6 py-4 border-t border-[#EEF2F7] flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50">
+              <span className="text-[#64748B] text-[13px] font-medium text-center sm:text-left">
                 Showing {((currentPage - 1) * typistsPerPage) + 1} to {Math.min(currentPage * typistsPerPage, filteredTypists.length)} of {filteredTypists.length}
               </span>
               <div className="flex gap-2">

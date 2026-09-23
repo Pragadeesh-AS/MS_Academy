@@ -69,7 +69,7 @@ export default function TeacherQuestionBank({ department }) {
   );
 
   return (
-    <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mt-6 min-h-[500px]">
+    <div className="bg-white rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-200 shadow-sm mt-6 min-h-[500px]">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h2 className="text-2xl font-[900] text-slate-900 flex items-center gap-2">

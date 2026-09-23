@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -10,6 +10,15 @@ import StudentLiveClasses from './StudentLiveClasses';
 import StudentTests from './StudentTests';
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
+
+const sidebarNavItems = [
+  { key: 'learning', label: 'My Learning', icon: BookOpen },
+  { key: 'live', label: 'Live Sessions', icon: Video },
+  { key: 'recordings', label: 'Recordings', icon: PlayCircle },
+  { key: 'notes', label: 'Study Notes', icon: FileText },
+  { key: 'schedule', label: 'Schedule', icon: Calendar },
+  { key: 'tests', label: 'Practice Tests', icon: Trophy },
+];
 
 const isStartingSoon = (timeStr) => {
   if (!timeStr || !timeStr.includes('T')) return false;
@@ -32,6 +41,7 @@ export default function Dashboard() {
   const [availableBundles, setAvailableBundles] = useState([]);
   const [activeTab, setActiveTab] = useState('learning');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [scheduledClasses, setScheduledClasses] = useState([]);
   
   // Onboarding State
@@ -449,6 +459,68 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Mobile Top Bar */}
+      <div className="md:hidden fixed top-0 inset-x-0 z-30 bg-white border-b border-slate-200 flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center p-1 border border-blue-100 flex-shrink-0">
+            <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="font-[900] text-blue-700 text-sm leading-tight truncate">MS Academy</h2>
+            <p className="text-[11px] font-bold text-slate-400 truncate">Student Portal</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setIsMobileNavOpen(true)}
+          aria-label="Open menu"
+          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 flex-shrink-0"
+        >
+          <Menu size={22} />
+        </button>
+      </div>
+
+      {/* Mobile Sidebar Drawer */}
+      {isMobileNavOpen && (
+        <div className="md:hidden fixed inset-0 z-40 flex">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsMobileNavOpen(false)}></div>
+          <div className="relative z-10 w-72 max-w-[80vw] h-full bg-white flex flex-col shadow-2xl animate-in slide-in-from-left duration-300">
+            <div className="p-5 flex items-center justify-between border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100 flex-shrink-0">
+                  <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <h2 className="font-[900] text-blue-700 text-lg leading-tight">MS Academy</h2>
+                  <p className="text-xs font-bold text-slate-400">Student Portal</p>
+                </div>
+              </div>
+              <button onClick={() => setIsMobileNavOpen(false)} aria-label="Close menu" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100">
+                <X size={20} />
+              </button>
+            </div>
+            <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+              {sidebarNavItems.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => { setActiveTab(key); setIsMobileNavOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === key ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+                >
+                  <Icon size={18} />
+                  <span>{label}</span>
+                </button>
+              ))}
+              <button
+                onClick={() => { setActiveTab('upgrade'); setIsMobileNavOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all mt-4 ${activeTab === 'upgrade' ? 'pro-badge border border-[#F2C94C] text-[#B8860B]' : isPro ? 'text-[#B8860B] hover:bg-[#FFF9E6]' : 'pro-badge border border-[#F2C94C] text-[#B8860B]'}`}
+              >
+                <Crown size={18} className="text-[#B8860B]" />
+                <span>{isPro ? 'Pro Benefits' : 'Upgrade to Pro'}</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <aside className={`transition-all duration-300 flex-shrink-0 relative z-20 ${isCollapsed ? 'w-[88px]' : 'w-64'} bg-white border-r border-slate-200 flex flex-col hidden md:flex`}>
         {/* Collapse Button */}
@@ -472,47 +544,17 @@ export default function Dashboard() {
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-2">
-          <button 
-            onClick={() => setActiveTab('learning')}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'learning' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-          >
-            <BookOpen size={18} />
-            {!isCollapsed && <span>My Learning</span>}
-          </button>
-          <button 
-            onClick={() => setActiveTab('live')}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'live' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-          >
-            <Video size={18} />
-            {!isCollapsed && <span>Live Sessions</span>}
-          </button>
-          <button 
-            onClick={() => setActiveTab('recordings')}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'recordings' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-          >
-            <PlayCircle size={18} /> {!isCollapsed && <span>Recordings</span>}
-          </button>
-          <button 
-            onClick={() => setActiveTab('notes')}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'notes' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-          >
-            <FileText size={18} /> {!isCollapsed && <span>Study Notes</span>}
-          </button>
-          <button 
-            onClick={() => setActiveTab('schedule')}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'schedule' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-          >
-            <Calendar size={18} />
-            {!isCollapsed && <span>Schedule</span>}
-          </button>
-          <button 
-            onClick={() => setActiveTab('tests')}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'tests' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
-          >
-            <Trophy size={18} />
-            {!isCollapsed && <span>Practice Tests</span>}
-          </button>
-          
+          {sidebarNavItems.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === key ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+            >
+              <Icon size={18} />
+              {!isCollapsed && <span>{label}</span>}
+            </button>
+          ))}
+
           {/* Upgrade to Premium Banner */}
           {!isCollapsed && !isPro && (
             <div className="mt-6 bg-gradient-to-br from-[#4f46e5] to-[#8b5cf6] rounded-[20px] p-5 text-white shadow-[0_10px_25px_rgba(99,102,241,0.4)] relative overflow-hidden">
@@ -546,7 +588,7 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className={`flex-1 p-8 overflow-y-auto ${showOnboarding ? 'blur-sm pointer-events-none' : ''} transition-all duration-300`}>
+      <main className={`flex-1 min-w-0 p-4 pt-20 sm:p-6 sm:pt-20 md:p-8 overflow-y-auto ${showOnboarding ? 'blur-sm pointer-events-none' : ''} transition-all duration-300`}>
         <header className="mb-8 flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
           <div>
             <h1 className="text-2xl sm:text-3xl font-[900] text-slate-900 tracking-tight flex items-center gap-3">

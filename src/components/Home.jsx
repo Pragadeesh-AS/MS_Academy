@@ -252,9 +252,9 @@ export default function Home() {
       {/* Hero Section */}
       <main className="relative flex flex-col lg:flex-row items-center justify-between text-center lg:text-left px-4 pt-4 pb-12 max-w-[1200px] w-full mx-auto gap-12">
         <div className="flex-1 flex flex-col items-center lg:items-start max-w-2xl">
-          <h1 className="text-[52px] md:text-[72px] font-[900] text-slate-900 leading-[1.1] tracking-[-0.03em] mb-6">
+          <h1 className="text-[36px] sm:text-[52px] md:text-[72px] font-[900] text-slate-900 leading-[1.1] tracking-[-0.03em] mb-6">
             Best <span className="text-[#1D4ED8]">GATE Coaching</span> in Coimbatore <br />
-            <span className="text-[32px] md:text-[42px] text-slate-600 font-bold block mt-4 tracking-tight">| Online & Offline Classes</span>
+            <span className="text-[22px] sm:text-[32px] md:text-[42px] text-slate-600 font-bold block mt-4 tracking-tight">| Online & Offline Classes</span>
           </h1>
 
           <p className="text-[17px] font-bold text-slate-700 mb-10 leading-relaxed">
@@ -400,8 +400,8 @@ export default function Home() {
 
       {/* Courses Carousel Section */}
       <section className="w-full relative z-10 py-12 flex-1 overflow-hidden">
-        <div className="max-w-[1400px] mx-auto px-8 mb-4">
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Explore Courses</h2>
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-8 mb-4">
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight mb-2">Explore Courses</h2>
           <p className="text-slate-500 font-medium">Find the perfect GATE program for your engineering discipline.</p>
         </div>
         <div className="mt-8">

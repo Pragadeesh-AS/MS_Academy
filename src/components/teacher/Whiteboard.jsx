@@ -849,10 +849,10 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       <div className="w-full h-full touch-none pointer-events-auto z-10" ref={containerRef}></div>
       
       {/* Static Left Sidebar Menu */}
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 z-50 flex items-start gap-4 pointer-events-none">
-        
+      <div className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-50 flex items-start gap-2 sm:gap-4 pointer-events-none max-h-[92vh]">
+
         {/* Main Toolbar */}
-        <div className="bg-slate-800 rounded-2xl p-2 shadow-2xl border border-slate-700 flex flex-col items-center gap-2 pointer-events-auto">
+        <div className="bg-slate-800 rounded-2xl p-2 shadow-2xl border border-slate-700 flex flex-col items-center gap-2 pointer-events-auto max-h-[92vh] overflow-y-auto">
           {[
             { id: 'select', icon: <MousePointer2 size={18} />, label: 'Select' },
             { id: 'text', icon: <Type size={18} />, label: 'Text' },
@@ -907,7 +907,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                 
                 {/* 3 Recently Used Colors explicitly when Pen is active (rendered inline for quick access) */}
                 {item.id === 'pen' && activeTool === 'pen' && (
-                  <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 p-1.5 bg-slate-800 rounded-full border border-slate-700 shadow-lg animate-in slide-in-from-left-2 fade-in">
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 sm:left-full sm:ml-3 sm:top-1/2 sm:-translate-y-1/2 sm:translate-x-0 sm:mt-0 flex items-center gap-1.5 p-1.5 bg-slate-800 rounded-full border border-slate-700 shadow-lg animate-in slide-in-from-left-2 fade-in z-20">
                     {recentColors.map((color, idx) => (
                       <button
                         key={`recent-${color}-${idx}`}
@@ -975,7 +975,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
           
           {/* Board Color Popout */}
           {showBoardColors && (
-            <div className="absolute left-0 top-0 flex items-center gap-3 p-3 bg-slate-800 rounded-full shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-left-2 z-10 w-max">
+            <div className="absolute left-0 top-0 flex items-center gap-3 p-3 bg-slate-800 rounded-full shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-left-2 z-10 w-max max-w-[92vw] flex-wrap">
               {boardBgColors.map(color => (
                 <button
                   key={color.name}
@@ -990,7 +990,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
 
           {/* Shape Options Popout */}
           {showShapeOptions && (
-            <div className="absolute left-0 top-0 flex flex-col gap-4 p-5 bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-left-2 z-10 w-max">
+            <div className="absolute left-0 top-0 flex flex-col gap-4 p-5 bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-left-2 z-10 w-max max-w-[92vw] max-h-[85vh] overflow-y-auto">
               <div className="flex items-center gap-2 max-w-[200px] flex-wrap">
                 {[
                   { id: 'line', icon: <Minus size={18} />, label: 'Line' },
@@ -1059,7 +1059,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
 
           {/* Tool Options Popout */}
           {showToolOptions && (
-            <div className="absolute left-0 top-0 flex flex-col gap-4 p-5 bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-left-2 z-10 w-max">
+            <div className="absolute left-0 top-0 flex flex-col gap-4 p-5 bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-left-2 z-10 w-max max-w-[92vw] max-h-[85vh] overflow-y-auto">
               <div className="flex items-center gap-4">
                 <div className="w-4 h-4 bg-white rounded-full shrink-0" style={{ transform: `scale(${activeTool === 'eraser' ? Math.max(0.2, eraserSize / 40) : Math.max(0.3, penSize / 12)})` }} />
                 <input 

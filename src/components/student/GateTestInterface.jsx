@@ -214,24 +214,24 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
 
   const Header = ({ showSystemInfo = true }) => (
     <div className="bg-[#2D66B3] text-white flex flex-col font-sans">
-      <div className="bg-white flex justify-center py-2 relative">
-        <h1 className="text-[#364968] text-xl font-bold uppercase">GRADUATE APTITUDE TEST IN ENGINEERING (GATE 2026)</h1>
-        <p className="absolute bottom-1 text-[#364968] text-xs font-semibold">Organizing Institute : INDIAN INSTITUTE OF TECHNOLOGY GUWAHATI</p>
+      <div className="bg-white flex flex-col items-center justify-center py-2 px-2 relative text-center">
+        <h1 className="text-[#364968] text-xs sm:text-base md:text-xl font-bold uppercase">GRADUATE APTITUDE TEST IN ENGINEERING (GATE 2026)</h1>
+        <p className="text-[#364968] text-[9px] sm:text-xs font-semibold mt-1 sm:mt-0 sm:absolute sm:bottom-1">Organizing Institute : INDIAN INSTITUTE OF TECHNOLOGY GUWAHATI</p>
       </div>
       {showSystemInfo && (
-        <div className="flex justify-between items-center px-4 py-2 bg-[#6B6B6B] border-t border-[#444]">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 px-4 py-2 bg-[#6B6B6B] border-t border-[#444]">
           <div>
             <div className="text-white text-sm">System Name :</div>
-            <div className="text-[#FFEA00] text-2xl font-bold">C001</div>
+            <div className="text-[#FFEA00] text-xl sm:text-2xl font-bold">C001</div>
             <div className="text-white text-xs mt-1">Kindly contact the invigilator if there are any discrepancies in the Name and Photograph displayed on the screen or if the photograph is not yours</div>
           </div>
-          <div className="flex items-center gap-4 text-right">
+          <div className="flex items-center gap-4 sm:text-right">
             <div>
               <div className="text-white text-sm">Candidate Name :</div>
-              <div className="text-[#FFEA00] text-xl font-bold">{studentName || 'John Smith'}</div>
+              <div className="text-[#FFEA00] text-lg sm:text-xl font-bold">{studentName || 'John Smith'}</div>
               <div className="text-white text-sm mt-1">Subject : <span className="text-[#00FF00] font-bold">{test.title}</span></div>
             </div>
-            <div className="w-20 h-20 bg-white p-1 border border-gray-400">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white p-1 border border-gray-400 shrink-0">
                <User className="w-full h-full text-slate-400 bg-slate-100" />
             </div>
           </div>
@@ -243,8 +243,8 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
   const LoginScreen = () => (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
       <Header />
-      <div className="flex-1 flex items-center justify-center bg-gray-100">
-        <div className="bg-[#EBEBEB] border border-gray-300 w-80 shadow-sm rounded-sm">
+      <div className="flex-1 flex items-center justify-center bg-gray-100 p-4">
+        <div className="bg-[#EBEBEB] border border-gray-300 w-80 max-w-full shadow-sm rounded-sm">
           <div className="bg-[#D1D1D1] text-gray-700 font-bold px-4 py-2 text-sm border-b border-gray-300">Login</div>
           <div className="p-6 space-y-4">
             <div className="flex bg-white border border-gray-300">
@@ -270,22 +270,22 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
       <div className="fixed inset-0 z-50 bg-white text-black flex flex-col font-sans overflow-hidden">
         {/* Top Header */}
         <header className="flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-300">
+          <div className="flex items-center justify-center px-4 py-2 border-b border-gray-300 text-center">
             <div className="flex items-center gap-4">
               <div className="text-center">
-                <h1 className="font-bold text-[#2A4B7C] text-lg tracking-wide uppercase">GRADUATE APTITUDE TEST IN ENGINEERING (GATE 2026)</h1>
-                <p className="text-xs text-gray-600">Organizing Institute : INDIAN INSTITUTE OF TECHNOLOGY GUWAHATI</p>
+                <h1 className="font-bold text-[#2A4B7C] text-sm sm:text-base md:text-lg tracking-wide uppercase">GRADUATE APTITUDE TEST IN ENGINEERING (GATE 2026)</h1>
+                <p className="text-[10px] sm:text-xs text-gray-600">Organizing Institute : INDIAN INSTITUTE OF TECHNOLOGY GUWAHATI</p>
               </div>
             </div>
           </div>
         </header>
-  
+
         <div className="bg-[#D9EAF7] text-[#1a5b82] font-bold px-4 py-2 text-sm border-b border-gray-300">
           {title}
         </div>
-        <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 flex flex-col border-r border-gray-300">
-            <div className="flex-1 p-8 overflow-y-auto">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+          <div className="flex-1 flex flex-col border-r border-gray-300 lg:min-h-0">
+            <div className="flex-1 p-4 sm:p-8 lg:overflow-y-auto">
               {children}
               {showNext && (
                 <div className="mt-8 flex justify-end border-t border-gray-200 pt-4">
@@ -305,14 +305,14 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                     </label>
                   </div>
                 )}
-                <div className="flex items-center relative">
+                <div className="flex flex-col sm:flex-row items-center gap-3 sm:relative">
                   {showPrev && (
-                    <button onClick={onPrev} className="border border-gray-300 px-4 py-1.5 flex items-center gap-1 hover:bg-gray-50 text-sm font-bold absolute left-0 bg-white shadow-sm">
+                    <button onClick={onPrev} className="border border-gray-300 px-4 py-1.5 flex items-center gap-1 hover:bg-gray-50 text-sm font-bold sm:absolute sm:left-0 bg-white shadow-sm order-2 sm:order-1">
                       <ChevronLeft size={16} /> Previous
                     </button>
                   )}
                   {isReady && (
-                    <div className="flex-1 flex justify-center">
+                    <div className="flex-1 flex justify-center order-1 sm:order-2">
                       <button onClick={onReady} disabled={!agreed} className={`px-8 py-2 text-white font-bold text-sm shadow-sm ${agreed ? 'bg-[#1589C9] hover:bg-[#1070A6]' : 'bg-[#1589C9] opacity-80 cursor-not-allowed'}`}>
                         I am ready to begin
                       </button>
@@ -322,8 +322,8 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
               </div>
             )}
           </div>
-          <div className="w-[250px] bg-white p-6 flex flex-col items-center border-l border-gray-300 shrink-0">
-            <div className="w-24 h-24 bg-white p-1 border border-gray-300 shadow-sm mb-4">
+          <div className="w-full lg:w-[250px] bg-white p-4 sm:p-6 flex flex-row lg:flex-col items-center justify-center lg:justify-start gap-4 lg:gap-0 border-t lg:border-t-0 lg:border-l border-gray-300 shrink-0">
+            <div className="w-16 h-16 lg:w-24 lg:h-24 bg-white p-1 border border-gray-300 shadow-sm lg:mb-4">
               <User className="w-full h-full text-slate-400 bg-slate-100" />
             </div>
             <div className="text-[#364968] font-bold text-sm text-center">{studentName || 'Student'}</div>
@@ -433,7 +433,8 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
           {/* Question Split-up Table */}
           <div className="border border-gray-300 rounded overflow-hidden">
             <div className="bg-[#2D66B3] text-white text-center font-bold py-2 text-sm">Question Paper Split-up</div>
-            <table className="w-full text-sm border-collapse">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse min-w-[500px]">
               <thead>
                 <tr className="bg-[#EAF2FA] text-[#1a3a6b] font-bold">
                   <th className="border border-gray-300 px-4 py-2 text-left">Question Type</th>
@@ -483,6 +484,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                 </tr>
               </tbody>
             </table>
+            </div>
           </div>
 
           {/* Fullscreen Notice */}
@@ -527,23 +529,23 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
     return (
       <div className="fixed inset-0 z-50 bg-[#F5F5F5] text-black flex flex-col font-sans select-none">
         {/* Header */}
-        <div className="bg-[#2D66B3] text-white flex justify-center py-2 border-b border-gray-400 relative">
-          <h1 className="text-[#364968] bg-white px-20 py-1 text-xl font-bold uppercase rounded-sm shadow-sm">GRADUATE APTITUDE TEST IN ENGINEERING (GATE 2026)</h1>
+        <div className="bg-[#2D66B3] text-white flex justify-center py-2 px-3 border-b border-gray-400 relative">
+          <h1 className="text-[#364968] bg-white px-3 sm:px-10 md:px-20 py-1 text-[11px] sm:text-base md:text-xl font-bold uppercase rounded-sm shadow-sm text-center">GRADUATE APTITUDE TEST IN ENGINEERING (GATE 2026)</h1>
         </div>
-        
-        <div className="bg-[#444444] text-white flex items-center justify-between px-4 py-1 text-sm border-b border-gray-500">
-          <div className="font-bold truncate max-w-xl">{test.title}</div>
-          <div className="flex gap-4">
-            <button className="flex items-center gap-1 bg-[#1589C9] px-2 py-0.5 rounded-sm"><Info size={14}/> Instructions</button>
-            <button className="flex items-center gap-1 bg-[#1589C9] px-2 py-0.5 rounded-sm">Question Paper</button>
+
+        <div className="bg-[#444444] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 px-4 py-1.5 text-sm border-b border-gray-500">
+          <div className="font-bold truncate max-w-full sm:max-w-xl">{test.title}</div>
+          <div className="flex flex-wrap gap-2">
+            <button className="flex items-center gap-1 bg-[#1589C9] px-2 py-0.5 rounded-sm text-xs sm:text-sm"><Info size={14}/> Instructions</button>
+            <button className="flex items-center gap-1 bg-[#1589C9] px-2 py-0.5 rounded-sm text-xs sm:text-sm">Question Paper</button>
           </div>
         </div>
 
         {/* Main Workspace */}
-        <div className="flex-1 flex overflow-hidden">
-          
+        <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
+
           {/* Left Panel */}
-          <div className="flex-1 flex flex-col border-r border-gray-400 bg-white">
+          <div className="flex-1 flex flex-col border-r border-gray-400 bg-white lg:min-h-0">
             <div className="flex bg-[#EAF2FA] border-b border-gray-300 text-sm">
               <div className="px-4 py-1.5 bg-[#1589C9] text-white font-bold border-r border-gray-300 flex items-center gap-2">
                 All Sections <Info size={14} className="bg-white text-[#1589C9] rounded-full"/>
@@ -577,7 +579,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                   <img src={currentQ.questionImageUrl} alt="Question Graphic" className="mt-4 max-w-full" />
                 )}
                 {currentQ?.questionType === 'Match' && (currentQ?.matchColumn1 || currentQ?.matchColumn2) && (
-                  <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <div className="border border-gray-300 rounded">
                       <div className="bg-gray-100 text-sm font-bold px-3 py-1.5 border-b border-gray-300">List I</div>
                       <div className="divide-y divide-gray-200">

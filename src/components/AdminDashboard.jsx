@@ -3,10 +3,10 @@ import { jsPDF } from 'jspdf';
 import { useNavigate } from 'react-router-dom';
 import CreateTestButton from './CreateTestButton';
 import { 
-  Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut, 
+  Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut,
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, ChevronDown, UserCheck, Database, BarChart2, Megaphone, Sparkles,
-  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck
+  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck, Menu
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
@@ -165,6 +165,7 @@ export default function AdminDashboard() {
   const [editQuestionId, setEditQuestionId] = useState(null);
   const [adminName, setAdminName] = useState('Admin');
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   // Core datasets states
   const [applications, setApplications] = useState([]);
@@ -757,13 +758,103 @@ export default function AdminDashboard() {
   });
 
   return (
-    <div className="h-screen w-full bg-slate-50/50 flex flex-col md:flex-row overflow-hidden">
-      
+    <div className="h-screen w-full bg-slate-50/50 flex md:flex-row overflow-hidden">
+
+      {/* Mobile Top Bar */}
+      <div className="md:hidden fixed top-0 inset-x-0 z-30 bg-[#111827] flex items-center justify-between px-4 py-3 shadow-lg">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm flex-shrink-0 border border-slate-200 overflow-hidden p-0.5">
+            <img src={logoImg} alt="MS Gate Academy Logo" className="w-full h-full object-contain" />
+          </div>
+          <h3 className="text-[14px] font-[900] text-white tracking-tight truncate flex items-center gap-1.5">MS Gate Academy <ShieldCheck size={14} className="text-amber-400 flex-shrink-0" /></h3>
+        </div>
+        <button
+          onClick={() => setIsMobileNavOpen(true)}
+          aria-label="Open menu"
+          className="p-2 rounded-lg text-slate-300 hover:bg-slate-800 flex-shrink-0"
+        >
+          <Menu size={22} />
+        </button>
+      </div>
+
+      {/* Mobile Sidebar Drawer */}
+      {isMobileNavOpen && (
+        <div className="md:hidden fixed inset-0 z-40 flex">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsMobileNavOpen(false)}></div>
+          <div className="relative z-10 w-80 max-w-[85vw] h-full bg-[#111827] flex flex-col justify-between pt-6 pb-6 px-4 overflow-y-auto shadow-2xl animate-in slide-in-from-left duration-300">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between gap-3 px-2 mb-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm flex-shrink-0 border border-slate-200 overflow-hidden p-0.5">
+                    <img src={logoImg} alt="MS Gate Academy Logo" className="w-full h-full object-contain" />
+                  </div>
+                  <h3 className="text-[15px] font-[900] text-white tracking-tight truncate flex items-center gap-2">MS Gate Academy <ShieldCheck size={16} className="text-amber-400 flex-shrink-0" /></h3>
+                </div>
+                <button onClick={() => setIsMobileNavOpen(false)} aria-label="Close menu" className="p-2 rounded-lg text-slate-300 hover:bg-slate-800 flex-shrink-0">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <nav className="space-y-1.5 px-1">
+                {[
+                  { key: 'overview', label: 'Dashboard', icon: LayoutGrid },
+                  { key: 'teachers', label: 'Teachers', icon: BookOpen },
+                  { key: 'typists', label: 'Data Entry Pairs', icon: Book },
+                  { key: 'queries', label: 'Students', icon: Users },
+                  { key: 'fees', label: 'Fees Tracker', icon: Wallet },
+                  { key: 'salary', label: 'Staff Salary', icon: IndianRupee },
+                  { key: 'courses', label: 'Course Setup', icon: Package },
+                  { key: 'invoice', label: 'Invoice', icon: FileText },
+                  { key: 'notes', label: 'Study Notes', icon: FileText },
+                  { key: 'recordings', label: 'Live Recordings', icon: Video },
+                  { key: 'attributes', label: 'Attributes', icon: Tag },
+                  { key: 'analytics', label: 'Analytics', icon: BarChart2 },
+                  { key: 'questions', label: 'Question Bank', icon: Database },
+                  { key: 'tests', label: 'Tests Manager', icon: Trophy },
+                  { key: 'reported', label: "Reported Q's", icon: ShieldCheck, danger: true },
+                  { key: 'premium_questions', label: 'Premium Questions', icon: Database },
+                  { key: 'blogs', label: 'Blogs', icon: FileText },
+                  { key: 'popup', label: 'Popup', icon: Megaphone },
+                  { key: 'ai', label: 'AI Generator', icon: Sparkles },
+                ].map(({ key, label, icon: Icon, danger }) => (
+                  <button
+                    key={key}
+                    onClick={() => { setActiveTab(key); setIsMobileNavOpen(false); }}
+                    className={`w-full relative flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === key ? (danger ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg') : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                  >
+                    <Icon size={20} className={activeTab === key ? 'text-white' : 'text-slate-400'} />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </nav>
+            </div>
+            <div className="pt-5 mt-8 space-y-3 px-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#1e293b] text-white font-black text-[16px] flex items-center justify-center flex-shrink-0">
+                  M
+                </div>
+                <div className="flex flex-col min-w-0 overflow-hidden">
+                  <span className="font-bold text-[14px] text-white truncate">User</span>
+                  <span className="text-[12px] font-semibold text-slate-400 truncate">msacademics.edu@gmail.com</span>
+                </div>
+              </div>
+              <button
+                onClick={() => { setIsMobileNavOpen(false); handleLogout(); }}
+                className="w-full flex items-center gap-3 px-2 py-2.5 mt-2 rounded-xl font-bold text-[14px] text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors"
+              >
+                <LogOut size={18} className="text-slate-500" />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Side Navigation Panel Wrapper */}
-      <div className={`transition-all duration-300 ${isCollapsed ? 'w-[88px]' : 'w-full md:w-[280px]'} h-full flex-shrink-0 relative z-20`}>
-        
+      <div className={`hidden md:block transition-all duration-300 ${isCollapsed ? 'w-[88px]' : 'w-full md:w-[280px]'} h-full flex-shrink-0 relative z-20`}>
+
         {/* Collapse Button (Now outside the overflow container so it's fully visible!) */}
-        <button 
+        <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="hidden md:flex absolute -right-3.5 top-9 w-7 h-7 bg-white border border-slate-200 rounded-full items-center justify-center shadow-sm text-slate-500 hover:text-slate-800 transition-colors z-30 hover:shadow-md"
         >
@@ -967,7 +1058,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Dashboard Container */}
-      <main className={`flex-1 w-full z-10 ${activeTab === 'analytics' ? 'h-full flex flex-col' : 'p-6 md:p-10 max-w-[1400px] mx-auto space-y-8 overflow-y-auto h-full'}`}>
+      <main className={`flex-1 w-full min-w-0 z-10 ${activeTab === 'analytics' ? 'h-full flex flex-col pt-16 md:pt-0' : 'p-4 pt-20 sm:p-6 sm:pt-20 md:p-10 md:pt-10 max-w-[1400px] mx-auto space-y-8 overflow-y-auto h-full'}`}>
         
         {/* Active Tab: Overview Dashboard */}
         {activeTab === 'overview' && (

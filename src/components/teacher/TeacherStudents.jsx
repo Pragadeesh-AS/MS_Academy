@@ -58,7 +58,7 @@ export default function TeacherStudents({ department }) {
   }
 
   return (
-    <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mt-6">
+    <div className="bg-white rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-200 shadow-sm mt-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
         <div>
           <h2 className="text-2xl font-[900] text-slate-900 mb-1">My Students</h2>

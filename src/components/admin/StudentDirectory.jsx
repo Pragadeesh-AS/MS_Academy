@@ -117,12 +117,12 @@ const StudentDirectory = ({
   };
 
   return (
-    <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.03) 0%, transparent 70%)' }}>
-      
+    <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-4 sm:px-6 lg:px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.03) 0%, transparent 70%)' }}>
+
       {/* Page Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 relative z-10">
         <div>
-          <h2 className="text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
+          <h2 className="text-[26px] sm:text-[30px] lg:text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
             Student Directory
           </h2>
           <p className="text-[#64748B] text-[15px] font-medium mt-1">
@@ -130,7 +130,7 @@ const StudentDirectory = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="flex bg-white/60 backdrop-blur-md border border-[#EEF2F7] p-1.5 rounded-2xl shadow-sm">
             <button 
               onClick={() => setActiveSubTab('joined')}
@@ -418,11 +418,11 @@ const StudentDirectory = ({
             
             {/* Pagination */}
             {totalPages > 0 && (
-              <div className="px-6 py-4 border-t border-[#EEF2F7] flex items-center justify-between bg-white/50">
-                <span className="text-[14px] text-[#64748B] font-medium">
+              <div className="px-4 sm:px-6 py-4 border-t border-[#EEF2F7] flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/50">
+                <span className="text-[13px] sm:text-[14px] text-[#64748B] font-medium text-center sm:text-left">
                   Showing <strong className="text-[#0F172A] font-semibold">{filteredStudents.length === 0 ? 0 : (currentPage - 1) * studentsPerPage + 1}</strong> to <strong className="text-[#0F172A] font-semibold">{Math.min(currentPage * studentsPerPage, filteredStudents.length)}</strong> of <strong className="text-[#0F172A] font-semibold">{filteredStudents.length}</strong> students
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-center">
                   <button 
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
@@ -466,25 +466,25 @@ const StudentDirectory = ({
       {/* Student Details Modal */}
       {selectedStudent && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setSelectedStudent(null)}>
-          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center">
+          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center shrink-0">
               <h3 className="text-[20px] font-bold text-[#0F172A]">Student Details</h3>
               <button onClick={() => setSelectedStudent(null)} className="text-[#64748B] hover:text-[#0F172A] transition-colors bg-slate-100 hover:bg-slate-200 p-2 rounded-full">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-8 space-y-6">
+            <div className="p-5 sm:p-8 space-y-6 overflow-y-auto">
               <div className="flex items-center gap-5">
                 <div className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-[#2563EB] border border-blue-100 font-bold text-[28px] flex items-center justify-center shrink-0 shadow-sm">
                   {selectedStudent.name.charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <h4 className="text-[22px] font-bold text-[#0F172A] leading-tight">{selectedStudent.name}</h4>
-                  <p className="text-[15px] font-medium text-[#64748B] mt-1">{selectedStudent.email}</p>
+                <div className="min-w-0">
+                  <h4 className="text-[22px] font-bold text-[#0F172A] leading-tight truncate">{selectedStudent.name}</h4>
+                  <p className="text-[15px] font-medium text-[#64748B] mt-1 truncate">{selectedStudent.email}</p>
                 </div>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#EEF2F7]">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-[#EEF2F7]">
                 <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
                   <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Department</span>
                   <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.department}</p>
@@ -602,7 +602,7 @@ const StudentDirectory = ({
                 </div>
               </div>
             </div>
-            <div className="p-6 bg-[#F8FAFC] border-t border-[#EEF2F7] flex justify-end">
+            <div className="p-6 bg-[#F8FAFC] border-t border-[#EEF2F7] flex justify-end shrink-0">
               <button onClick={() => setSelectedStudent(null)} className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm">
                 Close
               </button>
@@ -610,10 +610,10 @@ const StudentDirectory = ({
           </div>
         </div>
       )}
-      
+
       {/* Generic Confirmation Modal */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black">
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black p-4">
           <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
             <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Action</div>
             <div className="p-6">

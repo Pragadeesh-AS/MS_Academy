@@ -29,14 +29,15 @@ const Carousel_003 = ({
   const css = `
   .Carousal_003 {
     width: 100%;
-    height: 400px;
+    height: min(400px, 60vw);
+    min-height: 220px;
     padding-bottom: 50px !important;
   }
-  
+
   .Carousal_003 .swiper-slide {
     background-position: center;
     background-size: cover;
-    width: 300px;
+    width: min(300px, 78vw);
     border-radius: 16px;
     overflow: hidden;
     box-shadow: 0 10px 30px rgba(0,0,0,0.1);

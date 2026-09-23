@@ -74,19 +74,19 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
         <div className="grid gap-6">
           {reports.map((report) => (
             <div key={report.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col">
-              <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1 ${report.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              <div className="bg-slate-50 p-4 border-b border-slate-200 flex flex-wrap gap-3 justify-between items-center">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1 whitespace-nowrap ${report.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                     {report.status === 'resolved' ? <Check size={14}/> : <AlertTriangle size={14}/>} {report.status || 'Pending'}
                   </span>
-                  <span className="text-sm font-bold text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200">
+                  <span className="text-sm font-bold text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 whitespace-nowrap">
                     Dept: {report.department}
                   </span>
-                  <span className="text-sm font-bold text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200">
+                  <span className="text-sm font-bold text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 truncate max-w-[220px]">
                     Test: {report.testTitle}
                   </span>
                 </div>
-                <div className="text-sm font-bold text-slate-500">
+                <div className="text-sm font-bold text-slate-500 whitespace-nowrap">
                   {report.timestamp?.toDate ? report.timestamp.toDate().toLocaleString() : 'Recent'}
                 </div>
               </div>
@@ -103,7 +103,7 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
                     <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Question Context</div>
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm max-h-48 overflow-y-auto">
                       <div dangerouslySetInnerHTML={{ __html: report.questionText || '<i class="text-slate-400">No text provided</i>' }} />
-                      <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs font-bold text-slate-500">
+                      <div className="mt-4 pt-3 border-t border-slate-200 flex flex-wrap gap-2 items-center justify-between text-xs font-bold text-slate-500">
                         <span className="flex items-center gap-1" title={report.questionId}>
                           Question Ref: <span className="text-slate-700 bg-slate-200 px-2 py-0.5 rounded uppercase">{report.questionId.substring(0, 6)}</span>
                         </span>

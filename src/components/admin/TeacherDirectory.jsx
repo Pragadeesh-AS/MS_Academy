@@ -52,7 +52,7 @@ const TeacherDirectory = ({
   );
 
   return (
-    <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.04) 0%, transparent 70%)' }}>
+    <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-4 sm:px-6 lg:px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.04) 0%, transparent 70%)' }}>
       
       {/* Background Texture Overlay */}
       <div className="absolute inset-0 z-0 opacity-40 mix-blend-overlay pointer-events-none" style={{ backgroundImage: 'radial-gradient(#94A3B8 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
@@ -60,7 +60,7 @@ const TeacherDirectory = ({
       {/* Page Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 relative z-10 pt-8">
         <div>
-          <h2 className="text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
+          <h2 className="text-[26px] sm:text-[30px] lg:text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
             Teacher Directory
           </h2>
           <p className="text-[#64748B] text-[15px] font-medium mt-1">
@@ -68,7 +68,7 @@ const TeacherDirectory = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="flex bg-white/80 backdrop-blur-md border border-[#EEF2F7] p-1.5 rounded-2xl shadow-sm">
             <button 
               onClick={() => setActiveSubTab('faculty')}
@@ -290,11 +290,11 @@ const TeacherDirectory = ({
             
             {/* Pagination */}
             {totalPages > 0 && (
-              <div className="px-6 py-4 border-t border-[#EEF2F7] flex items-center justify-between bg-white/50">
-                <span className="text-[14px] text-[#64748B] font-medium">
+              <div className="px-4 sm:px-6 py-4 border-t border-[#EEF2F7] flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/50">
+                <span className="text-[13px] sm:text-[14px] text-[#64748B] font-medium text-center sm:text-left">
                   Showing <strong className="text-[#0F172A] font-semibold">{filteredTeachers.length === 0 ? 0 : (currentPage - 1) * teachersPerPage + 1}</strong> to <strong className="text-[#0F172A] font-semibold">{Math.min(currentPage * teachersPerPage, filteredTeachers.length)}</strong> of <strong className="text-[#0F172A] font-semibold">{filteredTeachers.length}</strong> faculty members
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-center">
                   <button 
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
@@ -338,25 +338,25 @@ const TeacherDirectory = ({
       {/* Teacher Details Modal */}
       {selectedTeacher && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setSelectedTeacher(null)}>
-          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center">
+          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center shrink-0">
               <h3 className="text-[20px] font-bold text-[#0F172A]">Teacher Details</h3>
               <button onClick={() => setSelectedTeacher(null)} className="text-[#64748B] hover:text-[#0F172A] transition-colors bg-slate-100 hover:bg-slate-200 p-2 rounded-full">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-8 space-y-6">
+            <div className="p-5 sm:p-8 space-y-6 overflow-y-auto">
               <div className="flex items-center gap-5">
                 <div className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-indigo-100 to-indigo-50 text-indigo-700 border border-indigo-100 font-bold text-[28px] flex items-center justify-center shrink-0 shadow-sm">
                   {selectedTeacher.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
                 </div>
-                <div>
-                  <h4 className="text-[22px] font-bold text-[#0F172A] leading-tight">{selectedTeacher.name}</h4>
-                  <p className="text-[15px] font-medium text-[#64748B] mt-1">{selectedTeacher.email}</p>
+                <div className="min-w-0">
+                  <h4 className="text-[22px] font-bold text-[#0F172A] leading-tight truncate">{selectedTeacher.name}</h4>
+                  <p className="text-[15px] font-medium text-[#64748B] mt-1 truncate">{selectedTeacher.email}</p>
                 </div>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-[#EEF2F7]">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-[#EEF2F7]">
                 <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
                   <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Department</span>
                   <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedTeacher.department}</p>
@@ -379,7 +379,7 @@ const TeacherDirectory = ({
                 </div>
               </div>
             </div>
-            <div className="p-6 bg-[#F8FAFC] border-t border-[#EEF2F7] flex justify-end">
+            <div className="p-6 bg-[#F8FAFC] border-t border-[#EEF2F7] flex justify-end shrink-0">
               <button onClick={() => setSelectedTeacher(null)} className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm">
                 Close
               </button>

@@ -317,7 +317,7 @@ export default function GateCourses() {
           <Sparkles size={14} className="animate-pulse" />
           GATE Coaching Center
         </div>
-        <h1 className="text-[44px] md:text-[60px] font-[900] text-slate-900 leading-[1.1] tracking-tight">
+        <h1 className="text-[32px] sm:text-[44px] md:text-[60px] font-[900] text-slate-900 leading-[1.1] tracking-tight">
           Explore Our <span className="text-[#1d4ed8]">GATE Streams</span>
         </h1>
         <p className="text-[17px] md:text-[18px] text-slate-500 leading-relaxed max-w-[650px] font-medium">
@@ -371,7 +371,7 @@ export default function GateCourses() {
               {/* Text Details Container */}
               <div className="flex-1 flex flex-col items-start relative z-10">
                 {/* Background Editorial Index Number */}
-                <div className={`absolute -top-10 left-0 text-[120px] font-black text-slate-100/55 select-none pointer-events-none tracking-tighter leading-none -z-10 transition-colors duration-500 ${th.watermarkHover}`}>
+                <div className={`absolute -top-6 sm:-top-10 left-0 text-[70px] sm:text-[90px] md:text-[120px] font-black text-slate-100/55 select-none pointer-events-none tracking-tighter leading-none -z-10 transition-colors duration-500 ${th.watermarkHover}`}>
                   {indexStr}
                 </div>
 

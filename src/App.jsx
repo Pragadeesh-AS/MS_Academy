@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import './index.css';
 import { ShinyButton } from "./components/ui/shiny-button";
-import { motion } from "motion/react";
-import { Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from "motion/react";
+import { Sparkles, Menu, X } from 'lucide-react';
 import { auth, db } from './firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import Home from './components/Home';
@@ -48,6 +48,7 @@ export default function App() {
 
   const [userRole, setUserRole] = useState(() => sessionStorage.getItem('auth_role'));
   const [userName, setUserName] = useState(() => sessionStorage.getItem('auth_name'));
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleStorageChange = () => {
@@ -69,6 +70,11 @@ export default function App() {
   // Reset scroll on route change
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [location.pathname]);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
   const getDynamicLink = () => {
@@ -94,7 +100,7 @@ export default function App() {
   const dynamicLink = getDynamicLink();
 
   return (
-    <div className={`min-h-screen bg-[#fafafa] relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col ${(location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student')) ? 'pt-24' : ''}`}>
+    <div className={`min-h-screen bg-[#fafafa] relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col ${(location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student')) ? 'pt-16 md:pt-24' : ''}`}>
       {/* Background Dotted Pattern */}
       <div className="absolute inset-0 z-[-1] bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMCwwLDAsMC4wNSkiLz48L3N2Zz4=')] [mask-image:linear-gradient(to_bottom,white_20%,transparent_90%)] pointer-events-none"></div>
 
@@ -113,6 +119,7 @@ export default function App() {
       
       {/* Navigation Bar - Hide on Login, Admin, Teacher Dashboard, Typist Dashboard, and Student Portal */}
       {(location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student')) && (
+      <>
       <div className="w-full fixed top-2 inset-x-0 z-50">
         <motion.nav 
           initial={false}
@@ -217,6 +224,93 @@ export default function App() {
           </div>
         </motion.nav>
       </div>
+
+      {/* Mobile Navigation Bar */}
+      <div className="md:hidden fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/70 shadow-sm">
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <Link to="/" className="flex flex-row items-center gap-2 whitespace-nowrap min-w-0">
+            <img src="/logo.png" alt="MS Academy Logo" className="w-9 h-9 object-contain flex-shrink-0" />
+            <div className="flex flex-col justify-center min-w-0">
+              <span className="font-black text-[13px] text-slate-900 uppercase tracking-wide leading-none truncate">MS GATE ACADEMY</span>
+              <span className="font-bold text-[8px] text-[#1d4ed8] uppercase tracking-[0.15em] mt-1 leading-none">COIMBATORE</span>
+            </div>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen((open) => !open)}
+            aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={isMobileMenuOpen}
+            className="p-2 rounded-lg text-slate-700 hover:bg-slate-100 flex-shrink-0"
+          >
+            {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="overflow-hidden border-t border-slate-200/70 bg-white/95"
+            >
+              <div className="flex flex-col gap-1 px-4 py-3">
+                {[
+                  { path: '/', label: 'Home' },
+                  { path: '/gate-courses', label: 'GATE Courses' },
+                  { path: '/programming', label: 'Programming Courses' },
+                  { path: '/about', label: 'About Us' },
+                  { path: '/careers', label: 'Careers' },
+                  { path: '/contact', label: 'Contact' },
+                ].map((item) => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${location.pathname === item.path ? 'text-[#1d4ed8] bg-blue-50' : 'text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+
+                <div className="pt-2 mt-1 border-t border-slate-200/70">
+                  {userRole ? (
+                    <div className="flex flex-col gap-2">
+                      <Link
+                        to={userRole === 'admin' ? '/admin' : userRole === 'teacher' ? '/teacher-dashboard' : userRole === 'typist' ? '/typist-dashboard' : '/student'}
+                        className="text-center text-sm font-bold text-slate-700 border border-slate-200 bg-slate-50 px-4 py-2.5 rounded-xl"
+                      >
+                        {userRole === 'admin' ? 'Admin Panel' : userRole === 'teacher' ? 'Faculty Portal' : userRole === 'typist' ? 'Typist Portal' : `Hello, ${userName}`}
+                      </Link>
+                      <button
+                        onClick={() => {
+                          sessionStorage.removeItem('auth_role');
+                          sessionStorage.removeItem('auth_email');
+                          sessionStorage.removeItem('auth_name');
+                          localStorage.removeItem('student_department');
+                          setUserRole(null);
+                          setUserName(null);
+                          navigate('/login');
+                        }}
+                        className="text-center text-sm font-bold text-red-650 border border-red-200/50 bg-red-50 px-4 py-2.5 rounded-xl"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  ) : (
+                    <Link to="/login" className="block">
+                      <div className="text-center font-semibold text-white rounded-lg bg-gradient-to-b from-[#3a3a3a] to-[#1a1a1a] shadow-md px-4 py-2.5 text-[15px]">
+                        Student Portal
+                      </div>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      </>
       )}
 
       <Routes>
