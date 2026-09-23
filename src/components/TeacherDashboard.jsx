@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, LogOut, Settings, Users, Video, Calendar, ChevronLeft, ChevronRight, Menu, X, FileText } from 'lucide-react';
+import { motion } from 'motion/react';
+import { BookOpen, LogOut, Settings, Users, Video, Calendar, ChevronLeft, ChevronRight, Menu, X, FileText, ArrowRight, Clock, Sparkles } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, getCountFromServer } from 'firebase/firestore';
@@ -24,18 +25,28 @@ const sidebarNavItems = [
   { key: 'reported', label: "Reported Q's", icon: ShieldAlert },
 ];
 
-function StatCard({ icon: Icon, label, value, onClick }) {
+function StatCard({ icon: Icon, label, value, onClick, gradient, index = 0 }) {
   return (
-    <button
+    <motion.button
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, delay: index * 0.07, ease: 'easeOut' }}
+      whileHover={{ y: -4 }}
+      whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 text-left hover:border-blue-200 hover:shadow-md transition-all group"
+      className="relative bg-white rounded-2xl border border-slate-200 shadow-sm p-5 text-left overflow-hidden group hover:shadow-xl hover:border-transparent transition-[box-shadow,border-color] duration-300"
     >
-      <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-        <Icon size={20} />
+      <div className={`absolute -right-6 -top-6 w-28 h-28 rounded-full bg-gradient-to-br ${gradient} opacity-[0.06] group-hover:opacity-[0.14] group-hover:scale-110 transition-all duration-500 pointer-events-none`}></div>
+      <div className={`relative w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} text-white flex items-center justify-center mb-4 shadow-lg shadow-slate-900/10 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300`}>
+        <Icon size={20} strokeWidth={2.25} />
       </div>
-      <p className="text-2xl font-[900] text-slate-900">{value}</p>
-      <p className="text-xs font-bold text-slate-500 mt-1">{label}</p>
-    </button>
+      <p className="relative text-3xl font-[900] text-slate-900 tabular-nums">{value}</p>
+      <p className="relative text-xs font-bold text-slate-500 mt-1 uppercase tracking-wide">{label}</p>
+      <div className="relative mt-3 flex items-center gap-1 text-[11px] font-bold text-slate-400 group-hover:text-slate-700 transition-colors">
+        <span>View details</span>
+        <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
+      </div>
+    </motion.button>
   );
 }
 
@@ -264,9 +275,12 @@ export default function TeacherDashboard() {
         {activeTab === 'courses' && (
           !authChecked ? (
             <div className="mt-6 space-y-6 animate-pulse">
-              <div className="h-28 bg-white rounded-[28px] border border-slate-200"></div>
+              <div className="h-32 bg-gradient-to-br from-slate-200 to-slate-100 rounded-[28px]"></div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                {[0, 1, 2, 3].map(i => <div key={i} className="h-28 bg-white rounded-2xl border border-slate-200"></div>)}
+                {[0, 1, 2, 3].map(i => <div key={i} className="h-32 bg-white rounded-2xl border border-slate-200"></div>)}
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {[0, 1].map(i => <div key={i} className="h-64 bg-white rounded-3xl border border-slate-200"></div>)}
               </div>
             </div>
           ) : !teacherDepartment ? (
@@ -288,80 +302,131 @@ export default function TeacherDashboard() {
 
             return (
               <div className="mt-6 space-y-6">
-                <div className="bg-white rounded-[28px] border border-slate-200 shadow-sm p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
-                    <CourseIcon size={32} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-1">Your Assigned Course</p>
-                    <h2 className="text-xl sm:text-2xl font-[900] text-slate-900 truncate">{courseInfo?.name || teacherDepartment}</h2>
-                    <p className="text-slate-500 text-sm font-medium mt-1">GATE preparation coaching for {courseInfo?.name || teacherDepartment} students.</p>
-                  </div>
-                </div>
+                {/* Course Hero */}
+                <motion.div
+                  initial={{ opacity: 0, y: -12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                  className="relative overflow-hidden bg-gradient-to-br from-[#1d4ed8] via-[#2f5ce0] to-[#4f46e5] rounded-[28px] shadow-xl shadow-blue-900/15 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6"
+                >
+                  <div className="absolute -top-16 -right-10 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+                  <div className="absolute -bottom-24 -left-10 w-64 h-64 bg-indigo-400/20 rounded-full blur-3xl pointer-events-none"></div>
 
+                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 text-white flex items-center justify-center flex-shrink-0 shadow-inner">
+                    <CourseIcon size={34} strokeWidth={2} />
+                  </div>
+                  <div className="relative flex-1 min-w-0">
+                    <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm text-white text-[11px] font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-3 border border-white/10">
+                      <Sparkles size={12} /> Your Assigned Course
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl font-[900] text-white tracking-tight truncate">{courseInfo?.name || teacherDepartment}</h2>
+                    <p className="text-blue-100/90 text-sm font-medium mt-2 max-w-lg">GATE preparation coaching for {courseInfo?.name || teacherDepartment} students.</p>
+                  </div>
+                  <div className="relative flex-shrink-0">
+                    <span className="inline-flex items-center gap-1.5 bg-white/15 text-white text-xs font-bold px-3 py-1.5 rounded-full border border-white/10">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Active
+                    </span>
+                  </div>
+                </motion.div>
+
+                {/* Stat Cards */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                  <StatCard icon={Users} label="Enrolled Students" value={deptStudentCount} onClick={() => setActiveTab('students')} />
-                  <StatCard icon={Calendar} label="Tests Created" value={courseStats.testsCount} onClick={() => setActiveTab('tests')} />
-                  <StatCard icon={BookOpen} label="Question Bank" value={courseStats.questionsCount} onClick={() => setActiveTab('questions')} />
-                  <StatCard icon={Video} label="Recordings" value={courseStats.recordingsCount} onClick={() => setActiveTab('live')} />
+                  <StatCard index={0} icon={Users} label="Enrolled Students" value={deptStudentCount} onClick={() => setActiveTab('students')} gradient="from-blue-500 to-blue-600" />
+                  <StatCard index={1} icon={Calendar} label="Tests Created" value={courseStats.testsCount} onClick={() => setActiveTab('tests')} gradient="from-violet-500 to-purple-600" />
+                  <StatCard index={2} icon={BookOpen} label="Question Bank" value={courseStats.questionsCount} onClick={() => setActiveTab('questions')} gradient="from-indigo-500 to-blue-600" />
+                  <StatCard index={3} icon={Video} label="Recordings" value={courseStats.recordingsCount} onClick={() => setActiveTab('live')} gradient="from-rose-500 to-pink-600" />
                 </div>
 
+                {/* Upcoming Classes / Recent Tests */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                  <motion.div
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.3, ease: 'easeOut' }}
+                    className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                  >
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-[900] text-slate-900 text-lg flex items-center gap-2">
-                        <Calendar size={18} className="text-blue-500" /> Upcoming Live Classes
+                        <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center"><Calendar size={16} /></span>
+                        Upcoming Live Classes
                       </h3>
-                      <button onClick={() => setActiveTab('live')} className="text-xs font-bold text-blue-600 hover:text-blue-700 flex-shrink-0">
-                        View all &rarr;
+                      <button onClick={() => setActiveTab('live')} className="text-xs font-bold text-blue-600 hover:text-white hover:bg-blue-600 px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0 flex items-center gap-1">
+                        View all <ArrowRight size={12} />
                       </button>
                     </div>
                     {upcomingClasses.length === 0 ? (
-                      <p className="text-slate-400 text-sm font-medium py-6 text-center">No upcoming classes scheduled.</p>
+                      <div className="py-8 text-center">
+                        <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Calendar size={20} />
+                        </div>
+                        <p className="text-slate-400 text-sm font-medium">No upcoming classes scheduled.</p>
+                      </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-2.5">
                         {upcomingClasses.map(cls => (
-                          <div key={cls.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                            <div className="min-w-0">
-                              <p className="font-bold text-slate-800 text-sm truncate">{cls.topic}</p>
-                              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                                {new Date(cls.time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
-                              </p>
+                          <div key={cls.id} className="group flex items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 hover:bg-blue-50/70 border border-slate-100 hover:border-blue-200 transition-all">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-lg bg-white text-blue-600 border border-blue-100 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-colors">
+                                <Clock size={16} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-slate-800 text-sm truncate">{cls.topic}</p>
+                                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                  {new Date(cls.time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                                </p>
+                              </div>
                             </div>
-                            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full flex-shrink-0">{cls.students || 0} students</span>
+                            <span className="text-xs font-bold text-blue-600 bg-white border border-blue-100 px-2.5 py-1 rounded-full flex-shrink-0">{cls.students || 0} students</span>
                           </div>
                         ))}
                       </div>
                     )}
-                  </div>
+                  </motion.div>
 
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                  <motion.div
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.36, ease: 'easeOut' }}
+                    className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6"
+                  >
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-[900] text-slate-900 text-lg flex items-center gap-2">
-                        <FileText size={18} className="text-purple-500" /> Recent Tests
+                        <span className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center"><FileText size={16} /></span>
+                        Recent Tests
                       </h3>
-                      <button onClick={() => setActiveTab('tests')} className="text-xs font-bold text-blue-600 hover:text-blue-700 flex-shrink-0">
-                        View all &rarr;
+                      <button onClick={() => setActiveTab('tests')} className="text-xs font-bold text-blue-600 hover:text-white hover:bg-blue-600 px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0 flex items-center gap-1">
+                        View all <ArrowRight size={12} />
                       </button>
                     </div>
                     {recentTests.length === 0 ? (
-                      <p className="text-slate-400 text-sm font-medium py-6 text-center">No tests created yet.</p>
+                      <div className="py-8 text-center">
+                        <div className="w-12 h-12 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <FileText size={20} />
+                        </div>
+                        <p className="text-slate-400 text-sm font-medium">No tests created yet.</p>
+                      </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-2.5">
                         {recentTests.map(t => (
-                          <div key={t.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                            <div className="min-w-0">
-                              <p className="font-bold text-slate-800 text-sm truncate">{t.title}</p>
-                              <p className="text-xs text-slate-500 font-medium mt-0.5">{t.subject || 'General'} &middot; {t.questions?.length || 0} questions</p>
+                          <div key={t.id} className="group flex items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 hover:bg-purple-50/70 border border-slate-100 hover:border-purple-200 transition-all">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-9 h-9 rounded-lg bg-white text-purple-600 border border-purple-100 flex items-center justify-center flex-shrink-0 group-hover:bg-purple-600 group-hover:text-white group-hover:border-purple-600 transition-colors">
+                                <FileText size={16} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-slate-800 text-sm truncate">{t.title}</p>
+                                <p className="text-xs text-slate-500 font-medium mt-0.5">{t.subject || 'General'} &middot; {t.questions?.length || 0} questions</p>
+                              </div>
                             </div>
-                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${t.status === 'active' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-500 bg-slate-100'}`}>
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${t.status === 'active' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-500 bg-slate-100'}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${t.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
                               {t.status}
                             </span>
                           </div>
                         ))}
                       </div>
                     )}
-                  </div>
+                  </motion.div>
                 </div>
               </div>
             );
