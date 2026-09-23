@@ -312,6 +312,34 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                       <img src={q.questionImageUrl} alt="Question Graphic" className="max-h-52 object-contain rounded-xl border border-slate-100 p-2 mb-4 bg-slate-50" />
                     )}
 
+                    {/* Match Columns */}
+                    {q.questionType === 'Match' && (q.matchColumn1 || q.matchColumn2) && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div className="border border-slate-200 rounded-xl overflow-hidden">
+                          <div className="bg-slate-50 text-xs font-bold text-slate-600 px-3 py-2 border-b border-slate-200">List I</div>
+                          <div className="divide-y divide-slate-100">
+                            {(q.matchColumn1 || []).filter(item => item && item.trim()).map((item, i) => (
+                              <div key={i} className="flex gap-2 px-3 py-2 text-sm text-slate-700">
+                                <span className="font-bold shrink-0">{String.fromCharCode(80 + i)}.</span>
+                                <span dangerouslySetInnerHTML={{ __html: item }} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="border border-slate-200 rounded-xl overflow-hidden">
+                          <div className="bg-slate-50 text-xs font-bold text-slate-600 px-3 py-2 border-b border-slate-200">List II</div>
+                          <div className="divide-y divide-slate-100">
+                            {(q.matchColumn2 || []).filter(item => item && item.trim()).map((item, i) => (
+                              <div key={i} className="flex gap-2 px-3 py-2 text-sm text-slate-700">
+                                <span className="font-bold shrink-0">{i + 1}.</span>
+                                <span dangerouslySetInnerHTML={{ __html: item }} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Options List */}
                     {q.questionType === 'Fill in Blanks' ? (
                       <div className="space-y-3 max-w-md pt-2">

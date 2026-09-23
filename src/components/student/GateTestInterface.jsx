@@ -576,8 +576,34 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                 {currentQ?.questionImageUrl && (
                   <img src={currentQ.questionImageUrl} alt="Question Graphic" className="mt-4 max-w-full" />
                 )}
+                {currentQ?.questionType === 'Match' && (currentQ?.matchColumn1 || currentQ?.matchColumn2) && (
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div className="border border-gray-300 rounded">
+                      <div className="bg-gray-100 text-sm font-bold px-3 py-1.5 border-b border-gray-300">List I</div>
+                      <div className="divide-y divide-gray-200">
+                        {(currentQ.matchColumn1 || []).filter(item => item && item.trim()).map((item, i) => (
+                          <div key={i} className="flex gap-2 px-3 py-2 text-sm">
+                            <span className="font-bold shrink-0">{String.fromCharCode(80 + i)}.</span>
+                            <span dangerouslySetInnerHTML={{ __html: item }} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="border border-gray-300 rounded">
+                      <div className="bg-gray-100 text-sm font-bold px-3 py-1.5 border-b border-gray-300">List II</div>
+                      <div className="divide-y divide-gray-200">
+                        {(currentQ.matchColumn2 || []).filter(item => item && item.trim()).map((item, i) => (
+                          <div key={i} className="flex gap-2 px-3 py-2 text-sm">
+                            <span className="font-bold shrink-0">{i + 1}.</span>
+                            <span dangerouslySetInnerHTML={{ __html: item }} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              
+
               <div className="space-y-4">
                 {currentQ?.questionType === 'Fill in Blanks' ? (
                   <div className="flex gap-2 items-center">
