@@ -44,13 +44,16 @@ export default function Analytics({ joinedStudents = [], department = null }) {
           testsQuery = query(collection(db, 'tests'), where('department', '==', department));
         }
         
-        const [testsSnap, attemptsSnap] = await Promise.all([
+        const [testsSnap, attemptsSnap, questionsSnap] = await Promise.all([
           getDocs(testsQuery),
-          getDocs(collection(db, 'test_attempts'))
+          getDocs(collection(db, 'test_attempts')),
+          getDocs(collection(db, 'question_bank'))
         ]);
-        
+
         const fetchedTests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
         const fetchedAttempts = attemptsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        const questionsMap = {};
+        questionsSnap.docs.forEach(d => { questionsMap[d.id] = { id: d.id, ...d.data() }; });
         
         // Allowed emails for this department/global view
         let validEmails = null;
@@ -135,9 +138,14 @@ export default function Analytics({ joinedStudents = [], department = null }) {
           let negMarks = 0;
 
           if (attempt.responses && Array.isArray(attempt.responses)) {
-            allQuestions = attempt.responses.map(r => {
+            allQuestions = attempt.responses.map((r, i) => {
+              const qData = questionsMap[r.questionId] || {};
+              const isFillBlank = qData.questionType === 'Fill in Blanks';
+
+              const hasAnswer = Array.isArray(r.selectedAnswer) ? r.selectedAnswer.length > 0 : !!r.selectedAnswer;
+
               let status = 'Unattempted';
-              if (r.selectedOption !== null && r.selectedOption !== undefined) {
+              if (hasAnswer) {
                  if (r.isCorrect) {
                    status = 'Correct';
                    correct++;
@@ -148,12 +156,19 @@ export default function Analytics({ joinedStudents = [], department = null }) {
               } else {
                  unattempted++;
               }
-              
+
+              const formatAnswer = (ans) => {
+                if (ans === undefined || ans === null || ans === '') return null;
+                if (Array.isArray(ans)) return ans.length ? `Option ${ans.slice().sort().join(', ')}` : null;
+                return isFillBlank ? ans : `Option ${ans}`;
+              };
+
               return {
-                q: r.questionText || "Question text hidden",
-                selected: r.selectedOption !== null ? `Option ${r.selectedOption}` : null,
-                correct: r.correctOption !== null ? `Option ${r.correctOption}` : 'Unknown',
-                explanation: r.explanation || 'No explanation provided.',
+                qIndex: i + 1,
+                q: qData.questionText || "Question text unavailable",
+                selected: formatAnswer(r.selectedAnswer),
+                correct: formatAnswer(r.correctAnswer) || 'Unknown',
+                explanation: qData.explanation || 'No explanation provided.',
                 status,
                 timeSpent: formatTime(r.timeSpent || 0)
               };
@@ -778,7 +793,7 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                           <div className={`px-6 py-4 border-b flex justify-between items-center ${q.status === 'Correct' ? 'bg-emerald-50 border-emerald-100' : q.status === 'Wrong' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
                             <div className="flex items-center gap-3">
                               <span className="text-sm font-black text-slate-500 bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded-xl shadow-sm">
-                                Q{activeDetailedTest.allQuestions.findIndex(origQ => origQ.q === q.q) + 1}
+                                Q{q.qIndex}
                               </span>
                               {q.status === 'Correct' && <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700"><CheckCircle2 size={16} className="text-emerald-500"/> Correct</span>}
                               {q.status === 'Wrong' && <span className="flex items-center gap-1.5 text-xs font-bold text-red-700"><XCircle size={16} className="text-red-500"/> Wrong</span>}
@@ -791,7 +806,7 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                           </div>
 
                           <div className="p-6">
-                            <p className="font-[800] text-slate-800 mb-6 text-base leading-relaxed tracking-tight">{q.q}</p>
+                            <p className="font-[800] text-slate-800 mb-6 text-base leading-relaxed tracking-tight" dangerouslySetInnerHTML={{ __html: q.q }} />
                             
                             <div className="flex flex-col gap-4 mb-6">
                               {/* Student Selected */}
@@ -822,7 +837,7 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                             <div className="pt-5 border-t border-slate-100">
                               <div className="flex items-center gap-3 text-[15px] text-slate-600 bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50">
                                 <AlertCircle className="shrink-0 text-blue-500" size={20} />
-                                <p className="leading-relaxed"><span className="font-bold text-slate-800 mr-1">Explanation:</span> {q.explanation}</p>
+                                <p className="leading-relaxed"><span className="font-bold text-slate-800 mr-1">Explanation:</span> <span dangerouslySetInnerHTML={{ __html: q.explanation }} /></p>
                               </div>
                             </div>
                           </div>
