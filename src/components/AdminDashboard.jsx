@@ -184,7 +184,7 @@ export default function AdminDashboard() {
   const [invitedTeachers, setInvitedTeachers] = useState([]);
   const [teacherSubTab, setTeacherSubTab] = useState('faculty'); // 'faculty' or 'recruitment'
   const [isTeacherInviteModalOpen, setIsTeacherInviteModalOpen] = useState(false);
-  const [teacherInviteForm, setTeacherInviteForm] = useState({ name: '', department: '', qualification: '', email: '' });
+  const [teacherInviteForm, setTeacherInviteForm] = useState({ name: '', department: '', qualification: '', experience: '', email: '' });
   const [isTeacherInviting, setIsTeacherInviting] = useState(false);
 
   // Invited typists dataset
@@ -691,18 +691,19 @@ export default function AdminDashboard() {
         email: teacherInviteForm.email,
         department: teacherInviteForm.department,
         qualification: teacherInviteForm.qualification,
+        experience: teacherInviteForm.experience,
         invitedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
         status: "Invited"
       };
-      
+
       const docRef = await addDoc(collection(db, 'invited_teachers'), newTeacher);
       newTeacher.id = docRef.id;
-      
+
       const updatedTeachers = [newTeacher, ...invitedTeachers];
       setInvitedTeachers(updatedTeachers);
-      
+
       setIsTeacherInviteModalOpen(false);
-      setTeacherInviteForm({ name: '', department: '', qualification: '', email: '' });
+      setTeacherInviteForm({ name: '', department: '', qualification: '', experience: '', email: '' });
       
     } catch (error) {
       console.error('Failed to send teacher invite:', error);
@@ -2202,6 +2203,17 @@ export default function AdminDashboard() {
                   onChange={(e) => setTeacherInviteForm({ ...teacherInviteForm, qualification: e.target.value })}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#5b32ea] focus:ring-4 focus:ring-purple-500/10 transition-all font-semibold text-slate-800"
                   placeholder="e.g. Ph.D. in AI"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Experience</label>
+                <input
+                  type="text"
+                  value={teacherInviteForm.experience}
+                  onChange={(e) => setTeacherInviteForm({ ...teacherInviteForm, experience: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#5b32ea] focus:ring-4 focus:ring-purple-500/10 transition-all font-semibold text-slate-800"
+                  placeholder="e.g. 8 Years"
                 />
               </div>
 

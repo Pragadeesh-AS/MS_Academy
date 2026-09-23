@@ -64,6 +64,18 @@ const StudentDirectory = ({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const studentsPerPage = 10;
 
+  const formatLastLogin = (lastLogin) => {
+    if (!lastLogin) return 'Never logged in';
+    const date = lastLogin.toDate ? lastLogin.toDate() : new Date(lastLogin);
+    const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diffSec < 60) return 'Just now';
+    if (diffSec < 3600) { const m = Math.floor(diffSec / 60); return `${m} min${m === 1 ? '' : 's'} ago`; }
+    if (diffSec < 86400) { const h = Math.floor(diffSec / 3600); return `${h} hour${h === 1 ? '' : 's'} ago`; }
+    if (diffSec < 172800) return 'Yesterday';
+    if (diffSec < 604800) { const d = Math.floor(diffSec / 86400); return `${d} days ago`; }
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
   // Pull the RAW (unmocked) record so we never pre-fill the edit form with the
   // random placeholder department/year this component uses for display when a
   // real field is missing — saving those as real data would corrupt the record.
@@ -123,7 +135,7 @@ const StudentDirectory = ({
         ...student,
         department: student.department || ['Computer Science', 'Mechanical Engineering', 'Electronics', 'Civil Engineering'][seed % 4],
         year: student.yearOfStudy || ['1st Year', '2nd Year', '3rd Year', '4th Year'][seed % 4],
-        lastLogin: student.lastLogin || ['2 hours ago', '1 day ago', '3 days ago', 'Just now'][seed % 4],
+        lastLogin: student.lastLogin || null,
         status: student.status || ['Active', 'Pending', 'Inactive'][seed % 3]
       };
     });
@@ -432,7 +444,7 @@ const StudentDirectory = ({
                           <span className="text-[14px] text-[#475569] font-medium">{student.joinedDate}</span>
                         </td>
                         <td className="px-6">
-                          <span className="text-[14px] text-[#64748B] font-medium">{student.lastLogin}</span>
+                          <span className="text-[14px] text-[#64748B] font-medium">{formatLastLogin(student.lastLogin)}</span>
                         </td>
                         <td className="px-6 text-center relative">
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
