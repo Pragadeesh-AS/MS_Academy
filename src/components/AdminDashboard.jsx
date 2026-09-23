@@ -720,6 +720,18 @@ export default function AdminDashboard() {
     });
   };
 
+  const updateTeacher = async (teacherId, updates) => {
+    try {
+      await updateDoc(doc(db, 'invited_teachers', teacherId), updates);
+      setInvitedTeachers(prev => prev.map(t => t.id === teacherId ? { ...t, ...updates } : t));
+      return true;
+    } catch (e) {
+      console.error('Failed to update teacher', e);
+      alert('Failed to update teacher. Please try again.');
+      return false;
+    }
+  };
+
   const confirmDeleteAction = async () => {
     if (!confirmDeleteObj) return;
     const { type, id } = confirmDeleteObj;
@@ -1474,9 +1486,10 @@ export default function AdminDashboard() {
 
         {/* Active Tab: Teachers (Faculty & Recruitment) */}
         {activeTab === 'teachers' && (
-          <TeacherDirectory 
+          <TeacherDirectory
             invitedTeachers={invitedTeachers}
             deleteTeacher={deleteTeacher}
+            updateTeacher={updateTeacher}
             onInvite={() => setIsTeacherInviteModalOpen(true)}
             activeSubTab={teacherSubTab}
             setActiveSubTab={setTeacherSubTab}

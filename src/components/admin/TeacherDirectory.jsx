@@ -18,9 +18,32 @@ import {
   X
 } from 'lucide-react';
 
-const TeacherDirectory = ({ 
-  invitedTeachers, 
-  deleteTeacher, 
+const DEPARTMENT_OPTIONS = [
+  'Computer Science (CSE)',
+  'Electronics (ECE)',
+  'Mechanical (ME)',
+  'Civil (CE)',
+  'Electrical (EE)',
+  'Data Science & AI (DS)',
+  'Production & Industrial Engg (PI)',
+  'Instrumentation Engg (IN)',
+  'Biotechnology (BT)',
+  'Chemical Engineering (CH)',
+  'Biomedical Engineering (BM)',
+  'Physics (PH)',
+  'Architecture & Planning (AR)',
+  'Agricultural Engineering (AG)',
+  'Metallurgical Engineering (MT)',
+  'Environmental Science (ES)',
+  'Life Sciences (XL)',
+  'Aerospace Engineering (AE)',
+  'Other'
+];
+
+const TeacherDirectory = ({
+  invitedTeachers,
+  deleteTeacher,
+  updateTeacher,
   onInvite,
   activeSubTab,
   setActiveSubTab,
@@ -29,7 +52,32 @@ const TeacherDirectory = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [editingTeacher, setEditingTeacher] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', department: '', qualification: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const teachersPerPage = 10;
+
+  const openEditTeacher = (teacher) => {
+    setEditForm({
+      name: teacher.name || '',
+      department: teacher.department || '',
+      qualification: teacher.qualification || ''
+    });
+    setEditingTeacher(teacher);
+  };
+
+  const handleSaveTeacherEdit = async (e) => {
+    e.preventDefault();
+    if (!editingTeacher) return;
+    setIsSavingEdit(true);
+    const ok = await updateTeacher(editingTeacher.id, {
+      name: editForm.name.trim(),
+      department: editForm.department,
+      qualification: editForm.qualification.trim()
+    });
+    setIsSavingEdit(false);
+    if (ok) setEditingTeacher(null);
+  };
 
   // Enhance existing teachers with mock data for the premium view
   const enhancedTeachers = invitedTeachers.map(teacher => ({
@@ -270,7 +318,7 @@ const TeacherDirectory = ({
                             <button onClick={() => setSelectedTeacher(teacher)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
                               <Eye size={18} />
                             </button>
-                            <button className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Faculty">
+                            <button onClick={() => openEditTeacher(teacher)} className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Faculty">
                               <Edit size={18} />
                             </button>
                             <button 
@@ -384,6 +432,87 @@ const TeacherDirectory = ({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Teacher Modal */}
+      {editingTeacher && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => !isSavingEdit && setEditingTeacher(null)}>
+          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center shrink-0">
+              <h3 className="text-[20px] font-bold text-[#0F172A]">Edit Faculty</h3>
+              <button onClick={() => !isSavingEdit && setEditingTeacher(null)} className="text-[#64748B] hover:text-[#0F172A] transition-colors bg-slate-100 hover:bg-slate-200 p-2 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveTeacherEdit} className="p-5 sm:p-8 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Teacher Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Department</label>
+                <select
+                  required
+                  value={editForm.department}
+                  onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800 bg-white"
+                >
+                  <option value="">Select Department...</option>
+                  {DEPARTMENT_OPTIONS.map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Qualification</label>
+                <input
+                  type="text"
+                  value={editForm.qualification}
+                  onChange={(e) => setEditForm({ ...editForm, qualification: e.target.value })}
+                  placeholder="e.g. Ph.D. in AI"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
+                <input
+                  type="email"
+                  disabled
+                  value={editingTeacher.email}
+                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-500 cursor-not-allowed"
+                />
+                <p className="text-[11px] text-slate-400 font-medium mt-1.5">Email is tied to their login and can't be changed here. Remove and re-invite the teacher to use a different email.</p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingTeacher(null)}
+                  disabled={isSavingEdit}
+                  className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  className="px-6 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[14px] transition-colors shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

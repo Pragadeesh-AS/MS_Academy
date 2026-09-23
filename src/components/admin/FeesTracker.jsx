@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { 
-  Search, 
-  Wallet, 
-  TrendingUp, 
-  IndianRupee, 
+import React, { useState, useEffect } from 'react';
+import { db } from '../../firebase';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import {
+  Search,
+  Wallet,
+  TrendingUp,
+  IndianRupee,
   Filter,
   Eye,
   Plus,
@@ -17,80 +19,26 @@ import {
   Trash2
 } from 'lucide-react';
 
-// Mock Data
-const MOCK_FEES_DATA = [
-  {
-    id: 1,
-    name: "Alex Johnson",
-    course: "Full Stack Development",
-    totalFee: 50000,
-    paid: 30000,
-    status: "Partial", // Fully Paid, Partial, Pending
-    history: [
-      { id: 101, amount: 15000, date: "2023-08-01", method: "Bank Transfer" },
-      { id: 102, amount: 15000, date: "2023-09-05", method: "Credit Card" }
-    ],
-    installments: [
-      { id: 201, amount: 10000, dueDate: "2023-10-05" },
-      { id: 202, amount: 10000, dueDate: "2023-11-05" }
-    ]
-  },
-  {
-    id: 2,
-    name: "Sarah Williams",
-    course: "Data Science Bootcamp",
-    totalFee: 75000,
-    paid: 75000,
-    status: "Fully Paid",
-    history: [
-      { id: 103, amount: 75000, date: "2023-08-10", method: "UPI" }
-    ],
-    installments: []
-  },
-  {
-    id: 3,
-    name: "Michael Chen",
-    course: "UI/UX Design Masterclass",
-    totalFee: 35000,
-    paid: 10000,
-    status: "Partial",
-    history: [
-      { id: 104, amount: 10000, date: "2023-09-01", method: "Cash" }
-    ],
-    installments: [
-      { id: 203, amount: 12500, dueDate: "2023-10-01" },
-      { id: 204, amount: 12500, dueDate: "2023-11-01" }
-    ]
-  },
-  {
-    id: 4,
-    name: "Emily Davis",
-    course: "Full Stack Development",
-    totalFee: 50000,
-    paid: 0,
-    status: "Pending",
-    history: [],
-    installments: [
-      { id: 205, amount: 25000, dueDate: "2023-09-15" },
-      { id: 206, amount: 25000, dueDate: "2023-10-15" }
-    ]
-  }
-];
-
 export default function FeesTracker() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedStudent, setSelectedStudent] = useState(null);
-  
-  const [feesData, setFeesData] = useState(() => {
-    const saved = localStorage.getItem('ms_academy_fees_data');
-    if (saved) return JSON.parse(saved);
-    return MOCK_FEES_DATA;
-  });
 
-  React.useEffect(() => {
-    localStorage.setItem('ms_academy_fees_data', JSON.stringify(feesData));
-  }, [feesData]);
+  const [feesData, setFeesData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFeesData = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'fee_records'));
+        setFeesData(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (e) {
+        console.error('Failed to fetch fee records', e);
+      }
+      setLoading(false);
+    };
+    fetchFeesData();
+  }, []);
 
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [newStudent, setNewStudent] = useState({
@@ -104,39 +52,44 @@ export default function FeesTracker() {
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
   const [paymentData, setPaymentData] = useState({ amount: '', date: new Date().toISOString().split('T')[0], method: 'Cash' });
 
-  const handleRecordPayment = () => {
+  const handleRecordPayment = async () => {
     if (!paymentData.amount || !selectedStudent) return;
     const amount = Number(paymentData.amount);
-    
-    setFeesData(prev => prev.map(student => {
-      if (student.id === selectedStudent.id) {
-        const newPaid = student.paid + amount;
-        const newStatus = newPaid >= student.totalFee ? 'Fully Paid' : 'Partial';
-        const newHistory = [{
-          id: Date.now(),
-          amount: amount,
-          date: paymentData.date,
-          method: paymentData.method
-        }, ...student.history];
-        
-        const updatedStudent = { ...student, paid: newPaid, status: newStatus, history: newHistory };
-        setSelectedStudent(updatedStudent);
-        return updatedStudent;
-      }
-      return student;
-    }));
-    
-    setIsRecordPaymentOpen(false);
-    setPaymentData({ amount: '', date: new Date().toISOString().split('T')[0], method: 'Cash' });
+
+    const newPaid = selectedStudent.paid + amount;
+    const newStatus = newPaid >= selectedStudent.totalFee ? 'Fully Paid' : 'Partial';
+    const newHistory = [{
+      id: Date.now(),
+      amount: amount,
+      date: paymentData.date,
+      method: paymentData.method
+    }, ...selectedStudent.history];
+
+    try {
+      await updateDoc(doc(db, 'fee_records', selectedStudent.id), { paid: newPaid, status: newStatus, history: newHistory });
+      const updatedStudent = { ...selectedStudent, paid: newPaid, status: newStatus, history: newHistory };
+      setSelectedStudent(updatedStudent);
+      setFeesData(prev => prev.map(s => s.id === selectedStudent.id ? updatedStudent : s));
+      setIsRecordPaymentOpen(false);
+      setPaymentData({ amount: '', date: new Date().toISOString().split('T')[0], method: 'Cash' });
+    } catch (e) {
+      console.error('Failed to record payment', e);
+      alert('Failed to record payment. Please try again.');
+    }
   };
 
-  const handleDeleteStudent = (e, id) => {
+  const handleDeleteStudent = async (e, id) => {
     e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this student from the fees tracker?")) {
+    if (!window.confirm("Are you sure you want to delete this student from the fees tracker?")) return;
+    try {
+      await deleteDoc(doc(db, 'fee_records', id));
       setFeesData(prev => prev.filter(s => s.id !== id));
       if (selectedStudent && selectedStudent.id === id) {
         setSelectedStudent(null);
       }
+    } catch (e) {
+      console.error('Failed to delete fee record', e);
+      alert('Failed to delete this record. Please try again.');
     }
   };
 
@@ -266,7 +219,13 @@ export default function FeesTracker() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredData.length > 0 ? filteredData.map(student => (
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-12 text-center text-slate-500 font-medium">
+                      Loading fee records...
+                    </td>
+                  </tr>
+                ) : filteredData.length > 0 ? filteredData.map(student => (
                   <tr key={student.id} className="hover:bg-slate-50/70 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
@@ -465,11 +424,17 @@ export default function FeesTracker() {
             </div>
             <div className="p-6 border-t border-slate-100 bg-slate-50/50 rounded-b-3xl flex justify-end gap-3">
               <button onClick={() => setIsAddStudentOpen(false)} className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
-              <button onClick={() => {
-                if(newStudent.name && newStudent.course && newStudent.totalFee) {
-                  setFeesData([{...newStudent, id: Date.now(), totalFee: Number(newStudent.totalFee), paid: 0, status: 'Pending', history: [], installments: []}, ...feesData]);
+              <button onClick={async () => {
+                if(!newStudent.name || !newStudent.course || !newStudent.totalFee) return;
+                const payload = { name: newStudent.name, course: newStudent.course, totalFee: Number(newStudent.totalFee), paid: 0, status: 'Pending', history: [], installments: [] };
+                try {
+                  const docRef = await addDoc(collection(db, 'fee_records'), payload);
+                  setFeesData([{ ...payload, id: docRef.id }, ...feesData]);
                   setIsAddStudentOpen(false);
                   setNewStudent({name: '', course: '', totalFee: '', paid: 0, status: 'Pending'});
+                } catch (e) {
+                  console.error('Failed to add fee record', e);
+                  alert('Failed to add student. Please try again.');
                 }
               }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-[14px] font-bold shadow-sm transition-colors">Add Student</button>
             </div>
