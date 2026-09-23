@@ -32,8 +32,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   const [targetMarks, setTargetMarks] = useState(100);
   const [total1Mark, setTotal1Mark] = useState(30);
   const [total2Mark, setTotal2Mark] = useState(35);
-  const [scheduledDate, setScheduledDate] = useState('');
-  const [scheduledTimeStr, setScheduledTimeStr] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [bundleId, setBundleId] = useState(''); // '' means dept level, 'free' means free, 'specific_id' means exclusive
   const [bundles, setBundles] = useState([]);
@@ -331,8 +330,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     setTargetMarks(100);
     setTotal1Mark(30);
     setTotal2Mark(35);
-    setScheduledDate('');
-    setScheduledTimeStr('');
+    setScheduledTime('');
     setSelectedDept(department || '');
     setSelectedSubject('');
     setSelectedTopics([]);
