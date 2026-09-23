@@ -132,11 +132,14 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     
     // Evaluate answers
       const evaluation = questionsList.map(q => {
-        const studentAns = answers[q.id] || '';
-        
+        const rawAns = answers[q.id];
+        const studentAns = q.questionType === 'Multiple Choice'
+          ? (Array.isArray(rawAns) ? rawAns : [])
+          : (rawAns || '');
+
         let isCorrect = false;
         let correctAnswerDisplay = q.correctAnswer;
-        
+
         if (q.questionType === 'Fill in Blanks') {
           const cleanStudent = studentAns.trim();
           if (q.fillBlankMode === 'Numeric Range') {
@@ -152,6 +155,13 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
              isCorrect = cleanStudent.toLowerCase() === cleanCorrect;
              correctAnswerDisplay = q.fillBlankAnswer;
           }
+        } else if (q.questionType === 'Multiple Choice') {
+          const correctSet = (q.correctAnswers || []).slice().sort();
+          const studentSet = studentAns.slice().sort();
+          isCorrect = correctSet.length > 0 &&
+            correctSet.length === studentSet.length &&
+            correctSet.every((opt, i) => opt === studentSet[i]);
+          correctAnswerDisplay = (q.correctAnswers || []).join(', ');
         } else {
           isCorrect = studentAns === q.correctAnswer;
         }
@@ -323,8 +333,12 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                             const optionText = q[`option${opt}`];
                             if (!optionText) return null;
   
-                            const isSelectedByStudent = studentResp.selectedAnswer === opt;
-                            const isCorrectOpt = q.correctAnswer === opt;
+                            const isSelectedByStudent = Array.isArray(studentResp.selectedAnswer)
+                              ? studentResp.selectedAnswer.includes(opt)
+                              : studentResp.selectedAnswer === opt;
+                            const isCorrectOpt = q.questionType === 'Multiple Choice'
+                              ? (q.correctAnswers || []).includes(opt)
+                              : q.correctAnswer === opt;
   
                             let cardClass = 'border-slate-200 bg-white text-slate-600';
                             let badgeClass = 'border-slate-350 text-slate-400';
@@ -347,7 +361,17 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                             );
                           })}
                         </div>
-                        {!isCorrect && q.correctAnswer && (
+                        {!isCorrect && q.questionType === 'Multiple Choice' && (q.correctAnswers || []).length > 0 && (
+                          <div className="flex flex-col gap-2 text-sm bg-green-50/50 px-4 py-3 rounded-xl border border-green-100 mb-4 mt-2">
+                            <span className="font-semibold text-green-700">Correct Answer{q.correctAnswers.length > 1 ? 's' : ''}:</span>
+                            {q.correctAnswers.map(opt => (
+                              <span key={opt} className="font-bold text-green-600">
+                                Option {opt} - <span dangerouslySetInnerHTML={{ __html: q[`option${opt}`] || '' }} />
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {!isCorrect && q.questionType !== 'Multiple Choice' && q.correctAnswer && (
                           <div className="flex items-center justify-between text-sm bg-green-50/50 px-4 py-3 rounded-xl border border-green-100 mb-4 mt-2">
                             <span className="font-semibold text-green-700">Correct Answer:</span>
                             <span className="font-bold text-green-600">

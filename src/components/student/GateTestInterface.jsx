@@ -92,6 +92,17 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
     setSelectedAnswers(prev => ({ ...prev, [qId]: option }));
   };
 
+  const handleToggleOption = (qId, option) => {
+    setSelectedAnswers(prev => {
+      const current = Array.isArray(prev[qId]) ? prev[qId] : [];
+      const updated = current.includes(option) ? current.filter(o => o !== option) : [...current, option];
+      return { ...prev, [qId]: updated };
+    });
+  };
+
+  const isAnswered = (answer) => Array.isArray(answer) ? answer.length > 0 : !!answer;
+  const answeredCount = Object.values(selectedAnswers).filter(isAnswered).length;
+
   const handleClearResponse = () => {
     const qId = testQuestions[currentIdx].id;
     setSelectedAnswers(prev => {
@@ -188,7 +199,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
 
   const getQuestionStatus = (qId) => {
     if (!visited.includes(qId)) return 'not_visited';
-    const hasAnswer = !!selectedAnswers[qId];
+    const hasAnswer = isAnswered(selectedAnswers[qId]);
     const isFlagged = flagged.includes(qId);
     
     if (hasAnswer && isFlagged) return 'answered_marked';
@@ -577,6 +588,29 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                       className="border border-gray-400 p-2 w-48 text-sm outline-none focus:border-blue-500"
                     />
                   </div>
+                ) : currentQ?.questionType === 'Multiple Choice' ? (
+                  <div className="flex flex-col gap-4">
+                    {['A', 'B', 'C', 'D'].map(opt => {
+                      const text = currentQ?.[`option${opt}`];
+                      const img = currentQ?.[`option${opt}Image`];
+                      if (isEmptyHtml(text) && !img) return null;
+                      const isChecked = Array.isArray(selectedAnswers[currentQ.id]) && selectedAnswers[currentQ.id].includes(opt);
+                      return (
+                        <label key={opt} className="flex items-start gap-3 cursor-pointer group">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleOption(currentQ.id, opt)}
+                            className="mt-1 accent-blue-600 w-4 h-4"
+                          />
+                          <div>
+                            {text && <span className="text-sm block" dangerouslySetInnerHTML={{ __html: text }} />}
+                            {img && <img src={img} alt={`Option ${opt}`} className="mt-2 max-h-24 border border-gray-200" />}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <div className="flex flex-col gap-4">
                     {['A', 'B', 'C', 'D'].map(opt => {
@@ -585,8 +619,8 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                       if (isEmptyHtml(text) && !img) return null;
                       return (
                         <label key={opt} className="flex items-start gap-3 cursor-pointer group">
-                          <input 
-                            type="radio" 
+                          <input
+                            type="radio"
                             name={`q_${currentQ.id}`}
                             checked={selectedAnswers[currentQ.id] === opt}
                             onChange={() => handleSelectOption(currentQ.id, opt)}
@@ -668,9 +702,9 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
             <div className="p-3 bg-[#C5EAF8] border-t border-[#86B4D6]">
               <button 
                 onClick={submitExam} 
-                disabled={Object.keys(selectedAnswers).length < testQuestions.length}
+                disabled={answeredCount < testQuestions.length}
                 className={`w-full font-bold py-2 rounded-sm shadow-sm border transition-colors ${
-                  Object.keys(selectedAnswers).length === testQuestions.length
+                  answeredCount === testQuestions.length
                     ? 'bg-[#5CB85C] hover:bg-[#449d44] border-[#4CAE4C] text-white'
                     : 'bg-gray-300 border-gray-400 text-gray-500 cursor-not-allowed'
                 }`}
@@ -690,7 +724,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
               <div className="bg-blue-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Submission</div>
               <div className="p-6">
                 <p className="text-gray-800 text-base mb-2">
-                  You have answered <strong>{Object.keys(selectedAnswers).length}</strong> of <strong>{testQuestions.length}</strong> questions.
+                  You have answered <strong>{answeredCount}</strong> of <strong>{testQuestions.length}</strong> questions.
                 </p>
                 {flagged.length > 0 && (
                   <div className="bg-orange-50 border border-orange-200 text-orange-800 p-3 rounded mb-4 text-sm font-semibold">
