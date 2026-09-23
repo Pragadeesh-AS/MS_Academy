@@ -198,6 +198,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const [filterMark, setFilterMark] = useState('All');
   const [filterDifficulty, setFilterDifficulty] = useState('All');
   const [filterStatus, setFilterStatus] = useState(externalFilter || 'Approved');
+  const [filterType, setFilterType] = useState('All');
 
   useEffect(() => {
     if (externalFilter !== null) {
@@ -329,6 +330,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const years = Array.from({length: currentYear - 1990 + 1}, (_, i) => (currentYear - i).toString()); // 1990 to current year, descending
   const marks = attributes.filter(a => a.type === 'mark').map(a => a.name);
   const difficulties = attributes.filter(a => a.type === 'difficulty').map(a => a.name);
+  const questionTypes = ['Single Choice', 'Multiple Choice', 'Fill in Blanks', 'Match'];
   const optionsList = ['A', 'B', 'C', 'D'];
 
   const handleInputChange = (e) => {
@@ -612,7 +614,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     const matchesMark = filterMark === 'All' || q.mark === filterMark;
     const matchesDifficulty = filterDifficulty === 'All' || q.difficultyLevel === filterDifficulty;
     const matchesStatus = filterStatus === 'All' || q.status === filterStatus;
-    
+    const matchesType = filterType === 'All' || q.questionType === filterType;
+
     // Default Role Filtering Logic
     let roleMatches = true;
     if (userRole === 'typist') {
@@ -625,7 +628,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       premiumMatches = q.isPremium === true;
     }
 
-    return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && roleMatches && premiumMatches;
+    return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && matchesType && roleMatches && premiumMatches;
   });
 
 
@@ -761,20 +764,21 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               {/* FILTERS */}
               <div className="flex flex-wrap items-center gap-3">
                 {[
-                  { label: 'Status', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: ['Draft', 'In Review', 'Approved'] },
-                  { label: 'Subject', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
-                  { label: 'Topic', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
-                  { label: 'Year', val: filterYear, setter: setFilterYear, icon: Clock, opts: years },
-                  { label: 'Marks', val: filterMark, setter: setFilterMark, icon: Trophy, opts: marks },
-                  { label: 'Difficulty', val: filterDifficulty, setter: setFilterDifficulty, icon: Star, opts: difficulties }
+                  { label: 'Status', plural: 'Statuses', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: ['Draft', 'In Review', 'Approved'] },
+                  { label: 'Type', plural: 'Types', val: filterType, setter: setFilterType, icon: Layers, opts: questionTypes },
+                  { label: 'Subject', plural: 'Subjects', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
+                  { label: 'Topic', plural: 'Topics', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
+                  { label: 'Year', plural: 'Years', val: filterYear, setter: setFilterYear, icon: Clock, opts: years },
+                  { label: 'Marks', plural: 'Marks', val: filterMark, setter: setFilterMark, icon: Trophy, opts: marks },
+                  { label: 'Difficulty', plural: 'Difficulties', val: filterDifficulty, setter: setFilterDifficulty, icon: Star, opts: difficulties }
                 ].map((f, i) => (
                   <div key={i} className="relative group shrink-0">
-                    <select 
+                    <select
                       value={f.val}
                       onChange={(e) => f.setter(e.target.value)}
                       className="h-[48px] pl-11 pr-10 appearance-none bg-white border border-[#E5E7EB] rounded-[14px] text-[13px] font-[600] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer min-w-[140px] hover:border-[#CBD5E1]"
                     >
-                      <option value="All">All {f.label}s</option>
+                      <option value="All">All {f.plural}</option>
                       {f.opts.map((opt, idx) => (
                         <option key={idx} value={opt}>{opt}</option>
                       ))}
@@ -783,10 +787,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                     <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none group-hover:text-[#64748B] transition-colors" />
                   </div>
                 ))}
-                
-                <button 
+
+                <button
                   onClick={() => {
-                    setSearch(''); setFilterStatus('All'); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All');
+                    setSearch(''); setFilterStatus('All'); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All'); setFilterType('All');
                   }}
                   className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2"
                 >
