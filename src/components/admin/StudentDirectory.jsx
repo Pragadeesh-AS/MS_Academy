@@ -17,7 +17,9 @@ import {
   Filter,
   X,
   RotateCcw,
-  Package
+  Package,
+  Crown,
+  Star
 } from 'lucide-react';
 
 const DEPARTMENT_OPTIONS = [
@@ -420,9 +422,7 @@ const StudentDirectory = ({
                             </div>
                             <div className="flex flex-col">
                               <span className="font-semibold text-[16px] text-[#0F172A] tracking-tight">{student.name}</span>
-                              <span className={`inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[11px] w-fit mt-1 font-bold tracking-wide ${TIER_STYLES[getTier(student).key]}`}>
-                                {getTier(student).icon} {getTier(student).text}
-                              </span>
+                              <TierPill tier={getTier(student)} />
 
                             </div>
                           </div>
@@ -857,14 +857,32 @@ const StudentDirectory = ({
 // Membership tier: Prime = has purchased bundles, Elite = Pro without bundles, Foundation = everyone else
 const getTier = (st) => {
   const count = (st.purchasedBundles || []).length;
-  if (count > 0) return { key: 'prime', label: 'Prime', icon: '⭐', text: `Prime · ${count} ${count === 1 ? 'Bundle' : 'Bundles'}` };
+  if (count > 0) return { key: 'prime', label: 'Prime', icon: '⭐', text: 'Prime' };
   if (st.isPro) return { key: 'elite', label: 'Elite', icon: '👑', text: 'Elite' };
   return { key: 'foundation', label: 'Foundation', icon: '🌱', text: 'Foundation' };
 };
-const TIER_STYLES = {
-  elite: 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200 shadow-sm',
-  prime: 'bg-gradient-to-r from-indigo-100 to-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm',
-  foundation: 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+// Foundation icon: green sprout on a brown soil mound
+const SproutOnSoil = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="tier-pill__icon">
+    <path d="M12 14c0-4-2.5-6.5-7-6.5 0 4 2.5 6.5 7 6.5z" fill="#22a05a" />
+    <path d="M12 12c0-3.5 2.2-6 6.5-6 0 3.8-2.4 6-6.5 6z" fill="#3ec877" />
+    <path d="M3 21c0-3.5 4-6 9-6s9 2.5 9 6z" fill="#7a3f14" />
+  </svg>
+);
+
+const TIER_ICONS = { elite: Crown, prime: Star, foundation: null };
+
+// Glossy pill badge (styles: .tier-pill in index.css)
+const TierPill = ({ tier }) => {
+  const Icon = TIER_ICONS[tier.key];
+  return (
+    <span className={`tier-pill tier-pill--${tier.key} mt-1 w-fit`}>
+      {Icon
+        ? <Icon size={14} fill="currentColor" strokeWidth={tier.key === 'elite' ? 1.5 : 0} className="tier-pill__icon" />
+        : <SproutOnSoil size={16} />}
+      <span>{tier.text}</span>
+    </span>
+  );
 };
 
 export default StudentDirectory;
