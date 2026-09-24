@@ -10,6 +10,7 @@ import StudentLiveClasses from './StudentLiveClasses';
 import StudentTests from './StudentTests';
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
+import { buyBundle, verifyOrder } from '../cashfree';
 
 const sidebarNavItems = [
   { key: 'learning', label: 'My Learning', icon: BookOpen },
@@ -55,6 +56,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [docId, setDocId] = useState(null);
+  const [payingBundleId, setPayingBundleId] = useState(null);
   
   const [formData, setFormData] = useState({
     department: '',
@@ -332,26 +334,44 @@ export default function Dashboard() {
   };
 
   const handleUpgradeToPro = async (bundleId) => {
-    if (!docId || !bundleId) return;
-    
-    // Simulate payment process delay
-    setLoading(true);
-    setTimeout(async () => {
-      try {
-        const newPurchased = [...purchasedBundles, bundleId];
-        await updateDoc(doc(db, 'joined_students', docId), {
-          purchasedBundles: newPurchased
-        });
-        setPurchasedBundles(newPurchased);
-        alert('Payment Successful! Bundle unlocked. 🎉');
-      } catch (e) {
-        console.error("Error upgrading account", e);
-        alert("Failed to upgrade account. Please try again.");
-      } finally {
-        setLoading(false);
+    if (!docId || !bundleId || payingBundleId) return;
+
+    setPayingBundleId(bundleId);
+    try {
+      const { status, message } = await buyBundle(bundleId);
+      if (status === 'PAID') {
+        setPurchasedBundles(prev => (prev.includes(bundleId) ? prev : [...prev, bundleId]));
+        alert('Payment successful! Your bundle is now unlocked. 🎉');
+      } else if (status === 'PENDING') {
+        alert('Your payment is still being processed. The bundle will unlock automatically once it is confirmed.');
+      } else if (status === 'FAILED') {
+        alert('Payment failed. You have not been charged. Please try again.');
+      } else if (message) {
+        console.warn('Checkout closed:', message);
       }
-    }, 1500);
+    } catch (e) {
+      console.error('Payment error', e);
+      alert(e.message || 'Could not start the payment. Please try again.');
+    } finally {
+      setPayingBundleId(null);
+    }
   };
+
+  // If Cashfree redirected back with ?order_id=..., confirm that order with the server
+  useEffect(() => {
+    const orderId = new URLSearchParams(window.location.search).get('order_id');
+    if (!orderId || !docId) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    verifyOrder(orderId)
+      .then(async (status) => {
+        if (status === 'PAID') {
+          const snap = await getDocs(query(collection(db, 'joined_students'), where('email', '==', sessionStorage.getItem('auth_email') || '')));
+          if (!snap.empty) setPurchasedBundles(snap.docs[0].data().purchasedBundles || []);
+          alert('Payment successful! Your bundle is now unlocked. 🎉');
+        }
+      })
+      .catch((e) => console.error('Order verification failed', e));
+  }, [docId]);
 
   if (loading) {
     return (
@@ -1020,9 +1040,10 @@ export default function Dashboard() {
                         ) : (
                           <button 
                             onClick={() => handleUpgradeToPro(bundle.id)}
-                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-[900] rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] transition-all hover:-translate-y-0.5"
+                            disabled={!!payingBundleId}
+                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-[900] rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] transition-all hover:-translate-y-0.5"
                           >
-                            Buy Now
+                            {payingBundleId === bundle.id ? 'Processing…' : 'Buy Now'}
                           </button>
                         )}
                       </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock } from 'lucide-react';
+import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer } from 'lucide-react';
 
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
@@ -9,6 +9,21 @@ const TimeKeeper = tkModule.default || tkModule;
 // Leading number of the mark label ("1 Mark (-0.33)" -> 1). A plain substring match would
 // also treat "10 Marks" / "15 Marks" / "12" as 1-mark questions.
 const markValue = (q) => parseFloat(q.mark) || 0;
+
+const TYPE_META = {
+  MCQ: { label: 'MCQ', chip: 'bg-blue-50/70 border-blue-100 text-blue-700', dot: 'bg-blue-500', bar: 'bg-blue-500' },
+  MSQ: { label: 'MSQ', chip: 'bg-indigo-50/70 border-indigo-100 text-indigo-700', dot: 'bg-indigo-500', bar: 'bg-indigo-500' },
+  NAT: { label: 'NAT', chip: 'bg-amber-50/70 border-amber-100 text-amber-700', dot: 'bg-amber-500', bar: 'bg-amber-500' },
+  Match: { label: 'Match', chip: 'bg-emerald-50/70 border-emerald-100 text-emerald-700', dot: 'bg-emerald-500', bar: 'bg-emerald-500' }
+};
+
+const shortType = (type) => ({
+  'Single Choice': 'MCQ',
+  'Multiple Choice': 'MSQ',
+  'Fill in Blanks': 'NAT',
+  'Fill in the Blanks': 'NAT',
+  'Match': 'Match'
+}[type] || type);
 
 export default function TestsManager({ department = '', isTeacher = false }) {
   const [tests, setTests] = useState([]);
@@ -445,6 +460,39 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     }
   };
 
+  // Derive card statistics from the questions a test actually contains
+  const getTestStats = (test) => {
+    const ids = test.questions || [];
+    const byId = new Map(questions.map(q => [q.id, q]));
+    const found = ids.map(id => byId.get(id)).filter(Boolean);
+
+    const typeCounts = { MCQ: 0, MSQ: 0, NAT: 0, Match: 0 };
+    found.forEach(q => {
+      const t = shortType(q.questionType);
+      if (t in typeCounts) typeCounts[t] += 1;
+    });
+    const typedTotal = Object.values(typeCounts).reduce((a, b) => a + b, 0);
+
+    // Prefer the saved allocations for the split; fall back to the question data
+    const allocs = test.allocations || {};
+    const allocTopics = Object.keys(allocs);
+    const q1 = allocTopics.length ? allocTopics.reduce((a, t) => a + (allocs[t]?.q1 || 0), 0) : found.filter(q => markValue(q) === 1).length;
+    const q2 = allocTopics.length ? allocTopics.reduce((a, t) => a + (allocs[t]?.q2 || 0), 0) : found.filter(q => markValue(q) === 2).length;
+
+    const allFound = ids.length > 0 && found.length === ids.length;
+    const totalMarks = allFound ? found.reduce((a, q) => a + markValue(q), 0) : (test.targetMarks || 0);
+
+    const topics = allocTopics.length
+      ? allocTopics.map(t => ({ name: t, q1: allocs[t]?.q1 || 0, q2: allocs[t]?.q2 || 0 }))
+      : (test.topic && test.topic !== 'All Topics' ? test.topic.split(',').map(t => ({ name: t.trim() })) : []);
+
+    return { typeCounts, typedTotal, q1, q2, totalMarks, totalQs: ids.length, topics };
+  };
+
+  const formatScheduled = (t) => (t?.includes?.('T')
+    ? new Date(t).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+    : t);
+
   const getBundleLabel = (test) => {
     if (test.bundleId === 'free') return { text: 'Free', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
     if (test.bundleId && test.bundleId !== '') {
@@ -484,112 +532,161 @@ export default function TestsManager({ department = '', isTeacher = false }) {
         </button>
       </div>
 
-      {/* Tests Table Card */}
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="p-20 text-center flex flex-col items-center justify-center">
-            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-slate-500 font-semibold">Loading test templates...</p>
+      {/* Test Template Cards */}
+      {loading ? (
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-20 text-center flex flex-col items-center justify-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-slate-500 font-semibold">Loading test templates...</p>
+        </div>
+      ) : tests.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-3xl shadow-sm text-center p-20 flex flex-col items-center justify-center">
+          <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-6">
+            <FileText size={32} />
           </div>
-        ) : tests.length === 0 ? (
-          <div className="text-center p-20 flex flex-col items-center justify-center">
-            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-6">
-              <FileText size={32} />
-            </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">No Test Blueprints Found</h3>
-            <p className="text-slate-500 max-w-md font-medium">Create a test module template and schedule it for your students to take directly from their dashboard.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-[800] uppercase tracking-wider text-slate-400">
-                  <th className="px-4 py-4">Template Title</th>
-                  <th className="px-4 py-4">Target Audience</th>
-                  <th className="px-4 py-4">Subtopic Blueprint</th>
-                  <th className="px-4 py-4">Marks & Duration</th>
-                  {!isTeacher && <th className="px-4 py-4">Access</th>}
-                  <th className="px-4 py-4">Scheduled Date</th>
-                  <th className="px-4 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-[14px]">
-                {tests.map((test) => (
-                  <tr key={test.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-5">
-                      <div className="font-[800] text-slate-800">{test.title}</div>
-                      <div className="text-[12px] text-slate-400 font-semibold mt-0.5 max-w-[260px] truncate">{test.description || 'No description provided'}</div>
-                    </td>
-                    <td className="px-4 py-5">
-                      <div className="font-bold text-slate-700">{test.department}</div>
-                      <div className="text-[12px] text-slate-500 font-semibold mt-0.5">by {test.createdBy}</div>
-                    </td>
-                    <td className="px-4 py-5">
-                      <span className="px-2.5 py-1 text-xs font-[800] bg-slate-100 text-slate-600 rounded-lg max-w-xs truncate inline-block">
-                        {test.subject} • {test.topic}
+          <h3 className="text-xl font-bold text-slate-800 mb-2">No Test Blueprints Found</h3>
+          <p className="text-slate-500 max-w-md font-medium">Create a test module template and schedule it for your students to take directly from their dashboard.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6 items-start">
+          {tests.map((test) => {
+            const st = getTestStats(test);
+            const lbl = getBundleLabel(test);
+            const typeKinds = Object.values(st.typeCounts).filter(Boolean).length;
+            return (
+              <div key={test.id} className="bg-white border border-[#EEF2F7] rounded-[28px] shadow-[0_12px_35px_rgba(15,23,42,0.06)] hover:shadow-[0_16px_40px_rgba(37,99,235,0.12)] hover:border-blue-200 transition-all duration-300 overflow-hidden flex flex-col">
+
+                {/* Header */}
+                <div className="px-6 pt-6 pb-5 bg-gradient-to-b from-blue-50/70 to-white border-b border-[#EEF2F7]">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
+                      <span className="px-3 py-1 rounded-full bg-blue-100/70 border border-blue-200/60 text-blue-800 text-[11px] font-[800] uppercase tracking-wider truncate max-w-[220px]">
+                        {test.department || 'General'}
                       </span>
-                    </td>
-                    <td className="px-4 py-5">
-                      <div className="flex items-center gap-1 text-slate-700 font-bold">
-                        <Award size={14} className="text-slate-400" />
-                        {test.targetMarks || 100} Marks
+                      {!isTeacher && (
+                        <span className={`px-2.5 py-1 text-[10px] font-[800] rounded-full border ${lbl.color}`}>{lbl.text}</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleDelete(test.id)}
+                      className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                      title="Delete Test"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                  <h3 className="text-[19px] font-[800] text-[#0F172A] leading-snug tracking-tight line-clamp-2">{test.title}</h3>
+                  <p className="text-[13px] text-slate-500 font-semibold mt-1.5 truncate">
+                    {test.description || [test.subject, test.topic].filter(Boolean).join(' • ') || 'No description provided'}
+                  </p>
+                </div>
+
+                <div className="px-6 py-5 space-y-5">
+
+                  {/* Stat tiles */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white border border-[#EEF2F7] rounded-2xl py-3 px-2 text-center shadow-[0_2px_8px_rgba(15,23,42,0.03)]">
+                      <div className="text-[10px] font-[800] uppercase tracking-wider text-slate-400">Duration</div>
+                      <div className="mt-1 flex items-center justify-center gap-1.5 text-[15px] font-[800] text-blue-700"><Timer size={15} />{test.duration || 0}m</div>
+                    </div>
+                    <div className="bg-white border border-[#EEF2F7] rounded-2xl py-3 px-2 text-center shadow-[0_2px_8px_rgba(15,23,42,0.03)]">
+                      <div className="text-[10px] font-[800] uppercase tracking-wider text-slate-400">Total Marks</div>
+                      <div className="mt-1 flex items-center justify-center gap-1.5 text-[15px] font-[800] text-indigo-700"><Award size={15} />{Number(st.totalMarks).toFixed(2)}M</div>
+                    </div>
+                    <div className="bg-white border border-[#EEF2F7] rounded-2xl py-3 px-2 text-center shadow-[0_2px_8px_rgba(15,23,42,0.03)]">
+                      <div className="text-[10px] font-[800] uppercase tracking-wider text-slate-400">Total Qs</div>
+                      <div className="mt-1 flex items-center justify-center gap-1.5 text-[15px] font-[800] text-emerald-700"><Layers size={15} />{st.totalQs} Qs</div>
+                    </div>
+                  </div>
+
+                  {/* Marks split */}
+                  <div className="flex items-center justify-between gap-3 bg-blue-50/50 border border-blue-100/70 rounded-2xl px-4 py-2.5 text-[12.5px]">
+                    <span className="font-[800] text-slate-700">Marks Split:</span>
+                    <span className="font-[800] text-blue-700 whitespace-nowrap">
+                      {st.q1} × 1-Mark <span className="text-slate-300 mx-1">•</span> {st.q2} × 2-Mark
+                    </span>
+                  </div>
+
+                  {/* Question type composition */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-[800] uppercase tracking-wider text-slate-500">Question Type Composition</span>
+                      <span className="text-[11px] font-[800] text-blue-600">
+                        {st.typedTotal === 0 ? 'No data' : `${typeKinds} type${typeKinds === 1 ? '' : 's'}`}
+                      </span>
+                    </div>
+                    <div className="flex h-2 rounded-full overflow-hidden bg-slate-100">
+                      {st.typedTotal > 0 && Object.entries(st.typeCounts).map(([type, count]) => count > 0 && (
+                        <div key={type} className={TYPE_META[type].bar} style={{ width: `${(count / st.typedTotal) * 100}%` }} />
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5 mt-3">
+                      {Object.entries(TYPE_META).map(([type, meta]) => {
+                        const count = st.typeCounts[type];
+                        const pct = st.typedTotal ? Math.round((count / st.typedTotal) * 100) : 0;
+                        return (
+                          <div key={type} className={`flex items-center justify-between gap-2 border rounded-2xl px-3 py-2 text-[12px] font-[800] ${meta.chip}`}>
+                            <span className="flex items-center gap-1.5"><span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`}></span>{meta.label}</span>
+                            <span className="opacity-80 whitespace-nowrap">{pct}% ({count} Qs)</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Topics */}
+                  <div>
+                    <div className="text-[11px] font-[800] uppercase tracking-wider text-slate-500 mb-2">Topics ({st.topics.length})</div>
+                    {st.topics.length === 0 ? (
+                      <p className="text-[12px] text-slate-400 font-semibold">{test.subject ? `${test.subject} • all topics` : 'All topics'}</p>
+                    ) : (
+                      <div className="flex gap-2.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
+                        {st.topics.map(t => (
+                          <div key={t.name} className="flex items-center gap-2 bg-slate-50 border border-[#EEF2F7] rounded-xl px-3 py-2 shrink-0 max-w-[260px]">
+                            <span className="text-[12px] font-[700] text-slate-700 truncate">{t.name}</span>
+                            {t.q1 !== undefined && (
+                              <span className="text-[10px] font-[800] text-blue-600 bg-blue-50 border border-blue-100 rounded-md px-1.5 py-0.5 whitespace-nowrap">{t.q1}×1M • {t.q2}×2M</span>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-1 text-slate-500 text-[12px] mt-0.5 font-medium">
-                        <Clock size={14} className="text-slate-400" />
-                        {test.duration} mins ({test.questions?.length || 0} Qs)
-                      </div>
-                    </td>
-                    {!isTeacher && (
-                      <td className="px-4 py-5">
-                        {(() => { const lbl = getBundleLabel(test); return (
-                          <span className={`px-2.5 py-1 text-[11px] font-[800] rounded-lg border ${lbl.color}`}>{lbl.text}</span>
-                        ); })()}
-                      </td>
                     )}
-                    <td className="px-4 py-5">
-                      <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[13px]">
-                        <Calendar size={14} />
-                        {test.scheduledTime?.includes('T') ? new Date(test.scheduledTime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : test.scheduledTime}
-                      </div>
-                    </td>
-                    <td className="px-4 py-5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleToggleSolutions(test)}
-                          className={`p-2 rounded-xl transition-colors inline-flex ${
-                            test.solutionsUnlocked 
-                              ? 'text-green-600 bg-green-50 hover:bg-green-100' 
-                              : 'text-amber-500 bg-amber-50 hover:bg-amber-100'
-                          }`}
-                          title={test.solutionsUnlocked ? "Lock Solutions" : "Unlock Solutions"}
-                        >
-                          {test.solutionsUnlocked ? <Unlock size={18} /> : <Lock size={18} />}
-                        </button>
-                        {!isTeacher && (
-                          <button 
-                            onClick={() => { setEditBundleTest(test); setEditBundleValue(test.bundleId || ''); }}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors inline-flex"
-                            title="Edit Access Control"
-                          >
-                            <Edit2 size={18} />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => handleDelete(test.id)}
-                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors inline-flex"
-                          title="Delete Test"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="mt-auto px-6 py-4 border-t border-[#EEF2F7] bg-slate-50/50 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[12.5px] min-w-0">
+                    <Calendar size={14} className="shrink-0" />
+                    <span className="truncate">{formatScheduled(test.scheduledTime) || 'Not scheduled'}</span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleToggleSolutions(test)}
+                      className={`p-2 rounded-xl transition-colors inline-flex ${
+                        test.solutionsUnlocked
+                          ? 'text-green-600 bg-green-50 hover:bg-green-100'
+                          : 'text-amber-500 bg-amber-50 hover:bg-amber-100'
+                      }`}
+                      title={test.solutionsUnlocked ? 'Lock Solutions' : 'Unlock Solutions'}
+                    >
+                      {test.solutionsUnlocked ? <Unlock size={17} /> : <Lock size={17} />}
+                    </button>
+                    {!isTeacher && (
+                      <button
+                        onClick={() => { setEditBundleTest(test); setEditBundleValue(test.bundleId || ''); }}
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors inline-flex"
+                        title="Edit Access Control"
+                      >
+                        <Edit2 size={17} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* 3-Step Wizard Modal */}
       {isCreatorOpen && (

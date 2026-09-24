@@ -5,6 +5,8 @@ const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
 
 admin.initializeApp();
 
+Object.assign(exports, require('./cashfree'));
+
 exports.generateAgoraToken = onRequest({ cors: true }, (request, response) => {
     // using built-in v2 cors or the manual cors middleware
     cors(request, response, () => {
