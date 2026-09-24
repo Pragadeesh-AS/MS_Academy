@@ -3,6 +3,7 @@ import { Download, Plus, Trash2, Printer, FileText } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import logoImg from '../../assets/msgate_logo.png';
+import signatureImg from '../../assets/signature.png';
 
 const amountToWords = (amount) => {
   if (amount === 0) return "Zero Rupees Only";
@@ -319,7 +320,21 @@ export default function InvoiceGenerator() {
                   <div className="absolute inset-0 flex items-center justify-center opacity-10">
                     <img src={logoImg} alt="Stamp Placeholder" className="w-20 h-20 object-contain" />
                   </div>
-                  <img src="/signature.png" alt="Signature" className="relative z-10 w-48 max-h-20 object-contain mix-blend-multiply -mb-4" />
+                  <div
+                    role="img"
+                    aria-label="Authorized signature"
+                    onContextMenu={(e) => e.preventDefault()}
+                    onDragStart={(e) => e.preventDefault()}
+                    className="relative z-10 w-48 h-20 mix-blend-multiply -mb-4 select-none pointer-events-none"
+                    style={{ backgroundImage: `url(${signatureImg})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center' }}
+                  />
+                  <div className="absolute inset-0 z-20 overflow-hidden pointer-events-none select-none flex items-center justify-center">
+                    <div className="-rotate-12 text-[8px] leading-[10px] font-bold uppercase tracking-wider text-[#1e293b] opacity-30 whitespace-nowrap text-center">
+                      {[0, 1, 2, 3, 4, 5].map((i) => (
+                        <div key={i}>MS Gate Academy • Invoice {date} • ₹{totalAmount.toFixed(2)} • MS Gate Academy • Invoice {date}</div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <p className="font-bold text-[#1e293b] mt-2">Authorized Signature</p>
                 <p className="text-sm text-[#64748b]">MS Gate Academy</p>
