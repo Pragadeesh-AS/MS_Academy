@@ -10,7 +10,7 @@ import 'katex/dist/katex.min.css';
 // Configure the worker for PDF.js using a CDN
 pdfjsLib.GlobalWorkerOptions.workerSrc = '//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-export default function AIGenerator() {
+export default function AIGenerator({ pairMode = false }) {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState('idle'); // idle | uploading | analyzing | review | success | error
   const [errorMsg, setErrorMsg] = useState('');
@@ -21,10 +21,14 @@ export default function AIGenerator() {
   const [reviewerEmail, setReviewerEmail] = useState('');
 
   useEffect(() => {
-    getDoc(doc(db, 'site_settings', 'ai_review'))
+    // Typists send to the reviewer they are paired with; admins use the saved AI reviewer
+    const settingsRef = pairMode
+      ? doc(db, 'invited_typists', localStorage.getItem('pair_id') || 'none')
+      : doc(db, 'site_settings', 'ai_review');
+    getDoc(settingsRef)
       .then(snap => { if (snap.exists()) setReviewerEmail(snap.data().reviewerEmail || ''); })
-      .catch(err => console.error('Failed to load AI reviewer setting:', err));
-  }, []);
+      .catch(err => console.error('Failed to load reviewer:', err));
+  }, [pairMode]);
 
   const isValidReviewerEmail = /^\S+@\S+\.\S+$/.test(reviewerEmail.trim());
   const [importSettings, setImportSettings] = useState({ department: '', year: '', subject: '', topic: '', mark: '', difficultyLevel: 'Auto' });
@@ -492,7 +496,10 @@ IMPORTANT:
     setErrorMsg('');
     try {
       const reviewer = reviewerEmail.trim().toLowerCase();
-      await setDoc(doc(db, 'site_settings', 'ai_review'), { reviewerEmail: reviewer }, { merge: true });
+      if (!pairMode) await setDoc(doc(db, 'site_settings', 'ai_review'), { reviewerEmail: reviewer }, { merge: true });
+      const pairFields = pairMode
+        ? { pairId: localStorage.getItem('pair_id'), typedBy: sessionStorage.getItem('auth_name') || 'Typist' }
+        : {};
 
       for (const question of extractedQuestions) {
         await addDoc(collection(db, 'question_bank'), { 
@@ -508,6 +515,7 @@ IMPORTANT:
           status: 'In Review',
           reviewerEmail: reviewer,
           source: 'AI Generator',
+          ...pairFields,
           isPremium: importAsPremium,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -850,6 +858,14 @@ IMPORTANT:
                 </div>
               </div>
 
+              {pairMode ? (
+                <div className="mt-5 p-4 rounded-xl border border-blue-200 bg-blue-50/60">
+                  <span className="block text-sm font-bold text-slate-800">Sent to your assigned reviewer</span>
+                  <span className="block text-sm text-slate-600 mt-0.5">
+                    {isValidReviewerEmail ? reviewerEmail : 'No reviewer is paired with your account yet. Please contact the admin.'}
+                  </span>
+                </div>
+              ) : (
               <div className="mt-5">
                 <label className="block text-sm font-bold text-slate-700 mb-1">Reviewer Email</label>
                 <input
@@ -861,6 +877,7 @@ IMPORTANT:
                 />
                 <p className="text-xs text-slate-500 mt-1">Extracted questions go to this person for review. Only approved questions reach the Question Bank.</p>
               </div>
+              )}
 
               <label className="mt-5 flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50/60 cursor-pointer">
                 <input
