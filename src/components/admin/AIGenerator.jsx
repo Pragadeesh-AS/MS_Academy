@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit } from 'lucide-react';
+import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit, AlertCircle } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
@@ -12,7 +12,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = '//cdnjs.cloudflare.com/ajax/libs/pdf.j
 
 export default function AIGenerator() {
   const [file, setFile] = useState(null);
-  const [status, setStatus] = useState('idle'); // idle | uploading | analyzing | review | success
+  const [status, setStatus] = useState('idle'); // idle | uploading | analyzing | review | success | error
+  const [errorMsg, setErrorMsg] = useState('');
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importSettings, setImportSettings] = useState({ department: '', year: '', subject: '', topic: '', mark: '', difficultyLevel: 'Auto' });
@@ -360,6 +361,7 @@ export default function AIGenerator() {
   const startAnalysis = async () => {
     if (!file) return;
     setStatus('uploading');
+    setErrorMsg('');
     
     try {
       setStatus('analyzing');
@@ -370,7 +372,7 @@ export default function AIGenerator() {
         let apiSuccess = false;
         const modelsToTry = [
           "gemini-3.5-flash-lite",
-          "gemini-2.5-flash",
+          "gemini-3.6-flash",
           "gemini-2.0-flash",
           "gemini-1.5-flash",
           "gemini-1.5-flash-8b",
@@ -402,7 +404,7 @@ Each object must have exactly these fields:
   "matchColumn2": ["Item 1", "Item 2", "Item 3", "Item 4"] (Only for Match questions, array of exactly 4 strings. Fill empty strings if less than 4)
 }
 IMPORTANT: 
-- For equations, fractions, subscripts, or math symbols, use standard LaTeX formatting enclosed in $...$ (e.g., $m^2K$, $\frac{1}{U}$).
+- For equations, fractions, subscripts, or math symbols, use standard LaTeX formatting enclosed in $...$ (e.g., $m^2K$, $\\\\frac{1}{U}$). YOU MUST double-escape all backslashes so the output is valid JSON (e.g. use \\\\frac instead of \\frac).
 - For Match type questions, extract the columns accurately.
 - The response MUST be a pure JSON array parseable by JSON.parse().`;
 
@@ -440,9 +442,9 @@ IMPORTANT:
         }
         
         if (!apiSuccess) {
-          alert("All Gemini AI models failed (check console for details). Falling back to manual text extraction, which may break math formatting.");
-          const text = await extractTextFromPDF(file);
-          parsedQuestions = parseQuestionsFromText(text);
+          setErrorMsg("All Gemini AI models failed. Please check your API key or try again later.");
+          setStatus('error');
+          return;
         }
       } else {
         console.log("No VITE_GEMINI_API_KEY found. Using pdf.js fallback...");
@@ -451,8 +453,8 @@ IMPORTANT:
       }
       
       if (parsedQuestions.length === 0) {
-        alert("We couldn't detect any structured questions in this PDF. Please ensure it follows a standard format.");
-        setStatus('idle');
+        setErrorMsg("We couldn't detect any structured questions in this PDF. Please ensure it follows a standard format.");
+        setStatus('error');
         return;
       }
       
@@ -460,8 +462,8 @@ IMPORTANT:
       setStatus('review');
     } catch (err) {
       console.error("PDF Parsing Error", err);
-      alert("Failed to parse the PDF document.");
-      setStatus('idle');
+      setErrorMsg(err.message || "Failed to parse the PDF document.");
+      setStatus('error');
     }
   };
 
@@ -476,6 +478,7 @@ IMPORTANT:
   const confirmApprove = async () => {
     setShowImportModal(false);
     setStatus('saving');
+    setErrorMsg('');
     try {
       for (const question of extractedQuestions) {
         await addDoc(collection(db, 'question_bank'), { 
@@ -497,7 +500,7 @@ IMPORTANT:
       }, 3000);
     } catch (error) {
       console.error("Error importing questions:", error);
-      alert("Failed to import questions to database.");
+      setErrorMsg("Failed to import questions to database.");
       setStatus('review');
     }
   };
@@ -505,6 +508,7 @@ IMPORTANT:
   const resetState = () => {
     setFile(null);
     setStatus('idle');
+    setErrorMsg('');
     setExtractedQuestions([]);
     setShowImportModal(false);
     setImportSettings({ department: '', year: '', subject: '', topic: '', mark: '', difficultyLevel: 'Auto' });
@@ -618,8 +622,47 @@ IMPORTANT:
         </div>
       )}
 
+      {status === 'error' && (
+        <div className="border border-red-200 rounded-3xl p-16 bg-red-50 flex flex-col items-center justify-center text-center h-[400px] shadow-sm">
+          <div className="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
+            <AlertCircle size={48} />
+          </div>
+          <h3 className="text-2xl font-black text-slate-800 mb-2">Extraction Failed</h3>
+          <p className="text-slate-600 font-medium mb-6 max-w-md">{errorMsg}</p>
+          <div className="flex gap-4">
+            <button 
+              onClick={resetState}
+              className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={() => {
+                setStatus('idle');
+                setErrorMsg('');
+                startAnalysis();
+              }}
+              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(220,38,38,0.3)] flex items-center gap-2"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
         {status === 'review' && (
           <div className="space-y-6">
+            {errorMsg && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-4">
+                <div className="p-2 bg-red-100 text-red-700 rounded-lg">
+                  <AlertCircle size={20} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-red-900">Import Failed</h4>
+                  <p className="text-sm text-red-700 mt-1">{errorMsg}</p>
+                </div>
+              </div>
+            )}
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-start gap-4">
               <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
                 <Sparkles size={20} />
