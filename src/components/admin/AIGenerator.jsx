@@ -321,10 +321,6 @@ export default function AIGenerator() {
       qText = preserveWhitespace(renderLatexToHTML(qText));
       explanation = preserveWhitespace(renderLatexToHTML(explanation));
       
-      if (qNum) {
-          qText = `<strong>${qNum}.</strong> ` + qText;
-      }
-      
       questions.push({
         questionType: questionType,
         questionText: qText,
@@ -391,7 +387,7 @@ Respond ONLY with a valid JSON array of objects. Do not include markdown code bl
 Each object must have exactly these fields:
 {
   "questionType": "Single Choice" | "Multiple Choice" | "Fill in the Blanks" | "Match",
-  "questionText": "Text of the question (prepend with question number e.g., '<strong>Q1.</strong> ...'). Use LaTeX inside $...$ for all math/equations.",
+  "questionText": "Text of the question (Do NOT include the question number). Use LaTeX inside $...$ for all math/equations.",
   "optionA": "Option A text",
   "optionB": "Option B text",
   "optionC": "Option C text",
