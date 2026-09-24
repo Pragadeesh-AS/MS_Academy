@@ -351,6 +351,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const marks = attributes.filter(a => a.type === 'mark').map(a => a.name);
   const difficulties = attributes.filter(a => a.type === 'difficulty').map(a => a.name);
   const questionTypes = ['Single Choice', 'Multiple Choice', 'Fill in Blanks', 'Match'];
+
+  const questionTypeShort = (type) => ({
+    'Single Choice': 'MCQ',
+    'Multiple Choice': 'MSQ',
+    'Fill in Blanks': 'NAT',
+    'Fill in the Blanks': 'NAT',
+    'Match': 'Match'
+  }[type] || type);
   const optionsList = ['A', 'B', 'C', 'D'];
 
   const handleInputChange = (e) => {
@@ -927,9 +935,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                           </div>
                         </td>
                         <td className="py-4 px-4 h-[82px] max-w-0 overflow-hidden">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full bg-purple-50 text-purple-600 border border-purple-100 text-[11px] font-[700] truncate max-w-full" title={q.questionType}>
-                            {q.questionType}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <ChevronDown size={16} className={`shrink-0 text-purple-400 transition-transform duration-200 ${expandedId === q.id ? '' : '-rotate-90'}`} />
+                            <span className="inline-flex items-center justify-center min-w-[72px] px-4 py-1.5 rounded-full bg-[#7C3AED] text-white text-[12px] font-[800] tracking-wide shadow-sm" title={q.questionType}>
+                              {questionTypeShort(q.questionType)}
+                            </span>
+                          </div>
                         </td>
                         <td className="py-4 px-4 h-[82px]">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full border text-[11px] font-[800] ${

@@ -343,14 +343,13 @@ const TeacherDirectory = ({
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Experience</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Status</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Invited Date</th>
-                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Last Login</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220] text-center w-[160px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]/60">
                   {paginatedTeachers.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="py-16 text-center">
+                      <td colSpan="7" className="py-16 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                             <Search className="text-slate-300" size={32} />
@@ -402,9 +401,6 @@ const TeacherDirectory = ({
                         </td>
                         <td className="px-4">
                           <span className="text-[14px] text-[#475569] font-medium">{teacher.invitedDate}</span>
-                        </td>
-                        <td className="px-4">
-                          <span className="text-[14px] text-[#475569] font-medium">{teacher.lastLogin}</span>
                         </td>
                         <td className="px-4 text-center relative">
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">

@@ -41,8 +41,10 @@ const SalaryManager = ({ teachers, typists }) => {
   const ghostTypistsMap = {};
   questions.forEach(q => {
     const pairId = q.pairId;
-    const typedBy = q.typedBy?.trim();
-    const reviewedBy = q.reviewedBy?.trim();
+    // The admin doesn't draw a salary, so their name is never treated as staff
+    const isAdminName = (n) => ['ms academy admin', 'admin'].includes((n || '').trim().toLowerCase());
+    const typedBy = isAdminName(q.typedBy) ? '' : q.typedBy?.trim();
+    const reviewedBy = isAdminName(q.reviewedBy) ? '' : q.reviewedBy?.trim();
     
     // Fallbacks for pairs without proper name registration
     if (pairId && !existingPairIds.has(pairId)) {

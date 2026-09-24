@@ -10,6 +10,98 @@ import 'katex/dist/katex.min.css';
 // Configure the worker for PDF.js using a CDN
 pdfjsLib.GlobalWorkerOptions.workerSrc = '//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+
+// ---------- Numerical (Fill in Blanks / NAT) answer handling ----------
+const NUM_RE = '-?\\d+(?:\\.\\d+)?';
+
+const decimalsOf = (numStr) => {
+  const m = String(numStr).match(/\.(\d+)/);
+  return m ? m[1].length : 0;
+};
+
+const stripTags = (html) => String(html || '')
+  .replace(/<br\s*\/?>/gi, '\n')
+  .replace(/<[^>]+>/g, ' ')
+  .replace(/&nbsp;/g, ' ')
+  .replace(/\u2212|\u2013|\u2014/g, '-');
+
+// Reads one piece of text and returns { mode, answer, start, end } if it holds a number or a range
+const readNumeric = (raw) => {
+  const text = stripTags(raw).replace(/(\d),(?=\d{3}\b)/g, '$1').replace(/\$/g, '');
+
+  // 2.5 ± 0.1  /  2.5 +/- 0.1
+  const pm = text.match(new RegExp(`(${NUM_RE})\\s*(?:\u00b1|\\+\\s*/\\s*-|\\+-)\\s*(\\d+(?:\\.\\d+)?)`));
+  if (pm) {
+    const v = parseFloat(pm[1]);
+    const d = parseFloat(pm[2]);
+    const dec = Math.max(decimalsOf(pm[1]), decimalsOf(pm[2]));
+    return { mode: 'Numeric Range', start: (v - d).toFixed(dec), end: (v + d).toFixed(dec), dec };
+  }
+
+  // 2.4 to 2.6  /  2.4 - 2.6  /  between 2.4 and 2.6
+  const range = text.match(new RegExp(`(${NUM_RE})\\s*(?:to|and|-)\\s*(${NUM_RE})`, 'i'));
+  if (range) {
+    const a = parseFloat(range[1]);
+    const b = parseFloat(range[2]);
+    const [lo, hi] = a <= b ? [range[1], range[2]] : [range[2], range[1]];
+    return { mode: 'Numeric Range', start: lo, end: hi, dec: Math.max(decimalsOf(range[1]), decimalsOf(range[2])) };
+  }
+
+  const single = text.match(new RegExp(`${NUM_RE}(?:[eE][-+]?\\d+)?`));
+  if (single) return { mode: 'Exact Match', answer: single[0], dec: decimalsOf(single[0]) };
+  return null;
+};
+
+// Fills the question-bank fields for a NAT question: answer, or the accepted range, plus precision
+const applyNatFields = (q) => {
+  const isNat = ['Fill in the Blanks', 'Fill in Blanks'].includes(q.questionType);
+  if (!isNat) return q;
+
+  const base = {
+    ...q,
+    questionType: 'Fill in Blanks',
+    fillBlankMode: 'Exact Match',
+    fillBlankPrecision: 'None',
+    fillBlankRangeStart: '',
+    fillBlankRangeEnd: ''
+  };
+
+  // Places the question / explanation usually state the answer or the accepted range
+  const context = [q.questionText, q.explanation].map(stripTags).join('\n');
+  const lines = context.split('\n');
+  const answerLines = lines.filter(l => /(answer|\bans\b)/i.test(l));
+  const rangeLines = lines.filter(l => /(accept|tolerance|range)/i.test(l));
+
+  const explicitRange = q.fillBlankRangeStart !== undefined && q.fillBlankRangeEnd !== undefined
+    && String(q.fillBlankRangeStart).trim() !== '' && String(q.fillBlankRangeEnd).trim() !== ''
+    ? readNumeric(`${q.fillBlankRangeStart} to ${q.fillBlankRangeEnd}`) : null;
+  const fromAnswerField = q.fillBlankAnswer ? readNumeric(q.fillBlankAnswer) : null;
+  const fromAnswerLines = answerLines.map(readNumeric).filter(Boolean);
+  const fromRangeLines = rangeLines.map(readNumeric).filter(r => r && r.mode === 'Numeric Range');
+
+  const range = explicitRange
+    || (fromAnswerField && fromAnswerField.mode === 'Numeric Range' ? fromAnswerField : null)
+    || fromAnswerLines.find(r => r.mode === 'Numeric Range')
+    || fromRangeLines[0];
+  const exact = (fromAnswerField && fromAnswerField.mode === 'Exact Match' ? fromAnswerField : null)
+    || fromAnswerLines.find(r => r.mode === 'Exact Match');
+  const pick = range || exact;
+  if (!pick) return base;
+
+  const precision = pick.dec >= 4 ? '.0000' : pick.dec === 3 ? '.000' : pick.dec === 2 ? '.00' : 'None';
+  if (pick.mode === 'Numeric Range') {
+    return {
+      ...base,
+      fillBlankMode: 'Numeric Range',
+      fillBlankRangeStart: pick.start,
+      fillBlankRangeEnd: pick.end,
+      fillBlankAnswer: exact ? exact.answer : '',
+      fillBlankPrecision: precision
+    };
+  }
+  return { ...base, fillBlankAnswer: pick.answer, fillBlankPrecision: precision };
+};
+
 export default function AIGenerator({ pairMode = false }) {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState('idle'); // idle | uploading | analyzing | review | success | error
@@ -411,7 +503,10 @@ Each object must have exactly these fields:
   "optionD": "Option D text",
   "correctAnswer": "A", "B", "C", or "D" (For Single Choice/Match. Auto-detect if checked/marked),
   "correctAnswers": ["A", "B"] (Array of strings for Multiple Choice. Auto-detect if checked/marked),
-  "fillBlankAnswer": "Numerical answer for NAT",
+  "fillBlankAnswer": "For NAT only: the exact numerical answer as plain digits (no units, no commas). Take it from the answer key / answer line / calculation in the PDF.",
+  "fillBlankMode": "For NAT only: \"Numeric Range\" if the PDF states a range of accepted answers (e.g. \"2.4 to 2.6\", \"between 2.4 and 2.6\", \"2.5 ± 0.1\"), otherwise \"Exact Match\"",
+  "fillBlankRangeStart": "For NAT with a range only: the lowest accepted value as plain digits, else empty string",
+  "fillBlankRangeEnd": "For NAT with a range only: the highest accepted value as plain digits, else empty string",
   "topic": "Extracted Topic",
   "difficultyLevel": "Easy" | "Medium" | "Hard",
   "explanation": "Explanation or calculation (use LaTeX inside $...$ for all math/equations)",
@@ -420,6 +515,7 @@ Each object must have exactly these fields:
 }
 IMPORTANT: 
 - For equations, fractions, subscripts, or math symbols, use standard LaTeX formatting enclosed in $...$ (e.g., $m^2K$, $\\\\frac{1}{U}$). YOU MUST double-escape all backslashes so the output is valid JSON (e.g. use \\\\frac instead of \\frac).
+- For Fill in the Blanks (NAT) questions, read the answer key / answer line carefully. Put a single value in fillBlankAnswer, or if a range of accepted answers is given, set fillBlankMode to \"Numeric Range\" and fill fillBlankRangeStart and fillBlankRangeEnd. Never put units in these fields.
 - For Match type questions, extract the columns accurately.
 - The response MUST be a pure JSON array parseable by JSON.parse().`;
 
@@ -473,6 +569,7 @@ IMPORTANT:
         return;
       }
       
+      parsedQuestions = parsedQuestions.map(applyNatFields);
       setExtractedQuestions(parsedQuestions);
       setStatus('review');
     } catch (err) {
@@ -510,6 +607,10 @@ IMPORTANT:
           topic: importSettings.topic || question.topic || '',
           mark: importSettings.mark || '1',
           difficultyLevel: importSettings.difficultyLevel === 'Auto' ? (question.difficultyLevel || 'Medium') : importSettings.difficultyLevel,
+          fillBlankMode: question.fillBlankMode || 'Exact Match',
+          fillBlankPrecision: question.fillBlankPrecision || 'None',
+          fillBlankRangeStart: question.fillBlankRangeStart || '',
+          fillBlankRangeEnd: question.fillBlankRangeEnd || '',
           matchColumn1: question.matchColumn1 || ['', ''],
           matchColumn2: question.matchColumn2 || ['', ''],
           status: 'In Review',
@@ -742,7 +843,7 @@ IMPORTANT:
                     </div>
                   )}
 
-                  {q.questionType !== 'Fill in the Blanks' ? (
+                  {!['Fill in the Blanks', 'Fill in Blanks'].includes(q.questionType) ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                       {['A', 'B', 'C', 'D'].map(opt => (
                         <div key={opt} className={`p-3 rounded-xl border font-medium text-sm flex gap-3 ${((q.questionType === 'Single Choice' || q.questionType === 'Match') && q.correctAnswer === opt) || (q.questionType === 'Multiple Choice' && q.correctAnswers.includes(opt)) ? 'bg-green-50 border-green-200 text-green-800' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
@@ -755,8 +856,17 @@ IMPORTANT:
                     </div>
                   ) : (
                     <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
-                      <span className="font-bold text-green-800">Numerical Answer: </span>
-                      <span className="text-green-700">{q.fillBlankAnswer || 'N/A'}</span>
+                      {q.fillBlankMode === 'Numeric Range' ? (
+                        <>
+                          <span className="font-bold text-green-800">Accepted Range: </span>
+                          <span className="text-green-700">{q.fillBlankRangeStart} to {q.fillBlankRangeEnd}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-bold text-green-800">Numerical Answer: </span>
+                          <span className="text-green-700">{q.fillBlankAnswer || 'N/A'}</span>
+                        </>
+                      )}
                     </div>
                   )}
   
