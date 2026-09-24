@@ -538,7 +538,8 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
         <div className="bg-[#444444] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 px-4 py-1.5 text-sm border-b border-gray-500">
           <div className="font-bold truncate max-w-full sm:max-w-xl">{test.title}</div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => setShowCalculator(!showCalculator)} className="flex items-center gap-1 bg-[#1589C9] hover:bg-[#1277b0] px-2 py-0.5 rounded-sm text-xs sm:text-sm transition-colors"><Calculator size={14}/> Calculator</button>`n              <button className="flex items-center gap-1 bg-[#1589C9] px-2 py-0.5 rounded-sm text-xs sm:text-sm"><Info size={14}/> Instructions</button>
+            <button onClick={() => setShowCalculator(!showCalculator)} className="flex items-center gap-1 bg-[#1589C9] hover:bg-[#1277b0] px-2 py-0.5 rounded-sm text-xs sm:text-sm transition-colors"><Calculator size={14}/> Calculator</button>
+              <button className="flex items-center gap-1 bg-[#1589C9] px-2 py-0.5 rounded-sm text-xs sm:text-sm"><Info size={14}/> Instructions</button>
             <button className="flex items-center gap-1 bg-[#1589C9] px-2 py-0.5 rounded-sm text-xs sm:text-sm">Question Paper</button>
           </div>
         </div>
@@ -892,5 +893,6 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
     document.body
   );
 }
+
 
 
