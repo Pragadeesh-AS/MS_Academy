@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
 import { collection, query, getDocs, deleteDoc, doc, onSnapshot, orderBy } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
-import { Video, Trash2, Search, Clock, Users, BookOpen, AlertCircle } from 'lucide-react';
+import { Video, Trash2, Search, Clock, Users, BookOpen, Folder, FolderOpen, ChevronRight } from 'lucide-react';
 import Loader from '../Loader';
 
 export default function RecordingsManager() {
@@ -10,6 +10,7 @@ export default function RecordingsManager() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [openFolders, setOpenFolders] = useState({});
 
   useEffect(() => {
     // Real-time listener for recordings
@@ -73,6 +74,21 @@ export default function RecordingsManager() {
     (r.teacherName && r.teacherName.toLowerCase().includes(search.toLowerCase()))
   );
 
+  // Group recordings into one folder per department (teacher's department); anything untagged goes to General
+  const folders = React.useMemo(() => {
+    const map = {};
+    filteredRecordings.forEach(r => {
+      const dept = (r.department && r.department.trim()) || 'General';
+      (map[dept] = map[dept] || []).push(r);
+    });
+    return Object.keys(map)
+      .sort((a, b) => (a === 'General') - (b === 'General') || a.localeCompare(b))
+      .map(name => ({ name, items: map[name] }));
+  }, [filteredRecordings]);
+
+  const isSearching = search.trim().length > 0;
+  const toggleFolder = (name) => setOpenFolders(prev => ({ ...prev, [name]: !prev[name] }));
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -100,7 +116,7 @@ export default function RecordingsManager() {
           />
         </div>
         <div className="text-sm font-bold text-slate-500 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100 flex items-center gap-2">
-          Total Recordings: <span className="text-blue-600">{filteredRecordings.length}</span>
+          Folders: <span className="text-blue-600">{folders.length}</span><span className="text-slate-300">|</span>Recordings: <span className="text-blue-600">{filteredRecordings.length}</span>
         </div>
       </div>
 
@@ -118,8 +134,27 @@ export default function RecordingsManager() {
           <p className="text-slate-500 font-medium">No recorded classes match your search criteria.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredRecordings.map(rec => (
+        <div className="space-y-4">
+          {folders.map(folder => {
+            const expanded = isSearching || !!openFolders[folder.name];
+            return (
+              <div key={folder.name} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <button
+                  onClick={() => toggleFolder(folder.name)}
+                  className="w-full flex items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {expanded ? <FolderOpen size={26} className="text-amber-500 shrink-0" /> : <Folder size={26} className="text-amber-500 shrink-0" />}
+                    <span className="font-bold text-slate-800 text-lg truncate">{folder.name}</span>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 shrink-0">
+                      {folder.items.length} {folder.items.length === 1 ? 'recording' : 'recordings'}
+                    </span>
+                  </div>
+                  <ChevronRight size={20} className={`text-slate-400 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                </button>
+                {expanded && (
+                  <div className="p-5 pt-1 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {folder.items.map(rec => (
             <div key={rec.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow group flex flex-col h-full relative">
               <div className="h-40 bg-slate-900 relative flex items-center justify-center group-hover:bg-slate-800 transition-colors">
                 <Video size={48} className="text-slate-700 group-hover:text-blue-500 transition-colors" />
@@ -179,6 +214,11 @@ export default function RecordingsManager() {
               </div>
             </div>
           ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
