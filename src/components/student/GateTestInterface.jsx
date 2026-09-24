@@ -850,7 +850,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
               <button onClick={() => setShowCalculator(false)} className="text-white hover:text-red-300 font-bold px-1 text-lg leading-none">&times;</button>
             </div>
             <iframe 
-              src="https://tcsion.com/OnlineAssessment/ScientificCalculator/Calculator.html" 
+              src="/calculator/Calculator.html" 
               className="w-full flex-1 border-none"
               title="Scientific Calculator"
             />
