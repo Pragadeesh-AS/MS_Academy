@@ -324,15 +324,15 @@ const SalaryManager = ({ teachers, typists }) => {
 
         {/* Staff Table */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[820px]">
+          <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Member</th>
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Role / Dept</th>
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Salary / Rate</th>
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Pending Payout</th>
-                  <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                  <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Member</th>
+                  <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Role / Dept</th>
+                  <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Salary / Rate</th>
+                  <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Pending Payout</th>
+                  <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -364,7 +364,7 @@ const SalaryManager = ({ teachers, typists }) => {
 
                     return (
                       <tr key={staff.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="py-4 px-6">
+                        <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-100">
                               {nameStr.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase()}
@@ -375,7 +375,7 @@ const SalaryManager = ({ teachers, typists }) => {
                             </div>
                           </div>
                         </td>
-                        <td className="py-4 px-6">
+                        <td className="py-4 px-4">
                           <div className="flex flex-col gap-1">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase w-fit ${
                               staff.systemRole === 'Teacher' ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'
@@ -385,7 +385,7 @@ const SalaryManager = ({ teachers, typists }) => {
                             <span className="text-xs text-slate-500">{staff.department || 'General'}</span>
                           </div>
                         </td>
-                        <td className="py-4 px-6">
+                        <td className="py-4 px-4">
                           <div className="font-bold text-slate-800 text-sm flex items-center gap-1">
                             <IndianRupee size={14} className="text-slate-400" />
                             {staff.baseSalary ? staff.baseSalary.toLocaleString('en-IN') : 'Not Set'}
@@ -400,7 +400,7 @@ const SalaryManager = ({ teachers, typists }) => {
                             </div>
                           )}
                         </td>
-                        <td className="py-4 px-6">
+                        <td className="py-4 px-4">
                            <div className="flex flex-col">
                               {staff.systemRole !== 'Teacher' ? (
                                 <>
@@ -423,7 +423,7 @@ const SalaryManager = ({ teachers, typists }) => {
                               )}
                             </div>
                         </td>
-                        <td className="py-4 px-6 text-right space-x-2">
+                        <td className="py-4 px-4 text-right space-x-2">
                            <button
                             onClick={() => {
                               setSelectedStaff(staff);

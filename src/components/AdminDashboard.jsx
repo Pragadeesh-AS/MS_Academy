@@ -1532,16 +1532,16 @@ export default function AdminDashboard() {
 
               {/* Applications Table */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[900px]">
+                <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <table className="w-full text-left border-collapse whitespace-nowrap">
                     <thead>
                       <tr className="bg-slate-50/50 border-b border-slate-200">
-                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Candidate</th>
-                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applied For</th>
-                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Experience</th>
-                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
-                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                        <th className="py-4 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                        <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Candidate</th>
+                        <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Applied For</th>
+                        <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Experience</th>
+                        <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                        <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                        <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1555,7 +1555,7 @@ export default function AdminDashboard() {
                           .filter(app => app.fullName.toLowerCase().includes(appSearch.toLowerCase()) || app.email.toLowerCase().includes(appSearch.toLowerCase()))
                           .map(app => (
                           <tr key={app.id} className="hover:bg-slate-50/50 transition-colors group">
-                            <td className="py-4 px-6">
+                            <td className="py-4 px-4">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-100">
                                   {app.fullName.split(' ').map(n=>n[0]).join('').substring(0, 2).toUpperCase()}
@@ -1566,10 +1566,10 @@ export default function AdminDashboard() {
                                 </div>
                               </div>
                             </td>
-                            <td className="py-4 px-6 text-sm font-medium text-slate-700">{app.role}</td>
-                            <td className="py-4 px-6 text-sm text-slate-600">{app.experience}</td>
-                            <td className="py-4 px-6 text-sm text-slate-500">{app.date}</td>
-                            <td className="py-4 px-6">
+                            <td className="py-4 px-4 text-sm font-medium text-slate-700">{app.role}</td>
+                            <td className="py-4 px-4 text-sm text-slate-600">{app.experience}</td>
+                            <td className="py-4 px-4 text-sm text-slate-500">{app.date}</td>
+                            <td className="py-4 px-4">
                               <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${
                                 app.status === 'Shortlisted' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
                                 app.status === 'Rejected' ? 'bg-red-100 text-red-700 border border-red-200' :
@@ -1578,7 +1578,7 @@ export default function AdminDashboard() {
                                 {app.status}
                               </span>
                             </td>
-                            <td className="py-4 px-6 text-right">
+                            <td className="py-4 px-4 text-right">
                               <button
                                 onClick={() => setSelectedApp(app)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg text-xs font-semibold transition-all shadow-sm"

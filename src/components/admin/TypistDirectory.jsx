@@ -139,19 +139,19 @@ const TypistDirectory = ({
 
         {/* Typists Table */}
         <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_12px_30px_rgba(15,23,42,0.05)] overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[800px]">
+          <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
                 <tr className="bg-[#F8FAFC] border-b border-[#EEF2F7]">
-                  <th className="py-5 px-6 font-semibold text-[#64748B] text-[13px] uppercase tracking-wider">Pair Info</th>
-                  <th className="py-5 px-6 font-semibold text-[#64748B] text-[13px] uppercase tracking-wider">Status</th>
-                  <th className="py-5 px-6 font-semibold text-[#64748B] text-[13px] uppercase tracking-wider text-right">Actions</th>
+                  <th className="py-5 px-4 font-semibold text-[#64748B] text-[13px] uppercase tracking-wider">Pair Info</th>
+                  <th className="py-5 px-4 font-semibold text-[#64748B] text-[13px] uppercase tracking-wider">Status</th>
+                  <th className="py-5 px-4 font-semibold text-[#64748B] text-[13px] uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EEF2F7]">
                 {paginatedTypists.map((typist) => (
                   <tr key={typist.id} className="hover:bg-blue-50/30 transition-colors group">
-                    <td className="py-4 px-6">
+                    <td className="py-4 px-4">
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center gap-3">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider w-16">Typist</span>
@@ -175,13 +175,13 @@ const TypistDirectory = ({
                         </div>
                       </div>
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-4 px-4">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-semibold ${typist.status === 'Accepted' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
                         {typist.status === 'Accepted' ? <ShieldCheck size={14} /> : <Clock size={14} />}
                         {typist.status}
                       </span>
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-4 px-4">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
                           onClick={() => deleteTypist(typist.id)}

@@ -333,18 +333,18 @@ const TeacherDirectory = ({
 
           {/* Faculty Table */}
           <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_12px_30px_rgba(15,23,42,0.05)] overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[1150px]">
+            <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Faculty</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Department</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Qualification</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Experience</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Status</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Invited Date</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Last Login</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B] text-center w-[160px]">Actions</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Faculty</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Department</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Qualification</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Experience</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Status</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Invited Date</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Last Login</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B] text-center w-[160px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]/60">
@@ -366,7 +366,7 @@ const TeacherDirectory = ({
                         key={teacher.id} 
                         className="group h-[84px] hover:bg-[#F8FAFF] hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(15,23,42,0.03)] transition-all duration-300 relative z-0 hover:z-10"
                       >
-                        <td className="px-6">
+                        <td className="px-4">
                           <div className="flex items-center gap-4">
                             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-100 to-indigo-50 text-indigo-700 font-bold flex items-center justify-center shrink-0 border border-indigo-100 group-hover:scale-105 transition-transform">
                               {teacher.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
@@ -377,16 +377,16 @@ const TeacherDirectory = ({
                             </div>
                           </div>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className="text-[14px] text-[#475569] font-medium">{teacher.department}</span>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className="text-[14px] text-[#475569] font-medium">{teacher.qualification}</span>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className="text-[14px] text-[#475569] font-medium">{teacher.experience}</span>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold tracking-wide ${
                             teacher.status === 'Accepted' 
                               ? 'bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-[#10B981] border border-emerald-100' 
@@ -400,13 +400,13 @@ const TeacherDirectory = ({
                             {teacher.status === 'Accepted' ? 'Active' : 'Invited'}
                           </span>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className="text-[14px] text-[#475569] font-medium">{teacher.invitedDate}</span>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className="text-[14px] text-[#475569] font-medium">{teacher.lastLogin}</span>
                         </td>
-                        <td className="px-6 text-center relative">
+                        <td className="px-4 text-center relative">
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                             <button onClick={() => setSelectedTeacher(teacher)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
                               <Eye size={18} />

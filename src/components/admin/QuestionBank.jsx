@@ -865,7 +865,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
           {/* QUESTION TABLE */}
           <div className="bg-white border border-[#EEF2F7] rounded-[24px] shadow-[0_10px_28px_rgba(15,23,42,0.05)] flex flex-col mb-8">
-            <div className="w-full overflow-x-auto">
+            <div className="w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <table className="w-full text-left border-collapse table-fixed min-w-[900px]">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">

@@ -379,18 +379,18 @@ const StudentDirectory = ({
 
           {/* Student Table */}
           <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_12px_30px_rgba(15,23,42,0.05)] overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[1000px]">
+            <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Student</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Department</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Year</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Tier</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Status</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Joined Date</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Last Login</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B] text-center w-[160px]">Actions</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Student</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Department</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Year</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Tier</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Status</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Joined Date</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Last Login</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B] text-center w-[160px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]/60">
@@ -412,7 +412,7 @@ const StudentDirectory = ({
                         key={student.id} 
                         className="group h-[82px] hover:bg-[#F8FAFF] transition-colors duration-200"
                       >
-                        <td className="px-6">
+                        <td className="px-4">
                           <div className="flex items-center gap-4">
                             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600 font-bold flex items-center justify-center shrink-0 border border-blue-100 group-hover:scale-105 transition-transform">
                               {student.name.charAt(0).toUpperCase()}
@@ -423,13 +423,13 @@ const StudentDirectory = ({
                             </div>
                           </div>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className="text-[14px] text-[#475569] font-medium">{student.department}</span>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className="text-[14px] text-[#475569] font-medium">{student.year}</span>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className={`inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${
                             student.isPro || (student.purchasedBundles && student.purchasedBundles.length > 0)
                               ? 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200 shadow-sm' 
@@ -438,7 +438,7 @@ const StudentDirectory = ({
                             {(student.isPro || (student.purchasedBundles && student.purchasedBundles.length > 0)) ? (student.purchasedBundles && student.purchasedBundles.length > 0 ? `✨ PRO (${student.purchasedBundles.length} Bundles)` : '✨ PRO') : 'Normal'}
                           </span>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold tracking-wide ${
                             student.status === 'Active' 
                               ? 'bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-[#10B981] border border-emerald-100' 
@@ -448,13 +448,13 @@ const StudentDirectory = ({
                             {student.status}
                           </span>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className="text-[14px] text-[#475569] font-medium">{student.joinedDate}</span>
                         </td>
-                        <td className="px-6">
+                        <td className="px-4">
                           <span className="text-[14px] text-[#64748B] font-medium">{formatLastLogin(student.lastLogin)}</span>
                         </td>
-                        <td className="px-6 text-center relative">
+                        <td className="px-4 text-center relative">
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                             <button onClick={() => setSelectedStudent(student)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
                               <Eye size={18} />

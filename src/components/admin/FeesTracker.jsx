@@ -206,46 +206,46 @@ export default function FeesTracker() {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[760px]">
+          <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
                 <tr className="bg-white border-b border-slate-100">
-                  <th className="px-6 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider">Student & Course</th>
-                  <th className="px-6 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Fee</th>
-                  <th className="px-6 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-right">Amount Paid</th>
-                  <th className="px-6 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-right">Balance</th>
-                  <th className="px-6 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-center">Action</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider">Student & Course</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Fee</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-right">Amount Paid</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-right">Balance</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-12 text-center text-slate-500 font-medium">
+                    <td colSpan="6" className="px-4 py-12 text-center text-slate-500 font-medium">
                       Loading fee records...
                     </td>
                   </tr>
                 ) : filteredData.length > 0 ? filteredData.map(student => (
                   <tr key={student.id} className="hover:bg-slate-50/70 transition-colors group">
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4">
                       <div className="flex flex-col">
                         <span className="text-[15px] font-bold text-slate-800">{student.name}</span>
                         <span className="text-[13px] font-medium text-slate-500 mt-0.5">{student.course}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-[15px] font-bold text-slate-700 text-right">
+                    <td className="px-4 py-4 text-[15px] font-bold text-slate-700 text-right">
                       ₹{student.totalFee.toLocaleString('en-IN')}
                     </td>
-                    <td className="px-6 py-4 text-[15px] font-bold text-green-600 text-right">
+                    <td className="px-4 py-4 text-[15px] font-bold text-green-600 text-right">
                       ₹{student.paid.toLocaleString('en-IN')}
                     </td>
-                    <td className="px-6 py-4 text-[15px] font-bold text-red-500 text-right">
+                    <td className="px-4 py-4 text-[15px] font-bold text-red-500 text-right">
                       ₹{(student.totalFee - student.paid).toLocaleString('en-IN')}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4">
                       {getStatusBadge(student.status)}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-4 py-4 text-center">
                       <div className="flex justify-center items-center gap-2">
                         <button 
                           onClick={(e) => {
@@ -269,7 +269,7 @@ export default function FeesTracker() {
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan="6" className="px-6 py-12 text-center text-slate-500 font-medium">
+                    <td colSpan="6" className="px-4 py-12 text-center text-slate-500 font-medium">
                       No matching records found.
                     </td>
                   </tr>

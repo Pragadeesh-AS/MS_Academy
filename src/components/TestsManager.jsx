@@ -496,36 +496,36 @@ export default function TestsManager({ department = '', isTeacher = false }) {
             <p className="text-slate-500 max-w-md font-medium">Create a test module template and schedule it for your students to take directly from their dashboard.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-[800] uppercase tracking-wider text-slate-400">
-                  <th className="px-6 py-4">Template Title</th>
-                  <th className="px-6 py-4">Target Audience</th>
-                  <th className="px-6 py-4">Subtopic Blueprint</th>
-                  <th className="px-6 py-4">Marks & Duration</th>
-                  {!isTeacher && <th className="px-6 py-4">Access</th>}
-                  <th className="px-6 py-4">Scheduled Date</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                  <th className="px-4 py-4">Template Title</th>
+                  <th className="px-4 py-4">Target Audience</th>
+                  <th className="px-4 py-4">Subtopic Blueprint</th>
+                  <th className="px-4 py-4">Marks & Duration</th>
+                  {!isTeacher && <th className="px-4 py-4">Access</th>}
+                  <th className="px-4 py-4">Scheduled Date</th>
+                  <th className="px-4 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-[14px]">
                 {tests.map((test) => (
                   <tr key={test.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-5">
+                    <td className="px-4 py-5">
                       <div className="font-[800] text-slate-800">{test.title}</div>
-                      <div className="text-[12px] text-slate-400 font-semibold mt-0.5">{test.description || 'No description provided'}</div>
+                      <div className="text-[12px] text-slate-400 font-semibold mt-0.5 max-w-[260px] truncate">{test.description || 'No description provided'}</div>
                     </td>
-                    <td className="px-6 py-5">
+                    <td className="px-4 py-5">
                       <div className="font-bold text-slate-700">{test.department}</div>
                       <div className="text-[12px] text-slate-500 font-semibold mt-0.5">by {test.createdBy}</div>
                     </td>
-                    <td className="px-6 py-5">
+                    <td className="px-4 py-5">
                       <span className="px-2.5 py-1 text-xs font-[800] bg-slate-100 text-slate-600 rounded-lg max-w-xs truncate inline-block">
                         {test.subject} • {test.topic}
                       </span>
                     </td>
-                    <td className="px-6 py-5">
+                    <td className="px-4 py-5">
                       <div className="flex items-center gap-1 text-slate-700 font-bold">
                         <Award size={14} className="text-slate-400" />
                         {test.targetMarks || 100} Marks
@@ -536,19 +536,19 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                       </div>
                     </td>
                     {!isTeacher && (
-                      <td className="px-6 py-5">
+                      <td className="px-4 py-5">
                         {(() => { const lbl = getBundleLabel(test); return (
                           <span className={`px-2.5 py-1 text-[11px] font-[800] rounded-lg border ${lbl.color}`}>{lbl.text}</span>
                         ); })()}
                       </td>
                     )}
-                    <td className="px-6 py-5">
+                    <td className="px-4 py-5">
                       <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[13px]">
                         <Calendar size={14} />
                         {test.scheduledTime?.includes('T') ? new Date(test.scheduledTime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : test.scheduledTime}
                       </div>
                     </td>
-                    <td className="px-6 py-5 text-right">
+                    <td className="px-4 py-5 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => handleToggleSolutions(test)}
