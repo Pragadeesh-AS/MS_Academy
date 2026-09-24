@@ -30,80 +30,17 @@ const SalaryManager = ({ teachers, typists }) => {
 
   const teacherStaff = teachers.map(t => ({ ...t, systemRole: 'Teacher', collection: 'invited_teachers', baseSalary: t.baseSalary || 0, salaryHistory: t.salaryHistory || [], isGhost: false }));
   
-  const existingPairIds = new Set(typists.map(t => t.pairId).filter(Boolean));
-  const existingNames = new Set();
-  typists.forEach(t => {
-    if (t.name || t.fullName || t.typistName) existingNames.add((t.name || t.fullName || t.typistName).trim().toLowerCase());
-    if (t.reviewerName) existingNames.add(t.reviewerName.trim().toLowerCase());
-  });
-
-  // Find ghost typists and reviewers from questions
-  const ghostTypistsMap = {};
-  questions.forEach(q => {
-    const pairId = q.pairId;
-    // The admin doesn't draw a salary, so their name is never treated as staff
-    const isAdminName = (n) => ['ms academy admin', 'admin'].includes((n || '').trim().toLowerCase());
-    const typedBy = isAdminName(q.typedBy) ? '' : q.typedBy?.trim();
-    const reviewedBy = isAdminName(q.reviewedBy) ? '' : q.reviewedBy?.trim();
-    
-    // Fallbacks for pairs without proper name registration
-    if (pairId && !existingPairIds.has(pairId)) {
-      if (!ghostTypistsMap[`${pairId}_typist`]) {
-        ghostTypistsMap[`${pairId}_typist`] = { pairId, name: typedBy || `Unknown Typist (${pairId})`, role: 'Typist', count: 0 };
-      }
-      ghostTypistsMap[`${pairId}_typist`].count += 1;
-      
-      if (reviewedBy) {
-        if (!ghostTypistsMap[`${pairId}_reviewer`]) {
-           ghostTypistsMap[`${pairId}_reviewer`] = { pairId, name: reviewedBy, role: 'Reviewer', count: 0 };
-        }
-        ghostTypistsMap[`${pairId}_reviewer`].count += 1;
-      }
-    } else {
-      if (typedBy && !existingNames.has(typedBy.toLowerCase())) {
-        const key = `typist_${typedBy.toLowerCase()}`;
-        if (!ghostTypistsMap[key]) {
-          ghostTypistsMap[key] = { pairId: null, name: typedBy, role: 'Typist', count: 0 };
-        }
-        ghostTypistsMap[key].count += 1;
-      }
-
-      if (reviewedBy && !existingNames.has(reviewedBy.toLowerCase())) {
-        const key = `reviewer_${reviewedBy.toLowerCase()}`;
-        if (!ghostTypistsMap[key]) {
-          ghostTypistsMap[key] = { pairId: null, name: reviewedBy, role: 'Reviewer', count: 0 };
-        }
-        ghostTypistsMap[key].count += 1;
-      }
-    }
-  });
-
-  const ghostTypists = Object.values(ghostTypistsMap).map((ghost, i) => ({
-    id: `ghost-${i}`,
-    name: ghost.name,
-    email: `Unregistered ${ghost.role}`,
-    pairId: ghost.pairId,
-    systemRole: ghost.role,
-    collection: 'invited_typists',
-    baseSalary: 0,
-    salaryHistory: [],
-    totalTyped: ghost.count,
-    paidQuestionsCount: 0,
-    pendingQuestionsCount: ghost.count,
-    pendingPayout: 0,
-    isGhost: true,
-    isSubRole: ghost.role.toLowerCase()
-  }));
-
   const typistStaff = [];
   
   typists.forEach(t => {
+      // Questions are tagged with the pair's document id when the pair has no separate pairId
+      const pairKey = t.pairId || t.id;
       // 1. TYPIST
       const tNameStr = t.typistName || t.name || t.fullName || '';
       if (tNameStr || !t.reviewerName) {
         const totalTyped = questions.filter(q => 
           (tNameStr && q.typedBy && q.typedBy.trim().toLowerCase() === tNameStr.trim().toLowerCase()) || 
-          (t.pairId && q.pairId === t.pairId)
+          (pairKey && q.pairId === pairKey)
         ).length;
         const paidCount = t.paidQuestionsCount || 0;
         const pendingCount = Math.max(0, totalTyped - paidCount);
@@ -132,7 +69,7 @@ const SalaryManager = ({ teachers, typists }) => {
       if (rNameStr) {
         const totalReviewed = questions.filter(q => 
           (rNameStr && q.reviewedBy && q.reviewedBy.trim().toLowerCase() === rNameStr.trim().toLowerCase()) || 
-          (t.pairId && q.pairId === t.pairId && q.reviewedBy)
+          (pairKey && q.pairId === pairKey && q.reviewedBy)
         ).length;
         const rPaidCount = t.reviewerPaidQuestionsCount || 0;
         const rPendingCount = Math.max(0, totalReviewed - rPaidCount);
@@ -159,8 +96,7 @@ const SalaryManager = ({ teachers, typists }) => {
 
   const allStaff = [
     ...teacherStaff, 
-    ...typistStaff.filter(t => t.totalTyped > 0), 
-    ...ghostTypists.filter(t => t.totalTyped > 0)
+    ...typistStaff
   ];
 
   const filteredStaff = allStaff.filter(staff => {

@@ -167,6 +167,10 @@ const StudentDirectory = ({
     const matchesStatus = filterStatus ? statusLow === filterStatusLow || statusLow.includes(filterStatusLow) : true;
     
     return matchesSearch && matchesDept && matchesYear && matchesStatus;
+  }).sort((a, b) => {
+    // Pro users first, then students with bundles, then normal users (original order kept within each group)
+    const rank = (st) => (st.purchasedBundles && st.purchasedBundles.length > 0 ? 1 : st.isPro ? 0 : 2);
+    return rank(a) - rank(b);
   });
 
   const totalPages = Math.ceil(filteredStudents.length / studentsPerPage);
