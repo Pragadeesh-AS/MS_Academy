@@ -869,15 +869,15 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               <table className="w-full text-left border-collapse table-fixed min-w-[900px]">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
-                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[5%]">ID</th>
-                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[25%]">Question</th>
-                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[12%]">Type</th>
-                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[10%]">Status</th>
-                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[10%]">Marks</th>
-                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[10%]">Difficulty</th>
-                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[12%]">Dept</th>
-                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[8%]">Date</th>
-                    <th className="py-5 px-4 text-[12px] font-[700] text-[#64748B] uppercase tracking-wider w-[8%] text-right">Actions</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-slate-900 uppercase tracking-wider w-[5%]">ID</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-slate-900 uppercase tracking-wider w-[25%]">Question</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-slate-900 uppercase tracking-wider w-[12%]">Type</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-slate-900 uppercase tracking-wider w-[10%]">Status</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-slate-900 uppercase tracking-wider w-[10%]">Marks</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-slate-900 uppercase tracking-wider w-[10%]">Difficulty</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-slate-900 uppercase tracking-wider w-[12%]">Dept</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-slate-900 uppercase tracking-wider w-[8%]">Date</th>
+                    <th className="py-5 px-4 text-[12px] font-[700] text-slate-900 uppercase tracking-wider w-[8%] text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]">

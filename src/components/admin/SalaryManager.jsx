@@ -328,11 +328,11 @@ const SalaryManager = ({ teachers, typists }) => {
             <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Member</th>
-                  <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Role / Dept</th>
-                  <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Salary / Rate</th>
-                  <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Pending Payout</th>
-                  <th className="py-4 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                  <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider">Staff Member</th>
+                  <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider">Role / Dept</th>
+                  <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider">Salary / Rate</th>
+                  <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider">Pending Payout</th>
+                  <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -557,13 +557,13 @@ const SalaryManager = ({ teachers, typists }) => {
                   <table className="w-full text-left min-w-[520px]">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Month</th>
-                        <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Amount</th>
-                        <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Paid On</th>
+                        <th className="px-6 py-3 text-xs font-semibold text-slate-900 uppercase">Month</th>
+                        <th className="px-6 py-3 text-xs font-semibold text-slate-900 uppercase">Amount</th>
+                        <th className="px-6 py-3 text-xs font-semibold text-slate-900 uppercase">Paid On</th>
                         {selectedStaff.systemRole === 'Typist' && (
-                          <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Questions</th>
+                          <th className="px-6 py-3 text-xs font-semibold text-slate-900 uppercase">Questions</th>
                         )}
-                        <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">Status</th>
+                        <th className="px-6 py-3 text-xs font-semibold text-slate-900 uppercase">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">

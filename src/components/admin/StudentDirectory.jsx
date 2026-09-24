@@ -383,14 +383,14 @@ const StudentDirectory = ({
               <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
-                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Student</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Department</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Year</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Tier</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Status</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Joined Date</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B]">Last Login</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-[#64748B] text-center w-[160px]">Actions</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Student</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Department</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Year</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Tier</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Status</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Joined Date</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Last Login</th>
+                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900 text-center w-[160px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]/60">

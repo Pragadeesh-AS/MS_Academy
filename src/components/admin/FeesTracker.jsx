@@ -210,12 +210,12 @@ export default function FeesTracker() {
             <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
                 <tr className="bg-white border-b border-slate-100">
-                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider">Student & Course</th>
-                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-right">Total Fee</th>
-                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-right">Amount Paid</th>
-                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-right">Balance</th>
-                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-5 text-[13px] font-bold text-slate-400 uppercase tracking-wider text-center">Action</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-900 uppercase tracking-wider">Student & Course</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-900 uppercase tracking-wider text-right">Total Fee</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-900 uppercase tracking-wider text-right">Amount Paid</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-900 uppercase tracking-wider text-right">Balance</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-900 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-5 text-[13px] font-bold text-slate-900 uppercase tracking-wider text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

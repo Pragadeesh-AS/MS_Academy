@@ -143,9 +143,9 @@ const TypistDirectory = ({
             <table className="w-full text-left border-collapse whitespace-nowrap">
               <thead>
                 <tr className="bg-[#F8FAFC] border-b border-[#EEF2F7]">
-                  <th className="py-5 px-4 font-semibold text-[#64748B] text-[13px] uppercase tracking-wider">Pair Info</th>
-                  <th className="py-5 px-4 font-semibold text-[#64748B] text-[13px] uppercase tracking-wider">Status</th>
-                  <th className="py-5 px-4 font-semibold text-[#64748B] text-[13px] uppercase tracking-wider text-right">Actions</th>
+                  <th className="py-5 px-4 font-semibold text-slate-900 text-[13px] uppercase tracking-wider">Pair Info</th>
+                  <th className="py-5 px-4 font-semibold text-slate-900 text-[13px] uppercase tracking-wider">Status</th>
+                  <th className="py-5 px-4 font-semibold text-slate-900 text-[13px] uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EEF2F7]">
