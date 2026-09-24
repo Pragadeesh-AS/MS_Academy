@@ -34,6 +34,7 @@ import TeacherDashboard from './components/TeacherDashboard';
 import TypistDashboard from './components/TypistDashboard';
 import Footer from './components/Footer';
 import Careers from './components/Careers';
+import Blog from './components/Blog';
 import GateCourses from './components/GateCourses';
 import LoginSignup from './components/LoginSignup';
 import Dashboard from './components/Dashboard';
@@ -347,6 +348,8 @@ export default function App() {
         <Route path="/gate-courses" element={<GateCourses />} />
         <Route path="/programming" element={<ProgrammingCourses />} />
         <Route path="/careers" element={<Careers />} />
+        <Route path="/blog" element={<Blog />} />
+        <Route path="/blog/:id" element={<Blog />} />
         <Route path="/login" element={<LoginSignup />} />
         <Route path="/student" element={<Dashboard />} />
         <Route path="/student/profile" element={<StudentProfile />} />

@@ -16,6 +16,7 @@ export default function AIGenerator() {
   const [errorMsg, setErrorMsg] = useState('');
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [importAsPremium, setImportAsPremium] = useState(false);
   const [importSettings, setImportSettings] = useState({ department: '', year: '', subject: '', topic: '', mark: '', difficultyLevel: 'Auto' });
   const fileInputRef = useRef(null);
   
@@ -492,6 +493,7 @@ IMPORTANT:
           matchColumn1: question.matchColumn1 || ['', ''],
           matchColumn2: question.matchColumn2 || ['', ''],
           status: 'Approved',
+          isPremium: importAsPremium,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
@@ -832,6 +834,19 @@ IMPORTANT:
                   </select>
                 </div>
               </div>
+
+              <label className="mt-5 flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50/60 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={importAsPremium}
+                  onChange={(e) => setImportAsPremium(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-amber-500"
+                />
+                <span>
+                  <span className="block text-sm font-bold text-slate-800">Move all extracted questions to the Premium Question Bank</span>
+                  <span className="block text-xs text-slate-500 mt-0.5">They will be imported as premium questions instead of the regular question bank.</span>
+                </span>
+              </label>
             </div>
             
             <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
