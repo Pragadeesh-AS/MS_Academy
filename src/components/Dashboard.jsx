@@ -39,6 +39,13 @@ export default function Dashboard() {
   const [isPro, setIsPro] = useState(false);
   const [purchasedBundles, setPurchasedBundles] = useState([]);
   const [availableBundles, setAvailableBundles] = useState([]);
+  // Membership tier: Elite (pro) > Prime (bought bundles) > Foundation (everyone else)
+  const bundleCount = purchasedBundles.length;
+  const tier = isPro
+    ? { tier: 'elite', label: 'MS GATE ELITE', icon: '👑' }
+    : bundleCount > 0
+      ? { tier: 'prime', label: 'MS GATE PRIME', icon: '⭐' }
+      : { tier: 'foundation', label: 'MS GATE FOUNDATION', icon: '🌱' };
   const [activeTab, setActiveTab] = useState('learning');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -522,7 +529,7 @@ export default function Dashboard() {
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all mt-4 ${activeTab === 'upgrade' ? 'pro-badge border border-[#F2C94C] text-[#B8860B]' : isPro ? 'text-[#B8860B] hover:bg-[#FFF9E6]' : 'pro-badge border border-[#F2C94C] text-[#B8860B]'}`}
               >
                 <Crown size={18} className="text-[#B8860B]" />
-                <span>{isPro ? 'Pro Benefits' : 'Upgrade to Pro'}</span>
+                <span>{isPro ? 'Elite Benefits' : 'Upgrade to Elite'}</span>
               </button>
             </nav>
             <div className="p-4 border-t border-slate-100">
@@ -597,7 +604,7 @@ export default function Dashboard() {
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'upgrade' ? 'pro-badge border border-[#F2C94C] text-[#B8860B] shadow-sm' : isPro ? 'text-[#B8860B] hover:bg-[#FFF9E6]' : 'pro-badge border border-[#F2C94C] text-[#B8860B] shadow-md hover:shadow-lg hover:-translate-y-0.5'}`}
               >
                 <Crown size={18} className={isPro && activeTab !== 'upgrade' ? 'text-[#B8860B]' : 'text-[#B8860B]'} />
-                {!isCollapsed && <span>{isPro ? 'Pro Benefits' : 'Upgrade to Pro'}</span>}
+                {!isCollapsed && <span>{isPro ? 'Elite Benefits' : 'Upgrade to Elite'}</span>}
               </button>
             </div>
           )}
@@ -621,11 +628,10 @@ export default function Dashboard() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-[900] text-slate-900 tracking-tight flex items-center gap-3">
               Welcome back, {studentName.split(' ')[0]} 👋
-              {isPro && (
-                <span className="pro-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[#F2C94C] text-[#B8860B] text-[12px] font-[900] uppercase tracking-widest shadow-sm hover:scale-105 transition-transform cursor-default">
-                  <Crown size={14} className="text-[#B8860B]" strokeWidth={2.5} /> PRO
-                </span>
-              )}
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[12px] font-[900] uppercase tracking-widest shadow-sm cursor-default ${isPro ? 'pro-badge border-[#F2C94C] text-[#B8860B]' : bundleCount > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+                {tier.label} <span className="text-[14px] leading-none">{tier.icon}</span>
+                {tier.tier === 'prime' && <span className="normal-case tracking-normal font-[800] opacity-80">&middot; {bundleCount} {bundleCount === 1 ? 'bundle' : 'bundles'}</span>}
+              </span>
             </h1>
             <p className="text-slate-500 font-medium text-sm sm:text-[15px] mt-1 flex items-center gap-2">
               <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -634,10 +640,10 @@ export default function Dashboard() {
           </div>
           <button 
             onClick={() => navigate('/student/profile')}
-            className="w-12 h-12 shrink-0 bg-gradient-to-br from-blue-100 to-blue-200 hover:from-blue-200 hover:to-blue-300 text-blue-700 rounded-full flex items-center justify-center font-[900] text-xl transition-all shadow-sm border border-blue-200 hover:shadow-md"
-            title="My Profile"
+            className="w-12 h-12 shrink-0 bg-gradient-to-br from-blue-100 to-blue-200 hover:from-blue-200 hover:to-blue-300 rounded-full flex items-center justify-center text-2xl transition-all shadow-sm border border-blue-200 hover:shadow-md"
+            title={`${tier.label} - My Profile`}
           >
-            {studentName.charAt(0).toUpperCase()}
+            {tier.icon}
           </button>
         </header>
 
@@ -793,7 +799,7 @@ export default function Dashboard() {
                       
                       {!canAccessRecording(rec) ? (
                         <button disabled className="w-full mt-4 py-2.5 bg-slate-50 text-slate-400 border border-slate-200 rounded-xl font-bold flex items-center justify-center gap-2 cursor-not-allowed">
-                          <Lock size={16} /> Locked (Pro)
+                          <Lock size={16} /> Locked (Elite)
                         </button>
                       ) : (
                         <button onClick={() => setPlayingVideoUrl(rec.url)} className="w-full mt-4 py-2.5 bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2">

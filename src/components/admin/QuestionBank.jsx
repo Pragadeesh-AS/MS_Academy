@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Loader from '../Loader';
 import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 
 const stripHtmlAndNormalize = (htmlString) => {
   if (!htmlString) return '';
@@ -615,36 +615,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }
   };
 
-  // Admin tool: questions saved with a mark other than 1 or 2 (e.g. "10 Marks", "15 Marks")
-  // are reset to the standard 1-mark label so test templates count them correctly.
-  const handleFixMarks = async () => {
-    const targetMark = '1 Mark (-0.33)';
-    const bad = questions.filter(q => ![1, 2].includes(parseFloat(q.mark)));
-    if (bad.length === 0) {
-      showToast('No questions with a wrong mark were found.', 'success');
-      return;
-    }
-    const counts = {};
-    bad.forEach(q => { const m = q.mark || '(empty)'; counts[m] = (counts[m] || 0) + 1; });
-    const summary = Object.entries(counts).map(([m, n]) => `${m}: ${n}`).join(', ');
-    if (!window.confirm(`Set ${bad.length} question(s) to "${targetMark}"? (${summary})`)) return;
-
-    try {
-      const nowIso = new Date().toISOString();
-      for (let i = 0; i < bad.length; i += 400) {
-        const batch = writeBatch(db);
-        bad.slice(i, i + 400).forEach(q => batch.update(doc(db, 'question_bank', q.id), { mark: targetMark, updatedAt: nowIso }));
-        await batch.commit();
-      }
-      const ids = new Set(bad.map(q => q.id));
-      setQuestions(prev => prev.map(q => ids.has(q.id) ? { ...q, mark: targetMark, updatedAt: nowIso } : q));
-      showToast(`Fixed marks on ${bad.length} question(s).`, 'success');
-    } catch (e) {
-      console.error('Failed to fix marks', e);
-      showToast('Failed to fix marks.', 'error');
-    }
-  };
-
   const openAddCreator = () => {
     setFormData({
       questionType: 'Single Choice',
@@ -794,16 +764,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               </div>
 
             {selectedFolder && (
-              <div className="flex items-center gap-3 shrink-0">
-              {userRole === 'admin' && (
-                <button
-                  onClick={handleFixMarks}
-                  title="Reset questions with a wrong mark (e.g. 10/15 Marks) to 1 Mark (-0.33)"
-                  className="h-[56px] px-6 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-[600] text-[15px] rounded-[16px] transition-all flex items-center justify-center gap-2"
-                >
-                  <Check size={18} /> Fix Marks
-                </button>
-              )}
               <button 
                 onClick={openAddCreator}
                 className="h-[56px] px-8 bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] hover:shadow-[0_8px_20px_rgba(37,99,235,0.25)] hover:-translate-y-1 text-white font-[600] text-[15px] rounded-[16px] transition-all shrink-0 flex items-center justify-center gap-2 group"
@@ -811,7 +771,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 <Plus size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" /> 
                 Add Question
               </button>
-              </div>
             )}
           </div>
         </div>
