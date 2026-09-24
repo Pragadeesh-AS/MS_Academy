@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Loader from '../Loader';
 import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 
 const stripHtmlAndNormalize = (htmlString) => {
   if (!htmlString) return '';
@@ -189,7 +189,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
   
-  const [selectedFolder, setSelectedFolder] = useState(null);
+  const [selectedFolder, setSelectedFolder] = useState(lockedDepartment || null);
   const [search, setSearch] = useState('');
   const [filterDept, setFilterDept] = useState(lockedDepartment || 'All');
   const [filterSubject, setFilterSubject] = useState('All');
@@ -198,6 +198,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const [filterMark, setFilterMark] = useState('All');
   const [filterDifficulty, setFilterDifficulty] = useState('All');
   const [filterStatus, setFilterStatus] = useState(externalFilter || 'Approved');
+  const [filterType, setFilterType] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Go back to page 1 whenever the filters or the page size change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, pageSize]);
 
   useEffect(() => {
     if (externalFilter !== null) {
@@ -243,7 +251,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const fetchQuestions = async () => {
     setLoading(true);
     try {
-      const qSnapshot = await getDocs(collection(db, 'question_bank'));
+      // Teachers are locked to their own department: scope the query at the
+      // Firestore level (not just client-side filtering) so other departments'
+      // question content is never sent to their browser at all.
+      const questionsRef = collection(db, 'question_bank');
+      const qSnapshot = await getDocs(
+        lockedDepartment ? query(questionsRef, where('department', '==', lockedDepartment)) : questionsRef
+      );
       let qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       // Deduplication Logic
@@ -291,7 +305,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   useEffect(() => {
     fetchQuestions();
-  }, []);
+  }, [lockedDepartment]);
+
+  // If lockedDepartment resolves after mount (async fetch upstream), keep the
+  // folder locked to it rather than leaving an admin-style department picker open.
+  useEffect(() => {
+    if (lockedDepartment) setSelectedFolder(lockedDepartment);
+  }, [lockedDepartment]);
 
   useEffect(() => {
     if (initialEditQuestionId && questions.length > 0 && !hasOpenedInitial) {
@@ -329,6 +349,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const years = Array.from({length: currentYear - 1990 + 1}, (_, i) => (currentYear - i).toString()); // 1990 to current year, descending
   const marks = attributes.filter(a => a.type === 'mark').map(a => a.name);
   const difficulties = attributes.filter(a => a.type === 'difficulty').map(a => a.name);
+  const questionTypes = ['Single Choice', 'Multiple Choice', 'Fill in Blanks', 'Match'];
   const optionsList = ['A', 'B', 'C', 'D'];
 
   const handleInputChange = (e) => {
@@ -612,7 +633,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     const matchesMark = filterMark === 'All' || q.mark === filterMark;
     const matchesDifficulty = filterDifficulty === 'All' || q.difficultyLevel === filterDifficulty;
     const matchesStatus = filterStatus === 'All' || q.status === filterStatus;
-    
+    const matchesType = filterType === 'All' || q.questionType === filterType;
+
     // Default Role Filtering Logic
     let roleMatches = true;
     if (userRole === 'typist') {
@@ -625,9 +647,23 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       premiumMatches = q.isPremium === true;
     }
 
-    return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && roleMatches && premiumMatches;
+    return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && matchesType && roleMatches && premiumMatches;
   });
 
+
+  const totalPages = Math.max(1, Math.ceil(filteredQuestions.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * pageSize;
+  const paginatedQuestions = filteredQuestions.slice(pageStart, pageStart + pageSize);
+
+  const pageNumbers = (() => {
+    const pages = [];
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || Math.abs(i - safePage) <= 1) pages.push(i);
+      else if (pages[pages.length - 1] !== '...') pages.push('...');
+    }
+    return pages;
+  })();
 
   const totalQuestions = filteredQuestions.length;
   const mcqQuestions = filteredQuestions.filter(q => q.questionType === 'Single Choice' || q.questionType === 'Multiple Choice').length;
@@ -653,13 +689,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           
           {/* Main Header */}
           <div className="flex flex-col gap-4">
-            {selectedFolder && (
-              <button 
-                onClick={() => setSelectedFolder(null)} 
+            {selectedFolder && !lockedDepartment && (
+              <button
+                onClick={() => setSelectedFolder(null)}
                 className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-all w-fit font-semibold text-sm group"
               >
                 <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm group-hover:border-slate-300 group-hover:shadow group-hover:-translate-x-1 transition-all">
-                  <ArrowLeft size={16} strokeWidth={2.5} /> 
+                  <ArrowLeft size={16} strokeWidth={2.5} />
                 </div>
                 Back to Departments
               </button>
@@ -761,20 +797,21 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               {/* FILTERS */}
               <div className="flex flex-wrap items-center gap-3">
                 {[
-                  { label: 'Status', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: ['Draft', 'In Review', 'Approved'] },
-                  { label: 'Subject', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
-                  { label: 'Topic', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
-                  { label: 'Year', val: filterYear, setter: setFilterYear, icon: Clock, opts: years },
-                  { label: 'Marks', val: filterMark, setter: setFilterMark, icon: Trophy, opts: marks },
-                  { label: 'Difficulty', val: filterDifficulty, setter: setFilterDifficulty, icon: Star, opts: difficulties }
+                  { label: 'Status', plural: 'Statuses', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: ['Draft', 'In Review', 'Approved'] },
+                  { label: 'Type', plural: 'Types', val: filterType, setter: setFilterType, icon: Layers, opts: questionTypes },
+                  { label: 'Subject', plural: 'Subjects', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
+                  { label: 'Topic', plural: 'Topics', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
+                  { label: 'Year', plural: 'Years', val: filterYear, setter: setFilterYear, icon: Clock, opts: years },
+                  { label: 'Marks', plural: 'Marks', val: filterMark, setter: setFilterMark, icon: Trophy, opts: marks },
+                  { label: 'Difficulty', plural: 'Difficulties', val: filterDifficulty, setter: setFilterDifficulty, icon: Star, opts: difficulties }
                 ].map((f, i) => (
                   <div key={i} className="relative group shrink-0">
-                    <select 
+                    <select
                       value={f.val}
                       onChange={(e) => f.setter(e.target.value)}
                       className="h-[48px] pl-11 pr-10 appearance-none bg-white border border-[#E5E7EB] rounded-[14px] text-[13px] font-[600] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer min-w-[140px] hover:border-[#CBD5E1]"
                     >
-                      <option value="All">All {f.label}s</option>
+                      <option value="All">All {f.plural}</option>
                       {f.opts.map((opt, idx) => (
                         <option key={idx} value={opt}>{opt}</option>
                       ))}
@@ -783,10 +820,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                     <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none group-hover:text-[#64748B] transition-colors" />
                   </div>
                 ))}
-                
-                <button 
+
+                <button
                   onClick={() => {
-                    setSearch(''); setFilterStatus('All'); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All');
+                    setSearch(''); setFilterStatus('All'); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All'); setFilterType('All');
                   }}
                   className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2"
                 >
@@ -825,7 +862,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       </td>
                     </tr>
                   ) : (
-                    filteredQuestions.map((q, index) => (
+                    paginatedQuestions.map((q, index) => (
                       <React.Fragment key={q.id}>
                         <tr 
                           onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}
@@ -833,7 +870,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                         >
                           <td className="py-4 px-4 h-[82px]">
                             <span className="text-[13px] font-[700] text-[#64748B] bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm inline-flex items-center justify-center min-w-[28px]">
-                              {index + 1}
+                              {pageStart + index + 1}
                             </span>
                           </td>
                           <td className="py-4 px-4 h-[82px] max-w-0">
@@ -954,21 +991,50 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               </table>
             </div>
             
-            {/* Pagination Placeholder */}
+            {/* Pagination */}
             {!loading && filteredQuestions.length > 0 && (
-              <div className="p-5 border-t border-[#EEF2F7] flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#F8FAFC]/50">
-                <span className="text-[13px] font-[500] text-[#64748B] text-center sm:text-left">
-                  Showing 1 to {filteredQuestions.length} of {filteredQuestions.length} questions
-                </span>
+              <div className="p-5 border-t border-[#EEF2F7] flex flex-col lg:flex-row items-center justify-between gap-3 bg-[#F8FAFC]/50">
+                <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-5">
+                  <span className="text-[13px] font-[500] text-[#64748B] text-center sm:text-left">
+                    Showing {pageStart + 1} to {Math.min(pageStart + pageSize, filteredQuestions.length)} of {filteredQuestions.length} questions
+                  </span>
+                  <label className="flex items-center gap-2 text-[13px] font-[500] text-[#64748B]">
+                    Per page
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="h-8 rounded-lg border border-[#EEF2F7] bg-white px-2 text-[13px] font-[600] text-[#334155] outline-none focus:border-[#2563EB]"
+                    >
+                      {[5, 10, 20, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </label>
+                </div>
                 <div className="flex items-center gap-2">
-                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#94A3B8] hover:border-[#CBD5E1] transition-colors">
+                  <button
+                    onClick={() => setCurrentPage(safePage - 1)}
+                    disabled={safePage === 1}
+                    className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] hover:border-[#CBD5E1] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
                     <ChevronDown size={16} className="rotate-90" />
                   </button>
-                  <button className="w-8 h-8 rounded-lg bg-[#2563EB] text-white font-[600] text-[13px] shadow-sm flex items-center justify-center">1</button>
-                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] font-[600] text-[13px] hover:border-[#CBD5E1] transition-colors">2</button>
-                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] font-[600] text-[13px] hover:border-[#CBD5E1] transition-colors">3</button>
-                  <span className="text-[#94A3B8]">...</span>
-                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#94A3B8] hover:border-[#CBD5E1] transition-colors">
+                  {pageNumbers.map((n, i) => n === '...' ? (
+                    <span key={`gap-${i}`} className="text-[#94A3B8]">...</span>
+                  ) : (
+                    <button
+                      key={n}
+                      onClick={() => setCurrentPage(n)}
+                      className={n === safePage
+                        ? 'w-8 h-8 rounded-lg bg-[#2563EB] text-white font-[600] text-[13px] shadow-sm flex items-center justify-center'
+                        : 'w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] font-[600] text-[13px] hover:border-[#CBD5E1] transition-colors'}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage(safePage + 1)}
+                    disabled={safePage === totalPages}
+                    className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] hover:border-[#CBD5E1] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
                     <ChevronDown size={16} className="-rotate-90" />
                   </button>
                 </div>

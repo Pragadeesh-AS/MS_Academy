@@ -3,7 +3,7 @@ import { User, Mail, Lock, TrendingUp, BookOpen, Trophy, Quote, Phone } from 'lu
 import signupImage from '../assets/signup2.png';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, sendPasswordResetEmail, setPersistence, browserSessionPersistence } from 'firebase/auth';
-import { collection, getDocs, query, where, updateDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, updateDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
 export default function LoginSignup() {
@@ -28,7 +28,7 @@ export default function LoginSignup() {
       
       if (!querySnapshot.empty) {
         const docId = querySnapshot.docs[0].id;
-        await updateDoc(doc(db, 'joined_students', docId), { status: 'Active' });
+        await updateDoc(doc(db, 'joined_students', docId), { status: 'Active', lastLogin: serverTimestamp() });
       } else {
         const newStudentRef = doc(collection(db, 'joined_students'));
         await setDoc(newStudentRef, {
@@ -38,7 +38,8 @@ export default function LoginSignup() {
           department: department,
           plan: plan,
           joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
-          status: "Active"
+          status: "Active",
+          lastLogin: serverTimestamp()
         });
       }
     } catch (e) {
@@ -53,7 +54,7 @@ export default function LoginSignup() {
       
       if (!querySnapshot.empty) {
         const docId = querySnapshot.docs[0].id;
-        await updateDoc(doc(db, 'invited_teachers', docId), { status: 'Accepted' });
+        await updateDoc(doc(db, 'invited_teachers', docId), { status: 'Accepted', lastLogin: serverTimestamp() });
         return true;
       }
     } catch (e) {

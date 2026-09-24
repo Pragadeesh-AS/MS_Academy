@@ -20,9 +20,33 @@ import {
   Package
 } from 'lucide-react';
 
-const StudentDirectory = ({ 
-  joinedStudents, 
-  setJoinedStudents, 
+const DEPARTMENT_OPTIONS = [
+  'Computer Science (CSE)',
+  'Electronics (ECE)',
+  'Mechanical (ME)',
+  'Civil (CE)',
+  'Electrical (EE)',
+  'Data Science & AI (DS)',
+  'Production & Industrial Engg (PI)',
+  'Instrumentation Engg (IN)',
+  'Biotechnology (BT)',
+  'Chemical Engineering (CH)',
+  'Biomedical Engineering (BM)',
+  'Physics (PH)',
+  'Architecture & Planning (AR)',
+  'Agricultural Engineering (AG)',
+  'Metallurgical Engineering (MT)',
+  'Environmental Science (ES)',
+  'Life Sciences (XL)',
+  'Aerospace Engineering (AE)',
+  'Other'
+];
+
+const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduated'];
+
+const StudentDirectory = ({
+  joinedStudents,
+  setJoinedStudents,
   onInvite,
   activeSubTab,
   setActiveSubTab,
@@ -35,7 +59,60 @@ const StudentDirectory = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [bundles, setBundles] = useState([]);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const studentsPerPage = 10;
+
+  const formatLastLogin = (lastLogin) => {
+    if (!lastLogin) return 'Never logged in';
+    const date = lastLogin.toDate ? lastLogin.toDate() : new Date(lastLogin);
+    const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diffSec < 60) return 'Just now';
+    if (diffSec < 3600) { const m = Math.floor(diffSec / 60); return `${m} min${m === 1 ? '' : 's'} ago`; }
+    if (diffSec < 86400) { const h = Math.floor(diffSec / 3600); return `${h} hour${h === 1 ? '' : 's'} ago`; }
+    if (diffSec < 172800) return 'Yesterday';
+    if (diffSec < 604800) { const d = Math.floor(diffSec / 86400); return `${d} days ago`; }
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  // Pull the RAW (unmocked) record so we never pre-fill the edit form with the
+  // random placeholder department/year this component uses for display when a
+  // real field is missing — saving those as real data would corrupt the record.
+  const openEditStudent = (student) => {
+    const raw = joinedStudents.find(s => String(s.id) === String(student.id)) || student;
+    setEditForm({
+      name: raw.name || '',
+      department: raw.department || '',
+      collegeName: raw.collegeName || '',
+      yearOfStudy: raw.yearOfStudy || ''
+    });
+    setEditingStudent(raw);
+  };
+
+  const handleSaveStudentEdit = async (e) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+    setIsSavingEdit(true);
+    try {
+      const updates = {
+        name: editForm.name.trim(),
+        department: editForm.department,
+        collegeName: editForm.collegeName.trim(),
+        yearOfStudy: editForm.yearOfStudy
+      };
+      await updateDoc(doc(db, 'joined_students', String(editingStudent.id)), updates);
+      setJoinedStudents(joinedStudents.map(s =>
+        String(s.id) === String(editingStudent.id) ? { ...s, ...updates } : s
+      ));
+      setEditingStudent(null);
+    } catch (err) {
+      console.error('Failed to update student', err);
+      alert('Failed to update student. Please try again.');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   useEffect(() => {
     const fetchBundles = async () => {
@@ -57,8 +134,8 @@ const StudentDirectory = ({
       return {
         ...student,
         department: student.department || ['Computer Science', 'Mechanical Engineering', 'Electronics', 'Civil Engineering'][seed % 4],
-        year: student.year || ['1st Year', '2nd Year', '3rd Year', '4th Year'][seed % 4],
-        lastLogin: student.lastLogin || ['2 hours ago', '1 day ago', '3 days ago', 'Just now'][seed % 4],
+        year: student.yearOfStudy || ['1st Year', '2nd Year', '3rd Year', '4th Year'][seed % 4],
+        lastLogin: student.lastLogin || null,
         status: student.status || ['Active', 'Pending', 'Inactive'][seed % 3]
       };
     });
@@ -367,7 +444,7 @@ const StudentDirectory = ({
                           <span className="text-[14px] text-[#475569] font-medium">{student.joinedDate}</span>
                         </td>
                         <td className="px-6">
-                          <span className="text-[14px] text-[#64748B] font-medium">{student.lastLogin}</span>
+                          <span className="text-[14px] text-[#64748B] font-medium">{formatLastLogin(student.lastLogin)}</span>
                         </td>
                         <td className="px-6 text-center relative">
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -398,7 +475,7 @@ const StudentDirectory = ({
                             >
                               <ShieldCheck size={18} />
                             </button>
-                            <button className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Student">
+                            <button onClick={() => openEditStudent(student)} className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Student">
                               <Edit size={18} />
                             </button>
                             <button 
@@ -607,6 +684,102 @@ const StudentDirectory = ({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Student Modal */}
+      {editingStudent && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => !isSavingEdit && setEditingStudent(null)}>
+          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center shrink-0">
+              <h3 className="text-[20px] font-bold text-[#0F172A]">Edit Student</h3>
+              <button onClick={() => !isSavingEdit && setEditingStudent(null)} className="text-[#64748B] hover:text-[#0F172A] transition-colors bg-slate-100 hover:bg-slate-200 p-2 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveStudentEdit} className="p-5 sm:p-8 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Student Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Department</label>
+                <select
+                  required
+                  value={editForm.department}
+                  onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800 bg-white"
+                >
+                  <option value="">Select Department...</option>
+                  {DEPARTMENT_OPTIONS.map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">College Name</label>
+                  <input
+                    type="text"
+                    value={editForm.collegeName}
+                    onChange={(e) => setEditForm({ ...editForm, collegeName: e.target.value })}
+                    placeholder="e.g. NIT Trichy"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Year of Study</label>
+                  <select
+                    value={editForm.yearOfStudy}
+                    onChange={(e) => setEditForm({ ...editForm, yearOfStudy: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800 bg-white"
+                  >
+                    <option value="">Select Year...</option>
+                    {YEAR_OPTIONS.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
+                <input
+                  type="email"
+                  disabled
+                  value={editingStudent.email}
+                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-500 cursor-not-allowed"
+                />
+                <p className="text-[11px] text-slate-400 font-medium mt-1.5">Email is tied to their login and can't be changed here.</p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingStudent(null)}
+                  disabled={isSavingEdit}
+                  className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  className="px-6 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[14px] transition-colors shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -1,26 +1,47 @@
 import React, { useState } from 'react';
-import { 
-  Search, 
-  ChevronDown, 
-  Eye, 
-  Edit, 
-  MoreVertical, 
-  Users, 
-  UserCheck, 
-  Clock, 
-  ShieldCheck, 
+import {
+  Search,
+  Eye,
+  Edit,
+  MoreVertical,
+  Users,
+  UserCheck,
+  Clock,
+  ShieldCheck,
   MailPlus,
   ChevronLeft,
   ChevronRight,
-  Filter,
   Trash2,
   RotateCcw,
   X
 } from 'lucide-react';
 
-const TeacherDirectory = ({ 
-  invitedTeachers, 
-  deleteTeacher, 
+const DEPARTMENT_OPTIONS = [
+  'Computer Science (CSE)',
+  'Electronics (ECE)',
+  'Mechanical (ME)',
+  'Civil (CE)',
+  'Electrical (EE)',
+  'Data Science & AI (DS)',
+  'Production & Industrial Engg (PI)',
+  'Instrumentation Engg (IN)',
+  'Biotechnology (BT)',
+  'Chemical Engineering (CH)',
+  'Biomedical Engineering (BM)',
+  'Physics (PH)',
+  'Architecture & Planning (AR)',
+  'Agricultural Engineering (AG)',
+  'Metallurgical Engineering (MT)',
+  'Environmental Science (ES)',
+  'Life Sciences (XL)',
+  'Aerospace Engineering (AE)',
+  'Other'
+];
+
+const TeacherDirectory = ({
+  invitedTeachers,
+  deleteTeacher,
+  updateTeacher,
   onInvite,
   activeSubTab,
   setActiveSubTab,
@@ -29,21 +50,90 @@ const TeacherDirectory = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [editingTeacher, setEditingTeacher] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', department: '', qualification: '', experience: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [filterDepartment, setFilterDepartment] = useState('');
+  const [filterQualification, setFilterQualification] = useState('');
+  const [filterExperience, setFilterExperience] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [sortBy, setSortBy] = useState('');
   const teachersPerPage = 10;
 
-  // Enhance existing teachers with mock data for the premium view
+  const resetTeacherFilters = () => {
+    setSearchQuery('');
+    setFilterDepartment('');
+    setFilterQualification('');
+    setFilterExperience('');
+    setFilterStatus('');
+    setSortBy('');
+    setCurrentPage(1);
+  };
+
+  // Pull the RAW record so we never pre-fill the edit form with the "Not set" /
+  // "Unknown" display placeholders this component uses when a real field is
+  // missing — saving those as-is would write the placeholder text as real data.
+  const openEditTeacher = (teacher) => {
+    const raw = invitedTeachers.find(t => t.id === teacher.id) || teacher;
+    setEditForm({
+      name: raw.name || '',
+      department: raw.department || '',
+      qualification: raw.qualification || '',
+      experience: raw.experience || ''
+    });
+    setEditingTeacher(raw);
+  };
+
+  const handleSaveTeacherEdit = async (e) => {
+    e.preventDefault();
+    if (!editingTeacher) return;
+    setIsSavingEdit(true);
+    const ok = await updateTeacher(editingTeacher.id, {
+      name: editForm.name.trim(),
+      department: editForm.department,
+      qualification: editForm.qualification.trim(),
+      experience: editForm.experience.trim()
+    });
+    setIsSavingEdit(false);
+    if (ok) setEditingTeacher(null);
+  };
+
+  const formatLastLogin = (lastLogin) => {
+    if (!lastLogin) return 'Never logged in';
+    const date = lastLogin.toDate ? lastLogin.toDate() : new Date(lastLogin);
+    const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diffSec < 60) return 'Just now';
+    if (diffSec < 3600) { const m = Math.floor(diffSec / 60); return `${m} min${m === 1 ? '' : 's'} ago`; }
+    if (diffSec < 86400) { const h = Math.floor(diffSec / 3600); return `${h} hour${h === 1 ? '' : 's'} ago`; }
+    if (diffSec < 172800) return 'Yesterday';
+    if (diffSec < 604800) { const d = Math.floor(diffSec / 86400); return `${d} days ago`; }
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
   const enhancedTeachers = invitedTeachers.map(teacher => ({
     ...teacher,
-    experience: teacher.experience || ['5 Years', '8 Years', '12 Years', '15 Years', '3 Years'][Math.floor(Math.random() * 5)],
-    joinedDate: teacher.joinedDate || ['10 Jan 2024', '15 Mar 2025', '22 Aug 2023', '05 Nov 2026'][Math.floor(Math.random() * 4)],
-    lastLogin: teacher.lastLogin || ['2 hours ago', '1 day ago', '3 days ago', 'Just now'][Math.floor(Math.random() * 4)],
+    experience: teacher.experience || 'Not set',
+    invitedDate: teacher.invitedDate || 'Unknown',
+    lastLogin: formatLastLogin(teacher.lastLogin),
   }));
 
-  const filteredTeachers = enhancedTeachers.filter(teacher => 
-    teacher.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    teacher.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    teacher.department.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTeachers = enhancedTeachers
+    .filter(teacher => {
+      const matchesSearch = teacher.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        teacher.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        teacher.department.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesDept = !filterDepartment || teacher.department === filterDepartment;
+      const matchesQualification = !filterQualification || teacher.qualification === filterQualification;
+      const matchesExperience = !filterExperience || teacher.experience === filterExperience;
+      const matchesStatus = !filterStatus || teacher.status === filterStatus;
+      return matchesSearch && matchesDept && matchesQualification && matchesExperience && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
+      if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
+      if (sortBy === 'status') return a.status.localeCompare(b.status);
+      return 0;
+    });
 
   const totalPages = Math.ceil(filteredTeachers.length / teachersPerPage);
   const paginatedTeachers = filteredTeachers.slice(
@@ -181,14 +271,61 @@ const TeacherDirectory = ({
             </div>
             
             <div className="flex flex-wrap items-center gap-3">
-              {['Department', 'Qualification', 'Experience', 'Status', 'Sort By'].map((filter) => (
-                <button key={filter} className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm">
-                  <Filter size={16} className="text-[#94A3B8]" />
-                  <span>{filter}</span>
-                  <ChevronDown size={16} className="text-[#94A3B8] ml-1" />
-                </button>
-              ))}
-              <button className="h-[48px] w-[48px] flex items-center justify-center ml-auto text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 rounded-full transition-colors">
+              <select
+                value={filterDepartment}
+                onChange={e => { setFilterDepartment(e.target.value); setCurrentPage(1); }}
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+              >
+                <option value="">All Departments</option>
+                {Array.from(new Set(enhancedTeachers.map(t => t.department).filter(Boolean))).sort().map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
+              </select>
+
+              <select
+                value={filterQualification}
+                onChange={e => { setFilterQualification(e.target.value); setCurrentPage(1); }}
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+              >
+                <option value="">All Qualifications</option>
+                {Array.from(new Set(enhancedTeachers.map(t => t.qualification).filter(Boolean))).sort().map(q => (
+                  <option key={q} value={q}>{q}</option>
+                ))}
+              </select>
+
+              <select
+                value={filterExperience}
+                onChange={e => { setFilterExperience(e.target.value); setCurrentPage(1); }}
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+              >
+                <option value="">All Experience</option>
+                {Array.from(new Set(enhancedTeachers.map(t => t.experience).filter(Boolean))).sort().map(exp => (
+                  <option key={exp} value={exp}>{exp}</option>
+                ))}
+              </select>
+
+              <select
+                value={filterStatus}
+                onChange={e => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+              >
+                <option value="">All Statuses</option>
+                <option value="Accepted">Active</option>
+                <option value="Invited">Invited</option>
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+              >
+                <option value="">Sort By</option>
+                <option value="name-asc">Name (A-Z)</option>
+                <option value="name-desc">Name (Z-A)</option>
+                <option value="status">Status</option>
+              </select>
+
+              <button onClick={resetTeacherFilters} className="h-[48px] w-[48px] flex items-center justify-center ml-auto text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 rounded-full transition-colors" title="Reset Filters">
                 <RotateCcw size={20} />
               </button>
             </div>
@@ -197,7 +334,7 @@ const TeacherDirectory = ({
           {/* Faculty Table */}
           <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_12px_30px_rgba(15,23,42,0.05)] overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[1050px]">
+              <table className="w-full text-left border-collapse min-w-[1150px]">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Faculty</th>
@@ -205,14 +342,15 @@ const TeacherDirectory = ({
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Qualification</th>
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Experience</th>
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Status</th>
-                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Joined Date</th>
+                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Invited Date</th>
+                    <th className="py-5 px-6 text-[14px] font-medium text-[#64748B]">Last Login</th>
                     <th className="py-5 px-6 text-[14px] font-medium text-[#64748B] text-center w-[160px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]/60">
                   {paginatedTeachers.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="py-16 text-center">
+                      <td colSpan="8" className="py-16 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                             <Search className="text-slate-300" size={32} />
@@ -263,14 +401,17 @@ const TeacherDirectory = ({
                           </span>
                         </td>
                         <td className="px-6">
-                          <span className="text-[14px] text-[#475569] font-medium">{teacher.joinedDate}</span>
+                          <span className="text-[14px] text-[#475569] font-medium">{teacher.invitedDate}</span>
+                        </td>
+                        <td className="px-6">
+                          <span className="text-[14px] text-[#475569] font-medium">{teacher.lastLogin}</span>
                         </td>
                         <td className="px-6 text-center relative">
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                             <button onClick={() => setSelectedTeacher(teacher)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
                               <Eye size={18} />
                             </button>
-                            <button className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Faculty">
+                            <button onClick={() => openEditTeacher(teacher)} className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Faculty">
                               <Edit size={18} />
                             </button>
                             <button 
@@ -384,6 +525,98 @@ const TeacherDirectory = ({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Teacher Modal */}
+      {editingTeacher && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => !isSavingEdit && setEditingTeacher(null)}>
+          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center shrink-0">
+              <h3 className="text-[20px] font-bold text-[#0F172A]">Edit Faculty</h3>
+              <button onClick={() => !isSavingEdit && setEditingTeacher(null)} className="text-[#64748B] hover:text-[#0F172A] transition-colors bg-slate-100 hover:bg-slate-200 p-2 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveTeacherEdit} className="p-5 sm:p-8 space-y-4 overflow-y-auto">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Teacher Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Department</label>
+                <select
+                  required
+                  value={editForm.department}
+                  onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800 bg-white"
+                >
+                  <option value="">Select Department...</option>
+                  {DEPARTMENT_OPTIONS.map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Qualification</label>
+                <input
+                  type="text"
+                  value={editForm.qualification}
+                  onChange={(e) => setEditForm({ ...editForm, qualification: e.target.value })}
+                  placeholder="e.g. Ph.D. in AI"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Experience</label>
+                <input
+                  type="text"
+                  value={editForm.experience}
+                  onChange={(e) => setEditForm({ ...editForm, experience: e.target.value })}
+                  placeholder="e.g. 8 Years"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
+                <input
+                  type="email"
+                  disabled
+                  value={editingTeacher.email}
+                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-500 cursor-not-allowed"
+                />
+                <p className="text-[11px] text-slate-400 font-medium mt-1.5">Email is tied to their login and can't be changed here. Remove and re-invite the teacher to use a different email.</p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingTeacher(null)}
+                  disabled={isSavingEdit}
+                  className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  className="px-6 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[14px] transition-colors shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

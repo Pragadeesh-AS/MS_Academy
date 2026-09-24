@@ -306,7 +306,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
               
               {/* Bottom: Options (Left 40%) */}
               <div className="flex flex-col md:flex-row w-full gap-8">
-                <div id="qb-options-area" className="w-full md:w-[45%] flex flex-col">
+                <div id="qb-options-area" className="w-full md:w-[45%] min-w-0 flex flex-col">
                   {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
                     <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
                       <img src={activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl} alt="Question" className={`${isPinned ? 'max-h-[30vh]' : 'max-h-16'} object-contain`} />
@@ -335,10 +335,10 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
                           id={`qb-opt-container-${opt}`}
                           key={opt}
                           onClick={() => !isRevealed && setStudentGuess(opt)}
-                          className={`flex items-center text-base md:text-lg font-semibold transition-all p-3 rounded-xl ${bgClass} pointer-events-auto text-left w-max`}
+                          className={`flex items-center text-base md:text-lg font-semibold transition-all p-3 rounded-xl ${bgClass} pointer-events-auto text-left w-fit max-w-full`}
                         >
                           <span id={`qb-opt-prefix-${opt}`} className="mr-4 font-bold shrink-0 whitespace-nowrap">( {opt} )</span> 
-                          <span id={`qb-opt-text-${opt}`} dangerouslySetInnerHTML={{ __html: text }} />
+                          <span id={`qb-opt-text-${opt}`} className="min-w-0 break-words" dangerouslySetInnerHTML={{ __html: text }} />
                           {isRevealed && isCorrect && <CheckCircle2 size={24} className="inline ml-4 text-green-500 shrink-0" />}
                           {isRevealed && isGuessed && !isCorrect && <X size={24} className="inline ml-4 text-red-500 shrink-0" />}
                         </button>
