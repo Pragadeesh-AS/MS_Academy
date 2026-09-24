@@ -382,7 +382,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex relative overflow-hidden">
+    <div className="h-screen bg-slate-50 flex relative overflow-hidden">
       
       {/* Onboarding Modal Overlay */}
       {showOnboarding && (
