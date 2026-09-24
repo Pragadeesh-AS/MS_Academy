@@ -30,7 +30,6 @@ import ReportedQuestions from './admin/ReportedQuestions';
 import InvoiceGenerator from './admin/InvoiceGenerator';
 import BlogManager from './admin/BlogManager';
 
-// Default mock data to populate localStorage if empty
 const loadImage = (src) => new Promise((resolve, reject) => {
   const img = new Image();
   img.crossOrigin = 'Anonymous';
@@ -38,53 +37,6 @@ const loadImage = (src) => new Promise((resolve, reject) => {
   img.onerror = reject;
   img.src = src;
 });
-
-const defaultStudents = [
-  { id: 1, name: "Arjun Kumar", email: "arjun.k@gmail.com", joinedDate: "15 Jul 2026", status: "Active" },
-  { id: 2, name: "Priya Sharma", email: "priya.sharma@yahoo.com", joinedDate: "18 Jul 2026", status: "Active" },
-  { id: 3, name: "Rahul Verma", email: "rahul.v@nitc.ac.in", joinedDate: "20 Jul 2026", status: "Inactive" },
-  { id: 4, name: "Sneha Reddy", email: "sneha.r@gmail.com", joinedDate: "21 Jul 2026", status: "Active" },
-  { id: 5, name: "Karthik Raja", email: "karthik.r@iitm.ac.in", joinedDate: "22 Jul 2026", status: "Active" }
-];
-
-const defaultApplications = [
-  {
-    id: 'app-1',
-    fullName: 'Rahul Sharma',
-    email: 'rahul.sharma@nitc.ac.in',
-    phone: '9876543210',
-    experience: '3+ Years',
-    specialization: 'Computer Science (Algorithms & OS)',
-    message: 'Graduated from NIT Calicut. I have 3 years of teaching experience for GATE candidates and CS subjects.',
-    role: 'GATE Coaching Teacher',
-    date: '21 Jul 2026',
-    status: 'Pending'
-  },
-  {
-    id: 'app-2',
-    fullName: 'Anjali Nair',
-    email: 'anjali.nair@iitb.ac.in',
-    phone: '8765432109',
-    experience: 'Fresher',
-    specialization: 'Electronics (VLSI & Networks)',
-    message: 'M.Tech graduate from IIT Bombay. Highly passionate about teaching and solving network equations.',
-    role: 'GATE Coaching Teacher',
-    date: '20 Jul 2026',
-    status: 'Shortlisted'
-  },
-  {
-    id: 'app-3',
-    fullName: 'Karthik Raja',
-    email: 'karthik.r@gmail.com',
-    phone: '7654321098',
-    experience: '5+ Years',
-    specialization: 'Physics (Mechanics)',
-    message: 'Applying for High School Physics Teacher. 5 years teaching CBSE curricula in top coaching centers.',
-    role: 'School Teachers (6th – 12th)',
-    date: '18 Jul 2026',
-    status: 'Pending'
-  }
-];
 
 const sendEmailViaGAS = async (to, subject, htmlMessage, attachment = null) => {
   const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
@@ -121,43 +73,18 @@ const sendEmailViaGAS = async (to, subject, htmlMessage, attachment = null) => {
   }
 };
 
-const defaultQueries = [
-  {
-    id: 'q-1',
-    fullName: 'Preeti Deshmukh',
-    email: 'preeti.d@outlook.com',
-    phone: '9988776655',
-    message: 'Hello, do you provide weekend online classes for GATE Mechanical? I am currently working in an IT firm.',
-    date: '22 Jul 2026',
-    status: 'Pending'
-  },
-  {
-    id: 'q-2',
-    fullName: 'Siddharth Sen',
-    email: 'sidd.sen@gmail.com',
-    phone: '8877665544',
-    message: 'I want to enroll for the test series package. Are full-length CBT mock tests included in the price?',
-    date: '21 Jul 2026',
-    status: 'Resolved'
-  },
-  {
-    id: 'q-3',
-    fullName: 'Venkatesh Prasad',
-    email: 'venky.p@gmail.com',
-    phone: '7766554433',
-    message: 'Is study material posted to our address or is it online PDF format only?',
-    date: '19 Jul 2026',
-    status: 'Pending'
-  }
-];
+const toDate = (v) => {
+  if (!v) return null;
+  if (typeof v.toDate === 'function') return v.toDate();
+  if (typeof v.seconds === 'number') return new Date(v.seconds * 1000);
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+};
 
-const defaultCourseOverrides = [
-  { code: 'CSE', fee: '₹35,000', batch: 'Starts 1st Aug (Evening)', status: 'Active' },
-  { code: 'ECE', fee: '₹35,000', batch: 'Starts 1st Aug (Morning)', status: 'Active' },
-  { code: 'ME', fee: '₹32,000', batch: 'Starts 5th Aug (Evening)', status: 'Active' },
-  { code: 'CE', fee: '₹30,000', batch: 'Starts 10th Aug (Morning)', status: 'Active' },
-  { code: 'DS', fee: '₹38,000', batch: 'Starts 1st Aug (Hybrid)', status: 'Active' }
-];
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Percentage change between two periods; null when there is no baseline to compare against
+const pctChange = (curr, prev) => (prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null);
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -174,7 +101,8 @@ export default function AdminDashboard() {
   const [rejectReason, setRejectReason] = useState('');
   const [isProcessingApp, setIsProcessingApp] = useState(false);
   const [queries, setQueries] = useState([]);
-  const [courses, setCourses] = useState([]);
+  const [tests, setTests] = useState([]);
+  const [testAttempts, setTestAttempts] = useState([]);
   
   // Joined students dataset and subtab state
   const [joinedStudents, setJoinedStudents] = useState([]);
@@ -225,7 +153,7 @@ export default function AdminDashboard() {
     }
   }, [navigate]);
 
-  // Load database from Firestore (with fallbacks to localStorage for courses config)
+  // Load database from Firestore
   useEffect(() => {
     const syncData = async () => {
       try {
@@ -251,27 +179,147 @@ export default function AdminDashboard() {
         const fetchedTypists = typistsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
         setInvitedTypists(fetchedTypists);
 
-        // 5. Keep courses config in localStorage for now since it's just settings
-        const savedCourses = localStorage.getItem('gate_courses_config');
-        if (savedCourses) {
-          setCourses(JSON.parse(savedCourses));
-        } else {
-          localStorage.setItem('gate_courses_config', JSON.stringify(defaultCourseOverrides));
-          setCourses(defaultCourseOverrides);
-        }
       } catch (err) {
         console.error("Failed to sync data from Firestore", err);
       }
     };
 
-    // Run initial sync
     syncData();
-
-    // Listen for storage events on courses config
-    const handleStorage = () => syncData();
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
   }, []);
+
+  // Tests + attempts power the overview stats (fetched separately so a failure here doesn't block the other lists)
+  const fetchTestsAndAttempts = async () => {
+    try {
+      const [testsSnap, attemptsSnap] = await Promise.all([
+        getDocs(collection(db, 'tests')),
+        getDocs(collection(db, 'test_attempts'))
+      ]);
+      setTests(testsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+      setTestAttempts(attemptsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+    } catch (err) {
+      console.error('Failed to load tests/attempts', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchTestsAndAttempts();
+  }, []);
+
+  const overview = React.useMemo(() => {
+    const now = Date.now();
+    const monthStart = now - 30 * DAY_MS;
+    const prevMonthStart = now - 60 * DAY_MS;
+    const inWindow = (d, from, to) => d && d.getTime() >= from && d.getTime() < to;
+
+    const attempts = testAttempts.map(a => ({
+      ...a,
+      _date: toDate(a.submittedAt),
+      _pct: a.totalQuestions > 0 ? ((a.score || 0) / a.totalQuestions) * 100 : null
+    }));
+
+    const avgOf = (list) => {
+      const scored = list.filter(a => a._pct !== null);
+      return scored.length ? scored.reduce((sum, a) => sum + a._pct, 0) / scored.length : null;
+    };
+    const attemptsNow = attempts.filter(a => inWindow(a._date, monthStart, now + DAY_MS));
+    const attemptsPrev = attempts.filter(a => inWindow(a._date, prevMonthStart, monthStart));
+
+    const testsNow = tests.filter(t => inWindow(toDate(t.createdAt), monthStart, now + DAY_MS)).length;
+    const testsPrev = tests.filter(t => inWindow(toDate(t.createdAt), prevMonthStart, monthStart)).length;
+
+    const studentsNow = joinedStudents.filter(s => inWindow(toDate(s.joinedDate), monthStart, now + DAY_MS)).length;
+    const studentsPrev = joinedStudents.filter(s => inWindow(toDate(s.joinedDate), prevMonthStart, monthStart)).length;
+
+    const key = (a) => (a.studentEmail || a.studentName || '').toLowerCase();
+    const uniqueStudents = (list) => new Set(list.map(key).filter(Boolean)).size;
+
+    const avgScore = avgOf(attempts);
+    const avgScoreDelta = avgOf(attemptsNow) !== null && avgOf(attemptsPrev) !== null
+      ? Math.round(avgOf(attemptsNow) - avgOf(attemptsPrev))
+      : null;
+
+    const participation = joinedStudents.length > 0
+      ? Math.min(100, Math.round((uniqueStudents(attempts) / joinedStudents.length) * 100))
+      : null;
+    const participationNow = uniqueStudents(attemptsNow);
+    const participationPrev = uniqueStudents(attemptsPrev);
+
+    // Heatmap: last 5 weeks (Mon-Sun rows) of submitted attempts per day
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const daysSinceMonday = (today.getDay() + 6) % 7;
+    const firstMonday = new Date(today.getTime() - (daysSinceMonday + 28) * DAY_MS);
+    const perDay = {};
+    attempts.forEach(a => {
+      if (!a._date) return;
+      const d = new Date(a._date);
+      d.setHours(0, 0, 0, 0);
+      perDay[d.getTime()] = (perDay[d.getTime()] || 0) + 1;
+    });
+    const weeks = Array.from({ length: 5 }, (_, w) => {
+      const weekStart = new Date(firstMonday.getTime() + w * 7 * DAY_MS);
+      return {
+        label: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        days: Array.from({ length: 7 }, (_, d) => {
+          const date = new Date(weekStart.getTime() + d * DAY_MS);
+          return { date, count: date.getTime() > today.getTime() ? null : (perDay[date.getTime()] || 0) };
+        })
+      };
+    });
+    const maxCount = Math.max(0, ...weeks.flatMap(w => w.days.map(d => d.count || 0)));
+    const level = (count) => {
+      if (!count) return 0;
+      return Math.max(1, Math.ceil((count / maxCount) * 6));
+    };
+
+    const attemptsByTest = {};
+    attempts.forEach(a => { attemptsByTest[a.testId] = (attemptsByTest[a.testId] || 0) + 1; });
+    const recentTests = [...tests]
+      .sort((a, b) => (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0))
+      .slice(0, 8)
+      .map(t => ({ ...t, attemptCount: attemptsByTest[t.id] || 0 }));
+
+    return {
+      testsDelta: pctChange(testsNow, testsPrev),
+      studentsDelta: pctChange(studentsNow, studentsPrev),
+      participation,
+      participationDelta: pctChange(participationNow, participationPrev),
+      avgScore: avgScore === null ? null : Math.round(avgScore),
+      avgScoreDelta,
+      weeks,
+      level,
+      activeStudents: participationNow,
+      activeStudentsDelta: pctChange(participationNow, participationPrev),
+      attemptsImproved: attemptsNow.length >= attemptsPrev.length && attemptsNow.length > 0,
+      recentTests
+    };
+  }, [tests, testAttempts, joinedStudents]);
+
+  const pendingInbox = queries.filter(q => q.status === 'Pending').length + applications.filter(a => a.status === 'Pending').length;
+
+  const deleteTest = async (test) => {
+    if (!window.confirm(`Delete "${test.title || 'this test'}"? Student attempts already recorded will remain.`)) return;
+    try {
+      await deleteDoc(doc(db, 'tests', test.id));
+      setTests(prev => prev.filter(t => t.id !== test.id));
+    } catch (err) {
+      console.error('Failed to delete test', err);
+      alert('Failed to delete test. Please try again.');
+    }
+  };
+
+  const renderDelta = (delta, suffix = 'vs last 30 days') => {
+    if (delta === null || delta === undefined) {
+      return <span className="text-[12px] font-semibold tracking-tight text-[#94A3B8]">No prior data</span>;
+    }
+    const up = delta >= 0;
+    return (
+      <div className={`flex items-center gap-1.5 ${up ? 'text-[#16A34A]' : 'text-[#EF4444]'}`}>
+        <ArrowUpRight size={14} strokeWidth={3} className={up ? '' : 'rotate-90'} />
+        <span className="text-[12px] font-semibold tracking-tight">{up ? '+' : ''}{delta}% {suffix}</span>
+      </div>
+    );
+  };
 
   useEffect(() => {
     const fetchPopup = async () => {
@@ -554,17 +602,6 @@ export default function AdminDashboard() {
     } catch (e) {
       console.error(e);
     }
-  };
-
-  const updateCourseDetail = (code, field, value) => {
-    const updated = courses.map(c => 
-      c.code === code ? { ...c, [field]: value } : c
-    );
-    if (!courses.some(c => c.code === code)) {
-      updated.push({ code, fee: '₹30,000', batch: 'TBD', status: 'Active', [field]: value });
-    }
-    setCourses(updated);
-    localStorage.setItem('gate_courses_config', JSON.stringify(updated));
   };
 
   const handleInviteSubmit = async (e) => {
@@ -1085,11 +1122,11 @@ export default function AdminDashboard() {
               <div className="flex items-center gap-4">
                 {/* Profile Avatar */}
                 <div className="w-[48px] h-[48px] rounded-full bg-slate-200 border border-slate-200 shadow-[0_2px_8px_rgba(15,23,42,0.06)] overflow-hidden cursor-pointer hover:scale-105 transition-transform shrink-0">
-                  <img src="https://ui-avatars.com/api/?name=Admin+User&background=1E293B&color=fff&size=100" alt="Admin Profile" className="w-full h-full object-cover" />
+                  <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(adminName)}&background=1E293B&color=fff&size=100`} alt="Admin Profile" className="w-full h-full object-cover" />
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <h1 className="text-[22px] font-[700] text-[#0F172A] leading-tight font-sans tracking-tight">Welcome back, Admin! 👋</h1>
-                  <p className="text-[13px] font-[500] text-[#64748B] tracking-tight">Here's what's happening with your tests today.</p>
+                  <h1 className="text-[22px] font-[700] text-[#0F172A] leading-tight font-sans tracking-tight">Welcome back, {adminName}! 👋</h1>
+                  <p className="text-[13px] font-[500] text-[#64748B] tracking-tight">Here's what's happening across your academy.</p>
                 </div>
               </div>
 
@@ -1109,9 +1146,15 @@ export default function AdminDashboard() {
               {/* Right Section: Notification */}
               <div className="flex items-center">
                 {/* Notification Button */}
-                <button className="relative flex items-center justify-center w-[42px] h-[42px] bg-[#FFFFFF] border border-[#EEF2F7] rounded-full shadow-[0_2px_12px_rgba(15,23,42,0.03)] hover:bg-[#F8FAFF] hover:border-blue-200 transition-all group">
+                <button
+                  onClick={() => { setStudentSubTab('queries'); setActiveTab('queries'); }}
+                  title={pendingInbox > 0 ? `${pendingInbox} pending queries/applications` : 'No pending items'}
+                  className="relative flex items-center justify-center w-[42px] h-[42px] bg-[#FFFFFF] border border-[#EEF2F7] rounded-full shadow-[0_2px_12px_rgba(15,23,42,0.03)] hover:bg-[#F8FAFF] hover:border-blue-200 transition-all group"
+                >
                   <Bell size={18} className="text-[#64748B] group-hover:text-[#2563EB] group-hover:animate-pulse" />
-                  <span className="absolute -top-1 -right-0.5 w-[16px] h-[16px] bg-[#EF4444] rounded-full border-[1.5px] border-white flex items-center justify-center text-[9px] font-bold text-white shadow-sm">3</span>
+                  {pendingInbox > 0 && (
+                    <span className="absolute -top-1 -right-0.5 min-w-[16px] h-[16px] px-1 bg-[#EF4444] rounded-full border-[1.5px] border-white flex items-center justify-center text-[9px] font-bold text-white shadow-sm">{pendingInbox > 99 ? '99+' : pendingInbox}</span>
+                  )}
                 </button>
               </div>
 
@@ -1130,16 +1173,12 @@ export default function AdminDashboard() {
                     <FileText size={20} className="text-[#2563EB]" strokeWidth={2.5} style={{ filter: 'drop-shadow(0 0 6px rgba(37,99,235,0.3))' }} />
                   </div>
                   <div className="flex flex-col">
-                    <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">128</h3>
+                    <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">{tests.length}</h3>
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Total Tests</span>
                   </div>
                 </div>
                 <div className="flex items-end justify-between w-full mt-auto pt-1">
-                  <div className="flex items-center text-[#16A34A] gap-1.5">
-                    <ArrowUpRight size={14} strokeWidth={3} />
-                    <span className="text-[12px] font-semibold tracking-tight">12% this month</span>
-                  </div>
-                  <svg className="w-16 h-8 text-blue-300 opacity-60" viewBox="0 0 100 30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M0 25 Q 15 20 25 15 T 50 15 T 75 10 T 100 5"/></svg>
+                  {renderDelta(overview.testsDelta, "vs last 30 days")}
                 </div>
               </div>
 
@@ -1153,16 +1192,12 @@ export default function AdminDashboard() {
                     <Users size={20} className="text-[#8B5CF6]" strokeWidth={2.5} style={{ filter: 'drop-shadow(0 0 6px rgba(139,92,246,0.3))' }} />
                   </div>
                   <div className="flex flex-col">
-                    <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">521</h3>
+                    <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">{joinedStudents.length}</h3>
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Total Students</span>
                   </div>
                 </div>
                 <div className="flex items-end justify-between w-full mt-auto pt-1">
-                  <div className="flex items-center text-[#16A34A] gap-1.5">
-                    <ArrowUpRight size={14} strokeWidth={3} />
-                    <span className="text-[12px] font-semibold tracking-tight">8% this month</span>
-                  </div>
-                  <svg className="w-16 h-8 text-purple-300 opacity-60" viewBox="0 0 100 30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M0 20 Q 20 15 30 25 T 60 10 T 80 5 T 100 15"/></svg>
+                  {renderDelta(overview.studentsDelta, "new vs last 30 days")}
                 </div>
               </div>
 
@@ -1176,16 +1211,12 @@ export default function AdminDashboard() {
                     <CheckCircle2 size={20} className="text-[#10B981]" strokeWidth={2.5} style={{ filter: 'drop-shadow(0 0 6px rgba(16,185,129,0.3))' }} />
                   </div>
                   <div className="flex flex-col">
-                    <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">87%</h3>
-                    <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Completion Rate</span>
+                    <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">{overview.participation === null ? "—" : `${overview.participation}%`}</h3>
+                    <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Test Participation</span>
                   </div>
                 </div>
                 <div className="flex items-end justify-between w-full mt-auto pt-1">
-                  <div className="flex items-center text-[#16A34A] gap-1.5">
-                    <ArrowUpRight size={14} strokeWidth={3} />
-                    <span className="text-[12px] font-semibold tracking-tight">5% this month</span>
-                  </div>
-                  <svg className="w-16 h-8 text-emerald-300 opacity-60" viewBox="0 0 100 30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M0 15 Q 15 25 35 15 T 65 10 T 85 5 T 100 10"/></svg>
+                  {renderDelta(overview.participationDelta, "active vs last 30 days")}
                 </div>
               </div>
 
@@ -1199,16 +1230,12 @@ export default function AdminDashboard() {
                     <TrendingUp size={20} className="text-[#F59E0B]" strokeWidth={2.5} style={{ filter: 'drop-shadow(0 0 6px rgba(245,158,11,0.3))' }} />
                   </div>
                   <div className="flex flex-col">
-                    <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">89%</h3>
+                    <h3 className="text-[30px] font-[700] text-[#0F172A] leading-none font-sans tracking-tight">{overview.avgScore === null ? "—" : `${overview.avgScore}%`}</h3>
                     <span className="text-[14px] font-[500] text-[#64748B] mt-1 tracking-tight">Average Score</span>
                   </div>
                 </div>
                 <div className="flex items-end justify-between w-full mt-auto pt-1">
-                  <div className="flex items-center text-[#16A34A] gap-1.5">
-                    <ArrowUpRight size={14} strokeWidth={3} />
-                    <span className="text-[12px] font-semibold tracking-tight">7% this month</span>
-                  </div>
-                  <svg className="w-16 h-8 text-orange-300 opacity-60" viewBox="0 0 100 30" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M0 25 Q 15 10 30 15 T 50 10 T 70 20 T 100 5"/></svg>
+                  {renderDelta(overview.avgScoreDelta, "pts vs last 30 days")}
                 </div>
               </div>
 
@@ -1228,34 +1255,22 @@ export default function AdminDashboard() {
                       </div>
                       <div className="flex flex-col">
                         <h3 className="text-[20px] font-bold text-[#0F172A] tracking-tight font-sans leading-tight">Recent Tests</h3>
-                        <p className="text-[13px] text-[#64748B] font-medium">Recently created AI-generated assessments</p>
+                        <p className="text-[13px] text-[#64748B] font-medium">Most recently created tests</p>
                       </div>
                     </div>
-                    <button className="text-[13px] font-semibold text-[#0F172A] border border-[#E5E7EB] px-5 py-2 rounded-full hover:bg-slate-50 transition-colors shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+                    <button onClick={() => setActiveTab('tests')} className="text-[13px] font-semibold text-[#0F172A] border border-[#E5E7EB] px-5 py-2 rounded-full hover:bg-slate-50 transition-colors shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
                       View All &rarr;
                     </button>
                   </div>
 
                   {/* Test List */}
                   <div className="flex flex-col gap-[14px] overflow-x-auto">
-                    {[
-                      { title: "Practice Test: ME2023.pdf", sub: "Mechanical Engineering", diff: "Medium", color: "orange", time: "60", marks: "100", date: "2 Jul 2025" },
-                      { title: "CS Foundations: Q1.pdf", sub: "Computer Science", diff: "Easy", color: "green", time: "45", marks: "50", date: "1 Jul 2025" },
-                      { title: "Advanced Calculus: Final.pdf", sub: "Mathematics", diff: "Hard", color: "red", time: "120", marks: "200", date: "28 Jun 2025" },
-                      { title: "Physics Mock: PH2025.pdf", sub: "Physics", diff: "Medium", color: "orange", time: "90", marks: "100", date: "25 Jun 2025" },
-                      { title: "Data Structures 101.pdf", sub: "Computer Science", diff: "Easy", color: "green", time: "30", marks: "30", date: "20 Jun 2025" },
-                      { title: "Thermodynamics: ME-Mid.pdf", sub: "Mechanical Engineering", diff: "Hard", color: "red", time: "180", marks: "150", date: "18 Jun 2025" },
-                      { title: "Organic Chem: CH-202.pdf", sub: "Chemistry", diff: "Medium", color: "orange", time: "60", marks: "80", date: "15 Jun 2025" },
-                      { title: "Ethics in Tech: ET-400.pdf", sub: "Humanities", diff: "Easy", color: "green", time: "45", marks: "50", date: "10 Jun 2025" }
-                    ].map((test, idx) => {
-                      const diffStyles = {
-                        green: 'text-[#10B981] bg-gradient-to-r from-emerald-50 to-emerald-100/50',
-                        orange: 'text-[#F59E0B] bg-gradient-to-r from-orange-50 to-orange-100/50',
-                        red: 'text-[#EF4444] bg-gradient-to-r from-rose-50 to-rose-100/50'
-                      }[test.color];
-
+                    {overview.recentTests.length === 0 && (
+                      <div className="text-center py-12 text-[14px] font-medium text-[#94A3B8]">No tests created yet. Use "Create Test" to add your first one.</div>
+                    )}
+                    {overview.recentTests.map((test) => {
                       return (
-                        <div key={idx} className="group flex flex-col bg-white border border-[#EEF2F7] rounded-[18px] px-5 py-4 shadow-[0_3px_12px_rgba(15,23,42,0.04)] hover:bg-[#F8FAFF] hover:-translate-y-1 hover:shadow-[0_16px_35px_rgba(37,99,235,0.12)] transition-all duration-300 z-10 hover:z-20 overflow-hidden min-w-[640px]">
+                        <div key={test.id} className="group flex flex-col bg-white border border-[#EEF2F7] rounded-[18px] px-5 py-4 shadow-[0_3px_12px_rgba(15,23,42,0.04)] hover:bg-[#F8FAFF] hover:-translate-y-1 hover:shadow-[0_16px_35px_rgba(37,99,235,0.12)] transition-all duration-300 z-10 hover:z-20 overflow-hidden min-w-[640px]">
                           
                           {/* Main Row Content (Always visible) */}
                           <div className="flex items-center justify-between">
@@ -1266,21 +1281,21 @@ export default function AdminDashboard() {
                                 <FileText size={18} strokeWidth={2.5} />
                               </div>
                               <div className="flex flex-col w-[240px]">
-                                <h4 className="font-[600] text-[17px] text-[#0F172A] font-sans leading-tight whitespace-nowrap overflow-hidden text-ellipsis">{test.title}</h4>
-                                <span className="text-[13px] font-medium text-[#64748B] font-sans mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{test.sub}</span>
+                                <h4 className="font-[600] text-[17px] text-[#0F172A] font-sans leading-tight whitespace-nowrap overflow-hidden text-ellipsis">{test.title || 'Untitled Test'}</h4>
+                                <span className="text-[13px] font-medium text-[#64748B] font-sans mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{[test.subject, test.department].filter(Boolean).join(' • ') || 'General'}</span>
                               </div>
-                              <span className={`ml-2 px-3 py-1 rounded-full text-[12px] font-bold tracking-wide shadow-sm whitespace-nowrap ${diffStyles}`}>
-                                {test.diff}
+                              <span className="ml-2 px-3 py-1 rounded-full text-[12px] font-bold tracking-wide shadow-sm whitespace-nowrap text-[#2563EB] bg-gradient-to-r from-blue-50 to-blue-100/50">
+                                {test.attemptCount} {test.attemptCount === 1 ? 'attempt' : 'attempts'}
                               </span>
                             </div>
 
                             {/* Metadata */}
                             <div className="flex items-center gap-8 text-[#64748B] flex-1 justify-end">
                               <div className="flex items-center gap-2 text-[14px] font-medium whitespace-nowrap">
-                                <Clock size={16} className="opacity-70" /> {test.time} mins
+                                <Clock size={16} className="opacity-70" /> {test.duration || "—"} mins
                               </div>
                               <div className="flex items-center gap-2 text-[14px] font-medium whitespace-nowrap">
-                                <Trophy size={16} className="opacity-70" /> {test.marks} Marks
+                                <Trophy size={16} className="opacity-70" /> {test.targetMarks || "—"} Marks
                               </div>
                               <ChevronRight size={18} className="opacity-40 group-hover:opacity-100 group-hover:text-[#2563EB] transition-all ml-2 shrink-0" />
                             </div>
@@ -1290,14 +1305,14 @@ export default function AdminDashboard() {
                           <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-all duration-300 ease-in-out opacity-0 group-hover:opacity-100">
                             <div className="overflow-hidden">
                               <div className="flex items-center gap-3 pt-4 mt-4 border-t border-[#EEF2F7]">
-                                <button className="h-[40px] px-5 bg-white border border-[#E5E7EB] rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#2563EB] font-semibold text-[14px] flex items-center gap-2 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
+                                <button onClick={() => setActiveTab('tests')} className="h-[40px] px-5 bg-white border border-[#E5E7EB] rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#2563EB] font-semibold text-[14px] flex items-center gap-2 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
                                   <Edit2 size={16} strokeWidth={2.5} /> Edit Test
                                 </button>
-                                <button className="h-[40px] px-5 bg-white border border-[#E5E7EB] rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#2563EB] font-semibold text-[14px] flex items-center gap-2 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
+                                <button onClick={() => setActiveTab('analytics')} className="h-[40px] px-5 bg-white border border-[#E5E7EB] rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#2563EB] font-semibold text-[14px] flex items-center gap-2 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
                                   <BarChart2 size={16} strokeWidth={2.5} /> Analytics
                                 </button>
                                 <div className="flex-1"></div>
-                                <button className="h-[40px] px-5 bg-[#FEF2F2] border border-red-100 rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#EF4444] font-semibold text-[14px] flex items-center gap-2 hover:bg-red-100 transition-all">
+                                <button onClick={() => deleteTest(test)} className="h-[40px] px-5 bg-[#FEF2F2] border border-red-100 rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#EF4444] font-semibold text-[14px] flex items-center gap-2 hover:bg-red-100 transition-all">
                                   <Trash2 size={16} strokeWidth={2.5} /> Delete
                                 </button>
                               </div>
@@ -1322,7 +1337,7 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Secondary Action 1 (Students) */}
-                  <button className="bg-white border border-[#EEF2F7] rounded-[20px] h-[80px] px-4 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group cursor-pointer text-left w-full overflow-hidden">
+                  <button onClick={() => { setStudentSubTab('joined'); setActiveTab('queries'); }} className="bg-white border border-[#EEF2F7] rounded-[20px] h-[80px] px-4 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group cursor-pointer text-left w-full overflow-hidden">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-[38px] h-[38px] shrink-0 rounded-full bg-gradient-to-br from-[#EEF6FF] to-[#DCEEFF] flex items-center justify-center text-[#2563EB]">
                         <Users size={18} strokeWidth={2.5} />
@@ -1336,7 +1351,7 @@ export default function AdminDashboard() {
                   </button>
 
                   {/* Secondary Action 2 (Analytics) */}
-                  <button className="bg-white border border-[#EEF2F7] rounded-[20px] h-[80px] px-4 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group cursor-pointer text-left w-full overflow-hidden">
+                  <button onClick={() => setActiveTab('analytics')} className="bg-white border border-[#EEF2F7] rounded-[20px] h-[80px] px-4 flex items-center justify-between shadow-[0_4px_20px_rgba(15,23,42,0.04)] hover:-translate-y-1 hover:shadow-[0_10px_25px_rgba(15,23,42,0.08)] hover:border-blue-400 transition-all group cursor-pointer text-left w-full overflow-hidden">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-[38px] h-[38px] shrink-0 rounded-full bg-gradient-to-br from-indigo-50 to-purple-100 flex items-center justify-center text-indigo-600">
                         <BarChart2 size={18} strokeWidth={2.5} />
@@ -1359,12 +1374,11 @@ export default function AdminDashboard() {
                       <div className="w-2.5 h-2.5 rounded-full bg-[#2563EB] animate-pulse shadow-[0_0_8px_rgba(37,99,235,0.6)]"></div>
                       <div className="flex flex-col">
                         <h4 className="font-bold text-[17px] text-[#0F172A] leading-tight">Student Activity</h4>
-                        <span className="font-medium text-[12px] text-[#64748B] mt-0.5">Daily student engagement overview</span>
+                        <span className="font-medium text-[12px] text-[#64748B] mt-0.5">Test attempts submitted per day</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F8FAFC] border border-[#EEF2F7] rounded-full cursor-pointer hover:bg-slate-50 transition-colors">
-                      <span className="text-[12px] font-semibold text-[#0F172A]">Last 30 Days</span>
-                      <ChevronRight size={14} className="text-slate-400 rotate-90" />
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F8FAFC] border border-[#EEF2F7] rounded-full">
+                      <span className="text-[12px] font-semibold text-[#0F172A]">Last 5 Weeks</span>
                     </div>
                   </div>
 
@@ -1372,11 +1386,7 @@ export default function AdminDashboard() {
                   <div className="flex gap-3 mb-6">
                     {/* Y-Axis Labels (Weeks) */}
                     <div className="flex flex-col justify-between text-[11px] font-medium text-[#64748B] pt-6 pb-2 w-16 text-right shrink-0">
-                      <span>May 6</span>
-                      <span>May 13</span>
-                      <span>May 20</span>
-                      <span>May 27</span>
-                      <span>Jun 3</span>
+                      {overview.weeks.map(w => <span key={w.label}>{w.label}</span>)}
                     </div>
 
                     {/* Grid + X-Axis Labels */}
@@ -1394,9 +1404,10 @@ export default function AdminDashboard() {
 
                       {/* Cells */}
                       <div className="flex flex-col gap-2">
-                        {[[0,1,2,4,3,0,0],[1,2,4,5,2,1,0],[2,3,5,6,4,2,1],[1,4,6,6,5,1,0],[2,5,6,6,6,2,1]].map((week, weekIdx) => (
+                        {overview.weeks.map((week, weekIdx) => (
                           <div key={weekIdx} className="grid grid-cols-7 gap-2">
-                            {week.map((val, dayIdx) => {
+                            {week.days.map((day, dayIdx) => {
+                              const val = overview.level(day.count);
                               const colors = [
                                 'bg-[#F8FAFC] border border-[#EEF2F7]', // 0
                                 'bg-[#DBEAFE]', // 1
@@ -1407,17 +1418,16 @@ export default function AdminDashboard() {
                                 'bg-[#2563EB] shadow-[0_0_8px_rgba(37,99,235,0.4)]'  // 6
                               ];
                               
-                              const count = val === 0 ? 0 : val * 35 + (dayIdx * 12);
-                              const id = weekIdx * 7 + dayIdx;
+                              const count = day.count;
 
                               return (
                                 <div key={dayIdx} className="relative group/cell flex justify-center">
-                                  <div className={`w-[18px] h-[18px] rounded-[4px] ${colors[val]} transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 group-hover/cell:scale-110 z-10`}></div>
+                                  <div className={`w-[18px] h-[18px] rounded-[4px] ${count === null ? 'bg-transparent border border-dashed border-[#E2E8F0]' : colors[val]} transition-all duration-200 cursor-pointer hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 group-hover/cell:scale-110 z-10`}></div>
                                   
                                   {/* Tooltip */}
                                   <div className="absolute bottom-[140%] opacity-0 group-hover/cell:opacity-100 pointer-events-none transition-all duration-200 w-max bg-[#0F172A] text-white text-[11px] rounded-[8px] px-3 py-2 shadow-xl z-[100] translate-y-1 group-hover/cell:-translate-y-1">
-                                    <div className="font-bold text-[#93C5FD] mb-0.5">Week {weekIdx + 1}, Day {dayIdx + 1}</div>
-                                    <div><span className="font-[900] text-white text-[13px]">{count}</span> active</div>
+                                    <div className="font-bold text-[#93C5FD] mb-0.5">{day.date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                                    <div><span className="font-[900] text-white text-[13px]">{count === null ? '—' : count}</span> {count === 1 ? 'attempt' : 'attempts'}</div>
                                     <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-[#0F172A]"></div>
                                   </div>
                                 </div>
@@ -1448,16 +1458,16 @@ export default function AdminDashboard() {
                     <div className="bg-[#F8FAFC] rounded-[14px] p-3 flex items-center gap-3 border border-[#F1F5F9]">
                       <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600"><Users size={14} strokeWidth={2.5} /></div>
                       <div className="flex flex-col">
-                        <span className="text-[15px] font-bold text-[#0F172A] leading-tight">1,284</span>
-                        <span className="text-[11px] font-medium text-[#64748B]">Active Students</span>
+                        <span className="text-[15px] font-bold text-[#0F172A] leading-tight">{overview.activeStudents}</span>
+                        <span className="text-[11px] font-medium text-[#64748B]">Active Students (30d)</span>
                       </div>
                     </div>
 
                     <div className="bg-[#F8FAFC] rounded-[14px] p-3 flex items-center gap-3 border border-[#F1F5F9]">
                       <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600"><TrendingUp size={14} strokeWidth={2.5} /></div>
                       <div className="flex flex-col">
-                        <span className="text-[15px] font-bold text-[#0F172A] leading-tight">+12%</span>
-                        <span className="text-[11px] font-medium text-[#64748B]">vs Last 30 Days</span>
+                        <span className="text-[15px] font-bold text-[#0F172A] leading-tight">{overview.activeStudentsDelta === null ? "—" : `${overview.activeStudentsDelta >= 0 ? "+" : ""}${overview.activeStudentsDelta}%`}</span>
+                        <span className="text-[11px] font-medium text-[#64748B]">vs Previous 30 Days</span>
                       </div>
                     </div>
 
@@ -1469,8 +1479,8 @@ export default function AdminDashboard() {
                   <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
                   <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -ml-10 -mb-10"></div>
                   <div className="relative z-10 flex flex-col w-[60%]">
-                    <h3 className="text-[20px] font-bold text-white mb-2 leading-tight">Keep it up!</h3>
-                    <p className="text-[13px] text-blue-100 font-medium leading-relaxed">Your academy performance is better than last month.</p>
+                    <h3 className="text-[20px] font-bold text-white mb-2 leading-tight">{overview.attemptsImproved ? 'Keep it up!' : 'Time to engage!'}</h3>
+                    <p className="text-[13px] text-blue-100 font-medium leading-relaxed">{overview.attemptsImproved ? 'Test activity is at least on par with the previous 30 days.' : 'Test activity is down from the previous 30 days. Consider publishing a new test.'}</p>
                   </div>
                   <div className="relative z-10">
                     <div className="w-20 h-20 bg-yellow-400 rounded-full flex items-center justify-center text-4xl shadow-[0_0_30px_rgba(250,204,21,0.4)] group-hover:scale-110 transition-transform">
@@ -1641,18 +1651,6 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                   
-                  {/* Reset seed button */}
-                  <button 
-                    onClick={() => {
-                      localStorage.removeItem('contact_queries');
-                      localStorage.setItem('contact_queries', JSON.stringify(defaultQueries));
-                      setQueries(defaultQueries);
-                    }}
-                    className="w-fit px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
-                  >
-                    <RefreshCw size={12} />
-                    <span>Reset Seed Data</span>
-                  </button>
                 </div>
 
             {/* Queries Grid */}

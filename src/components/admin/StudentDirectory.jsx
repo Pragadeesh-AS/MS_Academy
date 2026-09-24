@@ -78,9 +78,8 @@ const StudentDirectory = ({
     return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  // Pull the RAW (unmocked) record so we never pre-fill the edit form with the
-  // random placeholder department/year this component uses for display when a
-  // real field is missing — saving those as real data would corrupt the record.
+  // Pull the RAW record so the edit form is only ever pre-filled with values
+  // actually stored in Firestore.
   const openEditStudent = (student) => {
     const raw = joinedStudents.find(s => String(s.id) === String(student.id)) || student;
     setEditForm({
@@ -137,19 +136,21 @@ const StudentDirectory = ({
     fetchBundles();
   }, []);
 
-  // Enhance existing students with mock data deterministically
+  // Normalise stored records for display; missing fields stay empty rather than being invented.
+  // A student who has logged in is 'Active'; one who was only invited stays 'Invited'.
   const enhancedStudents = React.useMemo(() => {
-    return joinedStudents.map((student, idx) => {
-      const seed = (student.id ? String(student.id).length : 0) + idx;
-      return {
-        ...student,
-        department: student.department || ['Computer Science', 'Mechanical Engineering', 'Electronics', 'Civil Engineering'][seed % 4],
-        college: student.collegeName || '',
-        lastLogin: student.lastLogin || null,
-        status: student.status || ['Active', 'Pending', 'Inactive'][seed % 3]
-      };
-    });
+    return joinedStudents.map((student) => ({
+      ...student,
+      department: student.department || '',
+      college: student.collegeName || '',
+      lastLogin: student.lastLogin || null,
+      status: student.status || (student.lastLogin ? 'Active' : 'Invited')
+    }));
   }, [joinedStudents]);
+
+  const activeCount = enhancedStudents.filter(s => s.status === 'Active').length;
+  const invitedCount = enhancedStudents.filter(s => s.status === 'Invited').length;
+  const loggedInPct = enhancedStudents.length > 0 ? Math.round((enhancedStudents.filter(s => s.lastLogin).length / enhancedStudents.length) * 100) : 0;
 
   const filteredStudents = enhancedStudents.filter(student => {
     const searchLow = searchQuery.toLowerCase();
@@ -257,7 +258,7 @@ const StudentDirectory = ({
                     <span className="text-[13px] font-medium">Total Students</span>
                   </div>
                   <h3 className="text-[32px] font-bold text-[#0F172A] leading-none">
-                    {enhancedStudents.length > 0 ? enhancedStudents.length : 542}
+                    {enhancedStudents.length}
                   </h3>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-[#2563EB]">
@@ -274,7 +275,7 @@ const StudentDirectory = ({
                     <span className="text-[13px] font-medium">Active Students</span>
                   </div>
                   <h3 className="text-[32px] font-bold text-[#0F172A] leading-none">
-                    {enhancedStudents.filter(s => s.status === 'Active').length > 0 ? enhancedStudents.filter(s => s.status === 'Active').length : 489}
+                    {activeCount}
                   </h3>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center text-[#10B981]">
@@ -288,10 +289,10 @@ const StudentDirectory = ({
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-[#64748B] mb-2">
-                    <span className="text-[13px] font-medium">Pending Approval</span>
+                    <span className="text-[13px] font-medium">Invited (Not Logged In)</span>
                   </div>
                   <h3 className="text-[32px] font-bold text-[#0F172A] leading-none">
-                    18
+                    {invitedCount}
                   </h3>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center text-[#F59E0B]">
@@ -305,10 +306,10 @@ const StudentDirectory = ({
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-[#64748B] mb-2">
-                    <span className="text-[13px] font-medium">Verified Students</span>
+                    <span className="text-[13px] font-medium">Logged-in Students</span>
                   </div>
                   <h3 className="text-[32px] font-bold text-[#0F172A] leading-none">
-                    94%
+                    {loggedInPct}%
                   </h3>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center text-[#8B5CF6]">
@@ -428,7 +429,7 @@ const StudentDirectory = ({
                           </div>
                         </td>
                         <td className="px-4">
-                          <span className="text-[14px] text-[#475569] font-medium">{student.department}</span>
+                          <span className="text-[14px] text-[#475569] font-medium">{student.department || '—'}</span>
                         </td>
                         <td className="px-4">
                           <span className="text-[14px] text-[#475569] font-medium block max-w-[240px] truncate" title={student.college}>{student.college || '—'}</span>
@@ -567,7 +568,7 @@ const StudentDirectory = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-[#EEF2F7]">
                 <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
                   <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Department</span>
-                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.department}</p>
+                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.department || '—'}</p>
                 </div>
                 {[
                   { label: 'College', value: selectedStudent.collegeName },
