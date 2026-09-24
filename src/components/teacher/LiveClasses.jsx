@@ -1214,7 +1214,7 @@ export default function LiveClasses({ department }) {
 
   const [newClass, setNewClass] = useState({ topic: '', date: '', time: '', selectedStudents: [], bundleId: '' });
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [startClassData, setStartClassData] = useState({ topic: '', bundleId: '' });
+  const [startClassData, setStartClassData] = useState({ topic: '', bundleId: '', scheduledId: null });
   const [availableBundles, setAvailableBundles] = useState([]);
 
   const [activeSessions, setActiveSessions] = useState([]);
@@ -1398,6 +1398,16 @@ export default function LiveClasses({ department }) {
       };
 
       const docRef = await addDoc(collection(db, 'live_sessions'), sessionData);
+
+      // Remove the scheduled class only once it has actually been started
+      if (startClassData.scheduledId) {
+        try {
+          await deleteDoc(doc(db, 'scheduled_classes', startClassData.scheduledId));
+        } catch (delErr) {
+          console.error("Failed to remove started class from scheduled classes", delErr);
+        }
+        setStartClassData(prev => ({ ...prev, scheduledId: null }));
+      }
     } catch (e) {
       console.error("Failed to create live session in Firestore", e);
     }
@@ -1834,7 +1844,7 @@ export default function LiveClasses({ department }) {
             <Calendar size={18} /> Schedule Class
           </button>
           <button
-            onClick={() => setIsStartModalOpen(true)}
+            onClick={() => { setStartClassData(prev => ({ ...prev, scheduledId: null })); setIsStartModalOpen(true); }}
             className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] flex items-center gap-2"
           >
             <Plus size={18} strokeWidth={2.5} /> Start Instant Class
@@ -1918,7 +1928,7 @@ export default function LiveClasses({ department }) {
                   <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2 mt-2 sm:mt-0">
                     <button
                       onClick={() => {
-                        setStartClassData({ topic: cls.topic });
+                        setStartClassData({ topic: cls.topic, scheduledId: cls.id });
                         setIsStartModalOpen(true);
                       }}
                       className="w-full sm:w-auto px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center gap-2"

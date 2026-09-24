@@ -199,6 +199,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const [filterDifficulty, setFilterDifficulty] = useState('All');
   const [filterStatus, setFilterStatus] = useState(externalFilter || 'Approved');
   const [filterType, setFilterType] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Go back to page 1 whenever the filters or the page size change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, pageSize]);
 
   useEffect(() => {
     if (externalFilter !== null) {
@@ -644,6 +651,20 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   });
 
 
+  const totalPages = Math.max(1, Math.ceil(filteredQuestions.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * pageSize;
+  const paginatedQuestions = filteredQuestions.slice(pageStart, pageStart + pageSize);
+
+  const pageNumbers = (() => {
+    const pages = [];
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || Math.abs(i - safePage) <= 1) pages.push(i);
+      else if (pages[pages.length - 1] !== '...') pages.push('...');
+    }
+    return pages;
+  })();
+
   const totalQuestions = filteredQuestions.length;
   const mcqQuestions = filteredQuestions.filter(q => q.questionType === 'Single Choice' || q.questionType === 'Multiple Choice').length;
   const mcqPercentage = totalQuestions === 0 ? 0 : Math.round((mcqQuestions / totalQuestions) * 100);
@@ -841,7 +862,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       </td>
                     </tr>
                   ) : (
-                    filteredQuestions.map((q, index) => (
+                    paginatedQuestions.map((q, index) => (
                       <React.Fragment key={q.id}>
                         <tr 
                           onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}
@@ -849,7 +870,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                         >
                           <td className="py-4 px-4 h-[82px]">
                             <span className="text-[13px] font-[700] text-[#64748B] bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm inline-flex items-center justify-center min-w-[28px]">
-                              {index + 1}
+                              {pageStart + index + 1}
                             </span>
                           </td>
                           <td className="py-4 px-4 h-[82px] max-w-0">
@@ -970,21 +991,50 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               </table>
             </div>
             
-            {/* Pagination Placeholder */}
+            {/* Pagination */}
             {!loading && filteredQuestions.length > 0 && (
-              <div className="p-5 border-t border-[#EEF2F7] flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#F8FAFC]/50">
-                <span className="text-[13px] font-[500] text-[#64748B] text-center sm:text-left">
-                  Showing 1 to {filteredQuestions.length} of {filteredQuestions.length} questions
-                </span>
+              <div className="p-5 border-t border-[#EEF2F7] flex flex-col lg:flex-row items-center justify-between gap-3 bg-[#F8FAFC]/50">
+                <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-5">
+                  <span className="text-[13px] font-[500] text-[#64748B] text-center sm:text-left">
+                    Showing {pageStart + 1} to {Math.min(pageStart + pageSize, filteredQuestions.length)} of {filteredQuestions.length} questions
+                  </span>
+                  <label className="flex items-center gap-2 text-[13px] font-[500] text-[#64748B]">
+                    Per page
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="h-8 rounded-lg border border-[#EEF2F7] bg-white px-2 text-[13px] font-[600] text-[#334155] outline-none focus:border-[#2563EB]"
+                    >
+                      {[5, 10, 20, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </label>
+                </div>
                 <div className="flex items-center gap-2">
-                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#94A3B8] hover:border-[#CBD5E1] transition-colors">
+                  <button
+                    onClick={() => setCurrentPage(safePage - 1)}
+                    disabled={safePage === 1}
+                    className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] hover:border-[#CBD5E1] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
                     <ChevronDown size={16} className="rotate-90" />
                   </button>
-                  <button className="w-8 h-8 rounded-lg bg-[#2563EB] text-white font-[600] text-[13px] shadow-sm flex items-center justify-center">1</button>
-                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] font-[600] text-[13px] hover:border-[#CBD5E1] transition-colors">2</button>
-                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] font-[600] text-[13px] hover:border-[#CBD5E1] transition-colors">3</button>
-                  <span className="text-[#94A3B8]">...</span>
-                  <button className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#94A3B8] hover:border-[#CBD5E1] transition-colors">
+                  {pageNumbers.map((n, i) => n === '...' ? (
+                    <span key={`gap-${i}`} className="text-[#94A3B8]">...</span>
+                  ) : (
+                    <button
+                      key={n}
+                      onClick={() => setCurrentPage(n)}
+                      className={n === safePage
+                        ? 'w-8 h-8 rounded-lg bg-[#2563EB] text-white font-[600] text-[13px] shadow-sm flex items-center justify-center'
+                        : 'w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] font-[600] text-[13px] hover:border-[#CBD5E1] transition-colors'}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage(safePage + 1)}
+                    disabled={safePage === totalPages}
+                    className="w-8 h-8 rounded-lg border border-[#EEF2F7] bg-white flex items-center justify-center text-[#64748B] hover:border-[#CBD5E1] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
                     <ChevronDown size={16} className="-rotate-90" />
                   </button>
                 </div>

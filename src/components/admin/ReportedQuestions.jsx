@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle2, Search, Clock, Check, X, ShieldAlert } fro
 export default function ReportedQuestions({ role = 'admin', department = '', onViewQuestion }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('pending');
 
   useEffect(() => {
     fetchReports();
@@ -47,6 +48,11 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
     }
   };
 
+  const isResolved = (r) => r.status === 'resolved';
+  const pendingCount = reports.filter(r => !isResolved(r)).length;
+  const resolvedCount = reports.length - pendingCount;
+  const visibleReports = reports.filter(r => (activeTab === 'resolved' ? isResolved(r) : !isResolved(r)));
+
   if (loading) {
     return <div className="p-8 text-center text-slate-500 font-bold">Loading reported questions...</div>;
   }
@@ -62,17 +68,33 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
         </div>
       </div>
 
-      {reports.length === 0 ? (
+      <div className="flex gap-2 border-b border-slate-200">
+        {[
+          { key: 'pending', label: 'Reported', count: pendingCount, active: 'border-red-500 text-red-600', badge: 'bg-red-100 text-red-700' },
+          { key: 'resolved', label: 'Resolved', count: resolvedCount, active: 'border-green-500 text-green-600', badge: 'bg-green-100 text-green-700' }
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={`px-4 py-2.5 -mb-px border-b-2 font-bold text-sm flex items-center gap-2 transition-colors ${activeTab === t.key ? t.active : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            {t.label}
+            <span className={`px-2 py-0.5 rounded-full text-xs font-black ${activeTab === t.key ? t.badge : 'bg-slate-100 text-slate-500'}`}>{t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {visibleReports.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
           <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle2 size={32} className="text-green-500" />
           </div>
-          <h4 className="text-lg font-bold text-slate-800 mb-2">No Reports</h4>
-          <p className="text-slate-500">There are no reported questions at the moment.</p>
+          <h4 className="text-lg font-bold text-slate-800 mb-2">{activeTab === 'resolved' ? 'No Resolved Questions' : 'No Reports'}</h4>
+          <p className="text-slate-500">{activeTab === 'resolved' ? 'Resolved reports will appear here.' : 'There are no pending reported questions at the moment.'}</p>
         </div>
       ) : (
         <div className="grid gap-6">
-          {reports.map((report) => (
+          {visibleReports.map((report) => (
             <div key={report.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col">
               <div className="bg-slate-50 p-4 border-b border-slate-200 flex flex-wrap gap-3 justify-between items-center">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
