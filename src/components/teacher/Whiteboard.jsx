@@ -6,6 +6,7 @@ import logoImg from '../../assets/msgate_logo.png';
 export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId = 'whiteboard-canvas' }) {
   const canvasRef = useRef(null);
   const fabricRef = useRef(null);
+  const lastClickTimeRef = useRef({});
   const containerRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   
@@ -16,6 +17,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
   const [showToolOptions, setShowToolOptions] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showBoardColors, setShowBoardColors] = useState(false);
+  const [showQuickColors, setShowQuickColors] = useState(false);
   
   const [activeShape, setActiveShape] = useState('rectangle');
   const [showShapeOptions, setShowShapeOptions] = useState(false);
@@ -398,6 +400,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       setShowToolOptions(false);
       setShowShapeOptions(false);
       setShowBoardColors(false);
+      setShowQuickColors(false);
     };
     
     fCanvas.on('path:created', onPathCreated);
@@ -852,7 +855,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       <div className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-50 flex items-start gap-2 sm:gap-4 pointer-events-none max-h-[92vh]">
 
         {/* Main Toolbar */}
-        <div className="bg-slate-800 rounded-2xl p-2 shadow-2xl border border-slate-700 flex flex-col items-center gap-2 pointer-events-auto max-h-[92vh] overflow-y-auto">
+        <div className="bg-slate-800 rounded-2xl p-2 shadow-2xl border border-slate-700 flex flex-col items-center gap-2 pointer-events-auto max-h-[92vh] overflow-y-auto sm:overflow-visible">
           {[
             { id: 'select', icon: <MousePointer2 size={18} />, label: 'Select' },
             { id: 'text', icon: <Type size={18} />, label: 'Text' },
@@ -874,10 +877,24 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                       setShowBoardColors(!showBoardColors);
                       setShowToolOptions(false);
                       setShowShapeOptions(false);
+                      setShowQuickColors(false);
                     } else {
                       if (activeTool === item.id) {
-                        // Toggle options if clicking the same tool again
-                        if (['pen', 'highlighter', 'eraser'].includes(item.id)) {
+                        // Tool is already active, handle toggling options on click
+                        if (item.id === 'pen') {
+                          if (showQuickColors) {
+                            // Quick colors are visible -> switch to full options
+                            setShowToolOptions(true);
+                            setShowQuickColors(false);
+                          } else if (showToolOptions) {
+                            // Full options visible -> hide everything
+                            setShowToolOptions(false);
+                            setShowQuickColors(false);
+                          } else {
+                            // Both hidden (e.g. after drawing) -> show quick colors
+                            setShowQuickColors(true);
+                          }
+                        } else if (['highlighter', 'eraser'].includes(item.id)) {
                           setShowToolOptions(!showToolOptions);
                         } else if (item.id === 'shapes') {
                           setShowShapeOptions(!showShapeOptions);
@@ -886,11 +903,14 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                         // Switching to a new tool
                         setActiveTool(item.id);
                         setShowBoardColors(false);
-                        
-                        // Don't auto-open options for pen/highlighter/eraser, let the user click again if they want the full menu
                         setShowToolOptions(false);
                         
-                        // Auto-open shapes menu because it requires selecting a shape
+                        if (item.id === 'pen') {
+                          setShowQuickColors(true);
+                        } else {
+                          setShowQuickColors(false);
+                        }
+                        
                         if (item.id === 'shapes') {
                           setShowShapeOptions(true);
                         } else {
@@ -906,7 +926,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                 </button>
                 
                 {/* 3 Recently Used Colors explicitly when Pen is active (rendered inline for quick access) */}
-                {item.id === 'pen' && activeTool === 'pen' && (
+                {item.id === 'pen' && activeTool === 'pen' && showQuickColors && (
                   <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 sm:left-full sm:ml-3 sm:top-1/2 sm:-translate-y-1/2 sm:translate-x-0 sm:mt-0 flex items-center gap-1.5 p-1.5 bg-slate-800 rounded-full border border-slate-700 shadow-lg animate-in slide-in-from-left-2 fade-in z-20">
                     {recentColors.map((color, idx) => (
                       <button

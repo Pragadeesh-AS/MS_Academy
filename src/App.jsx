@@ -45,10 +45,11 @@ export default function App() {
   const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const location = useLocation();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [userRole, setUserRole] = useState(() => sessionStorage.getItem('auth_role'));
   const [userName, setUserName] = useState(() => sessionStorage.getItem('auth_name'));
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
 
   useEffect(() => {
     const handleStorageChange = () => {
@@ -70,6 +71,7 @@ export default function App() {
   // Reset scroll on route change
   useEffect(() => {
     window.scrollTo(0, 0);
+    setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
   // Close mobile menu on route change
@@ -136,7 +138,7 @@ export default function App() {
             duration: 0.8,
             ease: [0.16, 1, 0.3, 1] // Custom smooth spring-like curve
           }}
-          className="hidden md:flex flex-row self-center items-center justify-between py-3 mx-auto px-8 rounded-full relative z-[100]"
+          className="flex flex-row self-center items-center justify-between py-3 mx-auto px-4 md:px-8 rounded-full relative z-[100]"
         >
           <Link to="/" className="flex flex-row items-center gap-3 whitespace-nowrap">
             <img src="/logo.png" alt="MS Academy Logo" className="w-12 h-12 object-contain" />
@@ -190,7 +192,7 @@ export default function App() {
             </div>
           </div>
           
-          <div className="flex items-center transition-all duration-700 whitespace-nowrap opacity-100 gap-4">
+          <div className="hidden md:flex items-center transition-all duration-700 whitespace-nowrap opacity-100 gap-4">
             {userRole ? (
               <div className="flex items-center gap-3.5">
                 <Link 
@@ -222,6 +224,13 @@ export default function App() {
               </Link>
             )}
           </div>
+          
+          <button 
+            className="md:hidden flex items-center justify-center p-2 text-slate-700 hover:bg-slate-100 rounded-full transition-colors"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </motion.nav>
       </div>
 

@@ -257,7 +257,7 @@ export default function Home() {
             <span className="text-[22px] sm:text-[32px] md:text-[42px] text-slate-600 font-bold block mt-4 tracking-tight">| Online & Offline Classes</span>
           </h1>
 
-          <p className="text-[17px] font-bold text-slate-700 mb-10 leading-relaxed">
+          <p className="text-base md:text-[17px] font-bold text-slate-700 mb-10 leading-relaxed">
             Learn directly from Dr. M. Muthu Samy (NIT Trichy Alumnus). Go from average scores to your dream PSU or IIT with ease using MS Gate Academy, your favourite coaching platform.
           </p>
 

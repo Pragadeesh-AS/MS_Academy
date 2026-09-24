@@ -34,7 +34,7 @@ export default function Contact() {
               </div>
               <div className="flex flex-col justify-center">
                 <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider mb-2">Phone</span>
-                <span className="text-[22px] md:text-[24px] font-semibold text-slate-800">+91 8012052331</span>
+                <span className="text-[18px] md:text-[24px] font-semibold text-slate-800">+91 8012052331</span>
               </div>
             </div>
 
@@ -45,7 +45,7 @@ export default function Contact() {
               </div>
               <div className="flex flex-col justify-center">
                 <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider mb-2">Email</span>
-                <span className="text-[22px] md:text-[24px] font-semibold text-slate-800 break-all">msacademics.edu@gmail.com</span>
+                <span className="text-[18px] md:text-[24px] font-semibold text-slate-800 break-all">msacademics.edu@gmail.com</span>
               </div>
             </div>
 
@@ -56,7 +56,7 @@ export default function Contact() {
               </div>
               <div className="flex flex-col justify-center">
                 <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider mb-2">Address</span>
-                <span className="text-[20px] md:text-[22px] font-medium text-slate-700 leading-relaxed max-w-[400px]">
+                <span className="text-[16px] md:text-[22px] font-medium text-slate-700 leading-relaxed max-w-[400px]">
                   9 Vinayagar Koil Street, RC Nagar, Othakkalmandapam (P.O), Coimbatore - 641032
                 </span>
               </div>
@@ -69,7 +69,7 @@ export default function Contact() {
               </div>
               <div className="flex flex-col justify-center">
                 <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider mb-2">Startup Registration</span>
-                <span className="text-[20px] md:text-[22px] font-medium text-slate-700 leading-relaxed">
+                <span className="text-[16px] md:text-[22px] font-medium text-slate-700 leading-relaxed">
                   UDYAM-TN-03-0337502
                 </span>
               </div>
