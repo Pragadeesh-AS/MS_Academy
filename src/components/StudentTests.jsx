@@ -6,6 +6,11 @@ import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, Re
 import GateTestInterface from './student/GateTestInterface';
 import logoImg from '../assets/msgate_logo.png';
 
+// Older AI imports stored NAT questions as 'Fill in the Blanks'; the test screens expect 'Fill in Blanks'
+const normalizeQuestion = (q) => (
+  q.questionType === 'Fill in the Blanks' ? { ...q, questionType: 'Fill in Blanks' } : q
+);
+
 export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [] }) {
   const [tests, setTests] = useState([]);
   const [attempts, setAttempts] = useState([]);
@@ -70,7 +75,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       setLoading(true);
       // Fetch full question details for the list of IDs in this test
       const qSnapshot = await getDocs(collection(db, 'question_bank'));
-      const allQuestions = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(q => q.status === 'Approved' || !q.status);
+      const allQuestions = qSnapshot.docs.map(doc => normalizeQuestion({ id: doc.id, ...doc.data() })).filter(q => q.status === 'Approved' || !q.status);
       
       const qList = Array.isArray(test.questions) ? test.questions : [];
       const matchedQuestions = qList.map(qId => {
@@ -215,7 +220,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       // Reload questions first
       setLoading(true);
       getDocs(collection(db, 'question_bank')).then((qSnapshot) => {
-        const allQuestions = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(q => q.status === 'Approved' || !q.status);
+        const allQuestions = qSnapshot.docs.map(doc => normalizeQuestion({ id: doc.id, ...doc.data() })).filter(q => q.status === 'Approved' || !q.status);
         const testObj = tests.find(t => t.id === testId);
         
         const matchedQuestions = testObj.questions.map(qId => {
