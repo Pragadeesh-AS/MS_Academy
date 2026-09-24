@@ -262,20 +262,27 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       let qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       // Deduplication Logic
-      const seen = new Set();
+      // When copies collide, keep the premium one (so a premium import is never
+      // lost to an older normal copy), then prefer the Approved one.
+      const rank = (q) => (q.isPremium === true ? 2 : 0) + (q.status === 'Approved' ? 1 : 0);
+      const keeper = new Map();
       const duplicateIds = [];
 
       qData.forEach(q => {
         // Create a unique hash for the question based on text and image, ignoring HTML and whitespace differences
         const hash = `${stripHtmlAndNormalize(q.questionText)}_${q.questionImageUrl || ''}`;
-        
-        // If hash is just '_', it means both text and image are empty. 
+
+        // If hash is just '_', it means both text and image are empty.
         // We might not want to deduplicate completely empty shells aggressively unless they are truly duplicates.
         // But let's include them in deduplication if there are multiple empty ones.
-        if (seen.has(hash)) {
-          duplicateIds.push(q.id);
+        const current = keeper.get(hash);
+        if (!current) {
+          keeper.set(hash, q);
+        } else if (rank(q) > rank(current)) {
+          duplicateIds.push(current.id);
+          keeper.set(hash, q);
         } else {
-          seen.add(hash);
+          duplicateIds.push(q.id);
         }
       });
 
