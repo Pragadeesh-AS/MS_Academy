@@ -436,7 +436,7 @@ export default function TeacherDashboard() {
         {activeTab === 'live' && <LiveClasses department={teacherDepartment} />}
         {activeTab === 'students' && <TeacherStudents department={teacherDepartment} />}
         {activeTab === 'questions' && (
-          <div className="h-[800px]">
+          <div>
              <QuestionBank lockedDepartment={teacherDepartment} initialEditQuestionId={editQuestionId} onClearEdit={() => setEditQuestionId(null)} />
           </div>
         )}

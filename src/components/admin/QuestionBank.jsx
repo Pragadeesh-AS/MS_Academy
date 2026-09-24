@@ -201,6 +201,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const [filterType, setFilterType] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [goToPage, setGoToPage] = useState('');
 
   // Go back to page 1 whenever the filters or the page size change
   useEffect(() => {
@@ -656,6 +657,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const pageStart = (safePage - 1) * pageSize;
   const paginatedQuestions = filteredQuestions.slice(pageStart, pageStart + pageSize);
 
+  const handleGoToPage = (e) => {
+    if (e) e.preventDefault();
+    const n = parseInt(goToPage, 10);
+    if (Number.isNaN(n)) return;
+    setCurrentPage(Math.min(Math.max(n, 1), totalPages));
+    setGoToPage('');
+  };
+
   const pageNumbers = (() => {
     const pages = [];
     for (let i = 1; i <= totalPages; i++) {
@@ -682,7 +691,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   return (
     <>
-      <div className="relative flex flex-col xl:flex-row gap-8 w-full h-full min-h-[900px] p-4 sm:p-6 lg:p-8 overflow-x-hidden overflow-y-auto z-0 bg-[#F8FAFC]">
+      <div className="relative flex flex-col xl:flex-row gap-8 w-full min-h-[900px] p-4 sm:p-6 lg:p-8 overflow-x-clip z-0 bg-[#F8FAFC]">
 
         {/* ==================== MAIN CONTENT PANEL ==================== */}
         <div className="flex-1 flex flex-col gap-6 relative z-10 w-full min-w-0">
@@ -1037,6 +1046,19 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   >
                     <ChevronDown size={16} className="-rotate-90" />
                   </button>
+                  <form onSubmit={handleGoToPage} className="flex items-center gap-2 ml-2 pl-3 border-l border-[#EEF2F7]">
+                    <span className="text-[13px] font-[500] text-[#64748B] whitespace-nowrap">Go to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={goToPage}
+                      onChange={(e) => setGoToPage(e.target.value)}
+                      placeholder={`1-${totalPages}`}
+                      className="w-16 h-8 rounded-lg border border-[#EEF2F7] bg-white px-2 text-[13px] font-[600] text-[#334155] outline-none focus:border-[#2563EB] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <button type="submit" className="h-8 px-3 rounded-lg bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-[600] text-[13px] transition-colors">Go</button>
+                  </form>
                 </div>
               </div>
             )}

@@ -1714,14 +1714,14 @@ export default function AdminDashboard() {
 
         {/* Question Bank Tab */}
         {activeTab === 'questions' && (
-          <div className="h-full">
+          <div>
             <QuestionBank initialEditQuestionId={editQuestionId} onClearEdit={() => setEditQuestionId(null)} />
           </div>
         )}
 
         {/* Premium Question Bank Tab */}
         {activeTab === 'premium_questions' && (
-          <div className="h-full">
+          <div>
             <QuestionBank isPremiumView={true} initialEditQuestionId={editQuestionId} onClearEdit={() => setEditQuestionId(null)} />
           </div>
         )}

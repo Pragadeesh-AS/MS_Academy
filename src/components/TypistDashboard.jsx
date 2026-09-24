@@ -195,7 +195,7 @@ export default function TypistDashboard() {
           <p className="text-slate-500 font-medium mt-1">Manage and type questions for the question bank.</p>
         </header>
 
-        <div className="h-[calc(100vh-200px)] md:h-[calc(100vh-140px)]">
+        <div>
           <QuestionBank externalFilter={activeTab === 'review' ? 'In Review' : activeTab === 'draft' ? 'Draft' : 'Approved'} />
         </div>
       </main>
