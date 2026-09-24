@@ -114,6 +114,7 @@ export default function LoginSignup() {
     }
 
     setLoading(true);
+    const startTime = Date.now();
 
     try {
       if (isLogin) {
@@ -138,6 +139,11 @@ export default function LoginSignup() {
           }
         }
         
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 1500) {
+          await new Promise(resolve => setTimeout(resolve, 1500 - elapsed));
+        }
+
         const user = userCredential.user;
 
         // Check if the authenticated user has the registered admin email
@@ -202,6 +208,12 @@ export default function LoginSignup() {
       } else {
         // Registration / signup flow
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 1500) {
+          await new Promise(resolve => setTimeout(resolve, 1500 - elapsed));
+        }
+
         const user = userCredential.user;
         const userName = name || user.email.split('@')[0];
         
@@ -232,6 +244,10 @@ export default function LoginSignup() {
       }
     } catch (err) {
       console.error(err);
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 1500) {
+        await new Promise(resolve => setTimeout(resolve, 1500 - elapsed));
+      }
       setError(err.message || "An unexpected error occurred.");
     } finally {
       setLoading(false);
@@ -363,13 +379,22 @@ export default function LoginSignup() {
       return;
     }
     setLoading(true);
+    const startTime = Date.now();
     try {
       await sendPasswordResetEmail(auth, email);
-      setResetMessage('Password reset email sent! Please check your inbox (spam).');
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 1500) {
+        await new Promise(resolve => setTimeout(resolve, 1500 - elapsed));
+      }
+      setResetMessage('Mail sent to your account! Please check your inbox (and spam folder).');
     } catch (err) {
       console.error(err);
       if (err.code === 'auth/user-not-found') {
-        setError('No account found with this email address.');
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 1500) {
+          await new Promise(resolve => setTimeout(resolve, 1500 - elapsed));
+        }
+        setResetMessage('Mail sent to your account! Please check your inbox (and spam folder).');
       } else if (err.code === 'auth/invalid-email') {
         setError('Please enter a valid email address.');
       } else {
@@ -381,8 +406,23 @@ export default function LoginSignup() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-white flex overflow-hidden font-sans text-slate-900">
+    <div className="min-h-screen w-full bg-white flex overflow-hidden font-sans text-slate-900 relative">
       
+      {/* Full Page Loading Overlay */}
+      {loading && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+          <div className="flex flex-col items-center bg-white p-6 rounded-2xl shadow-xl border border-gray-100">
+            <svg className="animate-spin h-10 w-10 text-blue-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span className="text-blue-700 font-semibold text-[15px]" style={{ fontFamily: 'Inter, sans-serif' }}>Authenticating...</span>
+          </div>
+        </div>
+      )}
+
+
+
       {/* ==================================================
           LEFT PANEL (55%) 
           ================================================== */}
@@ -552,7 +592,7 @@ export default function LoginSignup() {
               className="w-full h-[46px] bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] rounded-[10px] shadow-[0_8px_20px_rgba(37,99,235,0.18)] text-white text-[15px] font-bold flex items-center justify-center hover:opacity-95 transition-opacity disabled:opacity-70"
               style={{ fontFamily: 'Inter, sans-serif' }}
             >
-              {loading ? "Processing..." : (isLogin ? "Sign In" : "Create Account")}
+              {isLogin ? "Sign In" : "Create Account"}
             </button>
           </form>
 
@@ -570,7 +610,8 @@ export default function LoginSignup() {
           <button 
             type="button"
             onClick={handleGoogleSignIn}
-            className="w-full h-[46px] bg-white border border-[#D0D5DD] rounded-[10px] flex items-center justify-center gap-3 text-[#111827] text-[14px] font-semibold hover:bg-gray-50 transition-colors shadow-sm"
+            disabled={loading}
+            className="w-full h-[46px] bg-white border border-[#D0D5DD] rounded-[10px] flex items-center justify-center gap-3 text-[#111827] text-[14px] font-semibold hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
             style={{ fontFamily: 'Inter, sans-serif' }}
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">

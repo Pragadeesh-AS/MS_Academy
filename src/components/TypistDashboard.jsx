@@ -51,8 +51,12 @@ export default function TypistDashboard() {
           localStorage.removeItem('pair_id');
           localStorage.removeItem('pair_role');
           window.dispatchEvent(new Event('storage'));
+          navigate('/login');
+        } else if (!role) {
+          navigate('/login');
+        } else {
+          navigate('/403');
         }
-        navigate('/login');
       } else {
         setTypistName(name || 'Typist');
       }

@@ -260,7 +260,11 @@ export default function Dashboard() {
     const email = sessionStorage.getItem('auth_email');
     
     if (role !== 'student') {
-      navigate('/login');
+      if (!role) {
+        navigate('/login');
+      } else {
+        navigate('/403');
+      }
       return;
     }
     

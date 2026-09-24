@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Carousel_003 } from "./ui/swiper-carousel";
 import { ShinyButton } from "./ui/shiny-button";
@@ -6,6 +6,7 @@ import { BookOpen, Target, Users, Star, Quote } from 'lucide-react';
 import homeImg from '../assets/home.jpeg';
 import { motion, AnimatePresence } from 'framer-motion';
 import SocialCard from './SocialCard';
+import TestimonialCarousel from './ui/TestimonialCarousel';
 
 const courses = [
   {
@@ -229,11 +230,73 @@ function TestimonialCard({ testimonial, onReadMore }) {
 export default function Home() {
   const [activeTestimonial, setActiveTestimonial] = useState(null);
   const [activeFAQ, setActiveFAQ] = useState(null);
+  const [reviews, setReviews] = useState(testimonials);
   const navigate = useNavigate();
 
   const toggleFAQ = (index) => {
     setActiveFAQ(activeFAQ === index ? null : index);
   };
+
+  useEffect(() => {
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const placeId = import.meta.env.VITE_GOOGLE_PLACE_ID;
+
+    if (!apiKey || !placeId) return;
+
+    const gradients = [
+      "from-blue-500 to-indigo-600",
+      "from-purple-500 to-pink-600",
+      "from-emerald-500 to-teal-600",
+      "from-orange-500 to-red-600",
+      "from-cyan-500 to-blue-600"
+    ];
+
+    const fetchReviews = () => {
+      // Create a dummy element for the PlacesService (it requires an HTML element)
+      const dummyEl = document.createElement('div');
+      const service = new window.google.maps.places.PlacesService(dummyEl);
+      
+      service.getDetails({
+        placeId: placeId,
+        fields: ['reviews']
+      }, (place, status) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && place.reviews) {
+          // Filter to good reviews and map to our custom format
+          const formattedReviews = place.reviews
+            .filter(r => r.rating >= 4 && r.text && r.text.length > 20)
+            .map((review, i) => {
+              const names = review.author_name.split(' ');
+              const initials = names.length > 1 ? (names[0][0] + names[names.length-1][0]) : names[0][0];
+              
+              return {
+                name: review.author_name,
+                role: "Google Reviewer",
+                discipline: review.relative_time_description,
+                quote: review.text,
+                rating: review.rating,
+                initials: initials.toUpperCase(),
+                bgGradient: gradients[i % gradients.length]
+              };
+            });
+
+          if (formattedReviews.length > 0) {
+            setReviews(formattedReviews);
+          }
+        }
+      });
+    };
+
+    if (window.google && window.google.maps && window.google.maps.places) {
+      fetchReviews();
+    } else {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = fetchReviews;
+      document.head.appendChild(script);
+    }
+  }, []);
   
   const swiperImages = courses.map(course => ({
     src: course.src,
@@ -343,60 +406,7 @@ export default function Home() {
       </section>
 
       {/* Student Reviews Section */}
-      <section className="relative z-10 w-full max-w-[1200px] mx-auto px-6 py-16">
-        {/* Decorative background glow for the section */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] h-[70%] bg-gradient-to-tr from-blue-50/50 via-indigo-50/20 to-purple-50/50 blur-[100px] -z-10 rounded-full opacity-60 pointer-events-none"></div>
-
-        <div className="text-center mb-12 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 border border-blue-100 text-[#1d4ed8] font-bold text-sm mb-4"
-          >
-            <Star size={16} className="fill-[#1d4ed8]" />
-            <span>Student Success Stories</span>
-          </motion.div>
-          <motion.h2 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-4xl font-extrabold text-slate-900 tracking-tight mb-4"
-          >
-            What Our Students Say
-          </motion.h2>
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-slate-500 font-semibold max-w-xl mx-auto"
-          >
-            Hear from our alumni who achieved their dream GATE scores and PSU placements under the guidance of Dr. M. Muthu Samy.
-          </motion.p>
-        </div>
-
-        <div 
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10 items-stretch"
-          style={{ perspective: "1000px" }}
-        >
-          {testimonials.map((testimonial, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ duration: 0.5, delay: idx * 0.1, ease: "easeOut" }}
-              className="flex"
-            >
-              <TestimonialCard testimonial={testimonial} onReadMore={setActiveTestimonial} />
-            </motion.div>
-          ))}
-        </div>
-
-      </section>
+      <TestimonialCarousel reviews={reviews} />
 
       {/* Courses Carousel Section */}
       <section className="w-full relative z-10 py-12 flex-1 overflow-hidden">

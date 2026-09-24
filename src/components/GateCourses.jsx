@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Monitor, Cpu, Cog, Building2, Zap, Settings, Database, Gauge, 
@@ -6,6 +6,46 @@ import {
   Anvil, Leaf, Microscope, Plane, ArrowRight, BookOpen, 
   GraduationCap, Award, Briefcase, Globe, Sparkles, Tag, Clock 
 } from 'lucide-react';
+
+const ScrollVideo = ({ src, className }) => {
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            videoRef.current?.play().catch(e => console.log("Video play interrupted:", e));
+          } else {
+            videoRef.current?.pause();
+          }
+        });
+      },
+      { threshold: 0.3 }
+    );
+
+    if (videoRef.current) {
+      observer.observe(videoRef.current);
+    }
+
+    return () => {
+      if (videoRef.current) {
+        observer.unobserve(videoRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      loop
+      muted
+      playsInline
+      className={className}
+    />
+  );
+};
 
 const themes = {
   blue: {
@@ -348,12 +388,8 @@ export default function GateCourses() {
                 {/* Media frame */}
                 <div className={`relative rounded-3xl overflow-hidden border border-slate-200/50 shadow-md hover:shadow-2xl transition-all duration-500 bg-white ${th.shadowHover}`}>
                   {course.video ? (
-                    <video
+                    <ScrollVideo
                       src={course.video}
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
                       className="w-full h-auto max-h-[350px] object-cover transition-transform duration-700 group-hover/media:scale-[1.03]"
                     />
                   ) : (

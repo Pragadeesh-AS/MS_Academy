@@ -5,7 +5,7 @@ import { ShinyButton } from "./components/ui/shiny-button";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Menu, X } from 'lucide-react';
 import { auth, db } from './firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, onSnapshot } from 'firebase/firestore';
 import Home from './components/Home';
 import AboutUs from './components/AboutUs';
 import Contact from './components/Contact';
@@ -41,6 +41,13 @@ import Dashboard from './components/Dashboard';
 import StudentProfile from './components/StudentProfile';
 import AdminDashboard from './components/AdminDashboard';
 import MarketingPopup from './components/MarketingPopup';
+import NotFound from './components/NotFound';
+import Forbidden403 from './components/Forbidden403';
+import ServerError500 from './components/ServerError500';
+import Maintenance from './components/Maintenance';
+import Offline from './components/Offline';
+import SessionExpired from './components/SessionExpired';
+import TestStates from './components/TestStates';
 
 export default function App() {
   const navigate = useNavigate();
@@ -50,7 +57,33 @@ export default function App() {
 
   const [userRole, setUserRole] = useState(() => sessionStorage.getItem('auth_role'));
   const [userName, setUserName] = useState(() => sessionStorage.getItem('auth_name'));
+  const [isMaintenance, setIsMaintenance] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Listen to the maintenance flag in real-time from Firestore
+    const unsub = onSnapshot(doc(db, 'site_settings', 'general'), (docSnap) => {
+      if (docSnap.exists() && docSnap.data().isMaintenanceMode === true) {
+        setIsMaintenance(true);
+      } else {
+        setIsMaintenance(false);
+      }
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const handleStorageChange = () => {
@@ -60,6 +93,49 @@ export default function App() {
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
+
+  // Idle Timeout Logic
+  useEffect(() => {
+    // Only apply timeout if user is logged in
+    if (!userRole) return;
+
+    let idleTimeout;
+    const IDLE_TIME_MS = 30 * 60 * 1000; // 30 minutes (configurable)
+
+    const logoutUser = () => {
+      // Clear session data
+      sessionStorage.removeItem('auth_role');
+      sessionStorage.removeItem('auth_email');
+      sessionStorage.removeItem('auth_name');
+      localStorage.removeItem('student_department');
+      localStorage.removeItem('pair_id');
+      localStorage.removeItem('pair_role');
+      
+      // Update local state
+      setUserRole(null);
+      setUserName(null);
+      
+      // Redirect to session expired page
+      navigate('/session-expired');
+    };
+
+    const resetTimer = () => {
+      if (idleTimeout) clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(logoutUser, IDLE_TIME_MS);
+    };
+
+    // Set initial timer
+    resetTimer();
+
+    // Listen to user activity across the app
+    const events = ['mousemove', 'keydown', 'mousedown', 'scroll', 'touchstart'];
+    events.forEach(event => window.addEventListener(event, resetTimer));
+
+    return () => {
+      if (idleTimeout) clearTimeout(idleTimeout);
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+    };
+  }, [userRole, navigate]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -101,6 +177,24 @@ export default function App() {
   };
 
   const dynamicLink = getDynamicLink();
+
+  // If offline, hijack the entire app
+  if (isOffline) {
+    return (
+      <div className="min-h-screen bg-[#fafafa] text-slate-900 flex flex-col">
+        <Offline />
+      </div>
+    );
+  }
+
+  // If maintenance is enabled in the database, hijack the entire app
+  if (isMaintenance) {
+    return (
+      <div className="min-h-screen bg-[#fafafa] text-slate-900 flex flex-col">
+        <Maintenance />
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen bg-[#fafafa] relative overflow-hidden font-sans text-slate-900 z-0 flex flex-col ${(location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student')) ? 'pt-16 md:pt-24' : ''}`}>
@@ -356,6 +450,13 @@ export default function App() {
         <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
         <Route path="/typist-dashboard" element={<TypistDashboard />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/403" element={<Forbidden403 />} />
+        <Route path="/500" element={<ServerError500 />} />
+        <Route path="/maintenance" element={<Maintenance />} />
+        <Route path="/offline" element={<Offline />} />
+        <Route path="/session-expired" element={<SessionExpired />} />
+        <Route path="/test-states" element={<TestStates />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
 
       {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student') && <Footer />}

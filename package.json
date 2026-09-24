@@ -36,6 +36,7 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "katex": "^0.18.7",
+    "lottie-web": "^5.13.0",
     "lucide-react": "^1.25.0",
     "motion": "^12.42.2",
     "pdfjs-dist": "^3.11.174",

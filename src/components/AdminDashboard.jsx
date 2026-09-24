@@ -146,8 +146,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     const role = sessionStorage.getItem('auth_role');
     const name = sessionStorage.getItem('auth_name');
-    if (role !== 'admin') {
+    if (!role) {
       navigate('/login');
+    } else if (role !== 'admin') {
+      navigate('/403');
     } else {
       setAdminName(name || 'Admin');
     }

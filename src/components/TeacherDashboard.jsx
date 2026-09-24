@@ -95,8 +95,12 @@ export default function TeacherDashboard() {
           sessionStorage.removeItem('auth_email');
           sessionStorage.removeItem('auth_name');
           window.dispatchEvent(new Event('storage'));
+          navigate('/login');
+        } else if (!role) {
+          navigate('/login');
+        } else {
+          navigate('/403');
         }
-        navigate('/login');
       } else {
         setTeacherName(name || 'Teacher');
         // Fetch all students for analytics
