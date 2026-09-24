@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
-import LogoutButton from './LogoutButton';
 import { useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Building2, School, Calendar, HelpCircle, ArrowLeft, GraduationCap, 
@@ -13,24 +12,27 @@ import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/fire
 import { updatePassword } from 'firebase/auth';
 import { motion } from 'framer-motion';
 
-// Mock Data
-const MOCK_SKILLS = [
-  { name: "C++", color: "text-blue-600", bg: "bg-blue-50" },
-  { name: "Java", color: "text-orange-600", bg: "bg-orange-50" },
-  { name: "Python", color: "text-yellow-600", bg: "bg-yellow-50" },
-  { name: "React", color: "text-cyan-600", bg: "bg-cyan-50" },
-  { name: "Node.js", color: "text-green-600", bg: "bg-green-50" },
-  { name: "Spring Boot", color: "text-green-500", bg: "bg-green-50" },
-  { name: "HTML", color: "text-orange-500", bg: "bg-orange-50" },
-  { name: "CSS", color: "text-blue-500", bg: "bg-blue-50" },
-  { name: "JavaScript", color: "text-yellow-500", bg: "bg-yellow-50" },
-  { name: "MySQL", color: "text-blue-700", bg: "bg-blue-50" },
-  { name: "MongoDB", color: "text-green-600", bg: "bg-green-50" },
-  { name: "Git", color: "text-orange-600", bg: "bg-orange-50" },
-  { name: "AWS", color: "text-yellow-600", bg: "bg-yellow-50" }
+const SKILL_STYLES = [
+  "text-blue-600 bg-blue-50",
+  "text-orange-600 bg-orange-50",
+  "text-yellow-600 bg-yellow-50",
+  "text-cyan-600 bg-cyan-50",
+  "text-green-600 bg-green-50",
+  "text-purple-600 bg-purple-50",
+  "text-pink-600 bg-pink-50"
 ];
 
- 
+const DEPARTMENT_OPTIONS = [
+  "Computer Science (CSE)", "Electronics (ECE)", "Mechanical (ME)", "Civil (CE)", "Electrical (EE)",
+  "Data Science & AI (DS)", "Production & Industrial Engg (PI)", "Instrumentation Engg (IN)",
+  "Biotechnology (BT)", "Chemical Engineering (CH)", "Biomedical Engineering (BM)", "Physics (PH)",
+  "Architecture & Planning (AR)", "Agricultural Engineering (AG)", "Metallurgical Engineering (MT)",
+  "Environmental Science (ES)", "Life Sciences (XL)", "Aerospace Engineering (AE)", "Other"
+];
+
+const YEAR_OPTIONS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Graduated / Working"];
+
+const inputClass = "w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-100 transition-all bg-slate-50 hover:bg-white focus:bg-white";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -56,12 +58,19 @@ export default function StudentProfile() {
   const [editFormData, setEditFormData] = useState({
     avatarUrl: '',
     department: '',
+    collegeName: '',
+    yearOfStudy: '',
+    cgpa: '',
+    batch: '',
+    location: '',
+    skills: [],
     newPassword: '',
     githubUrl: '',
     linkedinUrl: '',
     portfolioUrl: '',
     resumeUrl: ''
   });
+  const [skillInput, setSkillInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -89,6 +98,12 @@ export default function StudentProfile() {
             setEditFormData({
               avatarUrl: data.avatarUrl || '',
               department: data.department || '',
+              collegeName: data.collegeName || '',
+              yearOfStudy: data.yearOfStudy || '',
+              cgpa: data.cgpa || '',
+              batch: data.batch || '',
+              location: data.location || '',
+              skills: Array.isArray(data.skills) ? data.skills : [],
               newPassword: '',
               githubUrl: data.githubUrl || '',
               linkedinUrl: data.linkedinUrl || '',
@@ -107,6 +122,15 @@ export default function StudentProfile() {
     fetchProfile();
   }, [navigate]);
 
+  const addSkill = () => {
+    const skill = skillInput.trim().replace(/,$/, '');
+    if (!skill) return;
+    if (!editFormData.skills.some(sk => sk.toLowerCase() === skill.toLowerCase())) {
+      setEditFormData({ ...editFormData, skills: [...editFormData.skills, skill] });
+    }
+    setSkillInput('');
+  };
+
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -123,24 +147,33 @@ export default function StudentProfile() {
       }
 
       if (docId) {
-        await updateDoc(doc(db, 'joined_students', docId), {
+        const pendingSkill = skillInput.trim();
+        const skills = pendingSkill && !editFormData.skills.includes(pendingSkill)
+          ? [...editFormData.skills, pendingSkill]
+          : editFormData.skills;
+
+        const updates = {
           avatarUrl: editFormData.avatarUrl,
           department: editFormData.department,
+          collegeName: editFormData.collegeName.trim(),
+          yearOfStudy: editFormData.yearOfStudy,
+          cgpa: String(editFormData.cgpa).trim(),
+          batch: editFormData.batch.trim(),
+          location: editFormData.location.trim(),
+          skills,
           githubUrl: editFormData.githubUrl,
           linkedinUrl: editFormData.linkedinUrl,
           portfolioUrl: editFormData.portfolioUrl,
           resumeUrl: editFormData.resumeUrl
-        });
-        
-        setProfileData({
-          ...profileData,
-          avatarUrl: editFormData.avatarUrl,
-          department: editFormData.department,
-          githubUrl: editFormData.githubUrl,
-          linkedinUrl: editFormData.linkedinUrl,
-          portfolioUrl: editFormData.portfolioUrl,
-          resumeUrl: editFormData.resumeUrl
-        });
+        };
+
+        // Same joined_students record the admin panel and the rest of the site read from
+        await updateDoc(doc(db, 'joined_students', docId), updates);
+        setProfileData({ ...profileData, ...updates });
+        setEditFormData(prev => ({ ...prev, skills }));
+        setSkillInput('');
+
+        if (updates.department) localStorage.setItem('student_department', updates.department);
       }
 
       setSuccessMsg("Profile updated successfully!");
@@ -216,18 +249,126 @@ export default function StudentProfile() {
                 <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
                   <School size={16} className="text-slate-400" /> Department
                 </label>
-                <select 
+                <select
                   value={editFormData.department}
                   onChange={(e) => setEditFormData({...editFormData, department: e.target.value})}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-100 transition-all bg-slate-50 hover:bg-white focus:bg-white appearance-none"
+                  className={`${inputClass} appearance-none`}
                 >
                   <option value="">Select Department...</option>
-                  <option value="Computer Science (CSE)">Computer Science (CSE)</option>
-                  <option value="Electronics (ECE)">Electronics (ECE)</option>
-                  <option value="Mechanical (ME)">Mechanical (ME)</option>
-                  <option value="Civil (CE)">Civil (CE)</option>
-                  <option value="Other">Other</option>
+                  {[...new Set([editFormData.department, ...DEPARTMENT_OPTIONS])].filter(Boolean).map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Building2 size={16} className="text-slate-400" /> College
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.collegeName}
+                  onChange={(e) => setEditFormData({...editFormData, collegeName: e.target.value})}
+                  placeholder="Your college name"
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <Calendar size={16} className="text-slate-400" /> Current Year
+                  </label>
+                  <select
+                    value={editFormData.yearOfStudy}
+                    onChange={(e) => setEditFormData({...editFormData, yearOfStudy: e.target.value})}
+                    className={`${inputClass} appearance-none`}
+                  >
+                    <option value="">Select Year...</option>
+                    {[...new Set([editFormData.yearOfStudy, ...YEAR_OPTIONS])].filter(Boolean).map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <Star size={16} className="text-slate-400" /> CGPA
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="10"
+                    value={editFormData.cgpa}
+                    onChange={(e) => setEditFormData({...editFormData, cgpa: e.target.value})}
+                    placeholder="e.g. 8.84"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <Briefcase size={16} className="text-slate-400" /> Batch
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.batch}
+                    onChange={(e) => setEditFormData({...editFormData, batch: e.target.value})}
+                    placeholder="e.g. 2023 - 2027"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <MapPin size={16} className="text-slate-400" /> Location
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.location}
+                    onChange={(e) => setEditFormData({...editFormData, location: e.target.value})}
+                    placeholder="City, State"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Code size={16} className="text-slate-400" /> Skills
+                </label>
+                {editFormData.skills.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2.5">
+                    {editFormData.skills.map((skill, idx) => (
+                      <span key={skill} className={`px-3 py-1 rounded-lg text-sm font-semibold flex items-center gap-1.5 ${SKILL_STYLES[idx % SKILL_STYLES.length]}`}>
+                        {skill}
+                        <button
+                          type="button"
+                          onClick={() => setEditFormData({...editFormData, skills: editFormData.skills.filter(sk => sk !== skill)})}
+                          className="opacity-60 hover:opacity-100 leading-none"
+                          aria-label={`Remove ${skill}`}
+                        >✕</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={skillInput}
+                    onChange={(e) => setSkillInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        addSkill();
+                      }
+                    }}
+                    placeholder="Type a skill and press Enter"
+                    className={inputClass}
+                  />
+                  <button type="button" onClick={addSkill} className="px-4 shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all">Add</button>
+                </div>
               </div>
 
               <div>
@@ -393,22 +534,25 @@ export default function StudentProfile() {
                 <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                   <GraduationCap className="text-[#2563EB]" size={20} /> Academic Info
                 </h3>
+                <button onClick={() => setIsEditing(true)} className="text-xs font-bold text-[#2563EB] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+                  <Edit2 size={12} /> Edit
+                </button>
               </div>
               
               <div className="space-y-4">
                 {[
-                  { icon: <Building2 size={16} />, label: "College", value: profileData.collegeName || "Sri Eshwar College of Engineering" },
-                  { icon: <School size={16} />, label: "Department", value: profileData.department || "Computer Science (CSE)" },
-                  { icon: <Calendar size={16} />, label: "Current Year", value: profileData.yearOfStudy || "3rd Year" },
-                  { icon: <Star size={16} />, label: "CGPA", value: "8.84 / 10" },
-                  { icon: <Briefcase size={16} />, label: "Batch", value: "2023 - 2027" },
-                  { icon: <MapPin size={16} />, label: "Location", value: "Coimbatore, Tamil Nadu" },
+                  { icon: <Building2 size={16} />, label: "College", value: profileData.collegeName },
+                  { icon: <School size={16} />, label: "Department", value: profileData.department },
+                  { icon: <Calendar size={16} />, label: "Current Year", value: profileData.yearOfStudy },
+                  { icon: <Star size={16} />, label: "CGPA", value: profileData.cgpa ? `${profileData.cgpa} / 10` : '' },
+                  { icon: <Briefcase size={16} />, label: "Batch", value: profileData.batch },
+                  { icon: <MapPin size={16} />, label: "Location", value: profileData.location },
                 ].map((item, idx) => (
                   <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between py-2 border-b border-slate-50 last:border-0 group">
                     <div className="flex items-center gap-2 text-[13px] font-semibold text-slate-500 mb-1 sm:mb-0">
                       <span className="text-slate-400 group-hover:text-[#2563EB] transition-colors">{item.icon}</span> {item.label}
                     </div>
-                    <div className="text-sm font-semibold text-slate-800">{item.value}</div>
+                    <div className={`text-sm font-semibold ${item.value ? 'text-slate-800' : 'text-slate-400 italic'}`}>{item.value || 'Not set'}</div>
                   </div>
                 ))}
               </div>
@@ -416,17 +560,29 @@ export default function StudentProfile() {
 
             {/* Skills Card */}
             <motion.div variants={itemVariants} className="bg-white rounded-[24px] p-7 shadow-sm border border-slate-100">
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-6">
-                <Code className="text-[#14B8A6]" size={20} /> Skills
-              </h3>
-              
-              <div className="flex flex-wrap gap-2.5">
-                {MOCK_SKILLS.map((skill, idx) => (
-                  <div key={idx} className={`px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-all hover:scale-105 hover:shadow-sm cursor-default ${skill.bg} ${skill.color}`}>
-                    <Zap size={12} /> {skill.name}
-                  </div>
-                ))}
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <Code className="text-[#14B8A6]" size={20} /> Skills
+                </h3>
+                <button onClick={() => setIsEditing(true)} className="text-xs font-bold text-[#2563EB] hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+                  <Edit2 size={12} /> Edit
+                </button>
               </div>
+
+              {Array.isArray(profileData.skills) && profileData.skills.length > 0 ? (
+                <div className="flex flex-wrap gap-2.5">
+                  {profileData.skills.map((skill, idx) => (
+                    <div key={skill} className={`px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-all hover:scale-105 hover:shadow-sm cursor-default ${SKILL_STYLES[idx % SKILL_STYLES.length]}`}>
+                      <Zap size={12} /> {skill}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-slate-400 text-sm font-semibold border-2 border-dashed border-slate-100 rounded-xl">
+                  No skills added yet.<br />
+                  <button onClick={() => setIsEditing(true)} className="text-[#2563EB] mt-1 hover:underline">Add them now</button>
+                </div>
+              )}
             </motion.div>
           </div>
  
@@ -484,20 +640,6 @@ export default function StudentProfile() {
                 ));
               })()}
             </div>
-          </motion.div>
-
-          {/* Logout Section */}
-          <motion.div variants={itemVariants} className="bg-white rounded-[24px] p-7 shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
-             <p className="text-sm font-semibold text-slate-500 mb-4">Done for the day?</p>
-             <LogoutButton 
-                onClick={() => {
-                  sessionStorage.removeItem('auth_role');
-                  sessionStorage.removeItem('auth_email');
-                  sessionStorage.removeItem('auth_name');
-                  window.dispatchEvent(new Event('storage'));
-                  navigate('/');
-                }}
-              />
           </motion.div>
 
         </motion.div>

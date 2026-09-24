@@ -60,7 +60,7 @@ const StudentDirectory = ({
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [bundles, setBundles] = useState([]);
   const [editingStudent, setEditingStudent] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '' });
+  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '' });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const studentsPerPage = 10;
 
@@ -85,7 +85,11 @@ const StudentDirectory = ({
       name: raw.name || '',
       department: raw.department || '',
       collegeName: raw.collegeName || '',
-      yearOfStudy: raw.yearOfStudy || ''
+      yearOfStudy: raw.yearOfStudy || '',
+      cgpa: raw.cgpa || '',
+      batch: raw.batch || '',
+      location: raw.location || '',
+      skills: Array.isArray(raw.skills) ? raw.skills.join(', ') : ''
     });
     setEditingStudent(raw);
   };
@@ -99,7 +103,11 @@ const StudentDirectory = ({
         name: editForm.name.trim(),
         department: editForm.department,
         collegeName: editForm.collegeName.trim(),
-        yearOfStudy: editForm.yearOfStudy
+        yearOfStudy: editForm.yearOfStudy,
+        cgpa: String(editForm.cgpa).trim(),
+        batch: editForm.batch.trim(),
+        location: editForm.location.trim(),
+        skills: editForm.skills.split(',').map(sk => sk.trim()).filter(Boolean)
       };
       await updateDoc(doc(db, 'joined_students', String(editingStudent.id)), updates);
       setJoinedStudents(joinedStudents.map(s =>
@@ -570,6 +578,27 @@ const StudentDirectory = ({
                   <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Year</span>
                   <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.year}</p>
                 </div>
+                {[
+                  { label: 'College', value: selectedStudent.collegeName },
+                  { label: 'CGPA', value: selectedStudent.cgpa },
+                  { label: 'Batch', value: selectedStudent.batch },
+                  { label: 'Location', value: selectedStudent.location }
+                ].map(f => (
+                  <div key={f.label} className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
+                    <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">{f.label}</span>
+                    <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{f.value || '—'}</p>
+                  </div>
+                ))}
+                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7] sm:col-span-2">
+                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Skills</span>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {Array.isArray(selectedStudent.skills) && selectedStudent.skills.length > 0
+                      ? selectedStudent.skills.map(sk => (
+                          <span key={sk} className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-[12px] font-semibold">{sk}</span>
+                        ))
+                      : <span className="font-semibold text-[#0F172A] text-[15px]">—</span>}
+                  </div>
+                </div>
                 <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
                   <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Status</span>
                   <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">
@@ -749,6 +778,36 @@ const StudentDirectory = ({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { key: 'cgpa', label: 'CGPA', placeholder: 'e.g. 8.84' },
+                  { key: 'batch', label: 'Batch', placeholder: 'e.g. 2023 - 2027' },
+                  { key: 'location', label: 'Location', placeholder: 'e.g. Coimbatore' }
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">{f.label}</label>
+                    <input
+                      type="text"
+                      value={editForm[f.key]}
+                      onChange={(e) => setEditForm({ ...editForm, [f.key]: e.target.value })}
+                      placeholder={f.placeholder}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Skills</label>
+                <input
+                  type="text"
+                  value={editForm.skills}
+                  onChange={(e) => setEditForm({ ...editForm, skills: e.target.value })}
+                  placeholder="Comma separated, e.g. Python, React, MySQL"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                />
               </div>
 
               <div>
