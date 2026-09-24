@@ -62,7 +62,7 @@ const StudentDirectory = ({
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [bundles, setBundles] = useState([]);
   const [editingStudent, setEditingStudent] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '' });
+  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '', isPro: false });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const studentsPerPage = 10;
 
@@ -90,7 +90,8 @@ const StudentDirectory = ({
       cgpa: raw.cgpa || '',
       batch: raw.batch || '',
       location: raw.location || '',
-      skills: Array.isArray(raw.skills) ? raw.skills.join(', ') : ''
+      skills: Array.isArray(raw.skills) ? raw.skills.join(', ') : '',
+      isPro: !!raw.isPro
     });
     setEditingStudent(raw);
   };
@@ -108,7 +109,8 @@ const StudentDirectory = ({
         cgpa: String(editForm.cgpa).trim(),
         batch: editForm.batch.trim(),
         location: editForm.location.trim(),
-        skills: editForm.skills.split(',').map(sk => sk.trim()).filter(Boolean)
+        skills: editForm.skills.split(',').map(sk => sk.trim()).filter(Boolean),
+        isPro: !!editForm.isPro
       };
       await updateDoc(doc(db, 'joined_students', String(editingStudent.id)), updates);
       setJoinedStudents(joinedStudents.map(s =>
@@ -455,30 +457,6 @@ const StudentDirectory = ({
                             <button onClick={() => setSelectedStudent(student)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
                               <Eye size={18} />
                             </button>
-                            <button 
-                              onClick={() => {
-                                setConfirmDialog({
-                                  message: `Are you sure you want to ${student.isPro ? 'downgrade' : 'upgrade'} ${student.name}?`,
-                                  onConfirm: async () => {
-                                    setConfirmDialog(null);
-                                    try {
-                                      const updateData = { isPro: !student.isPro };
-                                      await updateDoc(doc(db, 'joined_students', String(student.id)), updateData);
-                                      setJoinedStudents(joinedStudents.map(s => 
-                                        s.id === student.id ? { ...s, isPro: !s.isPro } : s
-                                      ));
-                                    } catch (err) {
-                                      console.error("Failed to update status", err);
-                                      alert("Failed to update student status");
-                                    }
-                                  }
-                                });
-                              }}
-                              className={`p-2 rounded-[10px] transition-colors ${student.isPro ? 'text-amber-500 hover:bg-amber-50' : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50'}`}
-                              title={student.isPro ? "Downgrade from Premium" : "Upgrade to Premium"}
-                            >
-                              <ShieldCheck size={18} />
-                            </button>
                             <button onClick={() => openEditStudent(student)} className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Student">
                               <Edit size={18} />
                             </button>
@@ -800,6 +778,25 @@ const StudentDirectory = ({
                   placeholder="Comma separated, e.g. Python, React, MySQL"
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
                 />
+              </div>
+
+              <div className="flex items-center justify-between gap-4 px-4 py-3 bg-amber-50/60 border border-amber-100 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck size={20} className="text-amber-500 shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">Premium Access</p>
+                    <p className="text-[11px] text-slate-500 font-medium">{editForm.isPro ? 'Student has Premium (Elite) access.' : 'Turn on to upgrade this student to Premium.'}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={editForm.isPro}
+                  onClick={() => setEditForm({ ...editForm, isPro: !editForm.isPro })}
+                  className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${editForm.isPro ? 'bg-amber-500' : 'bg-slate-300'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${editForm.isPro ? 'translate-x-5' : ''}`}></span>
+                </button>
               </div>
 
               <div>

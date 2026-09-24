@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Download, Plus, Trash2, Printer, FileText } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import logoImg from '../../assets/msgate_logo.png';
 import signatureImg from '../../assets/signature.png';
 import stampImg from '../../assets/stamp.png';
 import signatoryImg from '../../assets/signatory.png';
@@ -46,6 +47,14 @@ const amountToWords = (amount) => {
   if (n) parts.push((parts.length ? 'and ' : '') + twoDigits(n));
   return 'Rupees ' + parts.join(' ') + ' only';
 };
+
+// Props that make an image non-draggable, non-selectable and non-savable from the preview
+const protectedImg = {
+  draggable: false,
+  onDragStart: (e) => e.preventDefault(),
+  onContextMenu: (e) => e.preventDefault()
+};
+const protectedImgStyle = { pointerEvents: 'none', userSelect: 'none', WebkitUserDrag: 'none' };
 
 export default function InvoiceGenerator() {
   const [toAddress, setToAddress] = useState('');
@@ -238,7 +247,10 @@ export default function InvoiceGenerator() {
             className="bg-[#ffffff] mx-auto w-full max-w-[210mm] min-h-[297mm] text-black flex flex-col"
             style={{ padding: '48px 44px', fontFamily: 'Calibri, Carlito, "Segoe UI", Arial, sans-serif', fontSize: '13px', color: '#000' }}
           >
-            <h1 style={{ textAlign: 'center', fontSize: '22px', fontWeight: 700, letterSpacing: '0.5px', paddingBottom: '8px', borderBottom: '2px solid #222', margin: 0 }}>INVOICE</h1>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '2px solid #222' }}>
+              <img src={logoImg} alt="MS Gate Academy logo" {...protectedImg} style={{ ...protectedImgStyle, width: '72px', height: '72px', objectFit: 'contain' }} />
+              <h1 style={{ fontSize: '26px', fontWeight: 700, letterSpacing: '1px', margin: 0 }}>INVOICE</h1>
+            </div>
 
             <div style={{ marginTop: '18px', display: 'flex', gap: '28px' }}>
               <span><b>Invoice No:</b> {invoiceNo}</span>
@@ -298,11 +310,11 @@ export default function InvoiceGenerator() {
             <div style={{ marginTop: '18px', fontStyle: 'italic', fontSize: '12.5px' }}>{GST_NOTE}</div>
 
             <div style={{ marginTop: 'auto', paddingTop: '40px', display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', gap: '24px' }}>
-              <img src={stampImg} alt="Academy stamp" style={{ width: '84px', height: '84px', objectFit: 'contain', mixBlendMode: 'multiply' }} />
+              <img src={stampImg} alt="Academy stamp" {...protectedImg} style={{ ...protectedImgStyle, width: '84px', height: '84px', objectFit: 'contain', mixBlendMode: 'multiply' }} />
               <div style={{ width: '150px' }}>
                 <div style={{ fontSize: '12.5px', marginBottom: '2px' }}>MS GATE ACADEMY</div>
-                <img src={signatureImg} alt="Authorized signature" onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} style={{ width: '100px', display: 'block', mixBlendMode: 'multiply', marginBottom: '4px' }} />
-                <img src={signatoryImg} alt="Dr. M. Muthu Samy" style={{ width: '150px', display: 'block', mixBlendMode: 'multiply' }} />
+                <img src={signatureImg} alt="Authorized signature" {...protectedImg} style={{ ...protectedImgStyle, width: '100px', display: 'block', mixBlendMode: 'multiply', marginBottom: '4px' }} />
+                <img src={signatoryImg} alt="Dr. M. Muthu Samy" {...protectedImg} style={{ ...protectedImgStyle, width: '150px', display: 'block', mixBlendMode: 'multiply' }} />
               </div>
             </div>
           </div>
