@@ -388,7 +388,7 @@ const StudentDirectory = ({
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Student</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Department</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">College</th>
-                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Tier</th>
+                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Email</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Status</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Joined Date</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220] text-center w-[160px]">Actions</th>
@@ -420,7 +420,14 @@ const StudentDirectory = ({
                             </div>
                             <div className="flex flex-col">
                               <span className="font-semibold text-[16px] text-[#0F172A] tracking-tight">{student.name}</span>
-                              <span className="text-[13px] text-[#64748B] font-medium">{student.email}</span>
+                              <span className={`inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[11px] w-fit mt-1 font-bold tracking-wide ${
+                            student.isPro || (student.purchasedBundles && student.purchasedBundles.length > 0)
+                              ? 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200 shadow-sm' 
+                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}>
+                            {(student.isPro || (student.purchasedBundles && student.purchasedBundles.length > 0)) ? (student.purchasedBundles && student.purchasedBundles.length > 0 ? `✨ PRO (${student.purchasedBundles.length} Bundles)` : '✨ PRO') : 'Normal'}
+                          </span>
+
                             </div>
                           </div>
                         </td>
@@ -431,13 +438,7 @@ const StudentDirectory = ({
                           <span className="text-[14px] text-[#475569] font-medium block max-w-[240px] truncate" title={student.college}>{student.college || '—'}</span>
                         </td>
                         <td className="px-4">
-                          <span className={`inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${
-                            student.isPro || (student.purchasedBundles && student.purchasedBundles.length > 0)
-                              ? 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200 shadow-sm' 
-                              : 'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}>
-                            {(student.isPro || (student.purchasedBundles && student.purchasedBundles.length > 0)) ? (student.purchasedBundles && student.purchasedBundles.length > 0 ? `✨ PRO (${student.purchasedBundles.length} Bundles)` : '✨ PRO') : 'Normal'}
-                          </span>
+                          <span className="text-[14px] text-[#475569] font-medium">{student.email}</span>
                         </td>
                         <td className="px-4">
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold tracking-wide ${
