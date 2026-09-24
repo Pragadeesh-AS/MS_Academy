@@ -111,7 +111,7 @@ export default function TypistDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="h-screen overflow-hidden bg-slate-50 flex">
       {/* Mobile Top Bar */}
       <div className="md:hidden fixed top-0 inset-x-0 z-30 bg-white border-b border-slate-200 flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -166,7 +166,7 @@ export default function TypistDashboard() {
       )}
 
       {/* Sidebar */}
-      <aside className={`transition-all duration-300 flex-shrink-0 sticky top-0 h-screen z-20 ${isCollapsed ? 'w-[88px]' : 'w-64'} bg-white border-r border-slate-200 flex flex-col hidden md:flex`}>
+      <aside className={`transition-all duration-300 flex-shrink-0 h-full z-20 ${isCollapsed ? 'w-[88px]' : 'w-64'} bg-white border-r border-slate-200 flex flex-col hidden md:flex`}>
         {/* Collapse Button */}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}

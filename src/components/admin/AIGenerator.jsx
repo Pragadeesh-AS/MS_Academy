@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit, AlertCircle } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import { GoogleGenAI } from '@google/genai';
 import katex from 'katex';
@@ -154,17 +154,28 @@ export default function AIGenerator({ pairMode = false }) {
   
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: currentYear - 1990 + 1}, (_, i) => (currentYear - i).toString());
-  const departments = [
-    'Computer Science (CSE)',
-    'Electronics (ECE)',
-    'Mechanical (ME)',
-    'Civil (CE)',
-    'Electrical (EE)',
-    'Data Science (DS)',
-    'All Departments'
-  ];
-  const difficultyLevels = ['Easy', 'Medium', 'Hard'];
-  const markOptions = ['1 Mark', '2 Marks', '3 Marks', '4 Marks', '5 Marks', '10 Marks', '15 Marks', '1 Mark (-0.33)', '2 Marks (-0.66)'];
+  // Departments / subjects / topics / marks / difficulties come from the admin Attributes tab
+  const [attributes, setAttributes] = useState([]);
+  useEffect(() => {
+    getDocs(collection(db, 'question_attributes'))
+      .then(snap => setAttributes(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(err => console.error('Failed to load attributes:', err));
+  }, []);
+
+  const attrNames = (type) => attributes.filter(a => a.type === type).map(a => a.name);
+  const departments = attrNames('department');
+  const selectedDeptAttr = attributes.find(a => a.type === 'department' && a.name === importSettings.department);
+  const selectedSubjectAttr = attributes.find(
+    a => a.type === 'subject' && a.name === importSettings.subject && (!selectedDeptAttr || a.parentId === selectedDeptAttr.id)
+  );
+  const subjects = attributes
+    .filter(a => a.type === 'subject' && selectedDeptAttr && a.parentId === selectedDeptAttr.id)
+    .map(a => a.name);
+  const topics = attributes
+    .filter(a => a.type === 'topic' && selectedSubjectAttr && a.parentId === selectedSubjectAttr.id)
+    .map(a => a.name);
+  const difficultyLevels = attrNames('difficulty');
+  const markOptions = attrNames('mark');
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -610,7 +621,14 @@ IMPORTANT:
   };
 
   const handleSettingChange = (e) => {
-    setImportSettings({ ...importSettings, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setImportSettings(prev => ({
+      ...prev,
+      [name]: value,
+      // Changing a parent clears the dependent choices
+      ...(name === 'department' ? { subject: '', topic: '' } : {}),
+      ...(name === 'subject' ? { topic: '' } : {})
+    }));
   };
 
   const confirmApprove = async () => {
@@ -945,26 +963,30 @@ IMPORTANT:
               
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Subject</label>
-                <input 
-                  type="text" 
-                  name="subject" 
-                  value={importSettings.subject} 
+                <select
+                  name="subject"
+                  value={importSettings.subject}
                   onChange={handleSettingChange}
-                  placeholder="Enter Subject..."
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                />
+                  disabled={!importSettings.department}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 disabled:opacity-60"
+                >
+                  <option value="">{importSettings.department ? 'Select Subject...' : 'Select a department first'}</option>
+                  {subjects.map(x => <option key={x} value={x}>{x}</option>)}
+                </select>
               </div>
 
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Topic / Subtopic</label>
-                <input 
-                  type="text" 
-                  name="topic" 
-                  value={importSettings.topic} 
+                <select
+                  name="topic"
+                  value={importSettings.topic}
                   onChange={handleSettingChange}
-                  placeholder="Enter Topic (Optional)..."
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                />
+                  disabled={!importSettings.subject}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 disabled:opacity-60"
+                >
+                  <option value="">{importSettings.subject ? 'Select Topic (Optional)...' : 'Select a subject first'}</option>
+                  {topics.map(x => <option key={x} value={x}>{x}</option>)}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
