@@ -445,7 +445,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     
     const finalStatus = forcedStatus || formData.status || 'Approved';
     const authName = sessionStorage.getItem('auth_name') || 'Unknown';
-    let payload = { ...formData, status: finalStatus, createdAt: formData.createdAt || new Date().toISOString() };
+    const nowIso = new Date().toISOString();
+    let payload = { ...formData, status: finalStatus, updatedAt: nowIso };
+    // Creation date is stamped once; edits must never overwrite it
+    if (formData.createdAt) payload.createdAt = formData.createdAt;
+    else if (!isEditing) payload.createdAt = nowIso;
+    else delete payload.createdAt;
     
     if (!isEditing) payload.typedBy = authName;
     if (finalStatus === 'Approved' && (!formData.reviewedBy || formData.status !== 'Approved')) payload.reviewedBy = authName;
@@ -501,7 +506,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     
     const finalStatus = forcedStatus || formData.status || 'Approved';
     const authName = sessionStorage.getItem('auth_name') || 'Unknown';
-    let payload = { ...formData, status: finalStatus, createdAt: formData.createdAt || new Date().toISOString() };
+    const nowIso = new Date().toISOString();
+    let payload = { ...formData, status: finalStatus, updatedAt: nowIso };
+    // Creation date is stamped once; edits must never overwrite it
+    if (formData.createdAt) payload.createdAt = formData.createdAt;
+    else if (!isEditing) payload.createdAt = nowIso;
+    else delete payload.createdAt;
     
     if (!isEditing) payload.typedBy = authName;
     if (finalStatus === 'Approved' && (!formData.reviewedBy || formData.status !== 'Approved')) payload.reviewedBy = authName;
@@ -564,7 +574,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       difficultyLevel: q.difficultyLevel || '',
       status: q.status || 'Approved',
       typedBy: q.typedBy || '',
-      reviewedBy: q.reviewedBy || ''
+      reviewedBy: q.reviewedBy || '',
+      createdAt: q.createdAt || ''
     });
     setCurrentId(q.id);
     setIsEditing(true);
@@ -680,13 +691,23 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const totalSubjects = new Set(filteredQuestions.map(q => q.subject).filter(Boolean)).size;
   const pendingReview = filteredQuestions.filter(q => q.status === 'In Review').length;
 
-  const relativeTime = (isoString) => {
-    if (!isoString) return 'Yesterday';
-    const date = new Date(isoString);
-    const diff = Math.floor((new Date() - date) / 1000);
-    if (diff < 86400) return 'Today';
-    if (diff < 172800) return 'Yesterday';
-    return `${Math.floor(diff/86400)} days ago`;
+  const formatDate = (isoString) => {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  const formatDateTime = (isoString) => {
+    const d = new Date(isoString);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Edited more than a minute after creation counts as modified
+  const wasModified = (q) => {
+    if (!q.updatedAt) return false;
+    if (!q.createdAt) return true;
+    return new Date(q.updatedAt).getTime() - new Date(q.createdAt).getTime() > 60000;
   };
 
   return (
@@ -933,7 +954,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                           <span className="text-[14px] font-[500] text-[#0F172A] truncate block" title={q.department || 'All'}>{q.department || 'All'}</span>
                         </td>
                         <td className="py-4 px-4 h-[82px]">
-                          <span className="text-[13px] font-[500] text-[#64748B]">{relativeTime(q.createdAt)}</span>
+                          <div className="flex flex-col leading-tight" title={[q.createdAt && `Created: ${formatDateTime(q.createdAt)}`, wasModified(q) && `Modified: ${formatDateTime(q.updatedAt)}`].filter(Boolean).join(' | ')}>
+                            <span className="text-[13px] font-[500] text-[#64748B]">{formatDate(q.createdAt) || '—'}</span>
+                            {wasModified(q) && (
+                              <span className="text-[11px] font-[500] text-[#94A3B8] mt-1">Edited {formatDate(q.updatedAt)}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-4 px-4 h-[82px] text-right">
                           <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">

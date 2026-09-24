@@ -491,7 +491,9 @@ IMPORTANT:
           difficultyLevel: importSettings.difficultyLevel === 'Auto' ? (question.difficultyLevel || 'Medium') : importSettings.difficultyLevel,
           matchColumn1: question.matchColumn1 || ['', ''],
           matchColumn2: question.matchColumn2 || ['', ''],
-          status: 'Approved' 
+          status: 'Approved',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         });
       }
       setStatus('success');

@@ -47,7 +47,7 @@ export default function MarketingPopup() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-300">
-      <div className="relative max-w-3xl w-full max-h-[90vh] overflow-y-auto rounded-[2rem] shadow-2xl bg-white flex flex-col items-center justify-center animate-in zoom-in-95 duration-500 border border-white/10">
+      <div className="relative w-fit min-w-[min(20rem,100%)] max-w-3xl max-h-[92vh] overflow-y-auto rounded-[2rem] shadow-2xl bg-white flex flex-col items-center justify-center animate-in zoom-in-95 duration-500 border border-white/10">
         
         {/* Close Button */}
         <button 
@@ -59,21 +59,22 @@ export default function MarketingPopup() {
 
         {/* Image */}
         <div className="w-full bg-slate-100 flex items-center justify-center overflow-hidden">
+          {/* Sized by the poster itself: portrait posters stay tall and narrow, landscape ones stay wide */}
           <img 
             src={popupData.imageUrl} 
             alt="Announcement" 
-            className="w-full h-auto max-h-[65vh] object-contain"
+            className="block w-auto h-auto max-w-full max-h-[calc(92vh-11rem)] object-contain"
           />
         </div>
 
         {/* Action Bar */}
-        <div className="w-full bg-white p-5 sm:p-6 flex flex-col sm:flex-row gap-4 justify-between items-center border-t border-slate-100">
-          <div className="flex flex-col text-center sm:text-left mb-2 sm:mb-0">
+        <div className="w-full bg-white p-5 sm:p-6 flex flex-wrap gap-4 justify-between items-center border-t border-slate-100">
+          <div className="flex flex-col text-center sm:text-left mx-auto sm:mx-0">
             <h3 className="text-lg font-[900] text-slate-800">Interested?</h3>
             <p className="text-sm font-medium text-slate-500">Get in touch with us to learn more.</p>
           </div>
           
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-3 w-full sm:w-auto mx-auto sm:mx-0">
             <a 
               href="tel:+918012052331"
               onClick={handleClose}
