@@ -615,13 +615,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }
   };
 
-  // Admin tool: AI imports saved with a mark other than 1 or 2 (e.g. "10 Marks", "15 Marks")
+  // Admin tool: questions saved with a mark other than 1 or 2 (e.g. "10 Marks", "15 Marks")
   // are reset to the standard 1-mark label so test templates count them correctly.
   const handleFixMarks = async () => {
     const targetMark = '1 Mark (-0.33)';
-    const bad = questions.filter(q => q.source === 'AI Generator' && ![1, 2].includes(parseFloat(q.mark)));
+    const bad = questions.filter(q => ![1, 2].includes(parseFloat(q.mark)));
     if (bad.length === 0) {
-      showToast('No AI-imported questions with a wrong mark were found.', 'success');
+      showToast('No questions with a wrong mark were found.', 'success');
       return;
     }
     const counts = {};
@@ -798,7 +798,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               {userRole === 'admin' && (
                 <button
                   onClick={handleFixMarks}
-                  title="Reset AI-imported questions with a wrong mark (e.g. 10/15 Marks) to 1 Mark (-0.33)"
+                  title="Reset questions with a wrong mark (e.g. 10/15 Marks) to 1 Mark (-0.33)"
                   className="h-[56px] px-6 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-[600] text-[15px] rounded-[16px] transition-all flex items-center justify-center gap-2"
                 >
                   <Check size={18} /> Fix Marks

@@ -175,7 +175,8 @@ export default function AIGenerator({ pairMode = false }) {
     .filter(a => a.type === 'topic' && selectedSubjectAttr && a.parentId === selectedSubjectAttr.id)
     .map(a => a.name);
   const difficultyLevels = attrNames('difficulty');
-  const markOptions = attrNames('mark');
+  // Same two labels the Question Bank editor uses, so an imported mark can always be edited there
+  const markOptions = ['1 Mark (-0.33)', '2 Mark (-0.66)'];
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -649,7 +650,7 @@ IMPORTANT:
           year: importSettings.year,
           subject: importSettings.subject,
           topic: importSettings.topic || question.topic || '',
-          mark: importSettings.mark || '1',
+          mark: importSettings.mark,
           difficultyLevel: importSettings.difficultyLevel === 'Auto' ? (question.difficultyLevel || 'Medium') : importSettings.difficultyLevel,
           fillBlankMode: question.fillBlankMode || 'Exact Match',
           fillBlankPrecision: question.fillBlankPrecision || 'None',
