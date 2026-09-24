@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit, AlertCircle } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import { GoogleGenAI } from '@google/genai';
 import katex from 'katex';
@@ -17,6 +17,16 @@ export default function AIGenerator() {
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importAsPremium, setImportAsPremium] = useState(false);
+  // Extracted questions go to this person for review before they reach the question bank
+  const [reviewerEmail, setReviewerEmail] = useState('');
+
+  useEffect(() => {
+    getDoc(doc(db, 'site_settings', 'ai_review'))
+      .then(snap => { if (snap.exists()) setReviewerEmail(snap.data().reviewerEmail || ''); })
+      .catch(err => console.error('Failed to load AI reviewer setting:', err));
+  }, []);
+
+  const isValidReviewerEmail = /^\S+@\S+\.\S+$/.test(reviewerEmail.trim());
   const [importSettings, setImportSettings] = useState({ department: '', year: '', subject: '', topic: '', mark: '', difficultyLevel: 'Auto' });
   const fileInputRef = useRef(null);
   
@@ -481,6 +491,9 @@ IMPORTANT:
     setStatus('saving');
     setErrorMsg('');
     try {
+      const reviewer = reviewerEmail.trim().toLowerCase();
+      await setDoc(doc(db, 'site_settings', 'ai_review'), { reviewerEmail: reviewer }, { merge: true });
+
       for (const question of extractedQuestions) {
         await addDoc(collection(db, 'question_bank'), { 
           ...question, 
@@ -492,7 +505,9 @@ IMPORTANT:
           difficultyLevel: importSettings.difficultyLevel === 'Auto' ? (question.difficultyLevel || 'Medium') : importSettings.difficultyLevel,
           matchColumn1: question.matchColumn1 || ['', ''],
           matchColumn2: question.matchColumn2 || ['', ''],
-          status: 'Approved',
+          status: 'In Review',
+          reviewerEmail: reviewer,
+          source: 'AI Generator',
           isPremium: importAsPremium,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -622,7 +637,7 @@ IMPORTANT:
             <CheckCircle2 size={48} />
           </div>
           <h3 className="text-2xl font-black text-slate-800 mb-2">Successfully Imported!</h3>
-          <p className="text-slate-500 font-medium">The extracted questions are now live in your Question Bank.</p>
+          <p className="text-slate-500 font-medium">The extracted questions have been sent to the reviewer. They reach the Question Bank once approved.</p>
         </div>
       )}
 
@@ -835,6 +850,18 @@ IMPORTANT:
                 </div>
               </div>
 
+              <div className="mt-5">
+                <label className="block text-sm font-bold text-slate-700 mb-1">Reviewer Email</label>
+                <input
+                  type="email"
+                  value={reviewerEmail}
+                  onChange={(e) => setReviewerEmail(e.target.value)}
+                  placeholder="reviewer@example.com"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                />
+                <p className="text-xs text-slate-500 mt-1">Extracted questions go to this person for review. Only approved questions reach the Question Bank.</p>
+              </div>
+
               <label className="mt-5 flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50/60 cursor-pointer">
                 <input
                   type="checkbox"
@@ -858,10 +885,10 @@ IMPORTANT:
               </button>
               <button 
                 onClick={confirmApprove}
-                disabled={!importSettings.department || !importSettings.year || !importSettings.subject || !importSettings.mark || !importSettings.difficultyLevel}
+                disabled={!isValidReviewerEmail || !importSettings.department || !importSettings.year || !importSettings.subject || !importSettings.mark || !importSettings.difficultyLevel}
                 className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-sm flex items-center gap-2"
               >
-                <Database size={18} /> Confirm Import
+                <Database size={18} /> Send for Review
               </button>
             </div>
           </div>

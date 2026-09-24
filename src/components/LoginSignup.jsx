@@ -3,7 +3,7 @@ import { User, Mail, Lock, TrendingUp, BookOpen, Trophy, Quote, Phone } from 'lu
 import signupImage from '../assets/signup2.png';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, sendPasswordResetEmail, setPersistence, browserSessionPersistence } from 'firebase/auth';
-import { collection, getDocs, query, where, updateDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, updateDoc, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
 export default function LoginSignup() {
@@ -80,6 +80,14 @@ export default function LoginSignup() {
         await updateDoc(doc(db, 'invited_typists', docId), { status: 'Accepted' });
         localStorage.setItem('pair_id', docId);
         localStorage.setItem('pair_role', pairRole);
+        return true;
+      }
+
+      // Reviewer set by the admin for AI-extracted questions
+      const aiSnap = await getDoc(doc(db, 'site_settings', 'ai_review'));
+      if (aiSnap.exists() && (aiSnap.data().reviewerEmail || '').toLowerCase() === (email || '').toLowerCase()) {
+        localStorage.setItem('pair_id', 'ai-review');
+        localStorage.setItem('pair_role', 'reviewer');
         return true;
       }
     } catch (e) {

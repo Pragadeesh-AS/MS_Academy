@@ -650,7 +650,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     // Default Role Filtering Logic
     let roleMatches = true;
     if (userRole === 'typist') {
-      roleMatches = q.pairId === pairId;
+      const myEmail = (sessionStorage.getItem('auth_email') || '').toLowerCase();
+      roleMatches = q.pairId === pairId || (!!q.reviewerEmail && q.reviewerEmail.toLowerCase() === myEmail);
     }
 
     // Premium View Filtering

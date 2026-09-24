@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BookOpen, FileEdit, ClipboardCheck, LogOut, ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import QuestionBank from './admin/QuestionBank';
 
 export default function TypistDashboard() {
@@ -31,6 +31,11 @@ export default function TypistDashboard() {
             querySnapshot = await getDocs(q);
           }
           isStillTypist = !querySnapshot.empty;
+
+          if (!isStillTypist) {
+            const aiSnap = await getDoc(doc(db, 'site_settings', 'ai_review'));
+            isStillTypist = aiSnap.exists() && (aiSnap.data().reviewerEmail || '').toLowerCase() === email.toLowerCase();
+          }
         }
       } catch (e) {
         console.error("Failed to verify typist role from Firestore", e);
