@@ -6,6 +6,10 @@ import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, Chevr
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
 
+// Leading number of the mark label ("1 Mark (-0.33)" -> 1). A plain substring match would
+// also treat "10 Marks" / "15 Marks" / "12" as 1-mark questions.
+const markValue = (q) => parseFloat(q.mark) || 0;
+
 export default function TestsManager({ department = '', isTeacher = false }) {
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -148,8 +152,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
       (q.topic || '').trim().toLowerCase() === (topicName || '').trim().toLowerCase()
     );
-    const q1 = pool.filter(q => (q.mark || '').toLowerCase().includes('1')).length;
-    const q2 = pool.filter(q => (q.mark || '').toLowerCase().includes('2')).length;
+    const q1 = pool.filter(q => markValue(q) === 1).length;
+    const q2 = pool.filter(q => markValue(q) === 2).length;
     return { q1, q2 };
   };
 
@@ -166,8 +170,8 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   });
 
   // Calculate available marks question count in database (flexible mark matching)
-  const available1MarkQ = availablePool.filter(q => (q.mark || '').toLowerCase().includes('1'));
-  const available2MarkQ = availablePool.filter(q => (q.mark || '').toLowerCase().includes('2'));
+  const available1MarkQ = availablePool.filter(q => markValue(q) === 1);
+  const available2MarkQ = availablePool.filter(q => markValue(q) === 2);
 
   // Calculate allocation totals
   const sum1Mark = selectedTopics.reduce((acc, t) => acc + (allocations[t]?.q1 || 0), 0);
@@ -296,7 +300,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
 
       // Pick 1-mark questions randomly
       const pool1MarkIds = topicPool
-        .filter(q => (q.mark || '').toLowerCase().includes('1'))
+        .filter(q => markValue(q) === 1)
         .map(q => q.id);
       const pick1MarkCount = Math.min(alloc.q1, pool1MarkIds.length);
       const shuffled1Mark = [...pool1MarkIds].sort(() => 0.5 - Math.random());
@@ -304,7 +308,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
 
       // Pick 2-mark questions randomly
       const pool2MarkIds = topicPool
-        .filter(q => (q.mark || '').toLowerCase().includes('2'))
+        .filter(q => markValue(q) === 2)
         .map(q => q.id);
       const pick2MarkCount = Math.min(alloc.q2, pool2MarkIds.length);
       const shuffled2Mark = [...pool2MarkIds].sort(() => 0.5 - Math.random());
