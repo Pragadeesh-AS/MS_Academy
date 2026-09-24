@@ -628,7 +628,7 @@ export default function Dashboard() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-[900] text-slate-900 tracking-tight flex items-center gap-3">
               Welcome back, {studentName.split(' ')[0]} 👋
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[12px] font-[900] uppercase tracking-widest shadow-sm cursor-default ${isPro ? 'pro-badge border-[#F2C94C] text-[#B8860B]' : bundleCount > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+              <span className={isPro ? 'elite-badge cursor-default' : `inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[12px] font-[900] uppercase tracking-widest shadow-sm cursor-default ${bundleCount > 0 ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
                 {tier.label} <span className="text-[14px] leading-none">{tier.icon}</span>
                 {tier.tier === 'prime' && <span className="normal-case tracking-normal font-[800] opacity-80">&middot; {bundleCount} {bundleCount === 1 ? 'bundle' : 'bundles'}</span>}
               </span>
