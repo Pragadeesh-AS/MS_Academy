@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Clock, User, ChevronRight, ChevronLeft, Info, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Clock, User, ChevronRight, ChevronLeft, Info, HelpCircle, AlertTriangle, Calculator } from 'lucide-react';
+import Draggable from 'react-draggable';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -20,6 +21,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
   const [flagged, setFlagged] = useState([]);
   const [visited, setVisited] = useState([]);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  const [showCalculator, setShowCalculator] = useState(false);
 
   const timerRef = useRef(null);
   const fsWarningsRef = useRef(0);
@@ -536,7 +538,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
         <div className="bg-[#444444] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 px-4 py-1.5 text-sm border-b border-gray-500">
           <div className="font-bold truncate max-w-full sm:max-w-xl">{test.title}</div>
           <div className="flex flex-wrap gap-2">
-            <button className="flex items-center gap-1 bg-[#1589C9] px-2 py-0.5 rounded-sm text-xs sm:text-sm"><Info size={14}/> Instructions</button>
+            <button onClick={() => setShowCalculator(!showCalculator)} className="flex items-center gap-1 bg-[#1589C9] hover:bg-[#1277b0] px-2 py-0.5 rounded-sm text-xs sm:text-sm transition-colors"><Calculator size={14}/> Calculator</button>`n              <button className="flex items-center gap-1 bg-[#1589C9] px-2 py-0.5 rounded-sm text-xs sm:text-sm"><Info size={14}/> Instructions</button>
             <button className="flex items-center gap-1 bg-[#1589C9] px-2 py-0.5 rounded-sm text-xs sm:text-sm">Question Paper</button>
           </div>
         </div>
@@ -839,6 +841,23 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
       {mode === 'instructions2' && Instructions2()}
       {mode === 'taking' && TakingScreen()}
 
+      {/* Draggable Calculator */}
+      {showCalculator && mode === 'taking' && (
+        <Draggable handle=".calculator-handle" bounds="parent">
+          <div className="fixed top-16 right-16 z-[100] shadow-2xl bg-white rounded-md overflow-hidden border border-gray-400 w-[550px] h-[550px] flex flex-col">
+            <div className="calculator-handle bg-[#2D66B3] text-white px-3 py-2 font-bold text-sm flex justify-between items-center cursor-move">
+              <span>Scientific Calculator</span>
+              <button onClick={() => setShowCalculator(false)} className="text-white hover:text-red-300 font-bold px-1 text-lg leading-none">&times;</button>
+            </div>
+            <iframe 
+              src="https://tcsion.com/OnlineAssessment/ScientificCalculator/Calculator.html" 
+              className="w-full flex-1 border-none"
+              title="Scientific Calculator"
+            />
+          </div>
+        </Draggable>
+      )}
+
       {/* Fullscreen Warning Modal */}
       {showFsWarning && mode === 'taking' && (
         <div className="fixed inset-0 z-[99999] bg-black/80 flex items-center justify-center font-sans p-4">
@@ -873,3 +892,5 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
     document.body
   );
 }
+
+
