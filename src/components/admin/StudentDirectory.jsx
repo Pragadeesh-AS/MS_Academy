@@ -142,7 +142,7 @@ const StudentDirectory = ({
       return {
         ...student,
         department: student.department || ['Computer Science', 'Mechanical Engineering', 'Electronics', 'Civil Engineering'][seed % 4],
-        year: student.yearOfStudy || ['1st Year', '2nd Year', '3rd Year', '4th Year'][seed % 4],
+        college: student.collegeName || '',
         lastLogin: student.lastLogin || null,
         status: student.status || ['Active', 'Pending', 'Inactive'][seed % 3]
       };
@@ -160,9 +160,7 @@ const StudentDirectory = ({
     const filterDeptLow = filterDepartment.toLowerCase();
     const matchesDept = filterDepartment ? deptLow === filterDeptLow || deptLow.includes(filterDeptLow) || filterDeptLow.includes(deptLow) : true;
     
-    const yearLow = (student.year || '').toLowerCase();
-    const filterYearLow = filterYear.toLowerCase();
-    const matchesYear = filterYear ? yearLow === filterYearLow || yearLow.includes(filterYearLow) : true;
+    const matchesYear = filterYear ? (student.college || '') === filterYear : true;
     
     const statusLow = (student.status || '').toLowerCase();
     const filterStatusLow = filterStatus.toLowerCase();
@@ -344,9 +342,9 @@ const StudentDirectory = ({
                 onChange={e => { setFilterYear(e.target.value); setCurrentPage(1); }}
                 className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
               >
-                <option value="">All Years</option>
-                {Array.from(new Set(enhancedStudents.map(s => s.year).filter(Boolean))).sort().map(year => (
-                  <option key={year} value={year}>{year}</option>
+                <option value="">All Colleges</option>
+                {Array.from(new Set(enhancedStudents.map(s => s.college).filter(Boolean))).sort().map(college => (
+                  <option key={college} value={college}>{college}</option>
                 ))}
               </select>
 
@@ -383,14 +381,14 @@ const StudentDirectory = ({
               <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
-                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Student</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Department</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Year</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Tier</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Status</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Joined Date</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900">Last Login</th>
-                    <th className="py-5 px-4 text-[14px] font-medium text-slate-900 text-center w-[160px]">Actions</th>
+                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Student</th>
+                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Department</th>
+                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">College</th>
+                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Tier</th>
+                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Status</th>
+                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Joined Date</th>
+                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Last Login</th>
+                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220] text-center w-[160px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]/60">
@@ -427,7 +425,7 @@ const StudentDirectory = ({
                           <span className="text-[14px] text-[#475569] font-medium">{student.department}</span>
                         </td>
                         <td className="px-4">
-                          <span className="text-[14px] text-[#475569] font-medium">{student.year}</span>
+                          <span className="text-[14px] text-[#475569] font-medium block max-w-[240px] truncate" title={student.college}>{student.college || '—'}</span>
                         </td>
                         <td className="px-4">
                           <span className={`inline-flex items-center whitespace-nowrap px-3 py-1 rounded-full text-[12px] font-bold tracking-wide ${
@@ -573,10 +571,6 @@ const StudentDirectory = ({
                 <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
                   <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Department</span>
                   <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.department}</p>
-                </div>
-                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
-                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Year</span>
-                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.year}</p>
                 </div>
                 {[
                   { label: 'College', value: selectedStudent.collegeName },

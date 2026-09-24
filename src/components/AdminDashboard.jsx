@@ -1536,12 +1536,12 @@ export default function AdminDashboard() {
                   <table className="w-full text-left border-collapse whitespace-nowrap">
                     <thead>
                       <tr className="bg-slate-50/50 border-b border-slate-200">
-                        <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider">Candidate</th>
-                        <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider">Applied For</th>
-                        <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider">Experience</th>
-                        <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider">Date</th>
-                        <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider">Status</th>
-                        <th className="py-4 px-4 text-xs font-semibold text-slate-900 uppercase tracking-wider text-right">Actions</th>
+                        <th className="py-4 px-4 text-xs font-bold text-[#0B1220] uppercase tracking-wider">Candidate</th>
+                        <th className="py-4 px-4 text-xs font-bold text-[#0B1220] uppercase tracking-wider">Applied For</th>
+                        <th className="py-4 px-4 text-xs font-bold text-[#0B1220] uppercase tracking-wider">Experience</th>
+                        <th className="py-4 px-4 text-xs font-bold text-[#0B1220] uppercase tracking-wider">Date</th>
+                        <th className="py-4 px-4 text-xs font-bold text-[#0B1220] uppercase tracking-wider">Status</th>
+                        <th className="py-4 px-4 text-xs font-bold text-[#0B1220] uppercase tracking-wider text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
