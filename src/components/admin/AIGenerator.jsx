@@ -20,17 +20,30 @@ const decimalsOf = (numStr) => {
 };
 
 const stripTags = (html) => String(html || '')
+  // KaTeX keeps a hidden MathML copy of every formula, which would double every number
+  .replace(/<span class="katex-mathml">[\s\S]*?<\/span>/g, ' ')
   .replace(/<br\s*\/?>/gi, '\n')
   .replace(/<[^>]+>/g, ' ')
   .replace(/&nbsp;/g, ' ')
   .replace(/\u2212|\u2013|\u2014/g, '-');
 
+// Cleans LaTeX / symbols so "0.24 \text{ to } 0.26", "0.24 → 0.26" or "0.24 ~ 0.26" read like plain ranges
+const normalizeNumericText = (raw) => stripTags(raw)
+  .replace(/\\(?:text|mathrm|textbf|mathbf)\s*\{([^}]*)\}/g, ' $1 ')
+  .replace(/\\(?:to|rightarrow)(?![a-zA-Z])/g, ' to ')
+  .replace(/\\[,;:! ]/g, ' ')
+  .replace(/[{}$]/g, ' ')
+  .replace(/(\d),(?=\d{3}(?!\d))/g, '$1')
+  .replace(/\u2192|->|~/g, ' to ');
+
+const allNumbers = (raw) => (normalizeNumericText(raw).match(new RegExp(NUM_RE, 'g')) || []);
+
 // Reads one piece of text and returns { mode, answer, start, end } if it holds a number or a range
 const readNumeric = (raw) => {
-  const text = stripTags(raw).replace(/(\d),(?=\d{3}\b)/g, '$1').replace(/\$/g, '');
+  const text = normalizeNumericText(raw);
 
   // 2.5 ± 0.1  /  2.5 +/- 0.1
-  const pm = text.match(new RegExp(`(${NUM_RE})\\s*(?:\u00b1|\\+\\s*/\\s*-|\\+-)\\s*(\\d+(?:\\.\\d+)?)`));
+  const pm = text.match(new RegExp(`(${NUM_RE})\\s*[A-Za-z%\u00b0\u00b5\u03a9/\u00b2\u00b3]{0,8}\\s*(?:\u00b1|\\+\\s*/\\s*-|\\+-)\\s*(\\d+(?:\\.\\d+)?)`));
   if (pm) {
     const v = parseFloat(pm[1]);
     const d = parseFloat(pm[2]);
@@ -38,8 +51,8 @@ const readNumeric = (raw) => {
     return { mode: 'Numeric Range', start: (v - d).toFixed(dec), end: (v + d).toFixed(dec), dec };
   }
 
-  // 2.4 to 2.6  /  2.4 - 2.6  /  between 2.4 and 2.6
-  const range = text.match(new RegExp(`(${NUM_RE})\\s*(?:to|and|-)\\s*(${NUM_RE})`, 'i'));
+  // 2.4 to 2.6  /  2.4 - 2.6  /  2.4 m to 2.6 m  /  between 2.4 and 2.6
+  const range = text.match(new RegExp(`(${NUM_RE})[A-Za-z%\u00b0\u00b5\u03a9/\u00b2\u00b3\\s]{0,14}?\\s*(?:\\bto\\b|\\band\\b|-)\\s*(${NUM_RE})`, 'i'));
   if (range) {
     const a = parseFloat(range[1]);
     const b = parseFloat(range[2]);
@@ -79,10 +92,23 @@ const applyNatFields = (q) => {
   const fromAnswerLines = answerLines.map(readNumeric).filter(Boolean);
   const fromRangeLines = rangeLines.map(readNumeric).filter(r => r && r.mode === 'Numeric Range');
 
+  // The AI flagged a range but its bounds did not read cleanly: take the first two numbers it gave
+  const flaggedRange = (() => {
+    if (q.fillBlankMode !== 'Numeric Range') return null;
+    const nums = [q.fillBlankRangeStart, q.fillBlankRangeEnd, q.fillBlankAnswer, ...answerLines, ...rangeLines]
+      .filter(v => v !== undefined && v !== null && String(v).trim() !== '')
+      .flatMap(allNumbers);
+    if (nums.length < 2) return null;
+    const [a, b] = [nums[0], nums[1]];
+    const [lo, hi] = parseFloat(a) <= parseFloat(b) ? [a, b] : [b, a];
+    return { mode: 'Numeric Range', start: lo, end: hi, dec: Math.max(decimalsOf(a), decimalsOf(b)) };
+  })();
+
   const range = explicitRange
     || (fromAnswerField && fromAnswerField.mode === 'Numeric Range' ? fromAnswerField : null)
     || fromAnswerLines.find(r => r.mode === 'Numeric Range')
-    || fromRangeLines[0];
+    || fromRangeLines[0]
+    || flaggedRange;
   const exact = (fromAnswerField && fromAnswerField.mode === 'Exact Match' ? fromAnswerField : null)
     || fromAnswerLines.find(r => r.mode === 'Exact Match');
   const pick = range || exact;
