@@ -4,13 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Building2, School, Calendar, HelpCircle, ArrowLeft, GraduationCap, 
   Edit2, ShieldCheck, Link, Lock, Camera, Check, MapPin, BookOpen, Trophy, Flame, 
-  Star, Briefcase, FileText, Download, Smartphone, Share2, Settings, 
+  Star, Search, Briefcase, FileText, Download, Smartphone, Share2, Settings, 
   CheckCircle2, AlertCircle, ExternalLink, Code, Zap
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { updatePassword } from 'firebase/auth';
 import { motion } from 'framer-motion';
+import { SKILLS } from './skillsList';
 
 const SKILL_STYLES = [
   "text-blue-600 bg-blue-50",
@@ -33,6 +34,30 @@ const DEPARTMENT_OPTIONS = [
 const YEAR_OPTIONS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Graduated / Working"];
 
 const inputClass = "w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-100 transition-all bg-slate-50 hover:bg-white focus:bg-white";
+
+const AVATAR_SIZE = 256;
+const MAX_UPLOAD_MB = 5;
+
+const fileToAvatarDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onerror = () => reject(new Error('Could not read the selected file.'));
+  reader.onload = () => {
+    const img = new Image();
+    img.onerror = () => reject(new Error('That file is not a valid image.'));
+    img.onload = () => {
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) / 2;
+      const sy = (img.height - side) / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = AVATAR_SIZE;
+      canvas.height = AVATAR_SIZE;
+      canvas.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+});
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -70,7 +95,8 @@ export default function StudentProfile() {
     portfolioUrl: '',
     resumeUrl: ''
   });
-  const [skillInput, setSkillInput] = useState('');
+  const [skillSearch, setSkillSearch] = useState('');
+  const [skillMenuOpen, setSkillMenuOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -122,14 +148,42 @@ export default function StudentProfile() {
     fetchProfile();
   }, [navigate]);
 
-  const addSkill = () => {
-    const skill = skillInput.trim().replace(/,$/, '');
-    if (!skill) return;
-    if (!editFormData.skills.some(sk => sk.toLowerCase() === skill.toLowerCase())) {
+  const handleAvatarFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setErrorMsg('');
+    if (!file.type.startsWith('image/')) {
+      setErrorMsg('Please choose an image file (JPG, PNG, WebP...).');
+      return;
+    }
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      setErrorMsg(`Image is too large. Please choose one under ${MAX_UPLOAD_MB} MB.`);
+      return;
+    }
+    try {
+      const dataUrl = await fileToAvatarDataUrl(file);
+      setEditFormData(prev => ({ ...prev, avatarUrl: dataUrl }));
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
+  const addSkill = (skill) => {
+    if (!editFormData.skills.includes(skill)) {
       setEditFormData({ ...editFormData, skills: [...editFormData.skills, skill] });
     }
-    setSkillInput('');
+    setSkillSearch('');
   };
+
+  const skillMatches = SKILLS
+    .filter(sk => !editFormData.skills.includes(sk) && sk.toLowerCase().includes(skillSearch.trim().toLowerCase()))
+    .sort((x, y) => {
+      // Names that start with the search text come first
+      const q = skillSearch.trim().toLowerCase();
+      return Number(y.toLowerCase().startsWith(q)) - Number(x.toLowerCase().startsWith(q));
+    })
+    .slice(0, 50);
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
@@ -147,10 +201,7 @@ export default function StudentProfile() {
       }
 
       if (docId) {
-        const pendingSkill = skillInput.trim();
-        const skills = pendingSkill && !editFormData.skills.includes(pendingSkill)
-          ? [...editFormData.skills, pendingSkill]
-          : editFormData.skills;
+        const skills = editFormData.skills;
 
         const updates = {
           avatarUrl: editFormData.avatarUrl,
@@ -171,8 +222,6 @@ export default function StudentProfile() {
         await updateDoc(doc(db, 'joined_students', docId), updates);
         setProfileData({ ...profileData, ...updates });
         setEditFormData(prev => ({ ...prev, skills }));
-        setSkillInput('');
-
         if (updates.department) localStorage.setItem('student_department', updates.department);
       }
 
@@ -233,16 +282,34 @@ export default function StudentProfile() {
               {successMsg && <div className="p-3 bg-green-50 text-green-700 rounded-xl text-sm font-medium">{successMsg}</div>}
 
               <div>
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                  <Link size={16} className="text-slate-400" /> Profile Image URL
+                <label className="block text-[13px] font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                  <Camera size={16} className="text-slate-400" /> Profile Photo
                 </label>
-                <input 
-                  type="url" 
-                  value={editFormData.avatarUrl}
-                  onChange={(e) => setEditFormData({...editFormData, avatarUrl: e.target.value})}
-                  placeholder="https://example.com/my-photo.jpg"
-                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-100 transition-all bg-slate-50 hover:bg-white focus:bg-white"
-                />
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center text-[#2563EB] text-3xl font-[900] shrink-0">
+                    {editFormData.avatarUrl ? (
+                      <img src={editFormData.avatarUrl} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      profileData.name.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="cursor-pointer px-4 py-2 bg-blue-50 hover:bg-blue-100 text-[#2563EB] font-bold text-sm rounded-xl transition-colors inline-flex items-center gap-2 w-fit">
+                      <Camera size={15} /> {editFormData.avatarUrl ? 'Change Photo' : 'Upload Photo'}
+                      <input type="file" accept="image/*" onChange={handleAvatarFile} className="hidden" />
+                    </label>
+                    {editFormData.avatarUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setEditFormData({ ...editFormData, avatarUrl: '' })}
+                        className="text-xs font-bold text-red-500 hover:text-red-600 text-left w-fit"
+                      >
+                        Remove photo
+                      </button>
+                    )}
+                    <span className="text-[11px] text-slate-400 font-medium">JPG, PNG or WebP, up to {MAX_UPLOAD_MB} MB</span>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -353,21 +420,42 @@ export default function StudentProfile() {
                     ))}
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={skillInput}
-                    onChange={(e) => setSkillInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ',') {
-                        e.preventDefault();
-                        addSkill();
-                      }
-                    }}
-                    placeholder="Type a skill and press Enter"
-                    className={inputClass}
-                  />
-                  <button type="button" onClick={addSkill} className="px-4 shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all">Add</button>
+                <div className="relative">
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={skillSearch}
+                      onChange={(e) => { setSkillSearch(e.target.value); setSkillMenuOpen(true); }}
+                      onFocus={() => setSkillMenuOpen(true)}
+                      onBlur={() => setTimeout(() => setSkillMenuOpen(false), 150)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (skillMatches.length > 0) addSkill(skillMatches[0]);
+                        }
+                      }}
+                      placeholder="Search and select skills..."
+                      className={`${inputClass} pl-10`}
+                    />
+                  </div>
+                  {skillMenuOpen && (
+                    <div className="absolute z-20 left-0 right-0 mt-1.5 max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl py-1">
+                      {skillMatches.length === 0 ? (
+                        <div className="px-4 py-3 text-sm text-slate-400 font-medium">No matching skills found</div>
+                      ) : skillMatches.map(sk => (
+                        <button
+                          key={sk}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => addSkill(sk)}
+                          className="w-full text-left px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                        >
+                          {sk}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
