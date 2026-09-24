@@ -416,17 +416,13 @@ const StudentDirectory = ({
                         <td className="px-4">
                           <div className="flex items-center gap-4">
                             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600 font-bold flex items-center justify-center shrink-0 border border-blue-100 group-hover:scale-105 transition-transform">
-                              {student.name.charAt(0).toUpperCase()}
+                              <span className="text-[20px] leading-none">{getTier(student).icon}</span>
                             </div>
                             <div className="flex flex-col">
                               <span className="font-semibold text-[16px] text-[#0F172A] tracking-tight">{student.name}</span>
-                              <span className={`inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[11px] w-fit mt-1 font-bold tracking-wide ${
-                            student.isPro || (student.purchasedBundles && student.purchasedBundles.length > 0)
-                              ? 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200 shadow-sm' 
-                              : 'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}>
-                            {(student.isPro || (student.purchasedBundles && student.purchasedBundles.length > 0)) ? (student.purchasedBundles && student.purchasedBundles.length > 0 ? `✨ PRO (${student.purchasedBundles.length} Bundles)` : '✨ PRO') : 'Normal'}
-                          </span>
+                              <span className={`inline-flex items-center whitespace-nowrap px-2.5 py-0.5 rounded-full text-[11px] w-fit mt-1 font-bold tracking-wide ${TIER_STYLES[getTier(student).key]}`}>
+                                {getTier(student).icon} {getTier(student).text}
+                              </span>
 
                             </div>
                           </div>
@@ -560,7 +556,7 @@ const StudentDirectory = ({
             <div className="p-5 sm:p-8 space-y-6 overflow-y-auto">
               <div className="flex items-center gap-5">
                 <div className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-[#2563EB] border border-blue-100 font-bold text-[28px] flex items-center justify-center shrink-0 shadow-sm">
-                  {selectedStudent.name.charAt(0).toUpperCase()}
+                  {getTier(selectedStudent).icon}
                 </div>
                 <div className="min-w-0">
                   <h4 className="text-[22px] font-bold text-[#0F172A] leading-tight truncate">{selectedStudent.name}</h4>
@@ -856,6 +852,19 @@ const StudentDirectory = ({
       )}
     </div>
   );
+};
+
+// Membership tier: Prime = has purchased bundles, Elite = Pro without bundles, Foundation = everyone else
+const getTier = (st) => {
+  const count = (st.purchasedBundles || []).length;
+  if (count > 0) return { key: 'prime', label: 'Prime', icon: '⭐', text: `Prime · ${count} ${count === 1 ? 'Bundle' : 'Bundles'}` };
+  if (st.isPro) return { key: 'elite', label: 'Elite', icon: '👑', text: 'Elite' };
+  return { key: 'foundation', label: 'Foundation', icon: '🌱', text: 'Foundation' };
+};
+const TIER_STYLES = {
+  elite: 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200 shadow-sm',
+  prime: 'bg-gradient-to-r from-indigo-100 to-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm',
+  foundation: 'bg-emerald-50 text-emerald-700 border border-emerald-200'
 };
 
 export default StudentDirectory;
