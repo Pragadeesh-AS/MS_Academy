@@ -10,6 +10,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const [tests, setTests] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [testsTab, setTestsTab] = useState('pending'); // 'pending' | 'completed'
 
   // Active Test States
   const [activeTest, setActiveTest] = useState(null);
@@ -477,6 +478,11 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     return studentPurchasedDeptBundles.length > 0;
   };
 
+  const isTestCompleted = (test) => attempts.some(a => a.testId === test.id);
+  const pendingTests = tests.filter(t => !isTestCompleted(t));
+  const completedTests = tests.filter(isTestCompleted);
+  const visibleTests = testsTab === 'completed' ? completedTests : pendingTests;
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -506,8 +512,38 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           <p className="text-slate-500 max-w-md font-medium">There are currently no active practice test modules scheduled for your department ({department}).</p>
         </div>
       ) : (
+        <>
+        <div className="flex gap-2 border-b border-slate-200">
+          {[
+            { key: 'pending', label: 'Not Completed', count: pendingTests.length, active: 'border-blue-600 text-blue-600', badge: 'bg-blue-100 text-blue-700' },
+            { key: 'completed', label: 'Completed', count: completedTests.length, active: 'border-emerald-500 text-emerald-600', badge: 'bg-emerald-100 text-emerald-700' }
+          ].map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTestsTab(t.key)}
+              className={`px-5 py-3 -mb-px border-b-2 font-bold text-sm flex items-center gap-2 transition-colors ${testsTab === t.key ? t.active : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+              {t.label}
+              <span className={`px-2 py-0.5 rounded-full text-xs font-black ${testsTab === t.key ? t.badge : 'bg-slate-100 text-slate-500'}`}>{t.count}</span>
+            </button>
+          ))}
+        </div>
+
+        {visibleTests.length === 0 ? (
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm text-center p-16 flex flex-col items-center justify-center">
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-6">
+              <Award size={32} />
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">
+              {testsTab === 'completed' ? 'No Completed Tests Yet' : 'All Caught Up!'}
+            </h3>
+            <p className="text-slate-500 max-w-md font-medium">
+              {testsTab === 'completed' ? 'Tests you finish will show up here so you can review your results.' : 'You have completed every available practice test.'}
+            </p>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {tests.map((test) => {
+          {visibleTests.map((test) => {
             const userAttempt = attempts.find(a => a.testId === test.id);
             const isCompleted = !!userAttempt;
 
@@ -604,6 +640,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
             );
           })}
         </div>
+        )}
+        </>
       )}
 
       {/* Custom Confirmation Modal */}

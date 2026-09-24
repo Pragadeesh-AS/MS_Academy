@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -295,6 +295,14 @@ export default function Dashboard() {
     checkOnboarding();
   }, [navigate]);
 
+  const handleLogout = () => {
+    sessionStorage.removeItem('auth_role');
+    sessionStorage.removeItem('auth_email');
+    sessionStorage.removeItem('auth_name');
+    window.dispatchEvent(new Event('storage'));
+    navigate('/');
+  };
+
   const handleOnboardingSubmit = async (e) => {
     e.preventDefault();
     if (!docId) return;
@@ -517,6 +525,15 @@ export default function Dashboard() {
                 <span>{isPro ? 'Pro Benefits' : 'Upgrade to Pro'}</span>
               </button>
             </nav>
+            <div className="p-4 border-t border-slate-100">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-red-500 hover:bg-red-50 transition-all"
+              >
+                <LogOut size={18} />
+                <span>Log Out</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -585,6 +602,17 @@ export default function Dashboard() {
             </div>
           )}
         </nav>
+
+        <div className="p-4 border-t border-slate-100">
+          <button
+            onClick={handleLogout}
+            title="Log Out"
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold text-red-500 hover:bg-red-50 transition-all`}
+          >
+            <LogOut size={18} />
+            {!isCollapsed && <span>Log Out</span>}
+          </button>
+        </div>
       </aside>
 
       {/* Main Content */}
