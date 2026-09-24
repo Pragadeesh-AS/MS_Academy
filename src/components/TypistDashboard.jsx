@@ -166,7 +166,7 @@ export default function TypistDashboard() {
       )}
 
       {/* Sidebar */}
-      <aside className={`transition-all duration-300 flex-shrink-0 relative z-20 ${isCollapsed ? 'w-[88px]' : 'w-64'} bg-white border-r border-slate-200 flex flex-col hidden md:flex`}>
+      <aside className={`transition-all duration-300 flex-shrink-0 sticky top-0 h-screen z-20 ${isCollapsed ? 'w-[88px]' : 'w-64'} bg-white border-r border-slate-200 flex flex-col hidden md:flex`}>
         {/* Collapse Button */}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
@@ -187,7 +187,7 @@ export default function TypistDashboard() {
           )}
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-2">
+        <nav className="flex-1 min-h-0 px-4 py-4 space-y-2 overflow-y-auto">
           {renderNavButtons(false)}
         </nav>
 

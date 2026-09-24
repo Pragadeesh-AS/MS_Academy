@@ -575,6 +575,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       status: q.status || 'Approved',
       typedBy: q.typedBy || '',
       reviewedBy: q.reviewedBy || '',
+      isPremium: q.isPremium === true,
       createdAt: q.createdAt || ''
     });
     setCurrentId(q.id);
