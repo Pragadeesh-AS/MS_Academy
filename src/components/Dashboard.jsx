@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut, Folder, Package } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -10,7 +10,7 @@ import StudentLiveClasses from './StudentLiveClasses';
 import StudentTests from './StudentTests';
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
-import { buyBundle, verifyOrder } from '../cashfree';
+import { buyBundle, buySubject, buyNoteBundle, verifyOrder } from '../cashfree';
 
 const sidebarNavItems = [
   { key: 'learning', label: 'My Learning', icon: BookOpen },
@@ -57,6 +57,13 @@ export default function Dashboard() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [docId, setDocId] = useState(null);
   const [payingBundleId, setPayingBundleId] = useState(null);
+  const [purchasedSubjects, setPurchasedSubjects] = useState([]);
+  const [noteFolders, setNoteFolders] = useState([]);
+  const [noteStack, setNoteStack] = useState([]);
+  const [payingSubjectId, setPayingSubjectId] = useState(null);
+  const [purchasedNoteBundles, setPurchasedNoteBundles] = useState([]);
+  const [noteBundles, setNoteBundles] = useState([]);
+  const [payingNoteBundleId, setPayingNoteBundleId] = useState(null);
   
   const [formData, setFormData] = useState({
     department: '',
@@ -102,8 +109,25 @@ export default function Dashboard() {
     return false;
   };
 
+  // Top-level (subject) folder a note belongs to
+  const subjectIdOf = (note) => {
+    if (note.subjectId) return note.subjectId;
+    let folder = noteFolders.find(f => f.id === note.folderId);
+    while (folder && folder.parentId) folder = noteFolders.find(f => f.id === folder.parentId);
+    return folder ? folder.id : '';
+  };
+
+  // A notes bundle the student owns covers all subjects of the department, or only the ones it lists
+  const coveredByNoteBundle = (subjectId) => noteBundles.some(b =>
+    purchasedNoteBundles.includes(b.id) && (b.includeAll || (b.subjectIds || []).includes(subjectId))
+  );
+
   const canAccessNote = (note) => {
     if (isPro) return true;
+
+    // SUBJECT / NOTES BUNDLE (bought or assigned by admin): unlocks every note inside the subject
+    const subjectId = subjectIdOf(note);
+    if (subjectId && (purchasedSubjects.includes(subjectId) || coveredByNoteBundle(subjectId))) return true;
     
     // EXCLUSIVE BUNDLE: If a note is assigned to a specific bundle, 
     // it can ONLY be unlocked by purchasing that specific bundle.
@@ -166,6 +190,25 @@ export default function Dashboard() {
       fetchedNotes.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
       setNotes(fetchedNotes);
     });
+    return () => unsubscribe();
+  }, [studentDepartment]);
+
+  // Only the student's own department's subject folders are ever loaded
+  useEffect(() => {
+    if (!studentDepartment) return;
+    const q = query(collection(db, 'note_folders'), where('department', '==', studentDepartment));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setNoteFolders(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error('Failed to load note folders', err));
+    return () => unsubscribe();
+  }, [studentDepartment]);
+
+  useEffect(() => {
+    if (!studentDepartment) return;
+    const q = query(collection(db, 'note_bundles'), where('department', '==', studentDepartment));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setNoteBundles(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error('Failed to load notes bundles', err));
     return () => unsubscribe();
   }, [studentDepartment]);
 
@@ -291,6 +334,12 @@ export default function Dashboard() {
             if (data.purchasedBundles) {
               setPurchasedBundles(data.purchasedBundles);
             }
+            if (data.purchasedSubjects) {
+              setPurchasedSubjects(data.purchasedSubjects);
+            }
+            if (data.purchasedNoteBundles) {
+              setPurchasedNoteBundles(data.purchasedNoteBundles);
+            }
             
             // Check if all onboarding fields exist
             if (!data.department || !data.collegeName || !data.yearOfStudy || !data.referralSource) {
@@ -361,6 +410,115 @@ export default function Dashboard() {
     }
   };
 
+  const handleBuySubject = async (subjectId) => {
+    if (!docId || !subjectId || payingSubjectId) return;
+
+    setPayingSubjectId(subjectId);
+    try {
+      const { status, message } = await buySubject(subjectId);
+      if (status === 'PAID') {
+        setPurchasedSubjects(prev => (prev.includes(subjectId) ? prev : [...prev, subjectId]));
+        alert('Payment successful! The subject is now unlocked. 🎉');
+      } else if (status === 'PENDING') {
+        alert('Your payment is still being processed. The subject will unlock automatically once it is confirmed.');
+      } else if (status === 'FAILED') {
+        alert('Payment failed. You have not been charged. Please try again.');
+      } else if (message) {
+        console.warn('Checkout closed:', message);
+      }
+    } catch (e) {
+      console.error('Payment error', e);
+      alert(e.message || 'Could not start the payment. Please try again.');
+    } finally {
+      setPayingSubjectId(null);
+    }
+  };
+
+  const handleBuyNoteBundle = async (bundleId) => {
+    if (!docId || !bundleId || payingNoteBundleId) return;
+
+    setPayingNoteBundleId(bundleId);
+    try {
+      const { status, message } = await buyNoteBundle(bundleId);
+      if (status === 'PAID') {
+        setPurchasedNoteBundles(prev => (prev.includes(bundleId) ? prev : [...prev, bundleId]));
+        alert('Payment successful! Your notes bundle is now unlocked. 🎉');
+      } else if (status === 'PENDING') {
+        alert('Your payment is still being processed. The bundle will unlock automatically once it is confirmed.');
+      } else if (status === 'FAILED') {
+        alert('Payment failed. You have not been charged. Please try again.');
+      } else if (message) {
+        console.warn('Checkout closed:', message);
+      }
+    } catch (e) {
+      console.error('Payment error', e);
+      alert(e.message || 'Could not start the payment. Please try again.');
+    } finally {
+      setPayingNoteBundleId(null);
+    }
+  };
+
+  // ---- Study notes folder helpers ----
+  const noteIdsUnder = (folderId) => {
+    const ids = [folderId];
+    noteFolders.filter(f => f.parentId === folderId).forEach(f => ids.push(...noteIdsUnder(f.id)));
+    return ids;
+  };
+  const notesUnder = (folderId) => {
+    const ids = new Set(noteIdsUnder(folderId));
+    return notes.filter(n => n.folderId && ids.has(n.folderId));
+  };
+  const folderPrice = (f) => Number(String(f.discountedPrice || f.price || '').replace(/[^\d.]/g, '')) || 0;
+
+  // 'owned' (bought/assigned) | 'included' (via Elite or a bundle) | 'locked'
+  const subjectAccess = (subject) => {
+    if (purchasedSubjects.includes(subject.id) || coveredByNoteBundle(subject.id)) return 'owned';
+    const list = notesUnder(subject.id);
+    if (list.length > 0 && list.every(canAccessNote)) return 'included';
+    return 'locked';
+  };
+
+  const renderNoteCard = (note) => {
+    const hasAccess = canAccessNote(note);
+    return (
+      <div key={note.id} className={`bg-white rounded-2xl border ${hasAccess ? 'border-slate-200 hover:border-blue-300 hover:shadow-md' : 'border-slate-100 opacity-75'} p-5 transition-all flex flex-col`}>
+        <div className="flex items-start gap-4 mb-4">
+          <div className={`w-14 h-14 shrink-0 rounded-[14px] flex items-center justify-center shadow-inner ${hasAccess ? 'bg-blue-50 text-blue-500' : 'bg-slate-100 text-slate-400'}`}>
+            <FileText size={28} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="font-[900] text-slate-900 text-[16px] mb-1 truncate" title={note.title}>{note.title}</h4>
+            {note.description && (
+              <p className="text-[13px] text-slate-500 font-medium line-clamp-2 mb-2">{note.description}</p>
+            )}
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-auto">
+              {note.fileName && (
+                <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                  <FileText size={12} /> {note.fileName}
+                </span>
+              )}
+              <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
+                <Calendar size={12} /> {note.createdAt?.toDate ? note.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-auto pt-4 border-t border-slate-100">
+          {hasAccess ? (
+            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(true); }} className="w-full py-2.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
+              <Eye size={16} /> View Full Note
+            </button>
+          ) : (
+            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(false); }} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
+              <Eye size={16} /> Preview (3 Pages)
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // If Cashfree redirected back with ?order_id=..., confirm that order with the server
   useEffect(() => {
     const orderId = new URLSearchParams(window.location.search).get('order_id');
@@ -370,7 +528,11 @@ export default function Dashboard() {
       .then(async (status) => {
         if (status === 'PAID') {
           const snap = await getDocs(query(collection(db, 'joined_students'), where('email', '==', sessionStorage.getItem('auth_email') || '')));
-          if (!snap.empty) setPurchasedBundles(snap.docs[0].data().purchasedBundles || []);
+          if (!snap.empty) {
+            setPurchasedBundles(snap.docs[0].data().purchasedBundles || []);
+            setPurchasedSubjects(snap.docs[0].data().purchasedSubjects || []);
+            setPurchasedNoteBundles(snap.docs[0].data().purchasedNoteBundles || []);
+          }
           alert('Payment successful! Your bundle is now unlocked. 🎉');
         }
       })
@@ -838,70 +1000,166 @@ export default function Dashboard() {
           </div>
         )}
 
-        {activeTab === 'notes' && (
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mt-6 relative overflow-hidden">
-            <h2 className="text-2xl font-[900] text-slate-900 mb-6 flex items-center gap-3">
-              <FileText className="text-blue-500" size={28} /> All Study Notes
-            </h2>
-            
-            <div>
-              {notes.length === 0 ? (
+        {activeTab === 'notes' && (() => {
+          const currentNoteFolder = noteStack[noteStack.length - 1] || null;
+          const currentSubject = noteStack[0] || null;
+          const parentKey = currentNoteFolder ? currentNoteFolder.id : null;
+          const childFolders = noteFolders
+            .filter(f => (f.parentId || null) === parentKey)
+            .sort((a, b) => a.name.localeCompare(b.name));
+          const filesHere = notes.filter(n => (n.folderId || null) === parentKey);
+          const subjectStatus = currentSubject ? subjectAccess(currentSubject) : null;
+
+          const buyButton = (subject, full = false) => {
+            const price = folderPrice(subject);
+            if (!price) return null;
+            return (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleBuySubject(subject.id); }}
+                disabled={!!payingSubjectId}
+                className={`${full ? 'w-full' : ''} px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-[900] rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.25)] transition-all`}
+              >
+                {payingSubjectId === subject.id ? 'Processing…' : `Buy Subject • ₹${price}`}
+              </button>
+            );
+          };
+
+          return (
+            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mt-6 relative overflow-hidden">
+              <h2 className="text-2xl font-[900] text-slate-900 mb-4 flex items-center gap-3">
+                <FileText className="text-blue-500" size={28} /> Study Notes
+              </h2>
+
+              {/* Breadcrumb */}
+              <div className="flex flex-wrap items-center gap-1.5 text-sm font-bold mb-6">
+                <button onClick={() => setNoteStack([])} className={`px-2.5 py-1 rounded-lg transition-colors ${noteStack.length === 0 ? 'text-blue-600 bg-blue-50' : 'text-slate-500 hover:bg-slate-100'}`}>
+                  {studentDepartment || 'My Department'}
+                </button>
+                {noteStack.map((f, i) => (
+                  <React.Fragment key={f.id}>
+                    <ChevronRight size={14} className="text-slate-300" />
+                    <button onClick={() => setNoteStack(noteStack.slice(0, i + 1))} className={`px-2.5 py-1 rounded-lg transition-colors ${i === noteStack.length - 1 ? 'text-blue-600 bg-blue-50' : 'text-slate-500 hover:bg-slate-100'}`}>
+                      {f.name}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {/* Subject access banner */}
+              {currentSubject && (
+                <div className={`mb-6 rounded-2xl border p-4 flex flex-wrap items-center justify-between gap-3 ${subjectStatus === 'locked' ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <div className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    {subjectStatus === 'locked' ? <Lock size={16} className="text-amber-600" /> : <CheckCircle size={16} className="text-emerald-600" />}
+                    {subjectStatus === 'owned' && 'You own this subject. Every note inside is unlocked.'}
+                    {subjectStatus === 'included' && 'Unlocked with your current plan.'}
+                    {subjectStatus === 'locked' && (folderPrice(currentSubject) ? 'Unlock this whole subject to read every note inside.' : 'This subject is available with a course bundle.')}
+                  </div>
+                  {subjectStatus === 'locked' && buyButton(currentSubject)}
+                </div>
+              )}
+
+              {/* Notes bundles for this department */}
+              {noteStack.length === 0 && noteBundles.filter(b => purchasedNoteBundles.includes(b.id) || folderPrice(b)).length > 0 && (
+                <div className="mb-8">
+                  <h3 className="text-[12px] font-[800] uppercase tracking-wider text-slate-400 mb-3">Notes Bundles</h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {noteBundles.filter(b => purchasedNoteBundles.includes(b.id) || folderPrice(b)).map(b => {
+                      const owned = purchasedNoteBundles.includes(b.id);
+                      const covered = noteFolders.filter(f => !f.parentId && (b.includeAll || (b.subjectIds || []).includes(f.id)));
+                      const worth = covered.reduce((sum, f) => sum + folderPrice(f), 0);
+                      const price = folderPrice(b);
+                      return (
+                        <div key={b.id} className={`rounded-2xl border p-5 flex flex-col gap-4 ${owned ? 'bg-emerald-50 border-emerald-200' : 'bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-200'}`}>
+                          <div className="flex items-start gap-3">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${owned ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}><Package size={26} /></div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="font-[900] text-slate-900 leading-tight">{b.name}</h4>
+                              <p className="text-xs font-bold text-slate-500 mt-1">
+                                {b.includeAll ? `All ${covered.length} subjects` : `${covered.length} subjects`} of {studentDepartment}
+                                {!owned && worth > price && price > 0 ? ` • worth ₹${worth}` : ''}
+                              </p>
+                            </div>
+                            {owned && <span className="text-[11px] font-[800] px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">Owned</span>}
+                          </div>
+                          {!owned && (
+                            <button
+                              onClick={() => handleBuyNoteBundle(b.id)}
+                              disabled={!!payingNoteBundleId}
+                              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-[900] rounded-xl shadow-[0_4px_14px_rgba(79,70,229,0.25)] transition-all"
+                            >
+                              {payingNoteBundleId === b.id ? 'Processing…' : `Buy Full Notes • ₹${price}`}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {childFolders.length === 0 && filesHere.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
                     <FileText size={32} />
                   </div>
-                  <h3 className="text-xl font-[900] text-slate-900 mb-2">No Study Notes Yet</h3>
+                  <h3 className="text-xl font-[900] text-slate-900 mb-2">{noteStack.length ? 'This folder is empty' : 'No Study Notes Yet'}</h3>
                   <p className="text-slate-500 max-w-md mx-auto">
-                    Once teachers upload study materials for your department, they will appear here.
+                    {noteStack.length ? 'Notes added here will show up automatically.' : 'Once study materials are uploaded for your department, they will appear here.'}
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {notes.map(note => {
-                    const hasAccess = canAccessNote(note);
-                    return (
-                      <div key={note.id} className={`bg-white rounded-2xl border ${hasAccess ? 'border-slate-200 hover:border-blue-300 hover:shadow-md' : 'border-slate-100 opacity-75'} p-5 transition-all flex flex-col`}>
-                        <div className="flex items-start gap-4 mb-4">
-                          <div className={`w-14 h-14 shrink-0 rounded-[14px] flex items-center justify-center shadow-inner ${hasAccess ? 'bg-blue-50 text-blue-500' : 'bg-slate-100 text-slate-400'}`}>
-                            <FileText size={28} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-[900] text-slate-900 text-[16px] mb-1 truncate" title={note.title}>{note.title}</h4>
-                            {note.description && (
-                              <p className="text-[13px] text-slate-500 font-medium line-clamp-2 mb-2">{note.description}</p>
-                            )}
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-auto">
-                              {note.fileName && (
-                                <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-                                  <FileText size={12} /> {note.fileName}
-                                </span>
+                <div className="space-y-8">
+                  {childFolders.length > 0 && (
+                    <div>
+                      <h3 className="text-[12px] font-[800] uppercase tracking-wider text-slate-400 mb-3">{noteStack.length === 0 ? 'Subjects' : 'Topics'}</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {childFolders.map(f => {
+                          const isSubject = noteStack.length === 0;
+                          const status = isSubject ? subjectAccess(f) : null;
+                          const count = notesUnder(f.id).length;
+                          return (
+                            <div
+                              key={f.id}
+                              onClick={() => setNoteStack([...noteStack, f])}
+                              className="cursor-pointer bg-white border border-slate-200 rounded-2xl p-5 hover:border-blue-300 hover:shadow-md transition-all flex flex-col gap-3"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0"><Folder size={26} /></div>
+                                {isSubject && (
+                                  <span className={`text-[11px] font-[800] px-2.5 py-1 rounded-full ${status === 'locked' ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                                    {status === 'owned' ? 'Owned' : status === 'included' ? 'Unlocked' : 'Locked'}
+                                  </span>
+                                )}
+                              </div>
+                              <div>
+                                <h4 className="font-[900] text-slate-900 leading-tight line-clamp-2" title={f.name}>{f.name}</h4>
+                                <p className="text-xs font-bold text-slate-400 mt-1">{count} {count === 1 ? 'note' : 'notes'}</p>
+                              </div>
+                              {isSubject && status === 'locked' && (
+                                folderPrice(f) ? buyButton(f, true) : <p className="text-xs font-bold text-slate-400">Included in course bundles</p>
                               )}
-                              <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-                                <Calendar size={12} /> {note.createdAt?.toDate ? note.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
-                              </span>
                             </div>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-auto pt-4 border-t border-slate-100">
-                          {hasAccess ? (
-                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(true); }} className="w-full py-2.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
-                              <Eye size={16} /> View Full Note
-                            </button>
-                          ) : (
-                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(false); }} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
-                              <Eye size={16} /> Preview (3 Pages)
-                            </button>
-                          )}
-                        </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
+
+                  {filesHere.length > 0 && (
+                    <div>
+                      {(childFolders.length > 0 || noteStack.length === 0) && (
+                        <h3 className="text-[12px] font-[800] uppercase tracking-wider text-slate-400 mb-3">{noteStack.length === 0 ? 'Other Notes' : 'Notes'}</h3>
+                      )}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {filesHere.map(renderNoteCard)}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {activeTab === 'schedule' && (
           <div className="mt-6 space-y-6">

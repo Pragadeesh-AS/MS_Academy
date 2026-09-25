@@ -23,12 +23,13 @@ export const verifyOrder = async (orderId) => {
 };
 
 /**
- * Starts a Cashfree checkout for a bundle.
+ * Starts a Cashfree checkout for a bundle or a single notes subject.
  * Resolves with { status: 'PAID' | 'PENDING' | 'FAILED' | 'CANCELLED', orderId }.
  * The bundle is only unlocked by the server after it confirms the payment with Cashfree.
  */
-export const buyBundle = async (bundleId) => {
-  const { data } = await httpsCallable(functions, 'createCashfreeOrder')({ bundleId });
+export const buyItem = async (item) => {
+  // item is { bundleId }, { subjectId } or { noteBundleId }
+  const { data } = await httpsCallable(functions, 'createCashfreeOrder')(item);
   const Cashfree = await loadCashfreeSdk();
   const cashfree = Cashfree({ mode: data.mode });
 
@@ -40,3 +41,7 @@ export const buyBundle = async (bundleId) => {
   }
   return { status: await verifyOrder(data.orderId), orderId: data.orderId };
 };
+
+export const buyBundle = (bundleId) => buyItem({ bundleId });
+export const buySubject = (subjectId) => buyItem({ subjectId });
+export const buyNoteBundle = (noteBundleId) => buyItem({ noteBundleId });

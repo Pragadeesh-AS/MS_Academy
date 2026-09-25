@@ -79,7 +79,14 @@ const fulfillOrder = async (orderId) => {
     }
 
     const studentRef = db.collection('joined_students').doc(payment.studentDocId);
-    tx.update(studentRef, { purchasedBundles: admin.firestore.FieldValue.arrayUnion(payment.bundleId) });
+    if (payment.itemType === 'subject') {
+      tx.update(studentRef, { purchasedSubjects: admin.firestore.FieldValue.arrayUnion(payment.itemId) });
+    } else if (payment.itemType === 'notebundle') {
+      tx.update(studentRef, { purchasedNoteBundles: admin.firestore.FieldValue.arrayUnion(payment.itemId) });
+    } else {
+      // orders created before subjects existed only have bundleId
+      tx.update(studentRef, { purchasedBundles: admin.firestore.FieldValue.arrayUnion(payment.itemId || payment.bundleId) });
+    }
     tx.update(paymentRef, {
       status: 'PAID',
       cfOrderStatus: status,
@@ -90,14 +97,16 @@ const fulfillOrder = async (orderId) => {
   return { status: 'PAID' };
 };
 
-// 1) Student clicks "Buy Now" -> create a Cashfree order for a bundle
+// 1) Student clicks "Buy Now" -> create a Cashfree order for a bundle or a single notes subject
 exports.createCashfreeOrder = onCall({ secrets: SECRETS }, async (request) => {
   if (!request.auth || !request.auth.token.email) {
     throw new HttpsError('unauthenticated', 'Please log in to purchase.');
   }
-  const bundleId = request.data && request.data.bundleId;
-  if (!bundleId || typeof bundleId !== 'string') {
-    throw new HttpsError('invalid-argument', 'bundleId is required.');
+  const { bundleId, subjectId, noteBundleId } = request.data || {};
+  const itemType = noteBundleId ? 'notebundle' : subjectId ? 'subject' : 'bundle';
+  const itemId = noteBundleId || subjectId || bundleId;
+  if (!itemId || typeof itemId !== 'string') {
+    throw new HttpsError('invalid-argument', 'bundleId, subjectId or noteBundleId is required.');
   }
 
   const db = admin.firestore();
@@ -106,17 +115,49 @@ exports.createCashfreeOrder = onCall({ secrets: SECRETS }, async (request) => {
   if (!studentDoc) throw new HttpsError('not-found', 'Student profile not found.');
   const student = studentDoc.data();
 
-  if ((student.purchasedBundles || []).includes(bundleId)) {
-    throw new HttpsError('already-exists', 'You already own this bundle.');
+  let itemName;
+  let amount;
+
+  if (itemType === 'notebundle') {
+    if ((student.purchasedNoteBundles || []).includes(itemId)) {
+      throw new HttpsError('already-exists', 'You already own this notes bundle.');
+    }
+    const nbSnap = await db.collection('note_bundles').doc(itemId).get();
+    if (!nbSnap.exists) throw new HttpsError('not-found', 'Notes bundle not found.');
+    const nb = nbSnap.data();
+    if (nb.department !== student.department) {
+      throw new HttpsError('permission-denied', 'This notes bundle is not part of your department.');
+    }
+    itemName = `${nb.department} - ${nb.name}`;
+    amount = parseAmount(nb.discountedPrice || nb.price);
+    if (amount < 1) throw new HttpsError('failed-precondition', 'This notes bundle is not available for purchase.');
+  } else if (itemType === 'subject') {
+    if ((student.purchasedSubjects || []).includes(itemId)) {
+      throw new HttpsError('already-exists', 'You already have access to this subject.');
+    }
+    const folderSnap = await db.collection('note_folders').doc(itemId).get();
+    if (!folderSnap.exists) throw new HttpsError('not-found', 'Subject not found.');
+    const folder = folderSnap.data();
+    // Only top-level (subject) folders can be sold, and only inside the student's own department
+    if (folder.parentId) throw new HttpsError('failed-precondition', 'Only whole subjects can be purchased.');
+    if (folder.department !== student.department) {
+      throw new HttpsError('permission-denied', 'This subject is not part of your department.');
+    }
+    itemName = `${folder.department} - ${folder.name}`;
+    amount = parseAmount(folder.discountedPrice || folder.price);
+    if (amount < 1) throw new HttpsError('failed-precondition', 'This subject is not available for individual purchase.');
+  } else {
+    if ((student.purchasedBundles || []).includes(itemId)) {
+      throw new HttpsError('already-exists', 'You already own this bundle.');
+    }
+    const bundleSnap = await db.collection('course_bundles').doc(itemId).get();
+    if (!bundleSnap.exists) throw new HttpsError('not-found', 'Bundle not found.');
+    const bundle = bundleSnap.data();
+    itemName = bundle.name || 'Course bundle';
+    // Price is always read on the server, never taken from the browser
+    amount = parseAmount(bundle.discountedPrice || bundle.price);
+    if (amount < 1) throw new HttpsError('failed-precondition', 'This bundle has no valid price.');
   }
-
-  const bundleSnap = await db.collection('course_bundles').doc(bundleId).get();
-  if (!bundleSnap.exists) throw new HttpsError('not-found', 'Bundle not found.');
-  const bundle = bundleSnap.data();
-
-  // Price is always read on the server, never taken from the browser
-  const amount = parseAmount(bundle.discountedPrice || bundle.price);
-  if (amount < 1) throw new HttpsError('failed-precondition', 'This bundle has no valid price.');
 
   const orderId = `MSA_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   const phone = String(student.phone || '').replace(/\D/g, '').slice(-10);
@@ -136,7 +177,7 @@ exports.createCashfreeOrder = onCall({ secrets: SECRETS }, async (request) => {
           customer_phone: phone.length === 10 ? phone : '9999999999'
         },
         order_meta: { return_url: `${SITE_URL}/student?order_id={order_id}` },
-        order_note: `${bundle.name || 'Course bundle'}`.slice(0, 200)
+        order_note: itemName.slice(0, 200)
       })
     });
   } catch (err) {
@@ -148,8 +189,12 @@ exports.createCashfreeOrder = onCall({ secrets: SECRETS }, async (request) => {
     studentDocId: studentDoc.id,
     studentEmail: email,
     studentName: student.name || '',
-    bundleId,
-    bundleName: bundle.name || '',
+    itemType,
+    itemId,
+    itemName,
+    // kept for older readers of this collection
+    bundleId: itemType === 'bundle' ? itemId : '',
+    bundleName: itemType === 'bundle' ? itemName : '',
     amount,
     currency: 'INR',
     status: 'CREATED',
