@@ -12,6 +12,7 @@ import { gateCoursesData } from '../GateCourses';
 
 export default function CourseSetup() {
   const [bundles, setBundles] = useState([]);
+  const [noteSubjects, setNoteSubjects] = useState([]); // top-level subject folders from Study Notes
   const [loading, setLoading] = useState(true);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -31,7 +32,9 @@ export default function CourseSetup() {
     status: 'Active',
     imageUrl: '',
     features: [''],
-    permissions: ['tests', 'live_classes', 'recordings', 'notes']
+    permissions: ['tests', 'live_classes', 'recordings', 'notes'],
+    notesSubjectMode: 'all',
+    noteSubjectIds: []
   });
 
   const showToast = (message, type = 'success') => {
@@ -57,7 +60,15 @@ export default function CourseSetup() {
 
   useEffect(() => {
     fetchBundles();
+    getDocs(collection(db, 'note_folders'))
+      .then(snap => setNoteSubjects(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => !f.parentId)))
+      .catch(err => console.error('Failed to load note subjects', err));
   }, []);
+
+  const toggleNoteSubject = (id) => setFormData(prev => {
+    const current = prev.noteSubjectIds || [];
+    return { ...prev, noteSubjectIds: current.includes(id) ? current.filter(x => x !== id) : [...current, id] };
+  });
 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadProgress, setImageUploadProgress] = useState(0);
@@ -95,7 +106,9 @@ export default function CourseSetup() {
       status: 'Active',
       imageUrl: '',
       features: [''],
-      permissions: ['tests', 'live_classes', 'recordings', 'notes']
+      permissions: ['tests', 'live_classes', 'recordings', 'notes'],
+      notesSubjectMode: 'all',
+      noteSubjectIds: []
     });
     setCurrentId(null);
     setIsEditing(false);
@@ -112,7 +125,9 @@ export default function CourseSetup() {
       status: bundle.status || 'Active',
       imageUrl: bundle.imageUrl || '',
       features: bundle.features && bundle.features.length > 0 ? bundle.features : [''],
-      permissions: bundle.permissions || ['tests', 'live_classes', 'recordings', 'notes']
+      permissions: bundle.permissions || ['tests', 'live_classes', 'recordings', 'notes'],
+      notesSubjectMode: bundle.notesSubjectMode || 'all',
+      noteSubjectIds: bundle.noteSubjectIds || []
     });
     setCurrentId(bundle.id);
     setIsEditing(true);
@@ -464,6 +479,40 @@ export default function CourseSetup() {
                     ))}
                   </div>
                 </div>
+
+                {(formData.permissions || []).includes('notes') && (() => {
+                  const deptSubjects = noteSubjects
+                    .filter(f => f.department === formData.department)
+                    .sort((a, b) => a.name.localeCompare(b.name));
+                  return (
+                    <div className="md:col-span-2 space-y-3 text-left border border-slate-200 p-5 rounded-2xl bg-slate-50/50 mt-4">
+                      <label className="text-[13px] font-[900] text-slate-800 uppercase tracking-widest">Study Notes Subjects Included</label>
+                      <p className="text-xs text-slate-500 font-medium">Choose which subject folders (Study Notes) students unlock when they buy this bundle.</p>
+                      <label className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer">
+                        <input type="radio" checked={formData.notesSubjectMode !== 'selected'} onChange={() => setFormData({ ...formData, notesSubjectMode: 'all' })} />
+                        <span className="text-sm font-bold text-slate-700">All subjects of this department <span className="text-slate-400 font-semibold">({deptSubjects.length} now, new ones included automatically)</span></span>
+                      </label>
+                      <label className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer">
+                        <input type="radio" checked={formData.notesSubjectMode === 'selected'} onChange={() => setFormData({ ...formData, notesSubjectMode: 'selected' })} />
+                        <span className="text-sm font-bold text-slate-700">Only selected subjects</span>
+                      </label>
+                      {formData.notesSubjectMode === 'selected' && (
+                        deptSubjects.length === 0 ? (
+                          <p className="text-sm font-semibold text-slate-400 px-1">No subject folders exist for {formData.department} yet. Create them under Study Notes first.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {deptSubjects.map(f => (
+                              <label key={f.id} className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl cursor-pointer hover:border-[#5b32ea] transition-all">
+                                <input type="checkbox" className="w-4 h-4" checked={(formData.noteSubjectIds || []).includes(f.id)} onChange={() => toggleNoteSubject(f.id)} />
+                                <span className="text-sm font-bold text-slate-700">{f.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className="md:col-span-2 space-y-2 mt-4">
                   <label className="text-[13px] font-[800] text-slate-700 uppercase tracking-wide">Cover Image</label>

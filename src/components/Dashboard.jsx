@@ -120,6 +120,12 @@ export default function Dashboard() {
   // A notes bundle the student owns covers all subjects of the department, or only the ones it lists
   const coveredByNoteBundle = (subjectId) => noteBundles.some(b =>
     purchasedNoteBundles.includes(b.id) && (b.includeAll || (b.subjectIds || []).includes(subjectId))
+  ) || (availableBundles || []).some(b =>
+    // A purchased course bundle with notes access: all subjects, or only those the admin selected
+    purchasedBundles.includes(b.id) &&
+    (b.permissions?.includes('notes') || !b.permissions) &&
+    (b.department === studentDepartment || b.department === 'General') &&
+    (b.notesSubjectMode !== 'selected' || (b.noteSubjectIds || []).includes(subjectId))
   );
 
   const canAccessNote = (note) => {
@@ -134,6 +140,9 @@ export default function Dashboard() {
     if (note.bundleId) {
       return purchasedBundles.includes(note.bundleId);
     }
+
+    // Notes inside a subject folder are unlocked per subject (checked above), not department-wide
+    if (subjectId) return false;
 
     // GENERAL NOTES: If no specific bundle is assigned, 
     // unlock it if they have any purchased bundle for this department with 'notes' permission.
