@@ -1110,7 +1110,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Dashboard Container */}
-      <main className={`flex-1 w-full min-w-0 z-10 ${activeTab === 'analytics' ? 'h-full flex flex-col pt-16 md:pt-0' : 'p-4 pt-20 sm:p-6 sm:pt-20 md:p-10 md:pt-10 max-w-[1400px] mx-auto space-y-8 overflow-y-auto h-full'}`}>
+      <main className={`flex-1 w-full min-w-0 z-10 ${activeTab === 'analytics' ? 'h-full flex flex-col overflow-y-auto pt-16 md:pt-0' : 'p-4 pt-20 sm:p-6 sm:pt-20 md:p-10 md:pt-10 max-w-[1400px] mx-auto space-y-8 overflow-y-auto h-full'}`}>
         
         {/* Active Tab: Overview Dashboard */}
         {activeTab === 'overview' && (

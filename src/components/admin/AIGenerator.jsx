@@ -607,6 +607,12 @@ IMPORTANT:
       }
       
       parsedQuestions = parsedQuestions.map(applyNatFields);
+      // Match items may contain $...$ LaTeX; render them like the question text so they show as symbols
+      parsedQuestions = parsedQuestions.map(q => (q.questionType === 'Match' ? {
+        ...q,
+        matchColumn1: (q.matchColumn1 || []).map(item => renderLatexToHTML(item)),
+        matchColumn2: (q.matchColumn2 || []).map(item => renderLatexToHTML(item))
+      } : q));
       setExtractedQuestions(parsedQuestions);
       setStatus('review');
     } catch (err) {
@@ -1004,17 +1010,13 @@ IMPORTANT:
                       <div className="space-y-2 border border-slate-200 rounded-xl p-4 bg-slate-50">
                         <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Column 1</h5>
                         {q.matchColumn1.filter(item => item.trim()).map((item, i) => (
-                          <div key={i} className="text-sm font-medium text-slate-700 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                            {item}
-                          </div>
+                          <div key={i} className="text-sm font-medium text-slate-700 bg-white p-2 rounded-lg border border-slate-200 shadow-sm" dangerouslySetInnerHTML={{ __html: item }} />
                         ))}
                       </div>
                       <div className="space-y-2 border border-slate-200 rounded-xl p-4 bg-slate-50">
                         <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Column 2</h5>
                         {q.matchColumn2.filter(item => item.trim()).map((item, i) => (
-                          <div key={i} className="text-sm font-medium text-slate-700 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                            {item}
-                          </div>
+                          <div key={i} className="text-sm font-medium text-slate-700 bg-white p-2 rounded-lg border border-slate-200 shadow-sm" dangerouslySetInnerHTML={{ __html: item }} />
                         ))}
                       </div>
                     </div>
