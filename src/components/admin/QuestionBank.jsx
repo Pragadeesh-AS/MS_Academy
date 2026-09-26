@@ -674,6 +674,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     let premiumMatches = true;
     if (isPremiumView) {
       premiumMatches = q.isPremium === true;
+    } else if (userRole === 'admin') {
+      // Admin has a separate Premium bank, so premium questions live only there.
+      premiumMatches = q.isPremium !== true;
     }
 
     return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && matchesType && roleMatches && premiumMatches;

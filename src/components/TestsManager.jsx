@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2 } from 'lucide-react';
+import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2, FolderOpen, ArrowLeft } from 'lucide-react';
 
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
@@ -33,6 +33,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [attributes, setAttributes] = useState([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [editingTestId, setEditingTestId] = useState(null);
+  const [openFolder, setOpenFolder] = useState(null);
   const [editBundleTest, setEditBundleTest] = useState(null);
   const [editBundleValue, setEditBundleValue] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -547,6 +548,20 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     return { text: 'Dept Bundle', color: 'bg-slate-100 text-slate-600 border-slate-200' };
   };
 
+  // Admin sees tests grouped into department folders; teachers are already scoped to one department.
+  const showFolders = !isTeacher && !openFolder;
+  const folderOf = (t) => (t.department || '').trim() || 'Uncategorized';
+  const folders = Object.entries(tests.reduce((acc, t) => {
+    const k = folderOf(t);
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {})).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
+  const visibleTests = isTeacher || !openFolder ? tests : tests.filter(t => folderOf(t) === openFolder);
+
+  useEffect(() => {
+    if (openFolder && !loading && !tests.some(t => folderOf(t) === openFolder)) setOpenFolder(null);
+  }, [tests, loading, openFolder]);
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 font-sans relative">
       
@@ -562,15 +577,32 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-        <div>
-          <h2 className="text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
-            <FileText className="text-blue-600 animate-pulse" size={28} />
-            Test Templates
-          </h2>
-          <p className="text-slate-500 font-semibold mt-1">Configure spec blueprints and schedule tests from subtopics.</p>
+        <div className="flex items-center gap-4 min-w-0">
+          {!isTeacher && openFolder && (
+            <button
+              onClick={() => setOpenFolder(null)}
+              className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors shrink-0"
+              title="Back to folders"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
+          <div className="min-w-0">
+            <h2 className="text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
+              <FileText className="text-blue-600 animate-pulse" size={28} />
+              <span className="truncate">{!isTeacher && openFolder ? `${openFolder} Tests` : 'Test Templates'}</span>
+            </h2>
+            <p className="text-slate-500 font-semibold mt-1">
+              {!isTeacher && !openFolder ? 'Select a department folder to manage its tests.' : 'Configure spec blueprints and schedule tests from subtopics.'}
+            </p>
+          </div>
         </div>
         <button 
-          onClick={() => { resetForm(); setIsCreatorOpen(true); }}
+          onClick={() => {
+            resetForm();
+            if (!isTeacher && openFolder && openFolder !== 'Uncategorized') setSelectedDept(openFolder);
+            setIsCreatorOpen(true);
+          }}
           className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] flex items-center gap-2 text-sm"
         >
           <Plus size={18} strokeWidth={2.5} /> Create Test Template
@@ -591,9 +623,29 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
           <h3 className="text-xl font-bold text-slate-800 mb-2">No Test Blueprints Found</h3>
           <p className="text-slate-500 max-w-md font-medium">Create a test module template and schedule it for your students to take directly from their dashboard.</p>
         </div>
+      ) : showFolders ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+          {folders.map(folder => (
+            <div key={folder.name} onClick={() => setOpenFolder(folder.name)} className="bg-white rounded-2xl border border-slate-200 p-5 cursor-pointer hover:border-blue-300 hover:shadow-lg transition-all duration-200 group flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors border border-blue-100 group-hover:border-blue-600">
+                <FolderOpen size={22} strokeWidth={2} />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <h3 className="font-[700] text-[15px] text-slate-800 truncate" title={folder.name}>{folder.name}</h3>
+                <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[13px] mt-0.5">
+                  <FileText size={12} />
+                  {folder.count} {folder.count === 1 ? 'Test' : 'Tests'}
+                </div>
+              </div>
+              <div className="ml-auto text-slate-300 group-hover:text-blue-400 transition-colors">
+                <ArrowLeft size={16} className="rotate-180" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6 items-start">
-          {tests.map((test) => {
+          {visibleTests.map((test) => {
             const st = getTestStats(test);
             const lbl = getBundleLabel(test);
             const typeKinds = Object.values(st.typeCounts).filter(Boolean).length;
@@ -743,7 +795,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       {/* 3-Step Wizard Modal */}
       {isCreatorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto font-sans">
-          <form onSubmit={handleSubmit} className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col my-8 max-h-[95vh] overflow-hidden animate-in zoom-in-95 duration-200">
+          <form onSubmit={handleSubmit} className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col my-8 max-h-[95vh] overflow-hidden animate-in zoom-in-95 duration-200">
             
             {/* Modal Header */}
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
@@ -1019,10 +1071,21 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                 const manuallySelectedQuestions = questions.filter(q => manualSelectedIds.includes(q.id));
                 const currentManualMarks = manuallySelectedQuestions.reduce((sum, q) => sum + (parseInt(q.mark) || 1), 0);
                 
+                const marksCap = parseInt(targetMarks) || 0;
+                const questionMarks = (q) => parseInt(q.mark) || 1;
+                // Adding is blocked once it would push the total past the test's target marks;
+                // removing and editing stay available regardless.
+                const wouldExceedCap = (q) => marksCap > 0 && currentManualMarks + questionMarks(q) > marksCap;
+
                 const handleToggleQuestion = (id) => {
                   if (manualSelectedIds.includes(id)) {
                     setManualSelectedIds(manualSelectedIds.filter(x => x !== id));
                   } else {
+                    const q = questions.find(x => x.id === id);
+                    if (q && wouldExceedCap(q)) {
+                      showToast(`Marks limit reached (${currentManualMarks} / ${marksCap}). Remove a question to add this one.`, 'error');
+                      return;
+                    }
                     setManualSelectedIds([...manualSelectedIds, id]);
                   }
                 };
@@ -1032,7 +1095,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                 const uniqueMarks = [...new Set(topicPool.map(q => q.mark).filter(Boolean))];
 
                 return (
-                <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 flex flex-col max-h-[60vh]">
+                <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 flex flex-col">
                   
                   <div className="flex flex-col sm:flex-row gap-4 sm:items-end shrink-0">
                     {/* Schedule date input */}
@@ -1124,7 +1187,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   )}
 
                   {(selectionMode === 'manual' || selectionMode === 'both') && (
-                    <div className="flex flex-col h-full overflow-hidden space-y-4">
+                    <div className="flex flex-col space-y-4">
 
                       {/* Selected Questions - view / remove / edit-in-question-bank */}
                       {manuallySelectedQuestions.length > 0 && (
@@ -1134,7 +1197,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                               Selected Questions ({manuallySelectedQuestions.length})
                             </span>
                           </div>
-                          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                          <div className="space-y-2">
                             {manuallySelectedQuestions.map(q => (
                               <div key={q.id} className="flex items-start gap-3 bg-white border border-indigo-100 rounded-xl p-3">
                                 <div className="flex-1 min-w-0">
@@ -1143,7 +1206,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">{q.questionType}</span>
                                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{q.mark} Mark</span>
                                   </div>
-                                  <div className="text-[12.5px] text-slate-700 font-medium line-clamp-2 break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
+                                  <div className="text-[12.5px] text-slate-700 font-medium break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
                                   {onEditQuestion && (
@@ -1197,14 +1260,15 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                       </div>
                       
                       {/* Question List */}
-                      <div className="flex-1 overflow-y-auto pr-1 space-y-3 pb-8">
+                      <div className="space-y-3 pb-4">
                         {filteredPool.length === 0 ? (
                           <div className="text-center py-8 text-slate-400 font-medium text-sm">No questions match the current filters.</div>
                         ) : (
                           filteredPool.map(q => {
                             const isSelected = manualSelectedIds.includes(q.id);
+                            const isBlocked = !isSelected && wouldExceedCap(q);
                             return (
-                              <div key={q.id} onClick={() => handleToggleQuestion(q.id)} className={`cursor-pointer border rounded-xl p-4 transition-all flex gap-4 ${isSelected ? 'border-indigo-500 bg-indigo-50/30 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                              <div key={q.id} onClick={() => handleToggleQuestion(q.id)} title={isBlocked ? 'Marks limit reached - remove a selected question to add this one' : undefined} className={`border rounded-xl p-4 transition-all flex gap-4 ${isBlocked ? 'cursor-not-allowed opacity-50 border-slate-200 bg-slate-50' : 'cursor-pointer'} ${isSelected ? 'border-indigo-500 bg-indigo-50/30 shadow-sm' : !isBlocked ? 'border-slate-200 bg-white hover:border-slate-300' : ''}`}>
                                 <div className="mt-1">
                                   <div className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}>
                                     {isSelected && <Check size={14} strokeWidth={3} />}
@@ -1217,8 +1281,18 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">{q.difficultyLevel || 'Easy'}</span>
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{q.mark}</span>
                                   </div>
-                                  <div className="text-[13px] text-slate-700 font-medium line-clamp-2 break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
+                                  <div className="text-[13px] text-slate-700 font-medium line-clamp-3 break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
                                 </div>
+                                {onEditQuestion && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleEditQuestionFromTest(q.id); }}
+                                    className="self-start p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shrink-0"
+                                    title="Edit this question in Question Bank"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                )}
                               </div>
                             );
                           })
