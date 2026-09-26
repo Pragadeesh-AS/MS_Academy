@@ -50,6 +50,12 @@ function StatCard({ icon: Icon, label, value, onClick, gradient, index = 0 }) {
   );
 }
 
+const DEPT_EMOJI = {
+  CSE: '💻', ECE: '📡', ME: '⚙️', CE: '🏗️', EE: '⚡', DS: '📊', PI: '🏭', IN: '🎛️', BT: '🧬',
+  CH: '⚗️', BM: '🩺', PH: '🔭', AR: '📐', AG: '🌾', MT: '🔩', ES: '🌿', XL: '🔬', AE: '✈️'
+};
+const getDeptEmoji = (dept) => DEPT_EMOJI[(dept.match(/\(([^)]+)\)/) || [])[1]] || '🎓';
+
 export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [teacherName, setTeacherName] = useState('Teacher');
@@ -272,8 +278,14 @@ export default function TeacherDashboard() {
       {/* Main Content */}
       <main className="flex-1 min-w-0 p-4 pt-20 sm:p-6 sm:pt-20 md:p-8 overflow-y-auto">
         <header className="mb-8">
-          <h1 className="text-2xl md:text-3xl font-[900] text-slate-900 tracking-tight">Welcome back, {teacherName}!</h1>
-          <p className="text-slate-500 font-medium mt-1">Manage your courses, students, and live sessions.</p>
+          <h1 className="text-2xl md:text-3xl font-[900] text-slate-900 tracking-tight">
+            Welcome back, {teacherName}! <span className="inline-block origin-[70%_70%] animate-[wave_2s_ease-in-out_1]">👋</span>
+          </h1>
+          <p className="text-slate-500 font-medium mt-1">
+            {teacherDepartment
+              ? `${getDeptEmoji(teacherDepartment)} Great to see you, ${teacherDepartment} faculty! Manage your courses, students, and live sessions.`
+              : 'Manage your courses, students, and live sessions.'}
+          </p>
         </header>
 
         {activeTab === 'courses' && (
