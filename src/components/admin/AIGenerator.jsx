@@ -698,10 +698,10 @@ IMPORTANT:
   const canImport = isValidReviewerEmail && !!importSettings.department && !!importSettings.year && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
 
   const importDetailsForm = (
-    <div className="mt-6 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+    <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
       <h3 className="text-lg font-bold text-slate-800 mb-1">Import Details</h3>
-      <p className="text-sm text-slate-500 font-medium mb-5">These details apply to every extracted question. Once you click Approve & Import, the questions are sent straight to the reviewer.</p>
-      <div className="space-y-4">
+      <p className="text-sm text-slate-500 font-medium mb-4">These details apply to every extracted question. Once you click Approve & Import, the questions are sent straight to the reviewer.</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Department</label>
                 <select 
@@ -756,7 +756,7 @@ IMPORTANT:
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 md:col-span-2">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1">Marks</label>
                   <select 
@@ -784,14 +784,14 @@ IMPORTANT:
               </div>
 
               {pairMode ? (
-                <div className="mt-5 p-4 rounded-xl border border-blue-200 bg-blue-50/60">
+                <div className="md:col-span-2 p-4 rounded-xl border border-blue-200 bg-blue-50/60">
                   <span className="block text-sm font-bold text-slate-800">Sent to your assigned reviewer</span>
                   <span className="block text-sm text-slate-600 mt-0.5">
                     {isValidReviewerEmail ? reviewerEmail : 'No reviewer is paired with your account yet. Please contact the admin.'}
                   </span>
                 </div>
               ) : (
-              <div className="mt-5">
+              <div className="md:col-span-2">
                 <label className="block text-sm font-bold text-slate-700 mb-1">Reviewer Email</label>
                 <input
                   type="email"
@@ -804,7 +804,7 @@ IMPORTANT:
               </div>
               )}
 
-              <label className="mt-5 flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50/60 cursor-pointer">
+              <label className="md:col-span-2 flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50/60 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={importAsPremium}
@@ -848,7 +848,7 @@ IMPORTANT:
       {status === 'idle' && (
         <>
         <div 
-          className="border-2 border-dashed border-slate-300 rounded-3xl p-12 bg-white flex flex-col items-center justify-center text-center transition-all hover:border-purple-400 hover:bg-purple-50 group cursor-pointer h-[400px]"
+          className="border-2 border-dashed border-slate-300 rounded-2xl px-6 py-6 bg-white flex flex-col items-center justify-center text-center transition-all hover:border-purple-400 hover:bg-purple-50 group cursor-pointer"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current.click()}
@@ -863,19 +863,19 @@ IMPORTANT:
           
           {!file ? (
             <>
-              <div className="w-20 h-20 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Upload size={32} />
+              <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <Upload size={22} />
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Drag & Drop your PDF here</h3>
-              <p className="text-slate-500 font-medium max-w-sm">Ensure your PDF contains numbered questions and lettered options (e.g., 1. What is... A) ...)</p>
+              <h3 className="text-base font-bold text-slate-800 mb-1">Drag & Drop your PDF here</h3>
+              <p className="text-slate-500 font-medium text-sm max-w-md">Ensure your PDF contains numbered questions and lettered options (e.g., 1. What is... A) ...)</p>
             </>
           ) : (
             <>
-              <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                <FileText size={40} />
+              <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-3 shadow-sm">
+                <FileText size={24} />
               </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1">{file.name}</h3>
-              <p className="text-slate-500 font-medium text-sm mb-8">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+              <h3 className="text-base font-bold text-slate-800 mb-0.5">{file.name}</h3>
+              <p className="text-slate-500 font-medium text-sm mb-4">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
               
               <div className="flex gap-4" onClick={(e) => e.stopPropagation()}>
                 <button 

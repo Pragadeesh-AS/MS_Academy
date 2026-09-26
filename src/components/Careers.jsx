@@ -216,7 +216,7 @@ export default function Careers() {
       removeFile();
     } catch (err) {
       console.error('Failed to save career application', err);
-      alert("Failed to submit application. Please check your internet connection.");
+      alert(`Failed to submit application${err?.code ? ` (${err.code})` : ''}. Please check your internet connection and try again.`);
       setPanelState('form');
     }
   };
