@@ -76,10 +76,11 @@ export default function CourseSetup() {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    const previousImageUrl = formData.imageUrl;
     setIsUploadingImage(true);
     setImageUploadProgress(50); // Fake progress for UX
     const storageRef = ref(storage, `bundles/${Date.now()}_${file.name}`);
-    
+
     uploadBytes(storageRef, file)
       .then(async (snapshot) => {
         const downloadUrl = await getDownloadURL(snapshot.ref);
@@ -87,6 +88,13 @@ export default function CourseSetup() {
         setIsUploadingImage(false);
         setImageUploadProgress(0);
         showToast("Image uploaded successfully!", "success");
+        if (previousImageUrl) {
+          try {
+            await deleteObject(ref(storage, previousImageUrl));
+          } catch (storageErr) {
+            console.warn('Could not delete replaced bundle image from storage:', storageErr);
+          }
+        }
       })
       .catch((error) => {
         console.error("Upload error:", error);
@@ -141,6 +149,14 @@ export default function CourseSetup() {
   const confirmDelete = async () => {
     if (!deleteConfirmId) return;
     try {
+      const bundleToDelete = bundles.find(b => b.id === deleteConfirmId);
+      if (bundleToDelete?.imageUrl) {
+        try {
+          await deleteObject(ref(storage, bundleToDelete.imageUrl));
+        } catch (storageErr) {
+          console.warn('Could not delete bundle image from storage (might already be deleted):', storageErr);
+        }
+      }
       await deleteDoc(doc(db, 'course_bundles', deleteConfirmId));
       setDeleteConfirmId(null);
       showToast("Bundle deleted successfully", "success");
