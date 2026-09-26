@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
-import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer } from 'lucide-react';
+import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2 } from 'lucide-react';
 
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
@@ -25,13 +25,14 @@ const shortType = (type) => ({
   'Match': 'Match'
 }[type] || type);
 
-export default function TestsManager({ department = '', isTeacher = false }) {
+export default function TestsManager({ department = '', isTeacher = false, onEditQuestion = null }) {
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
   const [questions, setQuestions] = useState([]);
   const [attributes, setAttributes] = useState([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [editingTestId, setEditingTestId] = useState(null);
   const [editBundleTest, setEditBundleTest] = useState(null);
   const [editBundleValue, setEditBundleValue] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -349,21 +350,29 @@ export default function TestsManager({ department = '', isTeacher = false }) {
       department: selectedDept,
       subject: selectedSubject || 'General',
       topic: selectedTopics.join(', ') || 'All Topics',
-      status: 'active',
       questions: finalQuestionIds,
       allocations,
-      bundleId: isTeacher ? '' : bundleId,
-      solutionsUnlocked: false,
-      createdBy: sessionStorage.getItem('auth_name') || (isTeacher ? 'Teacher' : 'Admin'),
-      createdAt: serverTimestamp()
+      bundleId: isTeacher ? '' : bundleId
     };
 
     try {
-      await addDoc(collection(db, 'tests'), testPayload);
+      if (editingTestId) {
+        // Preserve status/solutionsUnlocked/createdBy/createdAt - editing only touches the spec fields above.
+        await updateDoc(doc(db, 'tests', editingTestId), testPayload);
+        showToast("Test template updated successfully!", "success");
+      } else {
+        await addDoc(collection(db, 'tests'), {
+          ...testPayload,
+          status: 'active',
+          solutionsUnlocked: false,
+          createdBy: sessionStorage.getItem('auth_name') || (isTeacher ? 'Teacher' : 'Admin'),
+          createdAt: serverTimestamp()
+        });
+        showToast("Test template created successfully!", "success");
+      }
       setIsCreatorOpen(false);
       resetForm();
       fetchTests();
-      showToast("Test template created successfully!", "success");
     } catch (err) {
       console.error("Failed to save test template:", err);
       showToast("Error saving test template. Please try again.", "error");
@@ -371,6 +380,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
   };
 
   const resetForm = () => {
+    setEditingTestId(null);
     setTitle('');
     setDescription('');
     setDuration(180);
@@ -387,6 +397,41 @@ export default function TestsManager({ department = '', isTeacher = false }) {
     setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All' });
     setBundleId('');
     setStep(1);
+  };
+
+  // Reopen an existing test for editing: preload every wizard field from the saved
+  // document and drop straight into manual mode on Step 3 so the admin lands on the
+  // selected-questions list (view / remove / add) rather than re-walking the hierarchy.
+  const handleEditTest = (test) => {
+    setEditingTestId(test.id);
+    setTitle(test.title || '');
+    setDescription(test.description || '');
+    setDuration(test.duration || 180);
+    setTargetMarks(test.targetMarks || 100);
+    setTotal1Mark(test.total1Mark ?? 30);
+    setTotal2Mark(test.total2Mark ?? 35);
+    setScheduledTime(test.scheduledTime || '');
+    setBundleId(test.bundleId || '');
+    setSelectedDept(test.department || department || '');
+    setSelectedSubject(test.subject && test.subject !== 'General' ? test.subject : '');
+    setSelectedTopics(
+      test.topic && test.topic !== 'All Topics'
+        ? test.topic.split(',').map(t => t.trim()).filter(Boolean)
+        : []
+    );
+    setAllocations(test.allocations || {});
+    setSelectionMode('manual');
+    setManualSelectedIds(test.questions || []);
+    setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All' });
+    setStep(3);
+    setIsCreatorOpen(true);
+  };
+
+  const handleEditQuestionFromTest = (questionId) => {
+    if (!onEditQuestion) return;
+    const proceed = window.confirm("This opens the question in Question Bank to edit it. Any unsaved changes to this test will be lost. Continue?");
+    if (!proceed) return;
+    onEditQuestion(questionId);
   };
 
   const handleSaveBundle = async () => {
@@ -661,6 +706,13 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
+                      onClick={() => handleEditTest(test)}
+                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors inline-flex"
+                      title="Edit Test"
+                    >
+                      <Edit2 size={17} />
+                    </button>
+                    <button
                       onClick={() => handleToggleSolutions(test)}
                       className={`p-2 rounded-xl transition-colors inline-flex ${
                         test.solutionsUnlocked
@@ -677,7 +729,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors inline-flex"
                         title="Edit Access Control"
                       >
-                        <Edit2 size={17} />
+                        <Settings2 size={17} />
                       </button>
                     )}
                   </div>
@@ -700,11 +752,11 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                   <FileText size={20} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-[900] text-slate-900 leading-tight">Create Test Template (Step {step} of 3)</h2>
+                  <h2 className="text-lg font-[900] text-slate-900 leading-tight">{editingTestId ? 'Edit Test Template' : 'Create Test Template'} (Step {step} of 3)</h2>
                   <p className="text-xs text-slate-400 font-semibold mt-0.5">
                     {step === 1 && "Configure template title, total time duration, target marks, and question count targets."}
                     {step === 2 && "Configure structural course hierarchy and audience alignment."}
-                    {step === 3 && "Allocate 1-mark and 2-mark question counts for each selected topic with live availability checks."}
+                    {step === 3 && (editingTestId ? "View, remove or add questions. Edit a question's content directly in the Question Bank." : "Allocate 1-mark and 2-mark question counts for each selected topic with live availability checks.")}
                   </p>
                 </div>
               </div>
@@ -961,7 +1013,10 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                   return true;
                 });
                 
-                const manuallySelectedQuestions = topicPool.filter(q => manualSelectedIds.includes(q.id));
+                // Pulled from the full question pool (not topicPool) so a question stays visible
+                // here even if it no longer matches the currently selected hierarchy filters -
+                // otherwise it would silently vanish from view while still being part of the test.
+                const manuallySelectedQuestions = questions.filter(q => manualSelectedIds.includes(q.id));
                 const currentManualMarks = manuallySelectedQuestions.reduce((sum, q) => sum + (parseInt(q.mark) || 1), 0);
                 
                 const handleToggleQuestion = (id) => {
@@ -1070,7 +1125,52 @@ export default function TestsManager({ department = '', isTeacher = false }) {
 
                   {(selectionMode === 'manual' || selectionMode === 'both') && (
                     <div className="flex flex-col h-full overflow-hidden space-y-4">
-                      
+
+                      {/* Selected Questions - view / remove / edit-in-question-bank */}
+                      {manuallySelectedQuestions.length > 0 && (
+                        <div className="border border-indigo-200 bg-indigo-50/40 rounded-2xl p-4 shrink-0 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[12px] font-[900] text-indigo-700 uppercase tracking-wide">
+                              Selected Questions ({manuallySelectedQuestions.length})
+                            </span>
+                          </div>
+                          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                            {manuallySelectedQuestions.map(q => (
+                              <div key={q.id} className="flex items-start gap-3 bg-white border border-indigo-100 rounded-xl p-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{q.topic}</span>
+                                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">{q.questionType}</span>
+                                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{q.mark} Mark</span>
+                                  </div>
+                                  <div className="text-[12.5px] text-slate-700 font-medium line-clamp-2 break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {onEditQuestion && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditQuestionFromTest(q.id)}
+                                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                      title="Edit this question in Question Bank"
+                                    >
+                                      <Edit2 size={14} />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setManualSelectedIds(prev => prev.filter(id => id !== q.id))}
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Remove from this test"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Manual Mode Filters */}
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 shrink-0 flex flex-wrap gap-3">
                         <select className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none text-slate-700" value={manualFilters.topic} onChange={e => setManualFilters({...manualFilters, topic: e.target.value})}>
@@ -1184,7 +1284,7 @@ export default function TestsManager({ department = '', isTeacher = false }) {
                   disabled={!!getStep3Warning()}
                   className="px-6 py-2.5 bg-indigo-600 hover:bg-[#7C3AED] disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-xl transition-all shadow-md text-sm"
                 >
-                  Save Test Template Blueprint
+                  {editingTestId ? 'Save Changes' : 'Save Test Template Blueprint'}
                 </button>
               )}
 

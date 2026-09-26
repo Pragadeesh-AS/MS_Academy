@@ -444,7 +444,13 @@ export default function TeacherDashboard() {
              <QuestionBank lockedDepartment={teacherDepartment} initialEditQuestionId={editQuestionId} onClearEdit={() => setEditQuestionId(null)} />
           </div>
         )}
-        {activeTab === 'tests' && <TestsManager department={teacherDepartment} isTeacher={true} />}
+        {activeTab === 'tests' && (
+          <TestsManager
+            department={teacherDepartment}
+            isTeacher={true}
+            onEditQuestion={(qId) => { setEditQuestionId(qId); setActiveTab('questions'); }}
+          />
+        )}
         {activeTab === 'analytics' && <Analytics joinedStudents={joinedStudents} department={teacherDepartment} />}
         {activeTab === 'reported' && (
           <ReportedQuestions 

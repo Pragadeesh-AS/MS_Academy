@@ -1846,7 +1846,13 @@ export default function AdminDashboard() {
         {activeTab === 'ai' && <AIGenerator />}
 
         {/* Tests Manager Tab */}
-        {activeTab === 'tests' && <TestsManager department="" isTeacher={false} />}
+        {activeTab === 'tests' && (
+          <TestsManager
+            department=""
+            isTeacher={false}
+            onEditQuestion={(qId) => { setEditQuestionId(qId); setActiveTab('questions'); }}
+          />
+        )}
         
         {/* Blogs Tab */}
         {activeTab === 'blogs' && <BlogManager />}
