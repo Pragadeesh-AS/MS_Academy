@@ -746,7 +746,7 @@ export default function AdminDashboard() {
       
     } catch (error) {
       console.error('Failed to send teacher invite:', error);
-      alert('Failed to send teacher invite email. Please check your EmailJS configuration.');
+      alert(`Failed to send teacher invite email: ${error.message || 'email service unreachable'}. Check that the Google Apps Script email webhook (VITE_GAS_WEBHOOK_URL) is deployed and working.`);
     } finally {
       setIsTeacherInviting(false);
     }

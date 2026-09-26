@@ -133,7 +133,6 @@ export default function AIGenerator({ pairMode = false }) {
   const [status, setStatus] = useState('idle'); // idle | uploading | analyzing | review | success | error
   const [errorMsg, setErrorMsg] = useState('');
   const [extractedQuestions, setExtractedQuestions] = useState([]);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [importAsPremium, setImportAsPremium] = useState(false);
   // Extracted questions go to this person for review before they reach the question bank
   const [reviewerEmail, setReviewerEmail] = useState('');
@@ -618,7 +617,8 @@ IMPORTANT:
   };
 
   const handleApprove = () => {
-    setShowImportModal(true);
+    if (!canImport) return;
+    confirmApprove();
   };
 
   const handleSettingChange = (e) => {
@@ -633,7 +633,6 @@ IMPORTANT:
   };
 
   const confirmApprove = async () => {
-    setShowImportModal(false);
     setStatus('saving');
     setErrorMsg('');
     try {
@@ -696,246 +695,13 @@ IMPORTANT:
     }
   };
 
-  return (
-    <div className="max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
-            <BrainCircuit className="text-purple-600" size={28} />
-            AI Question Extractor
-          </h2>
-          <p className="text-slate-500 font-medium mt-1">Upload a PDF document and let the engine automatically extract and format questions.</p>
-        </div>
-        {status === 'review' && (
-          <button 
-            onClick={handleApprove}
-            className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(147,51,234,0.3)] flex items-center gap-2"
-          >
-            <Database size={18} /> Approve & Import
-          </button>
-        )}
-      </div>
+  const canImport = isValidReviewerEmail && !!importSettings.department && !!importSettings.year && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
 
-      {status === 'idle' && (
-        <div 
-          className="border-2 border-dashed border-slate-300 rounded-3xl p-12 bg-white flex flex-col items-center justify-center text-center transition-all hover:border-purple-400 hover:bg-purple-50 group cursor-pointer h-[400px]"
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current.click()}
-        >
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            className="hidden" 
-            accept=".pdf" 
-            onChange={handleFileChange} 
-          />
-          
-          {!file ? (
-            <>
-              <div className="w-20 h-20 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Upload size={32} />
-              </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Drag & Drop your PDF here</h3>
-              <p className="text-slate-500 font-medium max-w-sm">Ensure your PDF contains numbered questions and lettered options (e.g., 1. What is... A) ...)</p>
-            </>
-          ) : (
-            <>
-              <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
-                <FileText size={40} />
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-1">{file.name}</h3>
-              <p className="text-slate-500 font-medium text-sm mb-8">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-              
-              <div className="flex gap-4" onClick={(e) => e.stopPropagation()}>
-                <button 
-                  onClick={resetState}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={startAnalysis}
-                  className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(147,51,234,0.3)] flex items-center gap-2"
-                >
-                  <Sparkles size={18} /> Extract Questions
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {(status === 'uploading' || status === 'analyzing' || status === 'saving') && (
-        <div className="border border-slate-200 rounded-3xl p-16 bg-white flex flex-col items-center justify-center text-center h-[400px] shadow-sm">
-          <div className="relative mb-8">
-            <div className="w-24 h-24 border-4 border-slate-100 rounded-full"></div>
-            <div className="w-24 h-24 border-4 border-purple-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
-            <BrainCircuit size={32} className="text-purple-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-          </div>
-          <h3 className="text-xl font-bold text-slate-800 mb-2">
-            {status === 'uploading' && "Loading PDF..."}
-            {status === 'analyzing' && "Parsing & Extracting Questions..."}
-            {status === 'saving' && "Importing to Database..."}
-          </h3>
-          <p className="text-slate-500 font-medium max-w-sm">
-            {status === 'analyzing' ? "We are reading the document text and matching question patterns." : "Please do not close this window."}
-          </p>
-        </div>
-      )}
-
-      {status === 'success' && (
-        <div className="border border-slate-200 rounded-3xl p-16 bg-white flex flex-col items-center justify-center text-center h-[400px] shadow-sm">
-          <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6">
-            <CheckCircle2 size={48} />
-          </div>
-          <h3 className="text-2xl font-black text-slate-800 mb-2">Successfully Imported!</h3>
-          <p className="text-slate-500 font-medium">The extracted questions have been sent to the reviewer. They reach the Question Bank once approved.</p>
-        </div>
-      )}
-
-      {status === 'error' && (
-        <div className="border border-red-200 rounded-3xl p-16 bg-red-50 flex flex-col items-center justify-center text-center h-[400px] shadow-sm">
-          <div className="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
-            <AlertCircle size={48} />
-          </div>
-          <h3 className="text-2xl font-black text-slate-800 mb-2">Extraction Failed</h3>
-          <p className="text-slate-600 font-medium mb-6 max-w-md">{errorMsg}</p>
-          <div className="flex gap-4">
-            <button 
-              onClick={resetState}
-              className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl transition-colors"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={() => {
-                setStatus('idle');
-                setErrorMsg('');
-                startAnalysis();
-              }}
-              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(220,38,38,0.3)] flex items-center gap-2"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      )}
-
-        {status === 'review' && (
-          <div className="space-y-6">
-            {errorMsg && (
-              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-4">
-                <div className="p-2 bg-red-100 text-red-700 rounded-lg">
-                  <AlertCircle size={20} />
-                </div>
-                <div>
-                  <h4 className="font-bold text-red-900">Import Failed</h4>
-                  <p className="text-sm text-red-700 mt-1">{errorMsg}</p>
-                </div>
-              </div>
-            )}
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-start gap-4">
-              <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
-                <Sparkles size={20} />
-              </div>
-              <div>
-                <h4 className="font-bold text-blue-900">Review Extracted Questions</h4>
-                <p className="text-sm text-blue-700 mt-1">We successfully extracted {extractedQuestions.length} questions from <strong>{file?.name}</strong>. Please review them before importing.</p>
-              </div>
-            </div>
-  
-            <div className="grid grid-cols-1 gap-6">
-              {extractedQuestions.map((q, idx) => (
-                <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm relative group">
-                  <button 
-                    onClick={() => removeQuestion(idx)}
-                    className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                    title="Discard Question"
-                  >
-                    <X size={18} />
-                  </button>
-                  
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-md text-xs font-bold flex items-center gap-1">
-                      <Sparkles size={12} /> AI Extracted
-                    </span>
-                    <span className={`text-xs font-semibold px-3 py-1 rounded-md ${q.difficultyLevel === 'Hard' ? 'bg-red-100 text-red-700' : q.difficultyLevel === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>{q.difficultyLevel}</span>
-                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-md">{q.subject} • {q.topic}</span>
-                  </div>
-                  
-                  <h4 className="text-lg font-bold text-slate-900 mb-4" dangerouslySetInnerHTML={{ __html: q.questionText }}></h4>
-                  
-                  {q.questionType === 'Match' && q.matchColumn1 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-                      <div className="space-y-2 border border-slate-200 rounded-xl p-4 bg-slate-50">
-                        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Column 1</h5>
-                        {q.matchColumn1.filter(item => item.trim()).map((item, i) => (
-                          <div key={i} className="text-sm font-medium text-slate-700 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="space-y-2 border border-slate-200 rounded-xl p-4 bg-slate-50">
-                        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Column 2</h5>
-                        {q.matchColumn2.filter(item => item.trim()).map((item, i) => (
-                          <div key={i} className="text-sm font-medium text-slate-700 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-                            {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {!['Fill in the Blanks', 'Fill in Blanks'].includes(q.questionType) ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                      {['A', 'B', 'C', 'D'].map(opt => (
-                        <div key={opt} className={`p-3 rounded-xl border font-medium text-sm flex gap-3 ${((q.questionType === 'Single Choice' || q.questionType === 'Match') && q.correctAnswer === opt) || (q.questionType === 'Multiple Choice' && q.correctAnswers.includes(opt)) ? 'bg-green-50 border-green-200 text-green-800' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
-                          <span className={`w-6 h-6 rounded flex flex-shrink-0 items-center justify-center font-bold ${((q.questionType === 'Single Choice' || q.questionType === 'Match') && q.correctAnswer === opt) || (q.questionType === 'Multiple Choice' && q.correctAnswers.includes(opt)) ? 'bg-green-200 text-green-800' : 'bg-white border border-slate-300'}`}>
-                            {opt}
-                          </span>
-                          <span dangerouslySetInnerHTML={{ __html: q[`option${opt}`] }}></span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
-                      {q.fillBlankMode === 'Numeric Range' ? (
-                        <>
-                          <span className="font-bold text-green-800">Accepted Range: </span>
-                          <span className="text-green-700">{q.fillBlankRangeStart} to {q.fillBlankRangeEnd}</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="font-bold text-green-800">Numerical Answer: </span>
-                          <span className="text-green-700">{q.fillBlankAnswer || 'N/A'}</span>
-                        </>
-                      )}
-                    </div>
-                  )}
-  
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Explanation / Calculation</h5>
-                    <p className="text-sm text-slate-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: q.explanation }}></p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-      {showImportModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
-              <h3 className="text-xl font-bold text-slate-800">Import Details</h3>
-              <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+  const importDetailsForm = (
+    <div className="mt-6 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+      <h3 className="text-lg font-bold text-slate-800 mb-1">Import Details</h3>
+      <p className="text-sm text-slate-500 font-medium mb-5">These details apply to every extracted question. Once you click Approve & Import, the questions are sent straight to the reviewer.</p>
+      <div className="space-y-4">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Department</label>
                 <select 
@@ -1050,26 +816,247 @@ IMPORTANT:
                   <span className="block text-xs text-slate-500 mt-0.5">They will be imported as premium questions instead of the regular question bank.</span>
                 </span>
               </label>
-            </div>
-            
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
-              <button 
-                onClick={() => setShowImportModal(false)}
-                className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={confirmApprove}
-                disabled={!isValidReviewerEmail || !importSettings.department || !importSettings.year || !importSettings.subject || !importSettings.mark || !importSettings.difficultyLevel}
-                className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-sm flex items-center gap-2"
-              >
-                <Database size={18} /> Send for Review
-              </button>
-            </div>
+      </div>
+      {!canImport && (
+        <p className="mt-4 text-xs font-bold text-amber-600">Fill in Department, Regulation, Subject, Marks, Difficulty and a valid reviewer to enable Approve & Import.</p>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
+            <BrainCircuit className="text-purple-600" size={28} />
+            AI Question Extractor
+          </h2>
+          <p className="text-slate-500 font-medium mt-1">Upload a PDF document and let the engine automatically extract and format questions.</p>
+        </div>
+        {status === 'review' && (
+          <button 
+            onClick={handleApprove}
+            disabled={!canImport}
+            className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(147,51,234,0.3)] flex items-center gap-2"
+          >
+            <Database size={18} /> Approve & Import
+          </button>
+        )}
+      </div>
+
+      {status === 'idle' && (
+        <>
+        <div 
+          className="border-2 border-dashed border-slate-300 rounded-3xl p-12 bg-white flex flex-col items-center justify-center text-center transition-all hover:border-purple-400 hover:bg-purple-50 group cursor-pointer h-[400px]"
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current.click()}
+        >
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept=".pdf" 
+            onChange={handleFileChange} 
+          />
+          
+          {!file ? (
+            <>
+              <div className="w-20 h-20 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                <Upload size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Drag & Drop your PDF here</h3>
+              <p className="text-slate-500 font-medium max-w-sm">Ensure your PDF contains numbered questions and lettered options (e.g., 1. What is... A) ...)</p>
+            </>
+          ) : (
+            <>
+              <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
+                <FileText size={40} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-1">{file.name}</h3>
+              <p className="text-slate-500 font-medium text-sm mb-8">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+              
+              <div className="flex gap-4" onClick={(e) => e.stopPropagation()}>
+                <button 
+                  onClick={resetState}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={startAnalysis}
+                  className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(147,51,234,0.3)] flex items-center gap-2"
+                >
+                  <Sparkles size={18} /> Extract Questions
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+        {importDetailsForm}
+        </>
+      )}
+
+      {(status === 'uploading' || status === 'analyzing' || status === 'saving') && (
+        <div className="border border-slate-200 rounded-3xl p-16 bg-white flex flex-col items-center justify-center text-center h-[400px] shadow-sm">
+          <div className="relative mb-8">
+            <div className="w-24 h-24 border-4 border-slate-100 rounded-full"></div>
+            <div className="w-24 h-24 border-4 border-purple-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+            <BrainCircuit size={32} className="text-purple-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-800 mb-2">
+            {status === 'uploading' && "Loading PDF..."}
+            {status === 'analyzing' && "Parsing & Extracting Questions..."}
+            {status === 'saving' && "Importing to Database..."}
+          </h3>
+          <p className="text-slate-500 font-medium max-w-sm">
+            {status === 'analyzing' ? "We are reading the document text and matching question patterns." : "Please do not close this window."}
+          </p>
+        </div>
+      )}
+
+      {status === 'success' && (
+        <div className="border border-slate-200 rounded-3xl p-16 bg-white flex flex-col items-center justify-center text-center h-[400px] shadow-sm">
+          <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6">
+            <CheckCircle2 size={48} />
+          </div>
+          <h3 className="text-2xl font-black text-slate-800 mb-2">Successfully Imported!</h3>
+          <p className="text-slate-500 font-medium">The extracted questions have been sent to the reviewer. They reach the Question Bank once approved.</p>
+        </div>
+      )}
+
+      {status === 'error' && (
+        <div className="border border-red-200 rounded-3xl p-16 bg-red-50 flex flex-col items-center justify-center text-center h-[400px] shadow-sm">
+          <div className="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
+            <AlertCircle size={48} />
+          </div>
+          <h3 className="text-2xl font-black text-slate-800 mb-2">Extraction Failed</h3>
+          <p className="text-slate-600 font-medium mb-6 max-w-md">{errorMsg}</p>
+          <div className="flex gap-4">
+            <button 
+              onClick={resetState}
+              className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={() => {
+                setStatus('idle');
+                setErrorMsg('');
+                startAnalysis();
+              }}
+              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(220,38,38,0.3)] flex items-center gap-2"
+            >
+              Retry
+            </button>
           </div>
         </div>
       )}
+
+        {status === 'review' && (
+          <div className="space-y-6">
+            {importDetailsForm}
+            {errorMsg && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-4">
+                <div className="p-2 bg-red-100 text-red-700 rounded-lg">
+                  <AlertCircle size={20} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-red-900">Import Failed</h4>
+                  <p className="text-sm text-red-700 mt-1">{errorMsg}</p>
+                </div>
+              </div>
+            )}
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-start gap-4">
+              <div className="p-2 bg-blue-100 text-blue-700 rounded-lg">
+                <Sparkles size={20} />
+              </div>
+              <div>
+                <h4 className="font-bold text-blue-900">Review Extracted Questions</h4>
+                <p className="text-sm text-blue-700 mt-1">We successfully extracted {extractedQuestions.length} questions from <strong>{file?.name}</strong>. Please review them before importing.</p>
+              </div>
+            </div>
+  
+            <div className="grid grid-cols-1 gap-6">
+              {extractedQuestions.map((q, idx) => (
+                <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm relative group">
+                  <button 
+                    onClick={() => removeQuestion(idx)}
+                    className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                    title="Discard Question"
+                  >
+                    <X size={18} />
+                  </button>
+                  
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-md text-xs font-bold flex items-center gap-1">
+                      <Sparkles size={12} /> AI Extracted
+                    </span>
+                    <span className={`text-xs font-semibold px-3 py-1 rounded-md ${q.difficultyLevel === 'Hard' ? 'bg-red-100 text-red-700' : q.difficultyLevel === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>{q.difficultyLevel}</span>
+                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-md">{q.subject} • {q.topic}</span>
+                  </div>
+                  
+                  <h4 className="text-lg font-bold text-slate-900 mb-4" dangerouslySetInnerHTML={{ __html: q.questionText }}></h4>
+                  
+                  {q.questionType === 'Match' && q.matchColumn1 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+                      <div className="space-y-2 border border-slate-200 rounded-xl p-4 bg-slate-50">
+                        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Column 1</h5>
+                        {q.matchColumn1.filter(item => item.trim()).map((item, i) => (
+                          <div key={i} className="text-sm font-medium text-slate-700 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="space-y-2 border border-slate-200 rounded-xl p-4 bg-slate-50">
+                        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Column 2</h5>
+                        {q.matchColumn2.filter(item => item.trim()).map((item, i) => (
+                          <div key={i} className="text-sm font-medium text-slate-700 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                            {item}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {!['Fill in the Blanks', 'Fill in Blanks'].includes(q.questionType) ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                      {['A', 'B', 'C', 'D'].map(opt => (
+                        <div key={opt} className={`p-3 rounded-xl border font-medium text-sm flex gap-3 ${((q.questionType === 'Single Choice' || q.questionType === 'Match') && q.correctAnswer === opt) || (q.questionType === 'Multiple Choice' && q.correctAnswers.includes(opt)) ? 'bg-green-50 border-green-200 text-green-800' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                          <span className={`w-6 h-6 rounded flex flex-shrink-0 items-center justify-center font-bold ${((q.questionType === 'Single Choice' || q.questionType === 'Match') && q.correctAnswer === opt) || (q.questionType === 'Multiple Choice' && q.correctAnswers.includes(opt)) ? 'bg-green-200 text-green-800' : 'bg-white border border-slate-300'}`}>
+                            {opt}
+                          </span>
+                          <span dangerouslySetInnerHTML={{ __html: q[`option${opt}`] }}></span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+                      {q.fillBlankMode === 'Numeric Range' ? (
+                        <>
+                          <span className="font-bold text-green-800">Accepted Range: </span>
+                          <span className="text-green-700">{q.fillBlankRangeStart} to {q.fillBlankRangeEnd}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-bold text-green-800">Numerical Answer: </span>
+                          <span className="text-green-700">{q.fillBlankAnswer || 'N/A'}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
+  
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Explanation / Calculation</h5>
+                    <p className="text-sm text-slate-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: q.explanation }}></p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
     </div>
   );
 }
