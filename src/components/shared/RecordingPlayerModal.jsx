@@ -1,0 +1,216 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { X, Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react';
+
+const fmt = (s) => {
+  if (!isFinite(s) || s < 0) return '0:00';
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    : `${m}:${String(sec).padStart(2, '0')}`;
+};
+
+// MediaRecorder webm files often never get a real duration written into their container -
+// the browser reports it as Infinity forever, which is why the native scrubber and total-time
+// looked broken/missing. A hidden probe element forces the browser to discover the true length
+// by seeking near the end once; this never touches the actual player, so it can't disrupt playback.
+const probeDuration = (url) => new Promise((resolve) => {
+  const probe = document.createElement('video');
+  probe.preload = 'metadata';
+  probe.muted = true;
+  const timer = setTimeout(() => resolve(null), 8000);
+  probe.onloadedmetadata = () => {
+    if (!isFinite(probe.duration)) {
+      probe.currentTime = 1e101;
+      probe.ontimeupdate = () => {
+        clearTimeout(timer);
+        resolve(isFinite(probe.duration) ? probe.duration : null);
+      };
+    } else {
+      clearTimeout(timer);
+      resolve(probe.duration);
+    }
+  };
+  probe.onerror = () => { clearTimeout(timer); resolve(null); };
+  probe.src = url;
+});
+
+// Shared "watch a recording" modal used by the student, teacher and admin dashboards.
+// recording: { id, url, duration? } - duration (seconds) is the wall-clock length captured
+// by the recorder itself at upload time, when available; it's authoritative and skips probing.
+export default function RecordingPlayerModal({ recording, onClose }) {
+  const videoRef = useRef(null);
+  const barRef = useRef(null);
+  const lastSaveRef = useRef(0);
+  const closedRef = useRef(false);
+
+  const [duration, setDuration] = useState(
+    recording.duration && isFinite(recording.duration) && recording.duration > 0 ? recording.duration : null
+  );
+  const [current, setCurrent] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [muted, setMuted] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [dragFraction, setDragFraction] = useState(0);
+
+  const progressKey = `video_progress_${(sessionStorage.getItem('auth_email') || 'anon').toLowerCase()}_${recording.id}`;
+  const getSavedTime = () => {
+    try {
+      const v = parseFloat(localStorage.getItem(progressKey));
+      return isFinite(v) && v > 0 ? v : 0;
+    } catch { return 0; }
+  };
+  const saveTime = (time, total) => {
+    if (!isFinite(time)) return;
+    try {
+      if (total && time > total - 8) localStorage.removeItem(progressKey);
+      else if (time > 3) localStorage.setItem(progressKey, String(time));
+    } catch { /* localStorage unavailable - resume just won't persist */ }
+  };
+
+  // Resolve the real duration once, if the recorder didn't already save one.
+  useEffect(() => {
+    let cancelled = false;
+    if (duration === null) {
+      probeDuration(recording.url).then(d => { if (!cancelled && d) setDuration(d); });
+    }
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recording.id]);
+
+  // Resume where they left off, as soon as the element can seek.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const applyResume = () => {
+      const resumeAt = getSavedTime();
+      if (resumeAt > 0) {
+        try { v.currentTime = resumeAt; } catch { /* ignore */ }
+      }
+    };
+    v.addEventListener('loadedmetadata', applyResume);
+    return () => v.removeEventListener('loadedmetadata', applyResume);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recording.id]);
+
+  const handleTimeUpdate = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (!dragging) setCurrent(v.currentTime);
+    const now = Date.now();
+    if (now - lastSaveRef.current > 4000) {
+      lastSaveRef.current = now;
+      saveTime(v.currentTime, duration);
+    }
+  };
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) v.play(); else v.pause();
+  };
+
+  const fractionFromEvent = (e) => {
+    const bar = barRef.current;
+    if (!bar) return 0;
+    const rect = bar.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+  };
+
+  const seekToFraction = (fraction) => {
+    const v = videoRef.current;
+    if (!v || !duration) return;
+    const target = fraction * duration;
+    try { v.currentTime = target; } catch { /* ignore */ }
+    setCurrent(target);
+    saveTime(target, duration);
+  };
+
+  const handleClose = () => {
+    if (closedRef.current) return;
+    closedRef.current = true;
+    const v = videoRef.current;
+    if (v) saveTime(v.currentTime, duration);
+    onClose();
+  };
+
+  // ESC to close, like the rest of the app's modals.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') handleClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const shownCurrent = dragging ? dragFraction * (duration || 0) : current;
+  const pct = duration ? Math.min(100, (shownCurrent / duration) * 100) : 0;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={handleClose}></div>
+      <div className="relative z-10 w-full max-w-5xl rounded-2xl overflow-hidden shadow-2xl bg-black border border-slate-800 animate-in zoom-in-95 duration-300">
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 z-20 w-10 h-10 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors backdrop-blur-sm"
+        >
+          <X size={20} />
+        </button>
+
+        <video
+          ref={videoRef}
+          key={recording.id}
+          src={recording.url}
+          autoPlay
+          onClick={togglePlay}
+          onTimeUpdate={handleTimeUpdate}
+          onPlay={() => setPlaying(true)}
+          onPause={() => { setPlaying(false); const v = videoRef.current; if (v) saveTime(v.currentTime, duration); }}
+          onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
+          className="w-full h-auto max-h-[80vh] outline-none cursor-pointer bg-black block"
+        />
+
+        {/* Custom control bar - independent of the video element's own (often broken) duration */}
+        <div className="bg-slate-900 px-4 py-3 flex flex-col gap-2 select-none">
+          <div
+            ref={barRef}
+            className="relative h-2.5 bg-slate-700 rounded-full cursor-pointer group"
+            onClick={(e) => seekToFraction(fractionFromEvent(e))}
+            onMouseDown={(e) => { setDragging(true); setDragFraction(fractionFromEvent(e)); }}
+            onMouseMove={(e) => { if (dragging) setDragFraction(fractionFromEvent(e)); }}
+            onMouseUp={(e) => { if (dragging) { seekToFraction(fractionFromEvent(e)); setDragging(false); } }}
+            onMouseLeave={() => setDragging(false)}
+          >
+            <div className="absolute inset-y-0 left-0 bg-indigo-500 rounded-full pointer-events-none" style={{ width: `${pct}%` }} />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+              style={{ left: `calc(${pct}% - 7px)` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={togglePlay} className="text-white hover:text-indigo-400 transition-colors">
+                {playing ? <Pause size={18} /> : <Play size={18} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => { const v = videoRef.current; if (v) v.muted = !v.muted; }}
+                className="text-white hover:text-indigo-400 transition-colors"
+              >
+                {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              </button>
+              <span className="tabular-nums">{fmt(shownCurrent)} / {duration ? fmt(duration) : '--:--'}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => videoRef.current?.requestFullscreen?.()}
+              className="text-white hover:text-indigo-400 transition-colors"
+              title="Fullscreen"
+            >
+              <Maximize size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
