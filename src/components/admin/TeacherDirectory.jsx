@@ -196,7 +196,7 @@ const TeacherDirectory = ({
                     <span className="text-[13px] font-medium">Total Faculty</span>
                   </div>
                   <h3 className="text-[34px] font-bold text-[#0F172A] leading-none">
-                    {invitedTeachers.length > 0 ? invitedTeachers.length : 82}
+                    {invitedTeachers.length}
                   </h3>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-[#2563EB]">
@@ -213,7 +213,7 @@ const TeacherDirectory = ({
                     <span className="text-[13px] font-medium">Active Faculty</span>
                   </div>
                   <h3 className="text-[34px] font-bold text-[#0F172A] leading-none">
-                    {invitedTeachers.filter(t => t.status === 'Accepted').length > 0 ? invitedTeachers.filter(t => t.status === 'Accepted').length : 76}
+                    {invitedTeachers.filter(t => t.status === 'Accepted').length}
                   </h3>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center text-[#10B981]">
@@ -230,7 +230,7 @@ const TeacherDirectory = ({
                     <span className="text-[13px] font-medium">Pending Approval</span>
                   </div>
                   <h3 className="text-[34px] font-bold text-[#0F172A] leading-none">
-                    {invitedTeachers.filter(t => t.status !== 'Accepted').length > 0 ? invitedTeachers.filter(t => t.status !== 'Accepted').length : 5}
+                    {invitedTeachers.filter(t => t.status !== 'Accepted').length}
                   </h3>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center text-[#F59E0B]">
@@ -247,7 +247,7 @@ const TeacherDirectory = ({
                     <span className="text-[13px] font-medium">Verified Faculty</span>
                   </div>
                   <h3 className="text-[34px] font-bold text-[#0F172A] leading-none">
-                    96%
+                    {invitedTeachers.length > 0 ? Math.round((invitedTeachers.filter(t => t.status === 'Accepted').length / invitedTeachers.length) * 100) : 0}%
                   </h3>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center text-[#8B5CF6]">

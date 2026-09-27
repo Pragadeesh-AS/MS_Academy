@@ -14,6 +14,9 @@ import {
   BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud, MoreHorizontal, Trophy
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import LiveTestOverlay, { startLiveTest } from '../liveTest/LiveTestOverlay';
+import { PollCard, PollComposer } from '../liveTest/PollCard';
+import ParticipantsPanel, { buildPeople } from '../liveTest/ParticipantsPanel';
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
 import AgoraRTC, {
@@ -285,6 +288,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const client = useRTCClient();
   const connectionState = useConnectionState();
   const remoteUsers = useRemoteUsers();
+  const [isPeopleOpen, setIsPeopleOpen] = useState(false);
   const networkQuality = useNetworkQuality();
   
   const getQuality = (uid) => {
@@ -302,8 +306,14 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [qbSearchFilter, setQbSearchFilter] = useState("");
   const [qbDifficultyFilter, setQbDifficultyFilter] = useState("ALL");
   const [qbTypeFilter, setQbTypeFilter] = useState("ALL");
+  const [qbSubjectFilter, setQbSubjectFilter] = useState("ALL");
+  const [qbTopicFilter, setQbTopicFilter] = useState("ALL");
   const [activeQuestionState, setActiveQuestionState] = useState(null);
   const activeQuestionStateRef = useRef(activeQuestionState);
+  const [liveTest, setLiveTest] = useState(null);
+  const [participantsRaw, setParticipantsRaw] = useState([]);
+  const [qbMode, setQbMode] = useState('present'); // 'present' | 'live'
+  const [qbSeconds, setQbSeconds] = useState(60);
   const [newRecordingName, setNewRecordingName] = useState('');
   const [sessionBundleId, setSessionBundleId] = useState('free');
 
@@ -339,6 +349,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       setParticipantNames(names);
       setParticipantScores(scores);
       setParticipantRoles(roles);
+      setParticipantsRaw(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     // Listen for session state (Question Bank sync)
@@ -346,6 +357,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.bundleId) setSessionBundleId(data.bundleId);
+        setLiveTest(data.liveTest || null);
         if (data.activeQuestionState) {
           setActiveQuestionState(data.activeQuestionState);
         } else {
@@ -534,6 +546,17 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     setIsQBModalOpen(false);
     setSelectedQBIds([]);
     setQbSearchFilter("");
+
+    if (qbMode === 'live') {
+      const secs = Math.max(5, parseInt(qbSeconds) || 0);
+      try {
+        await startLiveTest(sessionId, selectedQList, secs);
+      } catch (err) {
+        console.error('Failed to start live test', err);
+        alert('Could not start the live test. Try selecting fewer questions.');
+      }
+      return;
+    }
 
     await updateDoc(doc(db, 'live_sessions', sessionId), {
       activeQuestionState: {
@@ -941,6 +964,16 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3 md:gap-4 shrink-0">
+          {/* People Button */}
+          <button
+            onClick={() => setIsPeopleOpen(o => !o)}
+            className={`w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center relative text-white control-btn ${isPeopleOpen ? 'ring-2 ring-blue-400' : ''}`}
+            title="Who is in the class"
+          >
+            <Users size={18} strokeWidth={1.5} />
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-[10px] font-bold flex items-center justify-center">{remoteUsers.filter(u => ![999997, 999998, 999999].includes(Number(u.uid))).length + 1}</span>
+          </button>
+
           {/* Chat Button */}
           <button
             onClick={toggleChat}
@@ -968,6 +1001,14 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
         </div>
       </div>
 
+      {isPeopleOpen && (
+        <ParticipantsPanel people={buildPeople({ myUid: client.uid, myRole: 'teacher', remoteUsers, names: participantNames, roles: participantRoles })} onClose={() => setIsPeopleOpen(false)} />
+      )}
+
+      {liveTest?.active && (
+        <LiveTestOverlay liveTest={liveTest} participants={participantsRaw} myUid={client.uid} sessionId={sessionId} isTeacher />
+      )}
+
       {/* Question Bank Modal */}
       {isQBModalOpen && (
         <div className="absolute inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -976,7 +1017,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
             <h3 className="text-xl font-bold text-slate-900 mb-2 flex items-center gap-2"><BookOpen className="text-indigo-600" /> Select Questions to Present</h3>
             <p className="text-slate-500 text-sm mb-4">Choose the exact questions you'd like to share with the class.</p>
 
-            <div className="flex items-center gap-2 mb-4 shrink-0">
+            <div className="flex items-center gap-2 mb-4 shrink-0 flex-wrap">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input 
@@ -995,7 +1036,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                 <option value="ALL">All Types</option>
                 <option value="Single Choice">Single Choice</option>
                 <option value="Multiple Choice">Multiple Choice</option>
-                <option value="Fill in the Blanks">Fill in the Blanks</option>
+                <option value="Fill in Blanks">Fill in the Blanks</option>
                 <option value="Match">Match</option>
               </select>
               <select 
@@ -1008,6 +1049,28 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                 <option value="Medium">Medium</option>
                 <option value="Hard">Hard</option>
               </select>
+              <select
+                value={qbSubjectFilter}
+                onChange={(e) => { setQbSubjectFilter(e.target.value); setQbTopicFilter("ALL"); }}
+                className="bg-slate-50 border border-slate-200 text-sm font-semibold rounded-xl px-4 py-3 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-all cursor-pointer max-w-[180px]"
+              >
+                <option value="ALL">All Subjects</option>
+                {[...new Set((departmentQuestions || []).map(q => (q.subject || "").trim()).filter(Boolean))].sort().map(sub => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </select>
+              <select
+                value={qbTopicFilter}
+                onChange={(e) => setQbTopicFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-sm font-semibold rounded-xl px-4 py-3 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-all cursor-pointer max-w-[180px]"
+              >
+                <option value="ALL">All Topics</option>
+                {[...new Set((departmentQuestions || [])
+                  .filter(q => qbSubjectFilter === "ALL" || (q.subject || "").trim().toLowerCase() === qbSubjectFilter.toLowerCase())
+                  .map(q => (q.topic || "").trim()).filter(Boolean))].sort().map(top => (
+                  <option key={top} value={top}>{top}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar border border-slate-200 rounded-xl mb-4 bg-slate-50 p-2 space-y-2 min-h-[300px]">
@@ -1017,7 +1080,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                   (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                   (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
                   (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase())) &&
-                  (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase()))
+                  (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase())) &&
+                  (qbSubjectFilter === "ALL" || (q.subject || "").trim().toLowerCase() === qbSubjectFilter.toLowerCase()) &&
+                  (qbTopicFilter === "ALL" || (q.topic || "").trim().toLowerCase() === qbTopicFilter.toLowerCase())
                 )
                 .map((q, idx) => {
                   const isSelected = selectedQBIds.includes(q.id);
@@ -1070,7 +1135,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                         (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                         (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
                         (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase())) &&
-                        (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase()))
+                        (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase())) &&
+                  (qbSubjectFilter === "ALL" || (q.subject || "").trim().toLowerCase() === qbSubjectFilter.toLowerCase()) &&
+                  (qbTopicFilter === "ALL" || (q.topic || "").trim().toLowerCase() === qbTopicFilter.toLowerCase())
                       ).map(q => q.id);
                     
                     const allSelected = filteredIds.length > 0 && filteredIds.every(id => selectedQBIds.includes(id));
@@ -1088,24 +1155,47 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                     (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                     (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
                     (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase())) &&
-                    (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase()))
+                    (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase())) &&
+                  (qbSubjectFilter === "ALL" || (q.subject || "").trim().toLowerCase() === qbSubjectFilter.toLowerCase()) &&
+                  (qbTopicFilter === "ALL" || (q.topic || "").trim().toLowerCase() === qbTopicFilter.toLowerCase())
                   ).every(q => selectedQBIds.includes(q.id)) && departmentQuestions.filter(q => 
                     ((q.questionText || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                     (q.topic || '').toLowerCase().includes(qbSearchFilter.toLowerCase()) ||
                     (q.subject || '').toLowerCase().includes(qbSearchFilter.toLowerCase())) &&
                     (qbDifficultyFilter === "ALL" || (q.difficultyLevel && q.difficultyLevel.toLowerCase() === qbDifficultyFilter.toLowerCase())) &&
-                    (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase()))
+                    (qbTypeFilter === "ALL" || (q.questionType && q.questionType.toLowerCase() === qbTypeFilter.toLowerCase())) &&
+                  (qbSubjectFilter === "ALL" || (q.subject || "").trim().toLowerCase() === qbSubjectFilter.toLowerCase()) &&
+                  (qbTopicFilter === "ALL" || (q.topic || "").trim().toLowerCase() === qbTopicFilter.toLowerCase())
                   ).length > 0 ? "Deselect All" : "Select All"}
                 </button>
                 <span className="text-sm font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">Selected: {selectedQBIds.length}</span>
               </div>
-              <button 
-                onClick={handleStartQB}
-                disabled={selectedQBIds.length === 0}
-                className="py-3 px-6 bg-indigo-600 disabled:bg-indigo-400 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-colors"
-              >
-                Start Presentation
-              </button>
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                <div className="flex bg-slate-100 p-1 rounded-xl">
+                  <button type="button" onClick={() => setQbMode('present')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${qbMode === 'present' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}>Present</button>
+                  <button type="button" onClick={() => setQbMode('live')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${qbMode === 'live' ? 'bg-white shadow-sm text-red-600' : 'text-slate-500'}`}>Live Test</button>
+                </div>
+                {qbMode === 'live' && (
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl" title="Time each student gets per question">
+                    <Clock size={14} />
+                    <input
+                      type="number"
+                      min="5"
+                      value={qbSeconds}
+                      onChange={(e) => setQbSeconds(e.target.value)}
+                      className="w-14 bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm font-bold text-slate-800 focus:outline-none focus:border-indigo-400"
+                    />
+                    sec / question
+                  </label>
+                )}
+                <button
+                  onClick={handleStartQB}
+                  disabled={selectedQBIds.length === 0}
+                  className={`py-3 px-6 disabled:opacity-60 text-white font-bold rounded-xl shadow-lg transition-colors ${qbMode === 'live' ? 'bg-red-500 hover:bg-red-600 shadow-red-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
+                >
+                  {qbMode === 'live' ? 'Start Live Test' : 'Start Presentation'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1165,6 +1255,8 @@ export default function LiveClasses({ department }) {
 
   // Chat State
   const [chatMessages, setChatMessages] = useState([]);
+  const [chatVotes, setChatVotes] = useState([]);
+  const [isPollComposerOpen, setIsPollComposerOpen] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const chatEndRef = useRef(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -1326,13 +1418,15 @@ export default function LiveClasses({ department }) {
     if (!isInCall || !currentSessionId) return;
     const q = query(collection(db, 'live_chats'), where('sessionId', '==', currentSessionId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setChatVotes(allDocs.filter(m => m.type === 'poll_vote'));
+      const messages = allDocs.filter(m => m.type !== 'poll_vote');
       messages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
 
       if (prevMessagesLength.current > 0 && messages.length > prevMessagesLength.current && !isChatOpen) {
         const lastMsg = messages[messages.length - 1];
         if (lastMsg.senderEmail !== sessionStorage.getItem('auth_email')) {
-          setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.message });
+          setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.type === 'poll' ? `New poll: ${lastMsg.question}` : lastMsg.message });
           setTimeout(() => setChatToast(prev => ({ ...prev, show: false })), 5000);
         }
       }
@@ -1784,7 +1878,9 @@ export default function LiveClasses({ department }) {
                       <p className="text-xs mt-1">Start the conversation!</p>
                     </div>
                   ) : (
-                    chatMessages.map((msg) => (
+                    chatMessages.map((msg) => msg.type === 'poll' ? (
+                      <PollCard key={msg.id} poll={msg} votes={chatVotes} isTeacher sessionId={currentSessionId} />
+                    ) : (
                       <div key={msg.id} className={`flex flex-col ${msg.senderEmail === sessionStorage.getItem('auth_email') ? 'items-end' : 'items-start'}`}>
                         <span className="text-[10px] font-bold text-slate-500 mb-1 ml-1">{msg.senderName}</span>
                         <div className={`px-4 py-2 rounded-2xl max-w-[85%] text-[13px] ${msg.senderEmail === sessionStorage.getItem('auth_email') ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-sm'}`}>
@@ -1796,6 +1892,11 @@ export default function LiveClasses({ department }) {
                   <div ref={chatEndRef} />
                 </div>
                 
+                {isPollComposerOpen ? (
+                  <PollComposer sessionId={currentSessionId} onClose={() => setIsPollComposerOpen(false)} />
+                ) : (
+                  <button type="button" onClick={() => setIsPollComposerOpen(true)} className="mx-3 mt-2 py-2 text-xs font-bold text-indigo-300 hover:text-white bg-slate-800 hover:bg-indigo-600 rounded-lg border border-slate-700 transition-colors">Create Poll</button>
+                )}
                 <form onSubmit={sendMessage} className="p-3 border-t border-slate-800 bg-slate-900/80">
                   <div className="flex items-center gap-2 bg-slate-800 rounded-xl p-1 border border-slate-700 focus-within:border-blue-500/50 transition-colors">
                     <input

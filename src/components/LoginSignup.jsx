@@ -77,7 +77,6 @@ export default function LoginSignup() {
       
       if (!querySnapshot.empty) {
         const docId = querySnapshot.docs[0].id;
-        await updateDoc(doc(db, 'invited_typists', docId), { status: 'Accepted' });
         localStorage.setItem('pair_id', docId);
         localStorage.setItem('pair_role', pairRole);
         return true;

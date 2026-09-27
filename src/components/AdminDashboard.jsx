@@ -772,6 +772,18 @@ export default function AdminDashboard() {
     }
   };
 
+  const updateTypist = async (pairId, updates) => {
+    try {
+      await updateDoc(doc(db, 'invited_typists', pairId), updates);
+      setInvitedTypists(prev => prev.map(t => t.id === pairId ? { ...t, ...updates } : t));
+      return true;
+    } catch (e) {
+      console.error('Failed to update pair', e);
+      alert('Failed to update pair. Please try again.');
+      return false;
+    }
+  };
+
   const confirmDeleteAction = async () => {
     if (!confirmDeleteObj) return;
     const { type, id } = confirmDeleteObj;
@@ -1620,6 +1632,7 @@ export default function AdminDashboard() {
                 message: 'Are you sure you want to remove this pair?'
               });
             }}
+            updateTypist={updateTypist}
             onInvite={() => setIsTypistInviteModalOpen(true)}
           />
         )}
@@ -2284,6 +2297,8 @@ export default function AdminDashboard() {
                   const newPair = {
                     ...typistInviteForm,
                     status: 'Pending',
+                    typistAccepted: false,
+                    reviewerAccepted: false,
                     invitedAt: new Date().toISOString()
                   };
                   const docRef = await addDoc(collection(db, 'invited_typists'), newPair);

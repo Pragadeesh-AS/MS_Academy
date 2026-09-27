@@ -36,6 +36,9 @@ import AgoraRTC, {
   useLocalCameraTrack,
   useNetworkQuality
 } from "agora-rtc-react";
+import LiveTestOverlay from './liveTest/LiveTestOverlay';
+import { PollCard } from './liveTest/PollCard';
+import ParticipantsPanel, { buildPeople } from './liveTest/ParticipantsPanel';
 
 const sendEmailViaGAS = async (to, subject, htmlMessage) => {
   const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
@@ -79,6 +82,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   }, [client.uid, sessionId]);
 
   const [activeQuestionState, setActiveQuestionState] = useState(null);
+  const [liveTest, setLiveTest] = useState(null);
+  const [participantsRaw, setParticipantsRaw] = useState([]);
   const [studentGuess, setStudentGuess] = useState(null);
   const [guessProcessed, setGuessProcessed] = useState(false); // The option the student guessed
 
@@ -98,12 +103,14 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
       setParticipantNames(names);
       setParticipantRoles(roles);
       setParticipantScores(scores);
+      setParticipantsRaw(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     // Listen for session state (Question Bank sync)
     const unsubSession = onSnapshot(doc(db, 'live_sessions', sessionId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
+        setLiveTest(data.liveTest || null);
         if (data.activeQuestionState) {
           // If the question changed, reset the student's guess
           setActiveQuestionState(prevState => {
@@ -225,6 +232,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   }, [localMicrophoneTrack, client, client.connectionState]);
 
   const remoteUsers = useRemoteUsers();
+  const [isPeopleOpen, setIsPeopleOpen] = useState(false);
   const networkQuality = useNetworkQuality();
   const remoteUserStyle = { width: '100%', height: '100%' };
 
@@ -519,6 +527,16 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
         </div>
         
         <div className="flex items-center gap-4">
+          {/* People Button */}
+          <button
+            onClick={() => setIsPeopleOpen(o => !o)}
+            className={`w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0 rounded-full flex items-center justify-center relative text-white control-btn ${isPeopleOpen ? 'ring-2 ring-blue-400' : ''}`}
+            title="Who is in the class"
+          >
+            <Users size={18} strokeWidth={1.5} />
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-[10px] font-bold flex items-center justify-center">{remoteUsers.filter(u => ![999997, 999998, 999999].includes(Number(u.uid))).length + 1}</span>
+          </button>
+
           {/* Chat Button */}
           <button 
             onClick={toggleChat} 
@@ -545,6 +563,14 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
         </div>
       </div>
 
+
+      {isPeopleOpen && (
+        <ParticipantsPanel people={buildPeople({ myUid: client.uid, myRole: 'student', remoteUsers, names: participantNames, roles: participantRoles })} onClose={() => setIsPeopleOpen(false)} />
+      )}
+
+      {liveTest?.active && (
+        <LiveTestOverlay liveTest={liveTest} participants={participantsRaw} myUid={client.uid} sessionId={sessionId} />
+      )}
     </div>
   );
 };
@@ -626,6 +652,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
   
   // Chat State
   const [chatMessages, setChatMessages] = useState([]);
+  const [chatVotes, setChatVotes] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const chatEndRef = useRef(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -838,13 +865,15 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     if (!isInCall || !currentSession) return;
     const q = query(collection(db, 'live_chats'), where('sessionId', '==', currentSession.id));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setChatVotes(allDocs.filter(m => m.type === 'poll_vote'));
+      const messages = allDocs.filter(m => m.type !== 'poll_vote');
       messages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
       
       if (prevMessagesLength.current > 0 && messages.length > prevMessagesLength.current && !isChatOpen) {
         const lastMsg = messages[messages.length - 1];
         if (lastMsg.senderEmail !== sessionStorage.getItem('auth_email')) {
-          setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.message });
+          setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.type === 'poll' ? `New poll: ${lastMsg.question}` : lastMsg.message });
           setTimeout(() => setChatToast(prev => ({ ...prev, show: false })), 5000);
         }
       }
@@ -1234,7 +1263,9 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                 {chatMessages.length === 0 ? (
                   <div className="text-center text-slate-500 text-sm mt-10">No messages yet. Say hi!</div>
                 ) : (
-                  chatMessages.map(msg => (
+                  chatMessages.map(msg => msg.type === 'poll' ? (
+                    <PollCard key={msg.id} poll={msg} votes={chatVotes} sessionId={currentSession.id} />
+                  ) : (
                     <div key={msg.id} className="flex flex-col">
                       <span className="text-[11px] font-bold text-slate-500 mb-1">{msg.senderName}</span>
                       <div className={`px-3 py-2 rounded-xl text-sm max-w-[90%] break-words ${msg.senderEmail === sessionStorage.getItem('auth_email') ? 'bg-blue-600 text-white self-end rounded-tr-sm' : 'bg-slate-800 text-slate-200 self-start rounded-tl-sm'}`}>
