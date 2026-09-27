@@ -64,6 +64,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   const [participantNames, setParticipantNames] = useState({});
   const [participantRoles, setParticipantRoles] = useState({});
   const [participantScores, setParticipantScores] = useState({});
+  const [participantEmails, setParticipantEmails] = useState({});
 
   useJoin({ appid: appId, channel: channel, token: token, uid: null });
   const client = useRTCClient();
@@ -95,14 +96,17 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
       const names = {};
       const roles = {};
       const scores = {};
-      snapshot.forEach(d => { 
-        names[d.id] = d.data().name; 
+      const emails = {};
+      snapshot.forEach(d => {
+        names[d.id] = d.data().name;
         roles[d.id] = d.data().role;
         scores[d.id] = d.data().score || 0;
+        emails[d.id] = d.data().email || '';
       });
       setParticipantNames(names);
       setParticipantRoles(roles);
       setParticipantScores(scores);
+      setParticipantEmails(emails);
       setParticipantsRaw(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
@@ -356,7 +360,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
                 </div>
                 {activeQuestionState.isAnswerRevealed && (
                   <div className="w-full md:w-[50%] flex flex-col pt-4 md:pt-0">
-                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} />
+                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} participantEmails={participantEmails} />
                   </div>
                 )}
               </div>
@@ -582,14 +586,21 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   );
 };
 
-const LeaderboardView = ({ participantNames, participantScores, participantRoles }) => {
-  const leaderboard = Object.keys(participantScores)
+const LeaderboardView = ({ participantNames, participantScores, participantRoles, participantEmails = {} }) => {
+  // Logging out and back in joins the class under a new connection id each time, which used to
+  // show the same person multiple times. Group by email (falling back to name) and keep their
+  // best score instead, so they only ever appear once.
+  const grouped = {};
+  Object.keys(participantScores)
     .filter(uid => participantRoles?.[uid] !== 'teacher')
-    .map(uid => ({
-       uid,
-       name: participantNames[uid] || 'Student',
-       score: participantScores[uid] || 0
-    }))
+    .forEach(uid => {
+      const identity = (participantEmails[uid] || participantNames[uid] || uid).toLowerCase().trim();
+      const score = participantScores[uid] || 0;
+      if (!grouped[identity] || score > grouped[identity].score) {
+        grouped[identity] = { uid: identity, name: participantNames[uid] || 'Student', score };
+      }
+    });
+  const leaderboard = Object.values(grouped)
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 

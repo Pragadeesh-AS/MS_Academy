@@ -21,6 +21,22 @@ export default function LoginSignup() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Landing on /login while already signed in - e.g. the browser Back button after a normal
+  // login push, a bookmark, or a stale tab - should bounce straight back to that person's own
+  // dashboard instead of showing the login form again.
+  useEffect(() => {
+    const role = sessionStorage.getItem('auth_role');
+    const dashboardByRole = {
+      admin: '/admin',
+      teacher: '/teacher-dashboard',
+      typist: '/typist-dashboard',
+      student: '/student'
+    };
+    if (role && dashboardByRole[role]) {
+      navigate(dashboardByRole[role], { replace: true });
+    }
+  }, [navigate]);
+
   const markStudentAsActive = async (email, name) => {
     try {
       const q = query(collection(db, 'joined_students'), where('email', '==', email));
@@ -151,7 +167,7 @@ export default function LoginSignup() {
           sessionStorage.setItem('auth_email', user.email);
           sessionStorage.setItem('auth_name', 'MS Academy Admin');
           window.dispatchEvent(new Event('storage'));
-          navigate('/admin');
+          navigate('/admin', { replace: true });
         } else {
           const isTeacher = await checkTeacherRole(user.email);
           const isTypist = await checkTypistRole(user.email);
@@ -187,13 +203,13 @@ export default function LoginSignup() {
             sessionStorage.setItem('auth_email', user.email);
             sessionStorage.setItem('auth_name', userName);
             window.dispatchEvent(new Event('storage'));
-            navigate('/teacher-dashboard');
+            navigate('/teacher-dashboard', { replace: true });
           } else if (isTypist) {
             sessionStorage.setItem('auth_role', 'typist');
             sessionStorage.setItem('auth_email', user.email);
             sessionStorage.setItem('auth_name', userName);
             window.dispatchEvent(new Event('storage'));
-            navigate('/typist-dashboard');
+            navigate('/typist-dashboard', { replace: true });
           } else {
             // Regular student auth
             await markStudentAsActive(user.email, userName);
@@ -201,7 +217,7 @@ export default function LoginSignup() {
             sessionStorage.setItem('auth_email', user.email);
             sessionStorage.setItem('auth_name', userName);
             window.dispatchEvent(new Event('storage'));
-            navigate('/student');
+            navigate('/student', { replace: true });
           }
         }
       } else {
@@ -224,13 +240,13 @@ export default function LoginSignup() {
           sessionStorage.setItem('auth_email', user.email);
           sessionStorage.setItem('auth_name', userName);
           window.dispatchEvent(new Event('storage'));
-          navigate('/teacher-dashboard');
+          navigate('/teacher-dashboard', { replace: true });
         } else if (isTypist) {
           sessionStorage.setItem('auth_role', 'typist');
           sessionStorage.setItem('auth_email', user.email);
           sessionStorage.setItem('auth_name', userName);
           window.dispatchEvent(new Event('storage'));
-          navigate('/typist-dashboard');
+          navigate('/typist-dashboard', { replace: true });
         } else {
           // Always student if not an invited teacher
           await markStudentAsActive(user.email, userName, department, plan);
@@ -238,7 +254,7 @@ export default function LoginSignup() {
           sessionStorage.setItem('auth_email', user.email);
           sessionStorage.setItem('auth_name', userName);
           window.dispatchEvent(new Event('storage'));
-          navigate('/student');
+          navigate('/student', { replace: true });
         }
       }
     } catch (err) {
@@ -262,7 +278,7 @@ export default function LoginSignup() {
         sessionStorage.setItem('auth_email', userEmail);
         sessionStorage.setItem('auth_name', 'MS Academy Admin');
         window.dispatchEvent(new Event('storage'));
-        navigate('/admin');
+        navigate('/admin', { replace: true });
         return;
       }
 
@@ -300,20 +316,20 @@ export default function LoginSignup() {
         sessionStorage.setItem('auth_email', userEmail);
         sessionStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
-        navigate('/teacher-dashboard');
+        navigate('/teacher-dashboard', { replace: true });
       } else if (isTypist) {
         sessionStorage.setItem('auth_role', 'typist');
         sessionStorage.setItem('auth_email', userEmail);
         sessionStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
-        navigate('/typist-dashboard');
+        navigate('/typist-dashboard', { replace: true });
       } else {
         await markStudentAsActive(userEmail, userName);
         sessionStorage.setItem('auth_role', 'student');
         sessionStorage.setItem('auth_email', userEmail);
         sessionStorage.setItem('auth_name', userName);
         window.dispatchEvent(new Event('storage'));
-        navigate('/student');
+        navigate('/student', { replace: true });
       }
     } catch (err) {
       console.error(err);

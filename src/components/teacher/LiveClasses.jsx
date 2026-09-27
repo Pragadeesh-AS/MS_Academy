@@ -49,7 +49,14 @@ const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) 
     if (stream && stream.getVideoTracks().length > 0) {
       try {
         track = AgoraRTC.createCustomVideoTrack({
-          mediaStreamTrack: stream.getVideoTracks()[0]
+          mediaStreamTrack: stream.getVideoTracks()[0],
+          // Without this, Agora's default track settings favor smoothness over clarity and can
+          // throttle the bitrate, which is why pen strokes and erasing appeared to lag behind -
+          // large sudden changes (like erasing) need more bitrate to render without a delay.
+          optimizationMode: 'detail',
+          frameRate: 30,
+          bitrateMin: 1000,
+          bitrateMax: 2500
         });
 
         wbClient.join(appId, channel, token, uid).then(() => {
@@ -223,14 +230,21 @@ const ScreenShareClient = ({ appId, channel, token, onTrackEnded, onAudioTrackRe
 };
 
 // Extracted TeacherCall component for custom Agora rendering
-const LeaderboardView = ({ participantNames, participantScores, participantRoles }) => {
-  const leaderboard = Object.keys(participantScores)
+const LeaderboardView = ({ participantNames, participantScores, participantRoles, participantEmails = {} }) => {
+  // Logging out and back in joins the class under a new connection id each time, which used to
+  // show the same person multiple times. Group by email (falling back to name) and keep their
+  // best score instead, so they only ever appear once.
+  const grouped = {};
+  Object.keys(participantScores)
     .filter(uid => participantRoles?.[uid] !== 'teacher')
-    .map(uid => ({
-       uid,
-       name: participantNames[uid] || 'Student',
-       score: participantScores[uid] || 0
-    }))
+    .forEach(uid => {
+      const identity = (participantEmails[uid] || participantNames[uid] || uid).toLowerCase().trim();
+      const score = participantScores[uid] || 0;
+      if (!grouped[identity] || score > grouped[identity].score) {
+        grouped[identity] = { uid: identity, name: participantNames[uid] || 'Student', score };
+      }
+    });
+  const leaderboard = Object.values(grouped)
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 
@@ -286,6 +300,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [participantNames, setParticipantNames] = useState({});
   const [participantScores, setParticipantScores] = useState({});
   const [participantRoles, setParticipantRoles] = useState({});
+  const [participantEmails, setParticipantEmails] = useState({});
   const client = useRTCClient();
   const connectionState = useConnectionState();
   const remoteUsers = useRemoteUsers();
@@ -342,14 +357,17 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       const names = {};
       const scores = {};
       const roles = {};
-      snapshot.forEach(d => { 
-        names[d.id] = d.data().name; 
+      const emails = {};
+      snapshot.forEach(d => {
+        names[d.id] = d.data().name;
         scores[d.id] = d.data().score || 0;
         roles[d.id] = d.data().role;
+        emails[d.id] = d.data().email || '';
       });
       setParticipantNames(names);
       setParticipantScores(scores);
       setParticipantRoles(roles);
+      setParticipantEmails(emails);
       setParticipantsRaw(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
@@ -647,7 +665,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                 </div>
                 {activeQuestionState.isAnswerRevealed ? (
                   <div className="w-full md:w-[50%] flex flex-col pt-4 md:pt-0">
-                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} />
+                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} participantEmails={participantEmails} />
                   </div>
                 ) : (
                   <div className="hidden md:flex md:w-[55%]"></div>
@@ -662,16 +680,17 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
               <Whiteboard canvasId="qb-whiteboard-canvas" onStreamReady={setQbWhiteboardStream} isOverlay={true} />
               <WhiteboardShareClient appId={appId} channel={channel} token={token} stream={qbWhiteboardStream} uid={999997} />
               
-              {/* Top Layer: Interactive Controls Overlay (aligned with Q.1) */}
-              <div className="absolute inset-0 py-6 pr-6 pl-20 md:py-12 md:pr-12 md:pl-28 pointer-events-none flex flex-col z-[100]">
-                <div className={`w-full flex font-bold ${isPinned ? 'text-base md:text-lg mb-8' : 'text-sm mb-4'}`}>
-                  <div className="shrink-0 flex flex-col items-center gap-4 mt-1 w-16 mr-4">
-                    <span className="invisible pointer-events-none">Q.{activeQuestionState.currentIndex + 1}</span>
-                    <button onClick={handleNextQB} className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-md transition-transform hover:scale-105 pointer-events-auto" title={activeQuestionState.isAnswerRevealed ? "Next Question" : "Reveal Answer"}>
-                      {activeQuestionState.isAnswerRevealed ? <ChevronRight size={22} /> : <Eye size={22} />}
-                    </button>
-                  </div>
-                </div>
+              {/* Top Layer: Interactive Controls Overlay - a fixed corner button rather than one
+                  aligned to the Q.1 row, so it never ends up sitting on top of the question text,
+                  image, or options, whatever their length happens to be. */}
+              <div className="absolute inset-0 pointer-events-none z-[100]">
+                <button
+                  onClick={handleNextQB}
+                  className="absolute bottom-6 right-6 md:bottom-10 md:right-10 bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-xl transition-transform hover:scale-105 pointer-events-auto"
+                  title={activeQuestionState.isAnswerRevealed ? "Next Question" : "Reveal Answer"}
+                >
+                  {activeQuestionState.isAnswerRevealed ? <ChevronRight size={22} /> : <Eye size={22} />}
+                </button>
               </div>
             </div>
           )}
