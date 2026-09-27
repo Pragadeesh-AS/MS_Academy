@@ -648,10 +648,13 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                   <div className={`flex flex-col gap-4 md:gap-5 ${isPinned ? 'ml-20' : 'ml-10'}`}>
                     {['A', 'B', 'C', 'D'].map(opt => {
                       const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
-                      if (!text) return null;
                       const currentQ = activeQuestionState.questions[activeQuestionState.currentIndex];
                       const isCorrect = currentQ.correctAnswers ? currentQ.correctAnswers.includes(opt) : currentQ.correctAnswer === opt;
                       const isRevealed = activeQuestionState.isAnswerRevealed;
+                      // An option with no text is normally skipped, but if it's the marked-correct
+                      // answer, it must still show on reveal - otherwise the answer just vanishes
+                      // instead of appearing, leaving only the wrong picks marked.
+                      if (!text && !(isRevealed && isCorrect)) return null;
 
                       return (
                         <div id={`qb-opt-container-${opt}`} key={opt} className={`flex items-center text-base md:text-lg font-semibold transition-all ${isRevealed && isCorrect ? 'text-green-600 bg-green-50 p-4 rounded-xl max-w-full' : 'text-slate-800 p-3'}`}>

@@ -327,11 +327,14 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
                   <div className={`flex flex-col gap-4 md:gap-5 ${isPinned ? 'ml-20' : 'ml-10'}`}>
                     {['A', 'B', 'C', 'D'].map(opt => {
                       const text = activeQuestionState.questions[activeQuestionState.currentIndex][`option${opt}`];
-                      if (!text) return null;
                       const currentQ = activeQuestionState.questions[activeQuestionState.currentIndex];
                       const isCorrect = currentQ.correctAnswers ? currentQ.correctAnswers.includes(opt) : currentQ.correctAnswer === opt;
                       const isGuessed = studentGuess === opt;
                       const isRevealed = activeQuestionState.isAnswerRevealed;
+                      // An option with no text is normally skipped, but if it's the marked-correct
+                      // answer, it must still show on reveal - otherwise the answer just vanishes
+                      // instead of appearing, leaving only the wrong picks marked.
+                      if (!text && !(isRevealed && isCorrect)) return null;
 
                       let bgClass = 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200';
                       if (isRevealed) {
