@@ -9,34 +9,9 @@ const fmt = (s) => {
     : `${m}:${String(sec).padStart(2, '0')}`;
 };
 
-// MediaRecorder webm files often never get a real duration written into their container -
-// the browser reports it as Infinity forever, which is why the native scrubber and total-time
-// looked broken/missing. A hidden probe element forces the browser to discover the true length
-// by seeking near the end once; this never touches the actual player, so it can't disrupt playback.
-const probeDuration = (url) => new Promise((resolve) => {
-  const probe = document.createElement('video');
-  probe.preload = 'metadata';
-  probe.muted = true;
-  const timer = setTimeout(() => resolve(null), 8000);
-  probe.onloadedmetadata = () => {
-    if (!isFinite(probe.duration)) {
-      probe.currentTime = 1e101;
-      probe.ontimeupdate = () => {
-        clearTimeout(timer);
-        resolve(isFinite(probe.duration) ? probe.duration : null);
-      };
-    } else {
-      clearTimeout(timer);
-      resolve(probe.duration);
-    }
-  };
-  probe.onerror = () => { clearTimeout(timer); resolve(null); };
-  probe.src = url;
-});
-
 // Shared "watch a recording" modal used by the student, teacher and admin dashboards.
 // recording: { id, url, duration? } - duration (seconds) is the wall-clock length captured
-// by the recorder itself at upload time, when available; it's authoritative and skips probing.
+// by the recorder itself at upload time, when available; it's authoritative and needs no fixing.
 export default function RecordingPlayerModal({ recording, onClose }) {
   const videoRef = useRef(null);
   const barRef = useRef(null);
@@ -47,7 +22,7 @@ export default function RecordingPlayerModal({ recording, onClose }) {
     recording.duration && isFinite(recording.duration) && recording.duration > 0 ? recording.duration : null
   );
   const [current, setCurrent] = useState(0);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [dragFraction, setDragFraction] = useState(0);
@@ -67,28 +42,58 @@ export default function RecordingPlayerModal({ recording, onClose }) {
     } catch { /* localStorage unavailable - resume just won't persist */ }
   };
 
-  // Resolve the real duration once, if the recorder didn't already save one.
-  useEffect(() => {
-    let cancelled = false;
-    if (duration === null) {
-      probeDuration(recording.url).then(d => { if (!cancelled && d) setDuration(d); });
-    }
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recording.id]);
-
-  // Resume where they left off, as soon as the element can seek.
+  // Get the video actually playing, work out its real duration if the recorder didn't already
+  // save one, resume where the viewer left off, then start playback - all on the ONE element
+  // that's on screen. (A previous version probed duration with a second hidden <video> pointed
+  // at the same URL; that second connection competed with the real player for bandwidth and
+  // could stall playback partway through, which is why this uses only one element.)
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const applyResume = () => {
+    let settled = false;
+
+    const startPlayback = (resolvedDuration) => {
+      if (settled) return;
+      settled = true;
+      if (resolvedDuration && isFinite(resolvedDuration)) setDuration(resolvedDuration);
       const resumeAt = getSavedTime();
-      if (resumeAt > 0) {
+      if (resumeAt > 0 && (!resolvedDuration || resumeAt < resolvedDuration - 5)) {
         try { v.currentTime = resumeAt; } catch { /* ignore */ }
       }
+      v.play().catch(() => {});
     };
-    v.addEventListener('loadedmetadata', applyResume);
-    return () => v.removeEventListener('loadedmetadata', applyResume);
+
+    // Don't get stuck forever if metadata/duration-fix never resolves for some file.
+    const safety = setTimeout(() => startPlayback(null), 6000);
+
+    const onLoadedMetadata = () => {
+      if (recording.duration && isFinite(recording.duration) && recording.duration > 0) {
+        clearTimeout(safety);
+        startPlayback(recording.duration);
+        return;
+      }
+      if (isFinite(v.duration)) {
+        clearTimeout(safety);
+        startPlayback(v.duration);
+        return;
+      }
+      // Known MediaRecorder webm quirk: duration reports Infinity until you seek near the end once.
+      const onTimeUpdateOnce = () => {
+        v.removeEventListener('timeupdate', onTimeUpdateOnce);
+        clearTimeout(safety);
+        const real = isFinite(v.duration) ? v.duration : null;
+        v.currentTime = 0;
+        startPlayback(real);
+      };
+      v.addEventListener('timeupdate', onTimeUpdateOnce);
+      v.currentTime = 1e101;
+    };
+
+    v.addEventListener('loadedmetadata', onLoadedMetadata);
+    return () => {
+      clearTimeout(safety);
+      v.removeEventListener('loadedmetadata', onLoadedMetadata);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recording.id]);
 
@@ -160,7 +165,6 @@ export default function RecordingPlayerModal({ recording, onClose }) {
           ref={videoRef}
           key={recording.id}
           src={recording.url}
-          autoPlay
           onClick={togglePlay}
           onTimeUpdate={handleTimeUpdate}
           onPlay={() => setPlaying(true)}
@@ -199,6 +203,7 @@ export default function RecordingPlayerModal({ recording, onClose }) {
                 {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
               </button>
               <span className="tabular-nums">{fmt(shownCurrent)} / {duration ? fmt(duration) : '--:--'}</span>
+              {!duration && <span className="text-amber-400 normal-case font-semibold">Reading length...</span>}
             </div>
             <button
               type="button"
