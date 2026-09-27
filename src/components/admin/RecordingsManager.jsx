@@ -5,6 +5,80 @@ import { ref, deleteObject } from 'firebase/storage';
 import { Video, Trash2, Search, Clock, Users, BookOpen, Folder, FolderOpen, ChevronRight } from 'lucide-react';
 import Loader from '../Loader';
 
+function VideoDuration({ url, storedDuration }) {
+  const [duration, setDuration] = useState('Loading...');
+
+  useEffect(() => {
+    const formatAndSetDuration = (totalSeconds) => {
+      if (!totalSeconds || !isFinite(totalSeconds)) {
+        setDuration('Unknown length');
+        return;
+      }
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = Math.floor(totalSeconds % 60);
+      
+      let formatted = '';
+      if (hours > 0) {
+        formatted += `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        formatted += `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+      setDuration(formatted);
+    };
+
+    if (storedDuration !== undefined && storedDuration !== null) {
+      formatAndSetDuration(storedDuration);
+      return;
+    }
+
+    if (!url) {
+      setDuration('Unknown');
+      return;
+    }
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    
+    // Some webm files recorded via MediaRecorder have Infinity duration.
+    // If we can't load metadata or it's infinite, we'll fall back after a timeout.
+    const timeout = setTimeout(() => {
+      setDuration('Unknown length');
+    }, 5000);
+
+    video.onloadedmetadata = () => {
+      clearTimeout(timeout);
+      let totalSeconds = video.duration;
+      
+      // If it's infinity (common for raw webm), try to seek to end to get duration
+      if (totalSeconds === Infinity) {
+        video.currentTime = 1e101;
+        video.ontimeupdate = () => {
+          video.ontimeupdate = null;
+          totalSeconds = video.duration;
+          formatAndSetDuration(totalSeconds);
+        };
+        return;
+      }
+      
+      formatAndSetDuration(totalSeconds);
+    };
+
+    video.onerror = () => {
+      clearTimeout(timeout);
+      setDuration('Unknown length');
+    };
+
+    video.src = url;
+    
+    return () => clearTimeout(timeout);
+  }, [url, storedDuration]);
+
+  return (
+    <span className="absolute bottom-3 right-3 text-white text-xs font-bold px-2 py-1 bg-black/70 rounded-lg pointer-events-none backdrop-blur-sm shadow-sm flex items-center gap-1 z-20">
+      <Clock size={12} /> {duration}
+    </span>
+  );
+}
 export default function RecordingsManager() {
   const [recordings, setRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -170,6 +244,7 @@ export default function RecordingsManager() {
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                   </div>
                 </a>
+                <VideoDuration url={rec.url} storedDuration={rec.duration} />
               </div>
               
               <div className="p-5 flex-1 flex flex-col">

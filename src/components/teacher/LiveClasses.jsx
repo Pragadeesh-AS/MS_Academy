@@ -477,13 +477,14 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     screenShareAudioTrack,
     remoteUsers,
     activeQuestionState,
-    onUploadComplete: async (url, fileName) => {
+    onUploadComplete: async (url, fileName, duration) => {
       try {
         const teacherName = sessionStorage.getItem('auth_name') || 'Teacher';
         await addDoc(collection(db, 'recordings'), {
           fileName,
           url,
           teacherName,
+          duration,
           department: department || 'General',
           bundleId: sessionBundleId || 'free',
           createdAt: serverTimestamp()

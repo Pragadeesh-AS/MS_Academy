@@ -8,6 +8,24 @@ export default function TestimonialCarousel({ reviews }) {
   // Default reviews if none provided
   const testimonials = reviews && reviews.length > 0 ? reviews : [
     {
+      name: "Senthamizhselvi Senthilnathan",
+      role: "Google Reviewer",
+      discipline: "GATE Coaching",
+      quote: "Very excellent teaching. Goes in depth of the subject and explains even complex concepts with easiness for the students. Dedicated teacher for the student's success",
+      rating: 5,
+      initials: "SS",
+      bgGradient: "from-violet-500 to-purple-600"
+    },
+    {
+      name: "VASANTH",
+      role: "Google Reviewer",
+      discipline: "GATE Coaching",
+      quote: "Hi ...This is the genuine feedback of this academy. Gate coaching is best at very less price. Teacher has good knowledge and share lots of information",
+      rating: 5,
+      initials: "V",
+      bgGradient: "from-sky-400 to-blue-500"
+    },
+    {
       name: "Rithikaa Kannan",
       role: "GATE ASPIRANT",
       discipline: "One-to-One Online Classes",
@@ -177,8 +195,10 @@ export default function TestimonialCarousel({ reviews }) {
 
                       {/* Star Badge at bottom for center card */}
                       {isCenter && (
-                        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.1)] border border-slate-50 z-20">
-                          <Star size={20} className="fill-amber-400 text-amber-400" />
+                        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 h-10 px-4 bg-white rounded-full flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.1)] border border-slate-50 z-20 gap-1">
+                          {[...Array(card.item.rating || 5)].map((_, i) => (
+                            <Star key={i} size={16} className="fill-amber-400 text-amber-400" />
+                          ))}
                         </div>
                       )}
                     </div>

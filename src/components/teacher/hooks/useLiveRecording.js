@@ -284,7 +284,7 @@ export const useLiveRecording = ({
         else if (type.includes('matroska')) ext = 'mkv';
         
         const defaultName = `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}`;
-        setPendingRecording({ blob, ext, defaultName });
+        setPendingRecording({ blob, ext, defaultName, duration: recordingTime });
 
         setIsRecording(false);
         setIsPaused(false);
@@ -322,7 +322,7 @@ export const useLiveRecording = ({
 
   const confirmRecordingName = (fileName) => {
     if (!pendingRecording) return;
-    const { blob, ext, defaultName } = pendingRecording;
+    const { blob, ext, defaultName, duration } = pendingRecording;
     const finalName = fileName || defaultName;
 
     setIsUploading(true);
@@ -347,7 +347,7 @@ export const useLiveRecording = ({
         try {
           const url = await getDownloadURL(uploadTask.snapshot.ref);
           if (onUploadComplete) {
-            onUploadComplete(url, `${finalName}.${ext}`);
+            onUploadComplete(url, `${finalName}.${ext}`, duration);
           }
         } catch (err) {
           console.error("Error getting download URL", err);
