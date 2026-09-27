@@ -881,21 +881,11 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                     } else {
                       if (activeTool === item.id) {
                         // Tool is already active, handle toggling options on click
-                        if (item.id === 'pen') {
-                          if (showQuickColors) {
-                            // Quick colors are visible -> switch to full options
-                            setShowToolOptions(true);
-                            setShowQuickColors(false);
-                          } else if (showToolOptions) {
-                            // Full options visible -> hide everything
-                            setShowToolOptions(false);
-                            setShowQuickColors(false);
-                          } else {
-                            // Both hidden (e.g. after drawing) -> show quick colors
-                            setShowQuickColors(true);
-                          }
-                        } else if (['highlighter', 'eraser'].includes(item.id)) {
+                        if (['pen', 'highlighter', 'eraser'].includes(item.id)) {
+                          // Pen thickness lives in this same panel as the colors, so one click
+                          // always shows both together instead of a separate "quick colors" step.
                           setShowToolOptions(!showToolOptions);
+                          setShowQuickColors(false);
                         } else if (item.id === 'shapes') {
                           setShowShapeOptions(!showShapeOptions);
                         }
@@ -903,19 +893,9 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                         // Switching to a new tool
                         setActiveTool(item.id);
                         setShowBoardColors(false);
-                        setShowToolOptions(false);
-                        
-                        if (item.id === 'pen') {
-                          setShowQuickColors(true);
-                        } else {
-                          setShowQuickColors(false);
-                        }
-                        
-                        if (item.id === 'shapes') {
-                          setShowShapeOptions(true);
-                        } else {
-                          setShowShapeOptions(false);
-                        }
+                        setShowQuickColors(false);
+                        setShowToolOptions(['pen', 'highlighter', 'eraser'].includes(item.id));
+                        setShowShapeOptions(item.id === 'shapes');
                       }
                     }
                   }}
