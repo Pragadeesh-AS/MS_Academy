@@ -12,6 +12,7 @@ export const voterKeyFor = () =>
   (sessionStorage.getItem('auth_email') || sessionStorage.getItem('auth_name') || 'student').replace(/[^a-zA-Z0-9]/g, '_');
 
 const DURATIONS = [
+  { label: '15 seconds', value: 15 },
   { label: '30 seconds', value: 30 },
   { label: '1 minute', value: 60 },
   { label: '2 minutes', value: 120 },
