@@ -319,13 +319,19 @@ export default function StudentProfile() {
                 <select
                   value={editFormData.department}
                   onChange={(e) => setEditFormData({...editFormData, department: e.target.value})}
-                  className={`${inputClass} appearance-none`}
+                  className={`${inputClass} appearance-none disabled:opacity-70 disabled:bg-slate-100 disabled:cursor-not-allowed`}
+                  disabled={!!profileData.department}
                 >
                   <option value="">Select Department...</option>
                   {[...new Set([editFormData.department, ...DEPARTMENT_OPTIONS])].filter(Boolean).map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
+                {!!profileData.department && (
+                  <p className="mt-1.5 text-[11px] text-slate-500 font-medium">
+                    To change your department, please request the admin.
+                  </p>
+                )}
               </div>
 
               <div>
