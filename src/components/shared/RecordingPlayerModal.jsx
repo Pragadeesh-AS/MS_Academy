@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, RotateCw } from 'lucide-react';
+import { X, Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, RotateCw, Gauge } from 'lucide-react';
+import { db } from '../../firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 const fmt = (s) => {
   if (!isFinite(s) || s < 0) return '0:00';
@@ -22,6 +24,7 @@ export default function RecordingPlayerModal({ recording, onClose }) {
     recording.duration && isFinite(recording.duration) && recording.duration > 0 ? recording.duration : null
   );
   const [durationGaveUp, setDurationGaveUp] = useState(false);
+  const [measuring, setMeasuring] = useState(false);
   const [bufferedEnd, setBufferedEnd] = useState(0);
   const [current, setCurrent] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -133,17 +136,64 @@ export default function RecordingPlayerModal({ recording, onClose }) {
 
   const togglePlay = () => {
     const v = videoRef.current;
-    if (!v) return;
+    if (!v || measuring) return;
     if (v.paused) v.play(); else v.pause();
   };
 
   const skip = (deltaSeconds) => {
     const v = videoRef.current;
-    if (!v) return;
+    if (!v || measuring) return;
     const target = Math.max(0, v.currentTime + deltaSeconds);
     try { v.currentTime = target; } catch { /* ignore */ }
     setCurrent(target);
     saveTime(target, duration);
+  };
+
+  // Once a real duration is known (measured or reached naturally), save it to the recording's own
+  // record - the next person to open this recording, anywhere, gets the exact length immediately.
+  const persistDiscoveredDuration = (real) => {
+    if (!real || !isFinite(real) || real <= 0 || recording.duration) return;
+    updateDoc(doc(db, 'recordings', recording.id), { duration: real }).catch(() => { /* no write access or offline - harmless, just skip */ });
+  };
+
+  // Some recordings have no index the browser can jump to, so it can never work out the length by
+  // seeking. This is an explicit, opt-in fallback: race through the file once at high speed to find
+  // the real end, then jump back to where the viewer actually was. Same single connection throughout.
+  const measureFullLength = () => {
+    const v = videoRef.current;
+    if (!v || measuring) return;
+    setMeasuring(true);
+    const resumeTo = v.currentTime;
+    const wasPlaying = !v.paused;
+    const prevRate = v.playbackRate;
+    const prevMuted = v.muted;
+    v.pause();
+    v.muted = true;
+
+    const finish = (real) => {
+      v.removeEventListener('ended', onEndedDuringScan);
+      v.playbackRate = prevRate;
+      v.muted = prevMuted;
+      setMeasuring(false);
+      if (real) {
+        setDuration(real);
+        setDurationGaveUp(false);
+        persistDiscoveredDuration(real);
+      }
+      try { v.currentTime = resumeTo; } catch { /* ignore */ }
+      if (wasPlaying) v.play().catch(() => {});
+    };
+
+    const onEndedDuringScan = () => finish(v.currentTime);
+    v.addEventListener('ended', onEndedDuringScan);
+
+    try {
+      v.playbackRate = 16;
+      v.currentTime = 0;
+      v.play().catch(() => finish(null));
+    } catch {
+      finish(null);
+    }
   };
 
   // A real duration makes the bar exact; without one, whatever has already downloaded (plus a
@@ -160,7 +210,7 @@ export default function RecordingPlayerModal({ recording, onClose }) {
 
   const seekToFraction = (fraction) => {
     const v = videoRef.current;
-    if (!v) return;
+    if (!v || measuring) return;
     const target = fraction * effectiveTotal;
     try { v.currentTime = target; } catch { /* ignore */ }
     setCurrent(target);
@@ -206,8 +256,25 @@ export default function RecordingPlayerModal({ recording, onClose }) {
           onPlay={() => setPlaying(true)}
           onPause={() => { setPlaying(false); const v = videoRef.current; if (v) saveTime(v.currentTime, duration); }}
           onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
+          onEnded={(e) => {
+            // Reaching the end naturally also reveals the true duration - save it even if nobody
+            // asked, so the next viewer of this same recording sees the length immediately.
+            if (!measuring) {
+              const real = e.currentTarget.currentTime;
+              if (!duration) { setDuration(real); setDurationGaveUp(false); }
+              persistDiscoveredDuration(real);
+            }
+          }}
           className="w-full h-auto max-h-[80vh] outline-none cursor-pointer bg-black block"
         />
+
+        {measuring && (
+          <div className="absolute inset-0 top-0 bottom-[60px] z-20 bg-black/70 flex flex-col items-center justify-center gap-3 pointer-events-none">
+            <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-white font-bold text-sm">Measuring the recording's length...</p>
+            <p className="text-slate-300 text-xs">This only has to happen once for this recording.</p>
+          </div>
+        )}
 
         {/* Custom control bar - independent of the video element's own (often broken) duration */}
         <div className="bg-slate-900 px-4 py-3 flex flex-col gap-2 select-none">
@@ -245,10 +312,21 @@ export default function RecordingPlayerModal({ recording, onClose }) {
                 {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
               </button>
               <span className="tabular-nums">{fmt(shownCurrent)} / {duration ? fmt(duration) : '--:--'}</span>
-              {!duration && (
-                <span className="text-amber-400 normal-case font-semibold">
-                  {durationGaveUp ? 'Length unavailable - use the skip buttons to seek' : 'Reading length...'}
-                </span>
+              {!duration && !measuring && durationGaveUp && (
+                <button
+                  type="button"
+                  onClick={measureFullLength}
+                  className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 normal-case font-semibold transition-colors"
+                  title="Quickly scans through the recording once to find its exact length, then saves it for everyone"
+                >
+                  <Gauge size={13} /> Measure exact length
+                </button>
+              )}
+              {!duration && !durationGaveUp && (
+                <span className="text-amber-400 normal-case font-semibold">Reading length...</span>
+              )}
+              {measuring && (
+                <span className="text-indigo-400 normal-case font-semibold animate-pulse">Measuring length - scanning through the recording...</span>
               )}
             </div>
             <button
