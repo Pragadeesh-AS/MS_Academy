@@ -205,6 +205,24 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
     }
   }, [isTeacher, timeIsUp]);
 
+  // Teacher's client automatically advances to the next question after 5 seconds of reveal
+  useEffect(() => {
+    if (isTeacher && phase === 'reveal') {
+      const timer = setTimeout(() => {
+        if (index + 1 < liveTest.questions.length) {
+          updateDoc(sessionRef, {
+            'liveTest.currentIndex': index + 1,
+            'liveTest.phase': 'question',
+            'liveTest.questionStartedAt': serverTimestamp()
+          }).catch(console.error);
+        } else {
+          updateDoc(sessionRef, { 'liveTest.phase': 'finished' }).catch(console.error);
+        }
+      }, 5000); // 5 seconds reveal time
+      return () => clearTimeout(timer);
+    }
+  }, [isTeacher, phase, index, liveTest.questions.length]);
+
   const submitAnswer = async (value) => {
     if (locked || submitting || value === null || value === '' || (Array.isArray(value) && value.length === 0)) return;
     setSubmitting(true);
@@ -221,10 +239,14 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
     setSubmitting(false);
   };
 
-  // Whatever the student picked is submitted automatically when time runs out.
+  // Whatever the student picked is submitted automatically when time runs out or the phase moves to reveal.
   useEffect(() => {
-    if (!isTeacher && timeIsUp && !locked) submitAnswer(draft);
-  }, [timeIsUp]);
+    if (!isTeacher && (timeIsUp || phase === 'reveal') && !locked) {
+      if (draft !== null && draft !== '' && (!Array.isArray(draft) || draft.length > 0)) {
+        submitAnswer(draft);
+      }
+    }
+  }, [isTeacher, timeIsUp, phase, locked, draft]);
 
   const nextQuestion = () => {
     if (index + 1 < liveTest.questions.length) {
