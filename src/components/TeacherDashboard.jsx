@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { BookOpen, LogOut, Settings, Users, Video, Calendar, ChevronLeft, ChevronRight, Menu, X, FileText, ArrowRight, Clock, Sparkles } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
@@ -69,6 +69,17 @@ export default function TeacherDashboard() {
   const [recentTests, setRecentTests] = useState([]);
   const [upcomingClasses, setUpcomingClasses] = useState([]);
   const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    // Prevent back button from leaving the dashboard
+    window.history.pushState(null, "", window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, "", window.location.href);
+      setActiveTab('classes'); // take to main dashboard view
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     const role = sessionStorage.getItem('auth_role');
@@ -169,7 +180,7 @@ export default function TeacherDashboard() {
     <div className="min-h-screen bg-slate-50 flex">
       {/* Mobile Top Bar */}
       <div className="md:hidden fixed top-0 inset-x-0 z-30 bg-white border-b border-slate-200 flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <Link to="/" className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center p-1 border border-blue-100 flex-shrink-0">
             <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
           </div>
@@ -177,7 +188,7 @@ export default function TeacherDashboard() {
             <h2 className="font-[900] text-blue-700 text-sm leading-tight truncate">MS Academy</h2>
             <p className="text-[11px] font-bold text-slate-400 truncate">Faculty Portal</p>
           </div>
-        </div>
+        </Link>
         <button
           onClick={() => setIsMobileNavOpen(true)}
           aria-label="Open menu"
@@ -193,7 +204,7 @@ export default function TeacherDashboard() {
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsMobileNavOpen(false)}></div>
           <div className="relative z-10 w-72 max-w-[80vw] h-full bg-white flex flex-col shadow-2xl animate-in slide-in-from-left duration-300">
             <div className="p-5 flex items-center justify-between border-b border-slate-100">
-              <div className="flex items-center gap-3">
+              <Link to="/" className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100 flex-shrink-0">
                   <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
                 </div>
@@ -201,7 +212,7 @@ export default function TeacherDashboard() {
                   <h2 className="font-[900] text-blue-700 text-lg leading-tight">MS Academy</h2>
                   <p className="text-xs font-bold text-slate-400">Faculty Portal</p>
                 </div>
-              </div>
+              </Link>
               <button onClick={() => setIsMobileNavOpen(false)} aria-label="Close menu" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100">
                 <X size={20} />
               </button>
@@ -248,8 +259,8 @@ export default function TeacherDashboard() {
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
 
-        <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3'}`}>
-          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100 flex-shrink-0">
+        <Link to="/" className={`p-6 flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3'} hover:bg-slate-50 transition-colors w-full`}>
+          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100 flex-shrink-0 mx-auto md:mx-0">
             <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
           </div>
           {!isCollapsed && (
@@ -258,7 +269,7 @@ export default function TeacherDashboard() {
               <p className="text-xs font-bold text-slate-400 whitespace-nowrap">Faculty Portal</p>
             </div>
           )}
-        </div>
+        </Link>
 
         <nav className="flex-1 px-4 py-4 space-y-2">
           {sidebarNavItems.map(({ key, label, icon: Icon }) => (

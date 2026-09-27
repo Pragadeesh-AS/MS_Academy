@@ -238,11 +238,11 @@ export const useLiveRecording = ({
       const combinedStream = new MediaStream(tracks);
       
       const types = [
-        'video/webm;codecs=vp9,opus', // best compression-per-byte for static/text-heavy content
+        'video/mp4',
         'video/webm;codecs=h264,opus',
+        'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp8,opus',
-        'video/webm',
-        'video/mp4'
+        'video/webm'
       ];
 
       // Empirically measured (headless-Chrome MediaRecorder test, see scratchpad
@@ -279,9 +279,7 @@ export const useLiveRecording = ({
         const type = mediaRecorder.mimeType || 'video/webm';
         const blob = new Blob(recordedChunksRef.current, { type });
         
-        let ext = 'webm';
-        if (type.includes('mp4')) ext = 'mp4';
-        else if (type.includes('matroska')) ext = 'mkv';
+        let ext = 'mp4'; // Forced to mp4 as requested by user (Fake MP4 wrapper for WebM on Chrome)
         
         const defaultName = `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}`;
         setPendingRecording({ blob, ext, defaultName, duration: recordingTime });

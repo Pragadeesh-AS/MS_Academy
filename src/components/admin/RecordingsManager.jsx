@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
 import { collection, query, getDocs, deleteDoc, doc, onSnapshot, orderBy } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
-import { Video, Trash2, Search, Clock, Users, BookOpen, Folder, FolderOpen, ChevronRight } from 'lucide-react';
+import { Video, Trash2, Search, Clock, Users, BookOpen, Folder, FolderOpen, ChevronRight, Download } from 'lucide-react';
 import Loader from '../Loader';
 import RecordingPlayerModal from '../shared/RecordingPlayerModal';
 
@@ -130,6 +130,26 @@ export default function RecordingsManager() {
     } catch (err) {
       console.error("Error deleting recording document:", err);
       alert("Failed to delete recording metadata.");
+    }
+  };
+
+  const handleDownload = async (e, url, fileName) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName || 'recording.mp4';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Failed to download as blob, opening in new tab", err);
+      window.open(url, '_blank');
     }
   };
 
@@ -279,13 +299,22 @@ export default function RecordingsManager() {
                     {rec.department || 'General'}
                   </span>
                   
-                  <button 
-                    onClick={() => handleDelete(rec)}
-                    className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
-                    title="Delete Recording"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={(e) => handleDownload(e, rec.url, rec.fileName)}
+                      className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors inline-flex"
+                      title="Download Recording"
+                    >
+                      <Download size={18} />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDelete(rec); }}
+                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                      title="Delete Recording"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

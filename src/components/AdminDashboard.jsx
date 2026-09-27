@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { jsPDF } from 'jspdf';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import CreateTestButton from './CreateTestButton';
 import { 
   Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut,
@@ -165,6 +165,16 @@ export default function AdminDashboard() {
   const [isUploadingPopup, setIsUploadingPopup] = useState(false);
 
   // Auth Guard
+  useEffect(() => {
+    // Prevent back button from leaving the dashboard
+    window.history.pushState(null, "", window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, "", window.location.href);
+      setActiveTab('dashboard'); // take to main dashboard view
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   useEffect(() => {
     const role = sessionStorage.getItem('auth_role');
     const name = sessionStorage.getItem('auth_name');
@@ -848,12 +858,12 @@ export default function AdminDashboard() {
 
       {/* Mobile Top Bar */}
       <div className="md:hidden fixed top-0 inset-x-0 z-30 bg-[#111827] flex items-center justify-between px-4 py-3 shadow-lg">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <Link to="/" className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm flex-shrink-0 border border-slate-200 overflow-hidden p-0.5">
             <img src={logoImg} alt="MS Gate Academy Logo" className="w-full h-full object-contain" />
           </div>
           <h3 className="text-[14px] font-[900] text-white tracking-tight truncate flex items-center gap-1.5">MS Gate Academy <ShieldCheck size={14} className="text-amber-400 flex-shrink-0" /></h3>
-        </div>
+        </Link>
         <button
           onClick={() => setIsMobileNavOpen(true)}
           aria-label="Open menu"
@@ -870,12 +880,12 @@ export default function AdminDashboard() {
           <div className="relative z-10 w-80 max-w-[85vw] h-full bg-[#111827] flex flex-col justify-between pt-6 pb-6 px-4 overflow-y-auto shadow-2xl animate-in slide-in-from-left duration-300">
             <div className="space-y-6">
               <div className="flex items-center justify-between gap-3 px-2 mb-2">
-                <div className="flex items-center gap-3 min-w-0">
+                <Link to="/" className="flex items-center gap-3 min-w-0">
                   <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm flex-shrink-0 border border-slate-200 overflow-hidden p-0.5">
                     <img src={logoImg} alt="MS Gate Academy Logo" className="w-full h-full object-contain" />
                   </div>
                   <h3 className="text-[15px] font-[900] text-white tracking-tight truncate flex items-center gap-2">MS Gate Academy <ShieldCheck size={16} className="text-amber-400 flex-shrink-0" /></h3>
-                </div>
+                </Link>
                 <button onClick={() => setIsMobileNavOpen(false)} aria-label="Close menu" className="p-2 rounded-lg text-slate-300 hover:bg-slate-800 flex-shrink-0">
                   <X size={20} />
                 </button>
@@ -950,12 +960,12 @@ export default function AdminDashboard() {
         <aside className="w-full h-full bg-[#111827] flex flex-col justify-between pt-8 pb-6 px-4 overflow-y-auto border-none shadow-2xl [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className="space-y-8">
             {/* Admin title */}
-            <div className={`flex items-center gap-3 px-2 mb-2 ${isCollapsed ? 'justify-center px-0' : ''}`}>
-              <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm flex-shrink-0 border border-slate-200 overflow-hidden p-0.5">
+            <Link to="/" className={`flex items-center gap-3 px-2 mb-2 ${isCollapsed ? 'justify-center px-0' : ''}`}>
+              <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-sm flex-shrink-0 border border-slate-200 overflow-hidden p-0.5 mx-auto md:mx-0">
                 <img src={logoImg} alt="MS Gate Academy Logo" className="w-full h-full object-contain" />
               </div>
               {!isCollapsed && <h3 className="text-[17px] font-[900] text-white tracking-tight whitespace-nowrap mt-0.5 flex items-center gap-2">MS Gate Academy <ShieldCheck size={16} className="text-amber-400" /></h3>}
-            </div>
+            </Link>
 
             {/* Navigation Links */}
             <nav className="space-y-1.5 px-1">

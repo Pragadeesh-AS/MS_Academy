@@ -290,7 +290,11 @@ export default function App() {
           <div className="hidden md:flex items-center transition-all duration-700 whitespace-nowrap opacity-100 gap-4">
             {userRole ? (
               <div className="flex items-center gap-3.5">
-
+                <Link to={userRole === 'admin' ? '/admin' : userRole === 'teacher' ? '/teacher-dashboard' : userRole === 'typist' ? '/typist-dashboard' : '/student'}>
+                  <ShinyButton className="text-xs font-bold text-white bg-gradient-to-b from-[#1d4ed8] to-[#1e3a8a] hover:from-[#1e40af] hover:to-[#172554] border border-[#1e3a8a] px-3.5 py-2.5 rounded-xl transition-all shadow-sm">
+                    Dashboard
+                  </ShinyButton>
+                </Link>
                 <button
                   onClick={() => {
                     sessionStorage.removeItem('auth_role');
@@ -375,7 +379,11 @@ export default function App() {
                 <div className="pt-2 mt-1 border-t border-slate-200/70">
                   {userRole ? (
                     <div className="flex flex-col gap-2">
-
+                      <Link to={userRole === 'admin' ? '/admin' : userRole === 'teacher' ? '/teacher-dashboard' : userRole === 'typist' ? '/typist-dashboard' : '/student'} className="block w-full">
+                        <div className="text-center text-sm font-bold text-white bg-gradient-to-b from-[#1d4ed8] to-[#1e3a8a] border border-[#1e3a8a] px-4 py-2.5 rounded-xl">
+                          Dashboard
+                        </div>
+                      </Link>
                       <button
                         onClick={() => {
                           sessionStorage.removeItem('auth_role');

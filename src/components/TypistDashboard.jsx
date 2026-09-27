@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { BookOpen, FileEdit, ClipboardCheck, Sparkles, LogOut, ChevronLeft, ChevronRight, Menu, X, CheckCircle2, Clock } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
@@ -62,6 +62,17 @@ export default function TypistDashboard() {
     }
     setIsAccepting(false);
   };
+
+  useEffect(() => {
+    // Prevent back button from leaving the dashboard
+    window.history.pushState(null, "", window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, "", window.location.href);
+      setActiveTab('assigned'); // take to main dashboard view
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   useEffect(() => {
     const role = sessionStorage.getItem('auth_role');
@@ -178,7 +189,7 @@ export default function TypistDashboard() {
     <div className="h-screen overflow-hidden bg-slate-50 flex">
       {/* Mobile Top Bar */}
       <div className="md:hidden fixed top-0 inset-x-0 z-30 bg-white border-b border-slate-200 flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-2.5 min-w-0">
+        <Link to="/" className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center p-1 border border-blue-100 flex-shrink-0">
             <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
           </div>
@@ -186,7 +197,7 @@ export default function TypistDashboard() {
             <h2 className="font-[900] text-blue-700 text-sm leading-tight truncate">MS Academy</h2>
             <p className="text-[11px] font-bold text-slate-400 truncate">{pairRole === 'reviewer' ? 'Reviewer Portal' : 'Typist Portal'}</p>
           </div>
-        </div>
+        </Link>
         <button
           onClick={() => setIsMobileNavOpen(true)}
           aria-label="Open menu"
@@ -202,7 +213,7 @@ export default function TypistDashboard() {
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setIsMobileNavOpen(false)}></div>
           <div className="relative z-10 w-72 max-w-[80vw] h-full bg-white flex flex-col shadow-2xl animate-in slide-in-from-left duration-300">
             <div className="p-5 flex items-center justify-between border-b border-slate-100">
-              <div className="flex items-center gap-3">
+              <Link to="/" className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100 flex-shrink-0">
                   <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
                 </div>
@@ -210,7 +221,7 @@ export default function TypistDashboard() {
                   <h2 className="font-[900] text-blue-700 text-lg leading-tight">MS Academy</h2>
                   <p className="text-xs font-bold text-slate-400">{pairRole === 'reviewer' ? 'Reviewer Portal' : 'Typist Portal'}</p>
                 </div>
-              </div>
+              </Link>
               <button onClick={() => setIsMobileNavOpen(false)} aria-label="Close menu" className="p-2 rounded-lg text-slate-500 hover:bg-slate-100">
                 <X size={20} />
               </button>
@@ -248,8 +259,8 @@ export default function TypistDashboard() {
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
         
-        <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3'}`}>
-          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100 flex-shrink-0">
+        <Link to="/" className={`p-6 flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3'} hover:bg-slate-50 transition-colors w-full`}>
+          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100 flex-shrink-0 mx-auto md:mx-0">
             <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
           </div>
           {!isCollapsed && (
@@ -258,7 +269,7 @@ export default function TypistDashboard() {
               <p className="text-xs font-bold text-slate-400 whitespace-nowrap">{pairRole === 'reviewer' ? 'Reviewer Portal' : 'Typist Portal'}</p>
             </div>
           )}
-        </div>
+        </Link>
 
         <nav className="flex-1 min-h-0 px-4 py-4 space-y-2 overflow-y-auto">
           {renderNavButtons(false)}
