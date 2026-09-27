@@ -895,11 +895,11 @@ export default function AdminDashboard() {
             <div className="pt-5 mt-8 space-y-3 px-2">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-[#1e293b] text-white font-black text-[16px] flex items-center justify-center flex-shrink-0">
-                  M
+                  {(sessionStorage.getItem('auth_name') || 'A').trim().charAt(0).toUpperCase()}
                 </div>
                 <div className="flex flex-col min-w-0 overflow-hidden">
-                  <span className="font-bold text-[14px] text-white truncate">User</span>
-                  <span className="text-[12px] font-semibold text-slate-400 truncate">msacademics.edu@gmail.com</span>
+                  <span className="font-bold text-[14px] text-white truncate">{sessionStorage.getItem('auth_name') || 'Admin'}</span>
+                  <span className="text-[12px] font-semibold text-slate-400 truncate">{sessionStorage.getItem('auth_email') || ''}</span>
                 </div>
               </div>
               <button
@@ -1100,12 +1100,12 @@ export default function AdminDashboard() {
           <div className={`pt-5 mt-8 space-y-3 ${isCollapsed ? 'px-0' : 'px-2'}`}>
             <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
               <div className="w-10 h-10 rounded-full bg-[#1e293b] text-white font-black text-[16px] flex items-center justify-center flex-shrink-0">
-                M
+                {(sessionStorage.getItem('auth_name') || 'A').trim().charAt(0).toUpperCase()}
               </div>
               {!isCollapsed && (
                 <div className="flex flex-col min-w-0 overflow-hidden">
-                  <span className="font-bold text-[14px] text-white truncate">User</span>
-                  <span className="text-[12px] font-semibold text-slate-400 truncate">msacademics.edu@gmail.com</span>
+                  <span className="font-bold text-[14px] text-white truncate">{sessionStorage.getItem('auth_name') || 'Admin'}</span>
+                  <span className="text-[12px] font-semibold text-slate-400 truncate">{sessionStorage.getItem('auth_email') || ''}</span>
                 </div>
               )}
             </div>

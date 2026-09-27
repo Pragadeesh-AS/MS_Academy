@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { db, auth } from '../firebase';
 import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target } from 'lucide-react';
+import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
 import logoImg from '../assets/msgate_logo.png';
 
@@ -129,19 +129,32 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     handleSubmitTest(testQuestions, activeTest, selectedAnswers);
   };
 
+  // "q.mark" is stored as a label like "1 Mark (-0.33)" / "2 Mark (-0.66)" - pull both
+  // numbers back out of it instead of relying on a separate field.
+  const positiveMarks = (q) => parseFloat(q.mark) || 1;
+  const negativeMarks = (q) => {
+    const match = (q.mark || '').match(/\(([-.\d]+)\)/);
+    return match ? Math.abs(parseFloat(match[1])) || 0 : 0;
+  };
+
   const handleSubmitTest = async (questionsList, test, answers) => {
     setLoading(true);
     let correctCount = 0;
-    
+    let totalScore = 0;
+    let totalMarks = 0;
+
     const timeTakenSeconds = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
     const avgTimePerQuestion = questionsList.length > 0 ? timeTakenSeconds / questionsList.length : 0;
-    
+
     // Evaluate answers
       const evaluation = questionsList.map(q => {
         const rawAns = answers[q.id];
         const studentAns = q.questionType === 'Multiple Choice'
           ? (Array.isArray(rawAns) ? rawAns : [])
           : (rawAns || '');
+        const isAnswered = q.questionType === 'Multiple Choice'
+          ? studentAns.length > 0
+          : String(studentAns).trim() !== '';
 
         let isCorrect = false;
         let correctAnswerDisplay = q.correctAnswer;
@@ -171,13 +184,22 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         } else {
           isCorrect = studentAns === q.correctAnswer;
         }
-  
+
+        // Skipped questions never lose marks - only an attempted-but-wrong answer does.
+        const posMark = positiveMarks(q);
+        const negMark = negativeMarks(q);
+        const marksAwarded = !isAnswered ? 0 : (isCorrect ? posMark : -negMark);
+
+        totalMarks += posMark;
+        totalScore += marksAwarded;
         if (isCorrect) correctCount++;
-        
+
         return {
           questionId: q.id,
           selectedAnswer: studentAns,
+          isAnswered,
           isCorrect,
+          marksAwarded,
           correctAnswer: correctAnswerDisplay,
           timeSpent: avgTimePerQuestion
         };
@@ -188,7 +210,9 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       testTitle: test.title,
       studentEmail: auth.currentUser?.email || sessionStorage.getItem('auth_email') || '',
       studentName: sessionStorage.getItem('auth_name') || 'Student',
-      score: correctCount,
+      score: Math.round(totalScore * 100) / 100,
+      totalMarks,
+      correctCount,
       totalQuestions: questionsList.length,
       responses: evaluation,
       submittedAt: serverTimestamp()
@@ -202,7 +226,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       fetchTestsAndAttempts();
     } catch (err) {
       console.error("Failed to save attempt:", err);
-      alert("Test graded but failed to save logs. Score: " + correctCount + "/" + questionsList.length);
+      alert("Test graded but failed to save logs. Score: " + attemptPayload.score + "/" + totalMarks);
     } finally {
       setLoading(false);
     }
@@ -273,12 +297,14 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           <div className="flex items-center gap-4 bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl">
             <Award className="text-blue-600 shrink-0" size={32} />
             <div>
-              <div className="text-[22px] font-[900] text-slate-900 leading-none">{activeAttempt.score} / {activeAttempt.totalQuestions}</div>
-              <div className="text-[12px] text-slate-400 font-bold uppercase tracking-wider mt-1">Your Grade</div>
+              <div className="text-[22px] font-[900] text-slate-900 leading-none">{activeAttempt.score} / {activeAttempt.totalMarks ?? activeAttempt.totalQuestions} marks</div>
+              <div className="text-[12px] text-slate-400 font-bold uppercase tracking-wider mt-1">
+                {activeAttempt.correctCount ?? '?'} / {activeAttempt.totalQuestions} Correct
+              </div>
             </div>
             <div className="border-l border-slate-200 h-10 mx-2"></div>
             <div className="text-2xl font-[900] text-blue-600">
-              {Math.round((activeAttempt.score / activeAttempt.totalQuestions) * 100)}%
+              {Math.round((activeAttempt.score / (activeAttempt.totalMarks || activeAttempt.totalQuestions || 1)) * 100)}%
             </div>
           </div>
         </div>
@@ -292,19 +318,29 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
             <div className="space-y-5">
               {testQuestions.map((q, idx) => {
-                const studentResp = activeAttempt.responses?.find(r => r.questionId === q.id) || { selectedAnswer: '', isCorrect: false };
+                const studentResp = activeAttempt.responses?.find(r => r.questionId === q.id) || { selectedAnswer: '', isCorrect: false, isAnswered: false };
                 const isCorrect = studentResp.isCorrect;
+                const skipped = studentResp.isAnswered === false;
+                const cardBorder = skipped ? 'border-slate-200 hover:border-slate-300' : isCorrect ? 'border-green-100 hover:border-green-200' : 'border-red-100 hover:border-red-200';
+                const badgeStyle = skipped ? 'bg-slate-100 text-slate-500' : isCorrect ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600';
 
                 return (
-                  <div key={q.id} className={`p-6 border rounded-3xl bg-white shadow-sm transition-all ${isCorrect ? 'border-green-100 hover:border-green-200' : 'border-red-100 hover:border-red-200'}`}>
-                    
+                  <div key={q.id} className={`p-6 border rounded-3xl bg-white shadow-sm transition-all ${cardBorder}`}>
+
                     {/* Header Row */}
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                       <span className="px-2.5 py-1 bg-slate-50 text-slate-500 rounded-lg text-xs font-bold">
                         Question {idx + 1}
+                        {typeof studentResp.marksAwarded === 'number' && (
+                          <span className={`ml-2 font-mono ${studentResp.marksAwarded > 0 ? 'text-green-600' : studentResp.marksAwarded < 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                            ({studentResp.marksAwarded > 0 ? '+' : ''}{studentResp.marksAwarded})
+                          </span>
+                        )}
                       </span>
-                      <span className={`px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 ${isCorrect ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                        {isCorrect ? (
+                      <span className={`px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 ${badgeStyle}`}>
+                        {skipped ? (
+                          <><MinusCircle size={14} /> Skipped - No Penalty</>
+                        ) : isCorrect ? (
                           <><CheckCircle size={14} /> Correct</>
                         ) : (
                           <><XCircle size={14} /> Incorrect</>

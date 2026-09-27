@@ -248,19 +248,43 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!studentDepartment) return;
-    const q = query(
+
+    const mineOnly = (docs) => docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(cls => !cls.selectedStudentNames || cls.selectedStudentNames.length === 0 || cls.selectedStudentNames.includes(studentName));
+
+    // Elite students also see "common" classes (Maths/Aptitude etc.) scheduled for every
+    // department, merged with their own department's classes.
+    let deptClasses = [];
+    let commonClasses = [];
+    const applyMerge = () => {
+      const merged = [...deptClasses, ...commonClasses.filter(c => !deptClasses.some(d => d.id === c.id))];
+      merged.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
+      setScheduledClasses(merged);
+    };
+
+    const deptQ = query(
       collection(db, 'scheduled_classes'),
       where('department', '==', studentDepartment)
     );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const classes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const myClasses = classes.filter(cls => 
-        !cls.selectedStudentNames || cls.selectedStudentNames.length === 0 || cls.selectedStudentNames.includes(studentName)
-      );
-      myClasses.sort((a, b) => (a.createdAt?.toMillis() || 0) - (b.createdAt?.toMillis() || 0));
-      setScheduledClasses(myClasses);
+    const unsubDept = onSnapshot(deptQ, (snapshot) => {
+      deptClasses = mineOnly(snapshot.docs);
+      applyMerge();
     });
-    return () => unsubscribe();
+
+    const commonQ = query(
+      collection(db, 'scheduled_classes'),
+      where('openToAllDepartments', '==', true)
+    );
+    const unsubCommon = onSnapshot(commonQ, (snapshot) => {
+      commonClasses = mineOnly(snapshot.docs);
+      applyMerge();
+    });
+
+    return () => {
+      unsubDept();
+      unsubCommon();
+    };
   }, [studentDepartment, studentName]);
 
   useEffect(() => {
@@ -802,7 +826,16 @@ export default function Dashboard() {
                 <span>{isPro ? 'Elite Benefits' : 'Upgrade to Elite'}</span>
               </button>
             </nav>
-            <div className="p-4 border-t border-slate-100">
+            <div className="p-4 border-t border-slate-100 space-y-3">
+              <div className="flex items-center gap-3 px-2">
+                <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-black text-[14px] flex items-center justify-center flex-shrink-0">
+                  {(studentName || 'S').trim().charAt(0).toUpperCase()}
+                </div>
+                <div className="flex flex-col min-w-0 overflow-hidden">
+                  <span className="font-bold text-[13px] text-slate-800 truncate">{studentName}</span>
+                  <span className="text-[11px] font-semibold text-slate-400 truncate">{sessionStorage.getItem('auth_email') || ''}</span>
+                </div>
+              </div>
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-red-500 hover:bg-red-50 transition-all"
@@ -880,7 +913,18 @@ export default function Dashboard() {
           )}
         </nav>
 
-        <div className="p-4 border-t border-slate-100">
+        <div className={`p-4 border-t border-slate-100 space-y-3 ${isCollapsed ? 'px-2' : ''}`}>
+          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
+            <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-black text-[14px] flex items-center justify-center flex-shrink-0">
+              {(studentName || 'S').trim().charAt(0).toUpperCase()}
+            </div>
+            {!isCollapsed && (
+              <div className="flex flex-col min-w-0 overflow-hidden">
+                <span className="font-bold text-[13px] text-slate-800 truncate">{studentName}</span>
+                <span className="text-[11px] font-semibold text-slate-400 truncate">{sessionStorage.getItem('auth_email') || ''}</span>
+              </div>
+            )}
+          </div>
           <button
             onClick={handleLogout}
             title="Log Out"

@@ -190,9 +190,18 @@ export default function TypistDashboard() {
             </div>
             <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
               {renderNavButtons(true)}
+              <div className="flex items-center gap-3 px-4 py-3 mt-4 border-t border-slate-100 pt-4">
+                <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-black text-[14px] flex items-center justify-center flex-shrink-0">
+                  {(typistName || 'T').trim().charAt(0).toUpperCase()}
+                </div>
+                <div className="flex flex-col min-w-0 overflow-hidden">
+                  <span className="font-bold text-[13px] text-slate-800 truncate">{typistName}</span>
+                  <span className="text-[11px] font-semibold text-slate-400 truncate">{sessionStorage.getItem('auth_email') || ''}</span>
+                </div>
+              </div>
               <button
                 onClick={() => { handleLogout(); setIsMobileNavOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl font-bold transition-all mt-4"
+                className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl font-bold transition-all"
               >
                 <LogOut size={18} />
                 <span>Log Out</span>
@@ -228,8 +237,19 @@ export default function TypistDashboard() {
           {renderNavButtons(false)}
         </nav>
 
-        <div className={`p-4 border-t border-slate-100 ${isCollapsed ? 'px-2' : ''}`}>
-          <button 
+        <div className={`p-4 border-t border-slate-100 space-y-3 ${isCollapsed ? 'px-2' : ''}`}>
+          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
+            <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-black text-[14px] flex items-center justify-center flex-shrink-0">
+              {(typistName || 'T').trim().charAt(0).toUpperCase()}
+            </div>
+            {!isCollapsed && (
+              <div className="flex flex-col min-w-0 overflow-hidden">
+                <span className="font-bold text-[13px] text-slate-800 truncate">{typistName}</span>
+                <span className="text-[11px] font-semibold text-slate-400 truncate">{sessionStorage.getItem('auth_email') || ''}</span>
+              </div>
+            )}
+          </div>
+          <button
             onClick={handleLogout}
             className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 text-red-500 hover:bg-red-50 rounded-xl font-bold transition-all`}
           >

@@ -270,7 +270,7 @@ const LeaderboardView = ({ participantNames, participantScores, participantRoles
   )
 }
 
-const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, departmentQuestions, department }) => {
+const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, unreadChatCount = 0, departmentQuestions, department }) => {
   const [activeTab, setActiveTab] = useState('chat');
   const [isRevealing, setIsRevealing] = useState(false);
   const [micOn, setMicOn] = useState(false);
@@ -982,6 +982,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
             title={isChatOpen ? 'Close Chat' : 'Open Chat'}
           >
             <MessageCircle size={18} strokeWidth={1.5} />
+            {unreadChatCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center animate-pulse">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>
+            )}
           </button>
 
           {/* End Call Button */}
@@ -1262,7 +1265,9 @@ export default function LiveClasses({ department }) {
   const chatEndRef = useRef(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatToast, setChatToast] = useState({ show: false, sender: '', message: '' });
-  const prevMessagesLength = useRef(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const lastSeenChatTsRef = useRef(0);
+  const chatInitializedRef = useRef(false);
 
   // Modals
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -1305,14 +1310,25 @@ export default function LiveClasses({ department }) {
     }
   };
 
-  const [newClass, setNewClass] = useState({ topic: '', date: '', time: '', selectedStudents: [], bundleId: '' });
+  const [newClass, setNewClass] = useState({ topic: '', date: '', time: '', selectedStudents: [], bundleId: '', isCommonClass: false });
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [startClassData, setStartClassData] = useState({ topic: '', bundleId: '', scheduledId: null });
+  const [startClassData, setStartClassData] = useState({ topic: '', bundleId: '', isCommonClass: false, scheduledId: null });
   const [availableBundles, setAvailableBundles] = useState([]);
 
   const [activeSessions, setActiveSessions] = useState([]);
   const [upcomingClasses, setUpcomingClasses] = useState([]);
   const [departmentStudents, setDepartmentStudents] = useState([]);
+
+  // Common classes (Maths/Aptitude) are open to Elite students platform-wide, not just this department.
+  const fetchEliteStudentsAcrossDepartments = async () => {
+    try {
+      const snap = await getDocs(query(collection(db, 'joined_students'), where('isPro', '==', true)));
+      return snap.docs.map(d => ({ name: d.data().name, email: d.data().email }));
+    } catch (err) {
+      console.error('Failed to fetch elite students', err);
+      return [];
+    }
+  };
   const [playingVideoUrl, setPlayingVideoUrl] = useState(null);
 
   useEffect(() => {
@@ -1418,26 +1434,39 @@ export default function LiveClasses({ department }) {
   useEffect(() => {
     if (!isInCall || !currentSessionId) return;
     const q = query(collection(db, 'live_chats'), where('sessionId', '==', currentSessionId));
+    const myEmail = sessionStorage.getItem('auth_email');
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setChatVotes(allDocs.filter(m => m.type === 'poll_vote'));
       const messages = allDocs.filter(m => m.type !== 'poll_vote');
       messages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
 
-      if (prevMessagesLength.current > 0 && messages.length > prevMessagesLength.current && !isChatOpen) {
-        const lastMsg = messages[messages.length - 1];
-        if (lastMsg.senderEmail !== sessionStorage.getItem('auth_email')) {
-          setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.type === 'poll' ? `New poll: ${lastMsg.question}` : lastMsg.message });
-          setTimeout(() => setChatToast(prev => ({ ...prev, show: false })), 5000);
-        }
+      // Messages from someone else, newer than the last one we've already accounted for.
+      // Skipped entirely on the very first snapshot so opening an existing chat log doesn't
+      // flood you with toasts/unread count for history that was already there.
+      const newOnes = chatInitializedRef.current
+        ? messages.filter(m => (m.timestamp?.toMillis() || 0) > lastSeenChatTsRef.current && m.senderEmail !== myEmail)
+        : [];
+      chatInitializedRef.current = true;
+      messages.forEach(m => { lastSeenChatTsRef.current = Math.max(lastSeenChatTsRef.current, m.timestamp?.toMillis() || 0); });
+
+      if (newOnes.length > 0 && !isChatOpen) {
+        const lastMsg = newOnes[newOnes.length - 1];
+        setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.type === 'poll' ? `New poll: ${lastMsg.question}` : lastMsg.message });
+        setTimeout(() => setChatToast(prev => ({ ...prev, show: false })), 6000);
+        setUnreadChatCount(prev => prev + newOnes.length);
       }
-      prevMessagesLength.current = messages.length;
 
       setChatMessages(messages);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
     return () => unsubscribe();
-  }, [isInCall, currentSessionId]);
+  }, [isInCall, currentSessionId, isChatOpen]);
+
+  // Opening the chat panel clears the unread badge.
+  useEffect(() => {
+    if (isChatOpen) setUnreadChatCount(0);
+  }, [isChatOpen]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -1489,6 +1518,7 @@ export default function LiveClasses({ department }) {
         topic: startClassData.topic || "Instant Live Session",
         status: 'live',
         bundleId: startClassData.bundleId || 'free',
+        openToAllDepartments: !!startClassData.isCommonClass,
         startedAt: serverTimestamp()
       };
 
@@ -1565,10 +1595,12 @@ export default function LiveClasses({ department }) {
 
     const combinedDateTime = `${newClass.date}T${newClass.time}`;
 
-    // Determine which students to email
+    // Determine which students to email. A common class reaches Elite students in every
+    // department; a normal class only reaches this department's students.
+    const recipientPool = newClass.isCommonClass ? await fetchEliteStudentsAcrossDepartments() : departmentStudents;
     const studentsToEmail = newClass.selectedStudents.length > 0 
-      ? departmentStudents.filter(s => newClass.selectedStudents.includes(s.name))
-      : departmentStudents;
+      ? recipientPool.filter(s => newClass.selectedStudents.includes(s.name))
+      : recipientPool;
 
     const teacherName = sessionStorage.getItem('auth_name') || 'Your Teacher';
     const loginLink = window.location.hostname === 'localhost' ? 'http://localhost:5173/student' : window.location.origin + '/student';
@@ -1619,6 +1651,7 @@ export default function LiveClasses({ department }) {
         teacherEmail: sessionStorage.getItem('auth_email'),
         teacherName: teacherName,
         department: department,
+        openToAllDepartments: !!newClass.isCommonClass,
         createdAt: serverTimestamp()
       });
     } catch(err) {
@@ -1626,16 +1659,17 @@ export default function LiveClasses({ department }) {
     }
 
     setIsScheduleModalOpen(false);
-    setNewClass({ topic: "", time: "", selectedStudents: [] });
+    setNewClass({ topic: "", date: "", time: "", selectedStudents: [], bundleId: '', isCommonClass: false });
   };
 
   const confirmCancelScheduledClass = async () => {
     if (!classToDelete) return;
     
     // Determine which students to email
+    const cancelRecipientPool = classToDelete.openToAllDepartments ? await fetchEliteStudentsAcrossDepartments() : departmentStudents;
     const studentsToEmail = classToDelete.selectedStudentNames && classToDelete.selectedStudentNames.length > 0 
-      ? departmentStudents.filter(s => classToDelete.selectedStudentNames.includes(s.name))
-      : departmentStudents;
+      ? cancelRecipientPool.filter(s => classToDelete.selectedStudentNames.includes(s.name))
+      : cancelRecipientPool;
 
     const teacherName = sessionStorage.getItem('auth_name') || 'Your Teacher';
 
@@ -1855,6 +1889,7 @@ export default function LiveClasses({ department }) {
                 toggleChat={() => setIsChatOpen(!isChatOpen)}
                 chatToast={chatToast}
                 setChatToast={setChatToast}
+                unreadChatCount={unreadChatCount}
                 departmentQuestions={departmentQuestions}
                 department={department}
               />
@@ -1946,7 +1981,7 @@ export default function LiveClasses({ department }) {
             <Calendar size={18} /> Schedule Class
           </button>
           <button
-            onClick={() => { setStartClassData(prev => ({ ...prev, scheduledId: null })); setIsStartModalOpen(true); }}
+            onClick={() => { setStartClassData({ topic: '', bundleId: '', isCommonClass: false, scheduledId: null }); setIsStartModalOpen(true); }}
             className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] flex items-center gap-2"
           >
             <Plus size={18} strokeWidth={2.5} /> Start Instant Class
@@ -2030,7 +2065,7 @@ export default function LiveClasses({ department }) {
                   <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2 mt-2 sm:mt-0">
                     <button
                       onClick={() => {
-                        setStartClassData({ topic: cls.topic, scheduledId: cls.id });
+                        setStartClassData({ topic: cls.topic, bundleId: cls.bundleId || '', isCommonClass: !!cls.openToAllDepartments, scheduledId: cls.id });
                         setIsStartModalOpen(true);
                       }}
                       className="w-full sm:w-auto px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center gap-2"
@@ -2116,6 +2151,19 @@ export default function LiveClasses({ department }) {
                     className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                   />
                 </div>
+
+                <label className="flex items-start gap-3 p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/60 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={startClassData.isCommonClass || false}
+                    onChange={(e) => {setStartClassData({ ...startClassData, isCommonClass: e.target.checked })}}
+                    className="mt-0.5 w-4 h-4 accent-indigo-600"
+                  />
+                  <span>
+                    <span className="block text-[13px] font-bold text-slate-800">Common class for all departments (e.g. Maths, Aptitude)</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">Elite students from every department can join this one, not just your own.</span>
+                  </span>
+                </label>
               </form>
             </div>
 
@@ -2162,6 +2210,19 @@ export default function LiveClasses({ department }) {
                     className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                   />
                 </div>
+
+                <label className="flex items-start gap-3 p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/60 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newClass.isCommonClass || false}
+                    onChange={(e) => {setNewClass({ ...newClass, isCommonClass: e.target.checked })}}
+                    className="mt-0.5 w-4 h-4 accent-indigo-600"
+                  />
+                  <span>
+                    <span className="block text-[13px] font-bold text-slate-800">Common class for all departments (e.g. Maths, Aptitude)</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">Elite students from every department can join this one, not just your own.</span>
+                  </span>
+                </label>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 sm:col-span-1">

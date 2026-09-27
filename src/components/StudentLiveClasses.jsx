@@ -57,7 +57,7 @@ const sendEmailViaGAS = async (to, subject, htmlMessage) => {
 };
 
 // Extracted StudentCall component for custom Agora rendering
-const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, showControls, resetControlsTimeout }) => {
+const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, unreadChatCount = 0, showControls, resetControlsTimeout }) => {
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [pinnedUid, setPinnedUid] = useState(null);
@@ -542,12 +542,15 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
           </button>
 
           {/* Chat Button */}
-          <button 
-            onClick={toggleChat} 
+          <button
+            onClick={toggleChat}
             className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center relative text-white ${isChatOpen ? 'control-btn' : 'control-btn off'}`}
             title={isChatOpen ? 'Close Chat' : 'Open Chat'}
           >
             <MessageCircle size={22} strokeWidth={1.5} />
+            {unreadChatCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center animate-pulse">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>
+            )}
           </button>
           
           {/* End Call Button */}
@@ -687,36 +690,63 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
   const [chatToast, setChatToast] = useState({ show: false, sender: '', message: '' });
-  const prevMessagesLength = useRef(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const lastSeenChatTsRef = useRef(0);
+  const chatInitializedRef = useRef(false);
 
   useEffect(() => {
     if (!department) return;
 
-    const q = query(
+    const toSessionCard = (doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        topic: data.topic || 'Live Session',
+        teacher: data.teacherName || 'Teacher',
+        time: 'Started recently',
+        students: '...', // Mocked student count for now
+        isLive: true,
+        bundleId: data.bundleId || 'free',
+        ...data
+      };
+    };
+
+    // Elite students also see "common" classes (Maths/Aptitude etc.) from every department,
+    // on top of their own department's classes - merged from two listeners since Firestore
+    // can't OR across different fields in one query.
+    let deptSessions = [];
+    let commonSessions = [];
+    const applyMerge = () => {
+      const merged = [...deptSessions, ...commonSessions.filter(c => !deptSessions.some(d => d.id === c.id))];
+      setActiveClasses(merged);
+    };
+
+    const deptQ = query(
       collection(db, 'live_sessions'),
       where('department', '==', department),
       where('status', '==', 'live')
     );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const sessions = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        sessions.push({
-          id: doc.id,
-          topic: data.topic || 'Live Session',
-          teacher: data.teacherName || 'Teacher',
-          time: 'Started recently',
-          students: '...', // Mocked student count for now
-          isLive: true,
-          bundleId: data.bundleId || 'free',
-          ...data
-        });
-      });
-      setActiveClasses(sessions);
+    const unsubDept = onSnapshot(deptQ, (snapshot) => {
+      deptSessions = snapshot.docs.map(toSessionCard);
+      applyMerge();
     });
 
-    return () => unsubscribe();
+    // Fetched for everyone - canAccessClass() below still locks it for a non-Elite student
+    // unless they hold the specific bundle this class requires.
+    const commonQ = query(
+      collection(db, 'live_sessions'),
+      where('openToAllDepartments', '==', true),
+      where('status', '==', 'live')
+    );
+    const unsubCommon = onSnapshot(commonQ, (snapshot) => {
+      commonSessions = snapshot.docs.map(toSessionCard);
+      applyMerge();
+    });
+
+    return () => {
+      unsubDept();
+      unsubCommon();
+    };
   }, [department]);
 
   // ── Anti-Screenshot: Active ONLY during live class ──────────────────────
@@ -893,26 +923,39 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
   useEffect(() => {
     if (!isInCall || !currentSession) return;
     const q = query(collection(db, 'live_chats'), where('sessionId', '==', currentSession.id));
+    const myEmail = sessionStorage.getItem('auth_email');
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setChatVotes(allDocs.filter(m => m.type === 'poll_vote'));
       const messages = allDocs.filter(m => m.type !== 'poll_vote');
       messages.sort((a, b) => (a.timestamp?.toMillis() || 0) - (b.timestamp?.toMillis() || 0));
-      
-      if (prevMessagesLength.current > 0 && messages.length > prevMessagesLength.current && !isChatOpen) {
-        const lastMsg = messages[messages.length - 1];
-        if (lastMsg.senderEmail !== sessionStorage.getItem('auth_email')) {
-          setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.type === 'poll' ? `New poll: ${lastMsg.question}` : lastMsg.message });
-          setTimeout(() => setChatToast(prev => ({ ...prev, show: false })), 5000);
-        }
+
+      // Messages from someone else, newer than the last one we've already accounted for.
+      // Skipped entirely on the very first snapshot so opening an existing chat log doesn't
+      // flood you with toasts/unread count for history that was already there.
+      const newOnes = chatInitializedRef.current
+        ? messages.filter(m => (m.timestamp?.toMillis() || 0) > lastSeenChatTsRef.current && m.senderEmail !== myEmail)
+        : [];
+      chatInitializedRef.current = true;
+      messages.forEach(m => { lastSeenChatTsRef.current = Math.max(lastSeenChatTsRef.current, m.timestamp?.toMillis() || 0); });
+
+      if (newOnes.length > 0 && !isChatOpen) {
+        const lastMsg = newOnes[newOnes.length - 1];
+        setChatToast({ show: true, sender: lastMsg.senderName, message: lastMsg.type === 'poll' ? `New poll: ${lastMsg.question}` : lastMsg.message });
+        setTimeout(() => setChatToast(prev => ({ ...prev, show: false })), 6000);
+        setUnreadChatCount(prev => prev + newOnes.length);
       }
-      prevMessagesLength.current = messages.length;
-      
+
       setChatMessages(messages);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
     return () => unsubscribe();
-  }, [isInCall, currentSession]);
+  }, [isInCall, currentSession, isChatOpen]);
+
+  // Opening the chat panel clears the unread badge.
+  useEffect(() => {
+    if (isChatOpen) setUnreadChatCount(0);
+  }, [isChatOpen]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -1271,6 +1314,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                 toggleChat={() => setIsChatOpen(!isChatOpen)}
                 chatToast={chatToast}
                 setChatToast={setChatToast}
+                unreadChatCount={unreadChatCount}
                 showControls={showControls}
                 resetControlsTimeout={resetControlsTimeout}
               />
