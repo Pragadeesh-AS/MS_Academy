@@ -126,6 +126,8 @@ export default function TypistDashboard() {
     sessionStorage.removeItem('auth_role');
     sessionStorage.removeItem('auth_email');
     sessionStorage.removeItem('auth_name');
+    localStorage.removeItem('pair_id');
+    localStorage.removeItem('pair_role');
     window.dispatchEvent(new Event('storage'));
     navigate('/');
   };

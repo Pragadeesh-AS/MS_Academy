@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   ChevronDown,
@@ -11,16 +11,23 @@ import {
   ShieldCheck,
   MailPlus,
   Trash2,
-  X
+  X,
+  Sparkles,
+  AlertTriangle
 } from 'lucide-react';
 
 const TypistDirectory = ({
   invitedTypists,
   deleteTypist,
   updateTypist,
-  onInvite
+  onInvite,
+  aiReviewEmail = '',
+  updateAiReviewEmail
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [aiReviewDraft, setAiReviewDraft] = useState(aiReviewEmail);
+  const [savingAiReview, setSavingAiReview] = useState(false);
+  useEffect(() => { setAiReviewDraft(aiReviewEmail); }, [aiReviewEmail]);
   const [collapsedReviewers, setCollapsedReviewers] = useState({});
   const toggleReviewer = (key) => setCollapsedReviewers(prev => ({ ...prev, [key]: !prev[key] }));
   const [editingPair, setEditingPair] = useState(null);
@@ -104,6 +111,55 @@ const TypistDirectory = ({
       </div>
 
       <div className="space-y-7 relative z-10">
+        {/* Default AI Reviewer - a separate, easy-to-miss setting: the AI Generator's "no pair
+            assigned" mode saves whoever is typed as reviewer here, and that email can then log in
+            as a reviewer even after being removed from the list below. Surfaced here so it's never
+            an invisible leftover again. */}
+        <div className={`rounded-[20px] border p-5 flex flex-col sm:flex-row sm:items-center gap-4 justify-between ${aiReviewEmail ? 'bg-amber-50/60 border-amber-200' : 'bg-white border-[#EEF2F7]'}`}>
+          <div className="flex items-start gap-3 min-w-0">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${aiReviewEmail ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>
+              <Sparkles size={18} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-[14px] font-bold text-[#0F172A]">Default AI Reviewer</h3>
+              <p className="text-[12.5px] text-[#64748B] font-medium mt-0.5">
+                Used by the AI Generator when it's run without a typist pair (e.g. directly by an admin). This email can log in as a reviewer, separately from the typists listed below.
+              </p>
+              {aiReviewEmail ? (
+                <p className="text-[12.5px] font-bold text-amber-700 mt-1.5 flex items-center gap-1.5"><AlertTriangle size={13} /> Currently set to: {aiReviewEmail}</p>
+              ) : (
+                <p className="text-[12.5px] font-semibold text-slate-400 mt-1.5">Not set - the AI Generator will ask for a reviewer email when needed.</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <input
+              type="email"
+              value={aiReviewDraft}
+              onChange={(e) => setAiReviewDraft(e.target.value)}
+              placeholder="reviewer@example.com"
+              className="w-full sm:w-56 h-[42px] px-3 bg-white border border-[#E5E7EB] rounded-xl text-[13px] focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-blue-500/10"
+            />
+            <button
+              onClick={async () => { setSavingAiReview(true); await updateAiReviewEmail(aiReviewDraft); setSavingAiReview(false); }}
+              disabled={savingAiReview || aiReviewDraft === aiReviewEmail}
+              className="h-[42px] px-4 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 disabled:cursor-not-allowed text-white text-[13px] font-bold rounded-xl transition-colors shrink-0"
+            >
+              Save
+            </button>
+            {aiReviewEmail && (
+              <button
+                onClick={async () => { setSavingAiReview(true); await updateAiReviewEmail(''); setSavingAiReview(false); }}
+                disabled={savingAiReview}
+                className="h-[42px] px-3 bg-white border border-[#E5E7EB] hover:bg-slate-50 disabled:opacity-40 text-[#64748B] text-[13px] font-bold rounded-xl transition-colors shrink-0"
+                title="Clear this setting"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-7">
           {/* Total Typists */}

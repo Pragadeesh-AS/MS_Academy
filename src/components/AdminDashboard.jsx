@@ -121,7 +121,28 @@ export default function AdminDashboard() {
   const [typistInviteForm, setTypistInviteForm] = useState({ typistName: '', typistEmail: '', reviewerName: '', reviewerEmail: '' });
   const [typistInviteReviewerMode, setTypistInviteReviewerMode] = useState('new'); // 'new' | 'existing' - lets many typists share one reviewer
   const [isTypistInviting, setIsTypistInviting] = useState(false);
-  
+
+  // The AI Generator's "non-paired" mode (used outside a typist/reviewer pairing) saves whoever
+  // is typed into its Reviewer Email field here - separately from the Data Entry Team list below,
+  // and with no other admin UI to see or clear it. Surfaced here so removing someone as a reviewer
+  // in one place doesn't silently leave them still able to log in as reviewer via the other.
+  const [aiReviewEmail, setAiReviewEmail] = useState('');
+  useEffect(() => {
+    getDoc(doc(db, 'site_settings', 'ai_review')).then(snap => {
+      if (snap.exists()) setAiReviewEmail(snap.data().reviewerEmail || '');
+    }).catch(err => console.error('Failed to load AI review setting', err));
+  }, []);
+  const updateAiReviewEmail = async (email) => {
+    try {
+      await setDoc(doc(db, 'site_settings', 'ai_review'), { reviewerEmail: email.trim().toLowerCase() }, { merge: true });
+      setAiReviewEmail(email.trim().toLowerCase());
+      return true;
+    } catch (err) {
+      console.error('Failed to update AI review setting', err);
+      return false;
+    }
+  };
+
   const [confirmDeleteObj, setConfirmDeleteObj] = useState(null);
 
   // Search & Filter states
@@ -1123,8 +1144,12 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Dashboard Container */}
-      <main className={`flex-1 w-full min-w-0 z-10 ${activeTab === 'analytics' ? 'h-full flex flex-col overflow-y-auto pt-16 md:pt-0' : 'p-4 pt-20 sm:p-6 sm:pt-20 md:p-10 md:pt-10 max-w-[1400px] mx-auto space-y-8 overflow-y-auto h-full'}`}>
-        
+      {/* overflow-y-auto lives on this full-width <main> so its scrollbar sits at the true edge
+          of the page; the inner div below only handles centering/width, never scroll, so a
+          max-w-capped page doesn't end up with its scrollbar floating inboard of the real edge. */}
+      <main className="flex-1 w-full min-w-0 z-10 h-full overflow-y-auto">
+        <div className={activeTab === 'analytics' ? 'h-full flex flex-col pt-16 md:pt-0' : 'p-4 pt-20 sm:p-6 sm:pt-20 md:p-10 md:pt-10 max-w-[1400px] mx-auto space-y-8'}>
+
         {/* Active Tab: Overview Dashboard */}
         {activeTab === 'overview' && (
           <div className="space-y-8">
@@ -1635,6 +1660,8 @@ export default function AdminDashboard() {
             }}
             updateTypist={updateTypist}
             onInvite={() => setIsTypistInviteModalOpen(true)}
+            aiReviewEmail={aiReviewEmail}
+            updateAiReviewEmail={updateAiReviewEmail}
           />
         )}
 
@@ -1871,6 +1898,7 @@ export default function AdminDashboard() {
         {/* Blogs Tab */}
         {activeTab === 'blogs' && <BlogManager />}
 
+        </div>
       </main>
 
       {/* Details Modal Overlay for applications */}
