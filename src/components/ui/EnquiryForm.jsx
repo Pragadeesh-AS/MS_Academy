@@ -84,9 +84,9 @@ export function EnquiryForm() {
         )}
         initial={false}
         animate={{
-          width: showForm ? FORM_WIDTH : 64,
-          height: showForm ? FORM_HEIGHT : 64,
-          borderRadius: showForm ? 24 : 32,
+          width: showForm ? FORM_WIDTH : 140,
+          height: showForm ? FORM_HEIGHT : 60,
+          borderRadius: showForm ? 24 : 30,
         }}
         transition={{
           type: "spring",
@@ -108,7 +108,7 @@ export function EnquiryForm() {
 function DockBar() {
   const { showForm, triggerOpen } = useFormContext()
   return (
-    <footer className="mt-auto flex h-[64px] w-full items-center justify-center whitespace-nowrap select-none">
+    <footer className="mt-auto flex h-[60px] w-full items-center justify-center whitespace-nowrap select-none">
       <Button
         type="button"
         className="flex h-full w-full items-center justify-center rounded-full p-0 bg-transparent cursor-pointer text-white"
@@ -132,8 +132,10 @@ function DockBar() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.5 }}
               transition={{ duration: 0.2 }}
+              className="flex items-center gap-2"
             >
-              <MessageSquarePlus size={28} />
+              <MessageSquarePlus size={22} />
+              <span className="font-bold text-[15px]">Enquiry</span>
             </motion.div>
           )}
         </AnimatePresence>
