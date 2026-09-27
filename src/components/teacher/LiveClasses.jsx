@@ -11,7 +11,7 @@ import {
   Calendar,
   Plus,
   Clock,
-  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud, MoreHorizontal, Trophy, Download
+  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud, MoreHorizontal, Trophy
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import LiveTestOverlay, { startLiveTest } from '../liveTest/LiveTestOverlay';
@@ -1280,25 +1280,6 @@ export default function LiveClasses({ department }) {
   const [isInCall, setIsInCall] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
 
-  const handleDownload = async (e, url, fileName) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = fileName || 'recording.mp4';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (err) {
-      console.error("Failed to download as blob, opening in new tab", err);
-      window.open(url, '_blank');
-    }
-  };
 
   // Chat State
   const [chatMessages, setChatMessages] = useState([]);
@@ -2155,18 +2136,9 @@ export default function LiveClasses({ department }) {
                       <p className="text-[11px] text-slate-500 font-bold">{new Date(rec.createdAt?.toMillis() || Date.now()).toLocaleDateString()}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => handleDownload(e, rec.url, rec.fileName)}
-                      className="p-2 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-flex"
-                      title="Download Recording"
-                    >
-                      <Download size={16} />
-                    </button>
-                    <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Watch Recording">
-                      <Play size={16} fill="currentColor" />
-                    </button>
-                  </div>
+                  <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Watch Recording">
+                    <Play size={16} fill="currentColor" />
+                  </button>
                 </div>
               ))
             )}
