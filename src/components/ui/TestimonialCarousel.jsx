@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Quote, CheckCircle2, Star } from 'lucide-react';
 
 export default function TestimonialCarousel({ reviews }) {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const defaultIndex = reviews?.findIndex(r => r.name === "Priya") ?? 0;
+  const [activeIndex, setActiveIndex] = useState(defaultIndex !== -1 ? defaultIndex : 0);
 
   // Default reviews if none provided
   const testimonials = reviews && reviews.length > 0 ? reviews : [
