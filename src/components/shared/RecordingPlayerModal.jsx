@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react';
+import { X, Play, Pause, Volume2, VolumeX, Maximize, RotateCcw, RotateCw } from 'lucide-react';
 
 const fmt = (s) => {
   if (!isFinite(s) || s < 0) return '0:00';
@@ -21,6 +21,8 @@ export default function RecordingPlayerModal({ recording, onClose }) {
   const [duration, setDuration] = useState(
     recording.duration && isFinite(recording.duration) && recording.duration > 0 ? recording.duration : null
   );
+  const [durationGaveUp, setDurationGaveUp] = useState(false);
+  const [bufferedEnd, setBufferedEnd] = useState(0);
   const [current, setCurrent] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -42,11 +44,17 @@ export default function RecordingPlayerModal({ recording, onClose }) {
     } catch { /* localStorage unavailable - resume just won't persist */ }
   };
 
-  // Get the video actually playing, work out its real duration if the recorder didn't already
-  // save one, resume where the viewer left off, then start playback - all on the ONE element
-  // that's on screen. (A previous version probed duration with a second hidden <video> pointed
-  // at the same URL; that second connection competed with the real player for bandwidth and
-  // could stall playback partway through, which is why this uses only one element.)
+  const readBuffered = (v) => {
+    try {
+      if (v.buffered && v.buffered.length > 0) {
+        setBufferedEnd(prev => Math.max(prev, v.buffered.end(v.buffered.length - 1)));
+      }
+    } catch { /* ignore */ }
+  };
+
+  // Work out this recording's real length (if the recorder didn't already save one) and start
+  // playback, all on the ONE video element that's on screen - never a second hidden download of
+  // the same file, which previously competed for bandwidth with the real player and could stall it.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -56,6 +64,7 @@ export default function RecordingPlayerModal({ recording, onClose }) {
       if (settled) return;
       settled = true;
       if (resolvedDuration && isFinite(resolvedDuration)) setDuration(resolvedDuration);
+      else setDurationGaveUp(true);
       const resumeAt = getSavedTime();
       if (resumeAt > 0 && (!resolvedDuration || resumeAt < resolvedDuration - 5)) {
         try { v.currentTime = resumeAt; } catch { /* ignore */ }
@@ -63,8 +72,16 @@ export default function RecordingPlayerModal({ recording, onClose }) {
       v.play().catch(() => {});
     };
 
-    // Don't get stuck forever if metadata/duration-fix never resolves for some file.
-    const safety = setTimeout(() => startPlayback(null), 6000);
+    // Some recordings (typically webm without a proper index/Cues) never resolve duration via any
+    // seek trick - don't leave the viewer staring at a frozen "reading length" state; start playing.
+    const safety = setTimeout(() => startPlayback(null), 4000);
+
+    // Chrome sometimes works out the real duration on its own as more of the file is buffered,
+    // without needing a manual seek - catch that whenever it happens, active fix or not.
+    const onDurationChange = () => {
+      if (isFinite(v.duration) && v.duration > 0) setDuration(v.duration);
+    };
+    v.addEventListener('durationchange', onDurationChange);
 
     const onLoadedMetadata = () => {
       if (recording.duration && isFinite(recording.duration) && recording.duration > 0) {
@@ -89,10 +106,15 @@ export default function RecordingPlayerModal({ recording, onClose }) {
       v.currentTime = 1e101;
     };
 
+    const onProgress = () => readBuffered(v);
+
     v.addEventListener('loadedmetadata', onLoadedMetadata);
+    v.addEventListener('progress', onProgress);
     return () => {
       clearTimeout(safety);
       v.removeEventListener('loadedmetadata', onLoadedMetadata);
+      v.removeEventListener('durationchange', onDurationChange);
+      v.removeEventListener('progress', onProgress);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recording.id]);
@@ -101,6 +123,7 @@ export default function RecordingPlayerModal({ recording, onClose }) {
     const v = videoRef.current;
     if (!v) return;
     if (!dragging) setCurrent(v.currentTime);
+    readBuffered(v);
     const now = Date.now();
     if (now - lastSaveRef.current > 4000) {
       lastSaveRef.current = now;
@@ -114,6 +137,19 @@ export default function RecordingPlayerModal({ recording, onClose }) {
     if (v.paused) v.play(); else v.pause();
   };
 
+  const skip = (deltaSeconds) => {
+    const v = videoRef.current;
+    if (!v) return;
+    const target = Math.max(0, v.currentTime + deltaSeconds);
+    try { v.currentTime = target; } catch { /* ignore */ }
+    setCurrent(target);
+    saveTime(target, duration);
+  };
+
+  // A real duration makes the bar exact; without one, whatever has already downloaded (plus a
+  // little headroom) stands in for "total" so the bar is still usable and keeps growing as more loads.
+  const effectiveTotal = duration || Math.max(bufferedEnd, current + 30, 30);
+
   const fractionFromEvent = (e) => {
     const bar = barRef.current;
     if (!bar) return 0;
@@ -124,8 +160,8 @@ export default function RecordingPlayerModal({ recording, onClose }) {
 
   const seekToFraction = (fraction) => {
     const v = videoRef.current;
-    if (!v || !duration) return;
-    const target = fraction * duration;
+    if (!v) return;
+    const target = fraction * effectiveTotal;
     try { v.currentTime = target; } catch { /* ignore */ }
     setCurrent(target);
     saveTime(target, duration);
@@ -147,8 +183,8 @@ export default function RecordingPlayerModal({ recording, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const shownCurrent = dragging ? dragFraction * (duration || 0) : current;
-  const pct = duration ? Math.min(100, (shownCurrent / duration) * 100) : 0;
+  const shownCurrent = dragging ? dragFraction * effectiveTotal : current;
+  const pct = Math.min(100, (shownCurrent / effectiveTotal) * 100);
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -191,9 +227,15 @@ export default function RecordingPlayerModal({ recording, onClose }) {
             />
           </div>
           <div className="flex items-center justify-between text-xs font-bold text-slate-300">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              <button type="button" onClick={() => skip(-10)} title="Back 10 seconds" className="text-white hover:text-indigo-400 transition-colors">
+                <RotateCcw size={16} />
+              </button>
               <button type="button" onClick={togglePlay} className="text-white hover:text-indigo-400 transition-colors">
                 {playing ? <Pause size={18} /> : <Play size={18} />}
+              </button>
+              <button type="button" onClick={() => skip(10)} title="Forward 10 seconds" className="text-white hover:text-indigo-400 transition-colors">
+                <RotateCw size={16} />
               </button>
               <button
                 type="button"
@@ -203,7 +245,11 @@ export default function RecordingPlayerModal({ recording, onClose }) {
                 {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
               </button>
               <span className="tabular-nums">{fmt(shownCurrent)} / {duration ? fmt(duration) : '--:--'}</span>
-              {!duration && <span className="text-amber-400 normal-case font-semibold">Reading length...</span>}
+              {!duration && (
+                <span className="text-amber-400 normal-case font-semibold">
+                  {durationGaveUp ? 'Length unavailable - use the skip buttons to seek' : 'Reading length...'}
+                </span>
+              )}
             </div>
             <button
               type="button"
