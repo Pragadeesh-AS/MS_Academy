@@ -1,10 +1,12 @@
 import React from 'react';
 import { ServerCrash, RefreshCcw } from 'lucide-react';
 
-export default function ServerError500() {
+export default function ServerError500({ error }) {
+  const isDev = import.meta.env.DEV;
+
   return (
     <div className="flex-1 flex items-center justify-center p-4">
-      <div className="max-w-md w-full text-center">
+      <div className="max-w-3xl w-full text-center">
         <div className="flex justify-center mb-8">
           <div className="relative">
             <div className="absolute inset-0 bg-orange-100 blur-2xl rounded-full opacity-50"></div>
@@ -23,6 +25,23 @@ export default function ServerError500() {
           <RefreshCcw size={18} />
           Reload Page
         </button>
+
+        {isDev && error && (
+          <div className="mt-12 text-left bg-red-50 p-6 rounded-xl border border-red-200 overflow-auto max-h-[500px]">
+            <h3 className="text-red-800 font-bold mb-2 text-lg flex items-center gap-2">
+              <span className="bg-red-200 text-red-800 text-xs px-2 py-1 rounded">DEV MODE</span>
+              Error Details:
+            </h3>
+            <p className="text-red-600 font-mono text-sm mb-4">
+              {error.message || String(error)}
+            </p>
+            {error.stack && (
+              <pre className="text-xs text-red-500 font-mono whitespace-pre-wrap bg-white p-4 rounded border border-red-100">
+                {error.stack}
+              </pre>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -121,31 +121,166 @@ const courses = [
 
 const testimonials = [
   {
-    name: "Rithikaa Kannan",
-    role: "GATE Aspirant",
-    discipline: "GATE Coaching",
-    quote: "I am truly grateful to be a part of this academy. The GATE coaching is excellent, with well-structured classes and experienced faculty who explain every concept clearly. The teachers and staff are very kind, supportive, and always willing to interact with students and clear our doubts. The academy’s sir is also very humble, caring, and encourages every student to do their best. I feel truly blessed to have joined this academy, and I highly recommend it to anyone preparing for GATE. Thank you for your continuous support and guidance!",
+    name: "Myl samy M",
+    role: "Google Reviewer",
+    discipline: "2 months ago",
+    quote: "",
     rating: 5,
-    initials: "RK",
-    bgGradient: "from-blue-500 to-indigo-600"
+    initials: "M",
+    bgGradient: "from-slate-400 to-slate-500"
+  },
+  {
+    name: "Manopradha N",
+    role: "Google Reviewer",
+    discipline: "6 months ago",
+    quote: "",
+    rating: 5,
+    initials: "MN",
+    bgGradient: "from-cyan-400 to-blue-500"
+  },
+  {
+    name: "SÔFÎÄ",
+    role: "Google Reviewer",
+    discipline: "6 days ago",
+    quote: "The coaching is good, and the faculty explain the concepts clearly and patiently. The study materials and guidance are also helpful for GATE preparation.",
+    rating: 5,
+    initials: "S",
+    bgGradient: "from-stone-500 to-stone-600"
+  },
+  {
+    name: "Preethi95 Preethi95",
+    role: "Google Reviewer",
+    discipline: "a month ago",
+    quote: "I am currently studying at this GATE coaching academy, and my experience has been excellent. The sir teaches every concept clearly from the basics and patiently clears all our doubts. He also provides free classes, which help students ...",
+    rating: 5,
+    initials: "P",
+    bgGradient: "from-green-500 to-lime-600"
+  },
+  {
+    name: "Keerthan",
+    role: "Google Reviewer",
+    discipline: "5 days ago",
+    quote: "I’m attending GATE classes here, and the teaching is clear and easy to understand. The faculty are supportive, and the regular guidance and structured preparation are helping me stay confident.",
+    rating: 5,
+    initials: "K",
+    bgGradient: "from-slate-400 to-slate-500"
+  },
+  {
+    name: "YAZHINI A 720723101062",
+    role: "Google Reviewer",
+    discipline: "6 days ago",
+    quote: "MS Academy is an excellent place for GATE preparation, with a very supportive and knowledgeable staff.\nThe teaching, guidance, and overall atmosphere are really amazing and make ...",
+    rating: 5,
+    initials: "Y",
+    bgGradient: "from-fuchsia-500 to-purple-600"
+  },
+  {
+    name: "Srinithin A",
+    role: "Google Reviewer",
+    discipline: "6 months ago",
+    quote: "Best gate coaching institute for gate. Teachers are teaching in full depth and the care for the student is excellent",
+    rating: 5,
+    initials: "SA",
+    bgGradient: "from-orange-500 to-amber-600"
+  },
+  {
+    name: "Mahi",
+    role: "Google Reviewer",
+    discipline: "5 months ago",
+    quote: "Very good teaching 👍",
+    rating: 5,
+    initials: "M",
+    bgGradient: "from-blue-600 to-indigo-700"
+  },
+  {
+    name: "Sriranjani Parthiban",
+    role: "Google Reviewer",
+    discipline: "6 months ago",
+    quote: "Best academy 👍",
+    rating: 5,
+    initials: "SP",
+    bgGradient: "from-indigo-800 to-blue-900"
+  },
+  {
+    name: "Mohanapriya",
+    role: "Google Reviewer",
+    discipline: "5 months ago",
+    quote: "Excellent teaching ! The concept are explained very clearly and easy to understand.the way the complex topic are simplified impressive.very dedicated and motivating teacher.",
+    rating: 5,
+    initials: "M",
+    bgGradient: "from-green-600 to-emerald-700"
+  },
+  {
+    name: "Poornima P",
+    role: "Google Reviewer",
+    discipline: "6 months ago",
+    quote: "I like to share the learning experience in Ms academy. The teacher have good knowledge to teach students and the caring for the students is very good.",
+    rating: 4,
+    initials: "P",
+    bgGradient: "from-pink-500 to-rose-600"
+  },
+  {
+    name: "Senthamizhselvi Senthilnathan",
+    role: "Google Reviewer",
+    discipline: "7 months ago",
+    quote: "Very excellent teaching. Goes in depth of the subject and explains even complex concepts with easiness for the students. Dedicated teacher for the student's success",
+    rating: 5,
+    initials: "SS",
+    bgGradient: "from-violet-500 to-purple-600"
+  },
+  {
+    name: "VASANTH",
+    role: "Google Reviewer",
+    discipline: "6 months ago",
+    quote: "Hi ...This is the genuine feedback of this academy. Gate coaching is best at very less price. Teacher has good knowledge and share lots of information",
+    rating: 5,
+    initials: "V",
+    bgGradient: "from-sky-400 to-blue-500"
   },
   {
     name: "Priya",
-    role: "GATE Aspirant",
-    discipline: "One-to-One Online Classes",
-    quote: "The teaching faculty is excellent and has a very friendly approach. The one to one online classes are highly effective and help me gain indepth knowledge. One of the special features of this academy is the constant support provided to students by its founder, Muthusamy Sir. When it comes to competitive exams, everyone needs someone who believes in them and supports them throughout the journey. Muthusamy Sir is truly a gem who supports me in every possible way. Apart from academics, he also takes care of the mental well-being of students, which is very important during exam preparation. I am grateful to be a part of this academy and for the guidance and support I receive every day. The encouragement and personal attention given to each student make a real difference and all this is possible because, here, passion has truly becomes a profession. As a aspirant i highly recommend this academy to anyone preparing for competitive exams like gate and other exams.",
+    role: "Google Reviewer",
+    discipline: "3 months ago",
+    quote: "The teaching faculty is excellent and has a very friendly approach. The one to one online classes are highly effective and help me gain indepth knowledge. One of the special features of this academy is the constant support provided to students by its founder, Muthusamy Sir.\n\nWhen it comes to competitive exams, everyone needs someone who believes in them and supports them throughout the journey. Muthusamy Sir is truly a gem who supports me in every possible way. Apart from academics, he also takes care of the mental well-being of students, which is very important during exam preparation. I am grateful to be a part of this academy and for the guidance and support I receive every day. The encouragement and personal attention given to each student make a real difference and all this is possible because, here, passion has truly becomes a profession.\n\nAs a aspirant i highly recommend this academy to anyone preparing for competitive exams like gate and other exams.",
     rating: 5,
     initials: "P",
+    bgGradient: "from-blue-500 to-indigo-600"
+  },
+  {
+    name: "rithikaa kannan",
+    role: "Google Reviewer",
+    discipline: "2 months ago",
+    quote: "I am truly grateful to be a part of this academy. The GATE coaching is excellent, with well-structured classes and experienced faculty who explain every concept clearly. The teachers and staff are very kind, supportive, and always willing to interact with students and clear our doubts. The academy's sir is also very humble, caring, and encourages every student to do their best. I feel truly blessed to have joined this academy, and I highly recommend it to anyone preparing for GATE. Thank you for your continuous support and guidance!",
+    rating: 5,
+    initials: "RK",
     bgGradient: "from-purple-500 to-pink-600"
   },
   {
     name: "Kiruthika Krishnakumar",
-    role: "GATE Aspirant",
-    discipline: "GATE Preparation",
+    role: "Google Reviewer",
+    discipline: "2 months ago",
     quote: "The teaching at this GATE academy is excellent. Every concept is explained clearly and in a simple way, making even tough topics easy to understand. What I love most is that the classes feel more like a friendly conversation than a lecture. The faculty are very approachable and always ready to help with doubts. Highly recommended for anyone preparing for GATE.",
     rating: 5,
     initials: "KK",
     bgGradient: "from-emerald-500 to-teal-600"
+  },
+  {
+    name: "SUJITHA A",
+    role: "Google Reviewer",
+    discipline: "6 months ago",
+    quote: "Very good teaching and friendly approach. Concepts are explained clearly and doubts are solved patiently. One-to-one guidance helps students understand even difficult topics easily. Overall a great place to learn and improve skills.",
+    rating: 5,
+    initials: "SA",
+    bgGradient: "from-orange-500 to-red-600"
+  },
+  {
+    name: "Anjana",
+    role: "Google Reviewer",
+    discipline: "7 months ago",
+    quote: "Good teaching. Very Effective One to one classes and doubt solving sessions. Teaches a subject in depth and effectively makes even complex topics feel easy. Overall excellent ??",
+    rating: 5,
+    initials: "A",
+    bgGradient: "from-cyan-500 to-blue-600"
   }
 ];
 
@@ -237,66 +372,7 @@ export default function Home() {
     setActiveFAQ(activeFAQ === index ? null : index);
   };
 
-  useEffect(() => {
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    const placeId = import.meta.env.VITE_GOOGLE_PLACE_ID;
 
-    if (!apiKey || !placeId) return;
-
-    const gradients = [
-      "from-blue-500 to-indigo-600",
-      "from-purple-500 to-pink-600",
-      "from-emerald-500 to-teal-600",
-      "from-orange-500 to-red-600",
-      "from-cyan-500 to-blue-600"
-    ];
-
-    const fetchReviews = () => {
-      // Create a dummy element for the PlacesService (it requires an HTML element)
-      const dummyEl = document.createElement('div');
-      const service = new window.google.maps.places.PlacesService(dummyEl);
-      
-      service.getDetails({
-        placeId: placeId,
-        fields: ['reviews']
-      }, (place, status) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK && place.reviews) {
-          // Filter to good reviews and map to our custom format
-          const formattedReviews = place.reviews
-            .filter(r => r.rating >= 4 && r.text && r.text.length > 20)
-            .map((review, i) => {
-              const names = review.author_name.split(' ');
-              const initials = names.length > 1 ? (names[0][0] + names[names.length-1][0]) : names[0][0];
-              
-              return {
-                name: review.author_name,
-                role: "Google Reviewer",
-                discipline: review.relative_time_description,
-                quote: review.text,
-                rating: review.rating,
-                initials: initials.toUpperCase(),
-                bgGradient: gradients[i % gradients.length]
-              };
-            });
-
-          if (formattedReviews.length > 0) {
-            setReviews(formattedReviews);
-          }
-        }
-      });
-    };
-
-    if (window.google && window.google.maps && window.google.maps.places) {
-      fetchReviews();
-    } else {
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = fetchReviews;
-      document.head.appendChild(script);
-    }
-  }, []);
   
   const swiperImages = courses.map(course => ({
     src: course.src,

@@ -12,6 +12,81 @@ import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
 import { buyBundle, buySubject, buyNoteBundle, verifyOrder } from '../cashfree';
 
+function VideoDuration({ url, storedDuration }) {
+  const [duration, setDuration] = useState('Loading...');
+
+  useEffect(() => {
+    const formatAndSetDuration = (totalSeconds) => {
+      if (!totalSeconds || !isFinite(totalSeconds)) {
+        setDuration('Unknown length');
+        return;
+      }
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = Math.floor(totalSeconds % 60);
+      
+      let formatted = '';
+      if (hours > 0) {
+        formatted += `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        formatted += `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+      setDuration(formatted);
+    };
+
+    if (storedDuration !== undefined && storedDuration !== null) {
+      formatAndSetDuration(storedDuration);
+      return;
+    }
+
+    if (!url) {
+      setDuration('Unknown');
+      return;
+    }
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    
+    // Some webm files recorded via MediaRecorder have Infinity duration.
+    // If we can't load metadata or it's infinite, we'll fall back after a timeout.
+    const timeout = setTimeout(() => {
+      setDuration('Unknown length');
+    }, 5000);
+
+    video.onloadedmetadata = () => {
+      clearTimeout(timeout);
+      let totalSeconds = video.duration;
+      
+      // If it's infinity (common for raw webm), try to seek to end to get duration
+      if (totalSeconds === Infinity) {
+        video.currentTime = 1e101;
+        video.ontimeupdate = () => {
+          video.ontimeupdate = null;
+          totalSeconds = video.duration;
+          formatAndSetDuration(totalSeconds);
+        };
+        return;
+      }
+      
+      formatAndSetDuration(totalSeconds);
+    };
+
+    video.onerror = () => {
+      clearTimeout(timeout);
+      setDuration('Unknown length');
+    };
+
+    video.src = url;
+    
+    return () => clearTimeout(timeout);
+  }, [url, storedDuration]);
+
+  return (
+    <span className="absolute bottom-3 right-3 text-white text-xs font-bold px-2 py-1 bg-black/70 rounded-lg pointer-events-none backdrop-blur-sm shadow-sm flex items-center gap-1 z-20">
+      <Clock size={12} /> {duration}
+    </span>
+  );
+}
+
 const sidebarNavItems = [
   { key: 'learning', label: 'My Learning', icon: BookOpen },
   { key: 'live', label: 'Live Sessions', icon: Video },
@@ -986,8 +1061,9 @@ export default function Dashboard() {
                          )}
                          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent pointer-events-none"></div>
                          <span className="absolute bottom-3 left-3 text-white text-xs font-bold px-2 py-1 bg-black/40 rounded-lg pointer-events-none backdrop-blur-sm">
-                           {new Date(rec.createdAt?.toMillis() || Date.now()).toLocaleDateString()}
+                           {new Date(rec.createdAt?.toMillis() || Date.now()).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                          </span>
+                         <VideoDuration url={rec.url} storedDuration={rec.duration} />
                       </div>
                       <h3 className="font-bold text-slate-800 text-lg line-clamp-2 mb-1">{rec.fileName}</h3>
                       <p className="text-sm text-slate-500 font-medium">By {rec.teacherName}</p>

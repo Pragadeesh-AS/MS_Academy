@@ -215,3 +215,7 @@ table {
   40% { transform: rotate(-4deg); }
   50% { transform: rotate(10deg); }
 }
+
+.screen-share-view video {
+  object-fit: contain !important;
+}

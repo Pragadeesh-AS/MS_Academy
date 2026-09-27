@@ -11,7 +11,7 @@ window.addEventListener('error', (event) => {
   console.error("Caught global error:", event.error);
   root.render(
     <div className="min-h-screen bg-[#fafafa] text-slate-900 flex flex-col">
-      <ServerError500 />
+      <ServerError500 error={event.error} />
     </div>
   );
 });
@@ -20,7 +20,7 @@ window.addEventListener('unhandledrejection', (event) => {
   console.error("Caught unhandled rejection:", event.reason);
   root.render(
     <div className="min-h-screen bg-[#fafafa] text-slate-900 flex flex-col">
-      <ServerError500 />
+      <ServerError500 error={event.reason} />
     </div>
   );
 });

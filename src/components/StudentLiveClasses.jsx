@@ -54,7 +54,7 @@ const sendEmailViaGAS = async (to, subject, htmlMessage) => {
 };
 
 // Extracted StudentCall component for custom Agora rendering
-const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast }) => {
+const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, showControls, resetControlsTimeout }) => {
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [pinnedUid, setPinnedUid] = useState(null);
@@ -273,7 +273,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
   const whiteboardOverlayNode = useMemo(() => {
     if (hasQbWhiteboard && qbWhiteboardUser && pinnedUid === 'question-bank') {
       return (
-        <div className="absolute inset-0 z-20 pointer-events-none mix-blend-multiply">
+        <div className="absolute inset-0 z-20 pointer-events-none mix-blend-multiply screen-share-view">
           <RemoteUser user={qbWhiteboardUser} playVideo={true} playAudio={false} style={{ width: '100%', height: '100%' }} />
         </div>
       );
@@ -426,7 +426,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
 
       const remoteTile = (
         <div key={user.uid} className={`relative rounded-2xl overflow-hidden bg-slate-900 shadow-xl border border-slate-800 group transition-all duration-300 ${isPinned ? 'absolute inset-0 z-0 rounded-none border-none h-full w-full' : (pinnedUid ? 'w-48 h-32 shrink-0 z-50' : 'h-full')}`}>
-          <div className="absolute inset-0">
+          <div className={`absolute inset-0 ${(user.uid === 999999 || user.uid === 999998 || user.uid === 999997) ? 'screen-share-view' : ''}`}>
             <RemoteUser user={user} style={remoteUserStyle} />
           </div>
           {!user.hasVideo && (
@@ -479,7 +479,10 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
             {pinnedTiles}
             
             {/* Small floating PIP videos container (Vertical Stack) */}
-            <div className="absolute bottom-28 right-6 z-[90] flex flex-col gap-3 max-h-[calc(100vh-250px)] overflow-y-auto pl-2 custom-scrollbar">
+            <div 
+              onClick={(e) => { e.stopPropagation(); resetControlsTimeout(); }}
+              className={`absolute bottom-28 right-6 z-[90] flex flex-col gap-3 max-h-[calc(100vh-250px)] overflow-y-auto pl-2 custom-scrollbar transition-all duration-500 ${!showControls ? 'opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto' : 'opacity-100'}`}
+            >
               {unpinnedTiles}
             </div>
           </>
@@ -490,7 +493,8 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
 
       {/* Custom Control Bar (Glassmorphic Theme mimicking Navbar) */}
       <div
-        className="absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 sm:gap-6 px-4 sm:px-8 py-3 sm:py-4 rounded-full z-[100] transition-all duration-500 hover:scale-[1.02] max-w-[95vw]"
+        onClick={(e) => { e.stopPropagation(); resetControlsTimeout(); }}
+        className={`absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 sm:gap-6 px-4 sm:px-8 py-3 sm:py-4 rounded-full z-[100] transition-all duration-500 hover:scale-[1.02] max-w-[95vw] ${!showControls ? 'opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto' : 'opacity-100'}`}
         style={{
           backgroundColor: "rgba(255, 255, 255, 0.15)",
           backdropFilter: "blur(24px) saturate(180%)",
@@ -612,6 +616,31 @@ const isStartingSoon = (timeStr) => {
 export default function StudentLiveClasses({ department, isPro, purchasedBundles = [], bundles = [] }) {
   const [agoraClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
   const [isInCall, setIsInCall] = useState(false);
+
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeoutRef = useRef(null);
+
+  const resetControlsTimeout = () => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 10000);
+  };
+
+  useEffect(() => {
+    resetControlsTimeout();
+    return () => clearTimeout(controlsTimeoutRef.current);
+  }, []);
+
+  const handleContainerClick = () => {
+    if (showControls) {
+      setShowControls(false);
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    } else {
+      resetControlsTimeout();
+    }
+  };
   const [currentSession, setCurrentSession] = useState(null);
   const [activeClasses, setActiveClasses] = useState([]);
   
@@ -1130,7 +1159,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     };
 
     return (
-      <div className="fixed inset-0 z-[100] bg-[#111827] w-full h-full flex overflow-hidden">
+      <div className="fixed inset-0 z-[100] bg-[#111827] w-full h-full flex overflow-hidden" onClick={handleContainerClick}>
         
         {/* ── Live Class Watermark ── */}
         {(() => {
@@ -1159,7 +1188,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
         })()}
 
         {/* Top Header overlay for aesthetics */}
-        <div className="absolute top-0 inset-x-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+        <div className={`absolute top-0 inset-x-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/80 to-transparent pointer-events-none transition-opacity duration-500 ${!showControls ? 'opacity-0 md:opacity-100' : 'opacity-100'}`}>
            <div className="flex items-center gap-3">
              <div className="bg-red-500/20 text-red-500 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border border-red-500/30">
                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
@@ -1213,6 +1242,8 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                 toggleChat={() => setIsChatOpen(!isChatOpen)}
                 chatToast={chatToast}
                 setChatToast={setChatToast}
+                showControls={showControls}
+                resetControlsTimeout={resetControlsTimeout}
               />
             </AgoraRTCProvider>
             </div>
