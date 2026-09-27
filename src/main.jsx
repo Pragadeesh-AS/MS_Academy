@@ -3,26 +3,23 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
-import ServerError500 from './components/ServerError500.jsx'
 
 const root = createRoot(document.getElementById('root'));
 
+// These used to tear down the entire app (replacing everything on screen with the error page)
+// for ANY uncaught error or unhandled promise rejection anywhere - including harmless, transient
+// ones from third-party libraries (Agora's WebRTC internals, a flaky network request, etc.) that
+// don't actually break the page. That's why live classes in particular kept getting knocked out:
+// they run the most async/WebRTC activity, so they were the most likely to trip this.
+// A genuine crash inside our own React render tree is still caught by <ErrorBoundary>, which is
+// the correct, narrower mechanism for that. These two just log now, so a stray rejection doesn't
+// end an active class or wipe unsaved work.
 window.addEventListener('error', (event) => {
   console.error("Caught global error:", event.error);
-  root.render(
-    <div className="min-h-screen bg-[#fafafa] text-slate-900 flex flex-col">
-      <ServerError500 error={event.error} />
-    </div>
-  );
 });
 
 window.addEventListener('unhandledrejection', (event) => {
   console.error("Caught unhandled rejection:", event.reason);
-  root.render(
-    <div className="min-h-screen bg-[#fafafa] text-slate-900 flex flex-col">
-      <ServerError500 error={event.reason} />
-    </div>
-  );
 });
 
 root.render(

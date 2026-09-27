@@ -137,7 +137,7 @@ export default function RecordingPlayerModal({ recording, onClose }) {
   const togglePlay = () => {
     const v = videoRef.current;
     if (!v || measuring) return;
-    if (v.paused) v.play(); else v.pause();
+    if (v.paused) v.play().catch(() => {}); else v.pause();
   };
 
   const skip = (deltaSeconds) => {
