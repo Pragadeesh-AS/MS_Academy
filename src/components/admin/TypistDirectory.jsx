@@ -21,11 +21,44 @@ import {
 const TypistDirectory = ({ 
   invitedTypists, 
   deleteTypist, 
+  updateTypist,
   onInvite
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const typistsPerPage = 10;
+  const [editingPair, setEditingPair] = useState(null);
+  const [editForm, setEditForm] = useState({ typistName: '', typistEmail: '', reviewerName: '', reviewerEmail: '' });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  const openEdit = (pair) => {
+    setEditForm({
+      typistName: pair.typistName || '',
+      typistEmail: pair.typistEmail || '',
+      reviewerName: pair.reviewerName || '',
+      reviewerEmail: pair.reviewerEmail || ''
+    });
+    setEditingPair(pair);
+  };
+
+  // Emails are the login keys, so they can only change while the pair is still Pending (nobody has logged in yet).
+  const hasAccepted = (pair, who) => (pair ? (pair[`${who}Accepted`] ?? pair.status === 'Accepted') : false);
+  const emailLocked = (field) => !!editingPair && hasAccepted(editingPair, field === 'typistEmail' ? 'typist' : 'reviewer');
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editingPair) return;
+    const updates = {
+      typistName: editForm.typistName.trim(),
+      reviewerName: editForm.reviewerName.trim()
+    };
+    if (!emailLocked('typistEmail')) updates.typistEmail = editForm.typistEmail.trim().toLowerCase();
+    if (!emailLocked('reviewerEmail')) updates.reviewerEmail = editForm.reviewerEmail.trim().toLowerCase();
+    setIsSavingEdit(true);
+    const ok = await updateTypist(editingPair.id, updates);
+    setIsSavingEdit(false);
+    if (ok) setEditingPair(null);
+  };
 
   const filteredTypists = invitedTypists.filter(typist => 
     typist.typistName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -159,7 +192,9 @@ const TypistDirectory = ({
                             {typist.typistName?.charAt(0) || '?'}
                           </div>
                           <div>
-                            <div className="font-bold text-[#0F172A] text-[14px]">{typist.typistName}</div>
+                            <div className="font-bold text-[#0F172A] text-[14px] flex items-center gap-2">{typist.typistName}
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${hasAccepted(typist, 'typist') ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{hasAccepted(typist, 'typist') ? 'Accepted' : 'Awaiting'}</span>
+                            </div>
                             <div className="text-[#64748B] text-[12px]">{typist.typistEmail}</div>
                           </div>
                         </div>
@@ -169,7 +204,9 @@ const TypistDirectory = ({
                             {typist.reviewerName?.charAt(0) || '?'}
                           </div>
                           <div>
-                            <div className="font-bold text-[#0F172A] text-[14px]">{typist.reviewerName}</div>
+                            <div className="font-bold text-[#0F172A] text-[14px] flex items-center gap-2">{typist.reviewerName}
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${hasAccepted(typist, 'reviewer') ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{hasAccepted(typist, 'reviewer') ? 'Accepted' : 'Awaiting'}</span>
+                            </div>
                             <div className="text-[#64748B] text-[12px]">{typist.reviewerEmail}</div>
                           </div>
                         </div>
@@ -183,6 +220,13 @@ const TypistDirectory = ({
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => openEdit(typist)}
+                          className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-amber-50 hover:text-amber-500 transition-colors"
+                          title="Edit Pair"
+                        >
+                          <Edit size={18} />
+                        </button>
                         <button 
                           onClick={() => deleteTypist(typist.id)}
                           className="w-9 h-9 rounded-xl flex items-center justify-center text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors"
@@ -235,6 +279,46 @@ const TypistDirectory = ({
           )}
         </div>
       </div>
+
+      {editingPair && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => !isSavingEdit && setEditingPair(null)}>
+          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center shrink-0">
+              <h3 className="text-[20px] font-bold text-[#0F172A]">Edit Data Entry Pair</h3>
+              <button type="button" onClick={() => !isSavingEdit && setEditingPair(null)} className="text-[#64748B] hover:text-[#0F172A] transition-colors bg-slate-100 hover:bg-slate-200 p-2 rounded-full">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveEdit} className="p-5 sm:p-8 space-y-4 overflow-y-auto">
+              {[
+                ['typistName', 'Typist Name', 'text', false],
+                ['typistEmail', 'Typist Email', 'email', true],
+                ['reviewerName', 'Reviewer Name', 'text', false],
+                ['reviewerEmail', 'Reviewer Email', 'email', true]
+              ].map(([field, label, type, isEmail]) => (
+                <div key={field}>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">{label}</label>
+                  <input
+                    type={type}
+                    required
+                    disabled={isEmail && emailLocked(field)}
+                    value={editForm[field]}
+                    onChange={(e) => setEditForm({ ...editForm, [field]: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
+                  />
+                </div>
+              ))}
+              {(emailLocked('typistEmail') || emailLocked('reviewerEmail')) && (
+                <p className="text-[11px] text-slate-400 font-medium">An email is tied to that person's login and can't be changed once they have accepted. Remove and re-invite the pair to use a different email.</p>
+              )}
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <button type="button" onClick={() => setEditingPair(null)} disabled={isSavingEdit} className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm disabled:opacity-60">Cancel</button>
+                <button type="submit" disabled={isSavingEdit} className="px-6 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[14px] transition-colors shadow-md disabled:opacity-70 disabled:cursor-not-allowed">{isSavingEdit ? 'Saving...' : 'Save Changes'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
