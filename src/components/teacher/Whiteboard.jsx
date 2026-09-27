@@ -881,11 +881,21 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                     } else {
                       if (activeTool === item.id) {
                         // Tool is already active, handle toggling options on click
-                        if (['pen', 'highlighter', 'eraser'].includes(item.id)) {
-                          // Pen thickness lives in this same panel as the colors, so one click
-                          // always shows both together instead of a separate "quick colors" step.
+                        if (item.id === 'pen') {
+                          if (showQuickColors) {
+                            // Quick colors are visible -> switch to full options (thickness + full palette)
+                            setShowToolOptions(true);
+                            setShowQuickColors(false);
+                          } else if (showToolOptions) {
+                            // Full options visible -> hide everything
+                            setShowToolOptions(false);
+                            setShowQuickColors(false);
+                          } else {
+                            // Both hidden (e.g. after drawing) -> show quick colors again
+                            setShowQuickColors(true);
+                          }
+                        } else if (['highlighter', 'eraser'].includes(item.id)) {
                           setShowToolOptions(!showToolOptions);
-                          setShowQuickColors(false);
                         } else if (item.id === 'shapes') {
                           setShowShapeOptions(!showShapeOptions);
                         }
@@ -893,9 +903,17 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                         // Switching to a new tool
                         setActiveTool(item.id);
                         setShowBoardColors(false);
-                        setShowQuickColors(false);
-                        setShowToolOptions(['pen', 'highlighter', 'eraser'].includes(item.id));
-                        setShowShapeOptions(item.id === 'shapes');
+                        setShowShapeOptions(false);
+
+                        if (item.id === 'pen') {
+                          // First click on the pen shows the 3 most recently used colors for quick
+                          // reuse; click the pen again to open the full panel with the thickness slider.
+                          setShowQuickColors(true);
+                          setShowToolOptions(false);
+                        } else {
+                          setShowQuickColors(false);
+                          setShowToolOptions(item.id === 'highlighter' || item.id === 'eraser');
+                        }
                       }
                     }
                   }}
@@ -920,6 +938,18 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                         title={`Use Color ${color}`}
                       />
                     ))}
+                    <div className="w-px h-5 bg-slate-600 mx-0.5" />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowQuickColors(false);
+                        setShowToolOptions(true);
+                      }}
+                      className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-slate-700 transition-colors shrink-0"
+                      title="More colors & pen thickness"
+                    >
+                      <div className="bg-white rounded-full shrink-0" style={{ width: Math.min(14, Math.max(4, penSize)), height: Math.min(14, Math.max(4, penSize)) }} />
+                    </button>
                   </div>
                 )}
               </div>
