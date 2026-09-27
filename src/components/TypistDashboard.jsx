@@ -15,6 +15,7 @@ export default function TypistDashboard() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [pair, setPair] = useState(null);
+  const [reviewerPairs, setReviewerPairs] = useState([]); // every typist assigned to this reviewer, when myRole === 'reviewer'
   const [myRole, setMyRole] = useState(null);
   const [isAccepting, setIsAccepting] = useState(false);
 
@@ -22,19 +23,39 @@ export default function TypistDashboard() {
   const hasAccepted = (p, who) => (p ? (p[`${who}Accepted`] ?? p.status === 'Accepted') : false);
 
   const handleAcceptInvite = async () => {
-    if (!pair || !myRole) return;
+    if (!myRole) return;
     setIsAccepting(true);
     try {
-      const pairRef = doc(db, 'invited_typists', pair.id);
-      const latest = (await getDoc(pairRef)).data() || pair;
-      const otherRole = myRole === 'typist' ? 'reviewer' : 'typist';
-      const updates = {
-        [`${myRole}Accepted`]: true,
-        [`${myRole}AcceptedAt`]: new Date().toISOString(),
-        status: hasAccepted(latest, otherRole) ? 'Accepted' : 'Pending'
-      };
-      await updateDoc(pairRef, updates);
-      setPair({ ...latest, ...updates, id: pair.id });
+      if (myRole === 'typist') {
+        if (!pair) return;
+        const pairRef = doc(db, 'invited_typists', pair.id);
+        const latest = (await getDoc(pairRef)).data() || pair;
+        const updates = {
+          typistAccepted: true,
+          typistAcceptedAt: new Date().toISOString(),
+          status: hasAccepted(latest, 'reviewer') ? 'Accepted' : 'Pending'
+        };
+        await updateDoc(pairRef, updates);
+        setPair({ ...latest, ...updates, id: pair.id });
+      } else {
+        // A reviewer accepts once, for every typist currently assigned to them - not once per typist.
+        const pending = reviewerPairs.filter(p => !hasAccepted(p, 'reviewer'));
+        const acceptedAt = new Date().toISOString();
+        await Promise.all(pending.map(async (p) => {
+          const pairRef = doc(db, 'invited_typists', p.id);
+          const latest = (await getDoc(pairRef)).data() || p;
+          const updates = {
+            reviewerAccepted: true,
+            reviewerAcceptedAt: acceptedAt,
+            status: hasAccepted(latest, 'typist') ? 'Accepted' : 'Pending'
+          };
+          await updateDoc(pairRef, updates);
+          return { ...latest, ...updates, id: p.id };
+        }));
+        setReviewerPairs(prev => prev.map(p => pending.some(x => x.id === p.id)
+          ? { ...p, reviewerAccepted: true, reviewerAcceptedAt: acceptedAt, status: hasAccepted(p, 'typist') ? 'Accepted' : 'Pending' }
+          : p));
+      }
     } catch (e) {
       console.error('Failed to accept invitation', e);
       alert('Failed to accept the invitation. Please try again.');
@@ -62,8 +83,12 @@ export default function TypistDashboard() {
           }
           isStillTypist = !querySnapshot.empty;
           if (isStillTypist) {
-            setPair({ id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() });
             setMyRole(foundRole);
+            if (foundRole === 'reviewer') {
+              setReviewerPairs(querySnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+            } else {
+              setPair({ id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() });
+            }
           }
 
           if (!isStillTypist) {
@@ -266,20 +291,18 @@ export default function TypistDashboard() {
           <p className="text-slate-500 font-medium mt-1">Manage and type questions for the question bank.</p>
         </header>
 
-        {pair && myRole && (
-          hasAccepted(pair, myRole) ? (
+        {myRole === 'typist' && pair && (
+          hasAccepted(pair, 'typist') ? (
             <div className="mb-6 p-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 flex items-start gap-3">
               <CheckCircle2 className="text-emerald-600 shrink-0 mt-0.5" size={20} />
               <div className="text-sm">
                 <p className="font-bold text-emerald-800">
                   {pair.status === 'Accepted'
                     ? 'Your pairing is active.'
-                    : `You have accepted. Waiting for your ${myRole === 'typist' ? 'reviewer' : 'typist'} to accept.`}
+                    : 'You have accepted. Waiting for your reviewer to accept.'}
                 </p>
                 <p className="text-emerald-700/80 font-medium mt-0.5">
-                  {myRole === 'typist'
-                    ? `Paired with reviewer ${pair.reviewerName || ''} (${pair.reviewerEmail})`
-                    : `Paired with typist ${pair.typistName || ''} (${pair.typistEmail})`}
+                  Paired with reviewer {pair.reviewerName || ''} ({pair.reviewerEmail})
                 </p>
               </div>
             </div>
@@ -290,10 +313,7 @@ export default function TypistDashboard() {
                 <div className="text-sm">
                   <p className="font-bold text-amber-900">You have been invited to a Data Entry pair.</p>
                   <p className="text-amber-800/80 font-medium mt-0.5">
-                    {myRole === 'typist'
-                      ? `Your reviewer will be ${pair.reviewerName || ''} (${pair.reviewerEmail}).`
-                      : `Your typist will be ${pair.typistName || ''} (${pair.typistEmail}).`}
-                    {' '}The pair becomes active once both of you accept.
+                    Your reviewer will be {pair.reviewerName || ''} ({pair.reviewerEmail}). The pair becomes active once both of you accept.
                   </p>
                 </div>
               </div>
@@ -307,6 +327,45 @@ export default function TypistDashboard() {
             </div>
           )
         )}
+
+        {myRole === 'reviewer' && reviewerPairs.length > 0 && (() => {
+          const pendingTypists = reviewerPairs.filter(p => !hasAccepted(p, 'reviewer'));
+          if (pendingTypists.length === 0) {
+            return (
+              <div className="mb-6 p-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 flex items-start gap-3">
+                <CheckCircle2 className="text-emerald-600 shrink-0 mt-0.5" size={20} />
+                <div className="text-sm">
+                  <p className="font-bold text-emerald-800">You're reviewing for {reviewerPairs.length} {reviewerPairs.length === 1 ? 'typist' : 'typists'}.</p>
+                  <p className="text-emerald-700/80 font-medium mt-0.5">
+                    {reviewerPairs.map(p => p.typistName).filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div className="mb-6 p-5 rounded-2xl border border-amber-200 bg-amber-50/70 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+              <div className="flex items-start gap-3">
+                <Clock className="text-amber-600 shrink-0 mt-0.5" size={20} />
+                <div className="text-sm">
+                  <p className="font-bold text-amber-900">
+                    You've been assigned as reviewer for {pendingTypists.length} {pendingTypists.length === 1 ? 'typist' : 'typists'}.
+                  </p>
+                  <p className="text-amber-800/80 font-medium mt-0.5">
+                    {pendingTypists.map(p => p.typistName).filter(Boolean).join(', ')}. Accept once to start reviewing all of their questions.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleAcceptInvite}
+                disabled={isAccepting}
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold rounded-xl transition-all shadow-md shrink-0"
+              >
+                {isAccepting ? 'Accepting...' : 'Accept Invitation'}
+              </button>
+            </div>
+          );
+        })()}
 
         <div>
           {activeTab === 'ai' && pairRole === 'typist' ? (

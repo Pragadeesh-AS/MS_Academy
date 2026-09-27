@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
 import { collection, query, getDocs, deleteDoc, doc, onSnapshot, orderBy } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
-import { Video, Trash2, Search, Clock, Users, BookOpen, Folder, FolderOpen, ChevronRight } from 'lucide-react';
+import { Video, Trash2, Search, Clock, Users, BookOpen, Folder, FolderOpen, ChevronRight, X } from 'lucide-react';
 import Loader from '../Loader';
 
 function VideoDuration({ url, storedDuration }) {
@@ -85,6 +85,34 @@ export default function RecordingsManager() {
   const [search, setSearch] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [openFolders, setOpenFolders] = useState({});
+  const [playingRecording, setPlayingRecording] = useState(null); // { id, url }
+  const videoPlayerRef = React.useRef(null);
+  const lastProgressSaveRef = React.useRef(0);
+
+  // MediaRecorder webm files often report duration as Infinity until you seek near the end once,
+  // which breaks the native player's timeline/scrubber and reliable seeking.
+  const videoProgressKey = (recId) => `video_progress_${(sessionStorage.getItem('auth_email') || 'anon').toLowerCase()}_${recId}`;
+  const getVideoProgress = (recId) => {
+    try {
+      const v = parseFloat(localStorage.getItem(videoProgressKey(recId)));
+      return isFinite(v) && v > 0 ? v : 0;
+    } catch { return 0; }
+  };
+  const saveVideoProgress = (recId, time, duration) => {
+    if (!recId || !isFinite(time)) return;
+    try {
+      if (duration && isFinite(duration) && time > duration - 8) {
+        localStorage.removeItem(videoProgressKey(recId));
+      } else if (time > 3) {
+        localStorage.setItem(videoProgressKey(recId), String(time));
+      }
+    } catch { /* localStorage unavailable - resume just won't persist */ }
+  };
+  const closeVideoPlayer = () => {
+    const v = videoPlayerRef.current;
+    if (v && playingRecording) saveVideoProgress(playingRecording.id, v.currentTime, isFinite(v.duration) ? v.duration : null);
+    setPlayingRecording(null);
+  };
 
   useEffect(() => {
     // Real-time listener for recordings
@@ -234,16 +262,15 @@ export default function RecordingsManager() {
                 <Video size={48} className="text-slate-700 group-hover:text-blue-500 transition-colors" />
                 
                 {/* Play Overlay */}
-                <a 
-                  href={rec.url} 
-                  target="_blank" 
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => setPlayingRecording({ id: rec.id, url: rec.url })}
                   className="absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40"
                 >
                   <div className="w-14 h-14 bg-blue-600 text-white rounded-full flex items-center justify-center pl-1">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                   </div>
-                </a>
+                </button>
                 <VideoDuration url={rec.url} storedDuration={rec.duration} />
               </div>
               
@@ -294,6 +321,59 @@ export default function RecordingsManager() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* In-App Video Player Modal */}
+      {playingRecording && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={closeVideoPlayer}></div>
+          <div className="relative z-10 w-full max-w-5xl rounded-2xl overflow-hidden shadow-2xl bg-black border border-slate-800 animate-in zoom-in-95 duration-300">
+            <button
+              onClick={closeVideoPlayer}
+              className="absolute top-4 right-4 z-20 w-10 h-10 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors backdrop-blur-sm"
+            >
+              <X size={20} />
+            </button>
+            <video
+              ref={videoPlayerRef}
+              key={playingRecording.id}
+              src={playingRecording.url}
+              controls
+              autoPlay
+              className="w-full h-auto max-h-[85vh] outline-none"
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget;
+                const resumeIfNeeded = (dur) => {
+                  const resumeAt = getVideoProgress(playingRecording.id);
+                  if (resumeAt > 0 && (!dur || !isFinite(dur) || resumeAt < dur - 5)) v.currentTime = resumeAt;
+                };
+                if (v.duration === Infinity) {
+                  const prevTime = v.currentTime;
+                  v.currentTime = 1e101;
+                  v.ontimeupdate = () => {
+                    v.ontimeupdate = null;
+                    v.currentTime = prevTime;
+                    resumeIfNeeded(v.duration);
+                  };
+                } else {
+                  resumeIfNeeded(v.duration);
+                }
+              }}
+              onTimeUpdate={(e) => {
+                const now = Date.now();
+                if (now - lastProgressSaveRef.current > 4000) {
+                  lastProgressSaveRef.current = now;
+                  const v = e.currentTarget;
+                  saveVideoProgress(playingRecording.id, v.currentTime, isFinite(v.duration) ? v.duration : null);
+                }
+              }}
+              onPause={(e) => {
+                const v = e.currentTarget;
+                saveVideoProgress(playingRecording.id, v.currentTime, isFinite(v.duration) ? v.duration : null);
+              }}
+            />
+          </div>
         </div>
       )}
 

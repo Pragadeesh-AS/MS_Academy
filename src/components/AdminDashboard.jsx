@@ -119,6 +119,7 @@ export default function AdminDashboard() {
   const [invitedTypists, setInvitedTypists] = useState([]);
   const [isTypistInviteModalOpen, setIsTypistInviteModalOpen] = useState(false);
   const [typistInviteForm, setTypistInviteForm] = useState({ typistName: '', typistEmail: '', reviewerName: '', reviewerEmail: '' });
+  const [typistInviteReviewerMode, setTypistInviteReviewerMode] = useState('new'); // 'new' | 'existing' - lets many typists share one reviewer
   const [isTypistInviting, setIsTypistInviting] = useState(false);
   
   const [confirmDeleteObj, setConfirmDeleteObj] = useState(null);
@@ -2294,17 +2295,24 @@ export default function AdminDashboard() {
                 e.preventDefault();
                 setIsTypistInviting(true);
                 try {
+                  // A reviewer who already accepted for another typist doesn't need to accept again per-pairing.
+                  const reviewerAlreadyAccepted = invitedTypists.some(t =>
+                    (t.reviewerEmail || '').toLowerCase() === typistInviteForm.reviewerEmail.trim().toLowerCase() &&
+                    (t.reviewerAccepted ?? t.status === 'Accepted')
+                  );
                   const newPair = {
                     ...typistInviteForm,
-                    status: 'Pending',
+                    status: 'Pending', // becomes 'Accepted' once the typist accepts too (see TypistDashboard)
                     typistAccepted: false,
-                    reviewerAccepted: false,
+                    reviewerAccepted: reviewerAlreadyAccepted,
+                    ...(reviewerAlreadyAccepted ? { reviewerAcceptedAt: new Date().toISOString() } : {}),
                     invitedAt: new Date().toISOString()
                   };
                   const docRef = await addDoc(collection(db, 'invited_typists'), newPair);
                   setInvitedTypists(prev => [{ id: docRef.id, ...newPair }, ...prev]);
                   setIsTypistInviteModalOpen(false);
                   setTypistInviteForm({ typistName: '', typistEmail: '', reviewerName: '', reviewerEmail: '' });
+                  setTypistInviteReviewerMode('new');
                 } catch (err) {
                   console.error("Failed to invite pair", err);
                 }
@@ -2320,17 +2328,50 @@ export default function AdminDashboard() {
                     <input type="email" required value={typistInviteForm.typistEmail} onChange={(e) => setTypistInviteForm({...typistInviteForm, typistEmail: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="e.g. john@example.com" />
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <label className="block text-[13px] font-bold text-slate-700 mb-2">Reviewer Name</label>
-                    <input type="text" required value={typistInviteForm.reviewerName} onChange={(e) => setTypistInviteForm({...typistInviteForm, reviewerName: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="e.g. Jane Smith" />
-                  </div>
-                  <div>
-                    <label className="block text-[13px] font-bold text-slate-700 mb-2">Reviewer Email</label>
-                    <input type="email" required value={typistInviteForm.reviewerEmail} onChange={(e) => setTypistInviteForm({...typistInviteForm, reviewerEmail: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="e.g. jane@example.com" />
-                  </div>
-                </div>
+
+                {(() => {
+                  const uniqueReviewers = Object.values(
+                    invitedTypists.reduce((acc, t) => {
+                      if (t.reviewerEmail) acc[t.reviewerEmail.toLowerCase()] = { name: t.reviewerName, email: t.reviewerEmail };
+                      return acc;
+                    }, {})
+                  );
+                  return (
+                    <div className="pt-2">
+                      <label className="block text-[13px] font-bold text-slate-700 mb-2">Reviewer</label>
+                      {uniqueReviewers.length > 0 && (
+                        <div className="flex bg-slate-100 p-1 rounded-xl mb-3 w-fit">
+                          <button type="button" onClick={() => setTypistInviteReviewerMode('existing')} className={`px-4 py-1.5 text-[13px] font-bold rounded-lg transition-all ${typistInviteReviewerMode === 'existing' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500'}`}>Existing Reviewer</button>
+                          <button type="button" onClick={() => { setTypistInviteReviewerMode('new'); setTypistInviteForm({ ...typistInviteForm, reviewerName: '', reviewerEmail: '' }); }} className={`px-4 py-1.5 text-[13px] font-bold rounded-lg transition-all ${typistInviteReviewerMode === 'new' ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500'}`}>New Reviewer</button>
+                        </div>
+                      )}
+                      {typistInviteReviewerMode === 'existing' && uniqueReviewers.length > 0 ? (
+                        <select
+                          required
+                          value={typistInviteForm.reviewerEmail}
+                          onChange={(e) => {
+                            const r = uniqueReviewers.find(x => x.email === e.target.value);
+                            setTypistInviteForm({ ...typistInviteForm, reviewerEmail: r?.email || '', reviewerName: r?.name || '' });
+                          }}
+                          className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all"
+                        >
+                          <option value="">Select a reviewer...</option>
+                          {uniqueReviewers.map(r => (
+                            <option key={r.email} value={r.email}>{r.name} ({r.email})</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <input type="text" required value={typistInviteForm.reviewerName} onChange={(e) => setTypistInviteForm({...typistInviteForm, reviewerName: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="Reviewer Name, e.g. Jane Smith" />
+                          <input type="email" required value={typistInviteForm.reviewerEmail} onChange={(e) => setTypistInviteForm({...typistInviteForm, reviewerEmail: e.target.value})} className="w-full h-[48px] border border-slate-200 rounded-xl px-4 text-[14px] bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all" placeholder="Reviewer Email, e.g. jane@example.com" />
+                        </div>
+                      )}
+                      {typistInviteReviewerMode === 'existing' && (
+                        <p className="text-[11px] text-slate-400 font-medium mt-2">This typist's extracted questions will go to the same reviewer as everyone else assigned to them.</p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className="pt-4 mt-6 border-t border-slate-100 flex gap-3">
                   <button type="button" onClick={() => setIsTypistInviteModalOpen(false)} className="flex-1 h-[48px] bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-[14px] transition-all">

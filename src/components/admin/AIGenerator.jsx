@@ -253,6 +253,14 @@ export default function AIGenerator({ pairMode = false }) {
     });
   };
 
+  // Safety net for when the AI forgets to wrap a short math expression in $...$ (seen on Match
+  // column items like "4\sigma/R"): if the whole string is raw LaTeX with no $ delimiters at
+  // all, wrap it once so KaTeX still renders it instead of showing the backslash commands as-is.
+  const wrapBareLatex = (text) => {
+    if (!text || text.includes('$')) return text;
+    return /\\[a-zA-Z]+|[a-zA-Z0-9]\^[{a-zA-Z0-9]|[a-zA-Z0-9]_[{a-zA-Z0-9]/.test(text) ? `$${text}$` : text;
+  };
+
   const renderLatexToHTML = (text) => {
     if (!text) return text;
     // Keep old pdf.js fallbacks just in case
@@ -547,11 +555,12 @@ Each object must have exactly these fields:
   "topic": "Extracted Topic",
   "difficultyLevel": "Easy" | "Medium" | "Hard",
   "explanation": "Explanation or calculation (use LaTeX inside $...$ for all math/equations)",
-  "matchColumn1": ["Item P", "Item Q", "Item R", "Item S"], (Only for Match questions, array of exactly 4 strings. Fill empty strings if less than 4)
-  "matchColumn2": ["Item 1", "Item 2", "Item 3", "Item 4"] (Only for Match questions, array of exactly 4 strings. Fill empty strings if less than 4)
+  "matchColumn1": ["Item P", "Item Q", "Item R", "Item S"], (Only for Match questions, array of exactly 4 strings, LaTeX inside $...$ for any math/equations, e.g. "$4\\\\sigma/R$")
+  "matchColumn2": ["Item 1", "Item 2", "Item 3", "Item 4"] (Only for Match questions, array of exactly 4 strings, LaTeX inside $...$ for any math/equations, e.g. "$\\\\sigma (1/R_1 + 1/R_2)$")
 }
-IMPORTANT: 
+IMPORTANT:
 - For equations, fractions, subscripts, or math symbols, use standard LaTeX formatting enclosed in $...$ (e.g., $m^2K$, $\\\\frac{1}{U}$). YOU MUST double-escape all backslashes so the output is valid JSON (e.g. use \\\\frac instead of \\frac).
+- This applies to matchColumn1 and matchColumn2 too - every expression containing a LaTeX command (\\\\sigma, \\\\Delta, \\\\frac, subscripts like R_1, etc.) MUST be wrapped in $...$. Never output a bare backslash command outside $...$ anywhere in the JSON.
 - For Fill in the Blanks (NAT) questions, read the answer key / answer line carefully. Put a single value in fillBlankAnswer, or if a range of accepted answers is given, set fillBlankMode to \"Numeric Range\" and fill fillBlankRangeStart and fillBlankRangeEnd. Never put units in these fields.
 - For Match type questions, extract the columns accurately.
 - For Match type questions, optionA, optionB, optionC and optionD MUST be filled with the answer choices exactly as printed in the PDF (for example "P-2, Q-1, R-4, S-3"). Never leave them empty, and set correctAnswer to the letter of the correct choice.
@@ -611,8 +620,8 @@ IMPORTANT:
       // Match items may contain $...$ LaTeX; render them like the question text so they show as symbols
       parsedQuestions = parsedQuestions.map(q => (q.questionType === 'Match' ? {
         ...q,
-        matchColumn1: (q.matchColumn1 || []).map(item => renderLatexToHTML(item)),
-        matchColumn2: (q.matchColumn2 || []).map(item => renderLatexToHTML(item))
+        matchColumn1: (q.matchColumn1 || []).map(item => renderLatexToHTML(wrapBareLatex(item))),
+        matchColumn2: (q.matchColumn2 || []).map(item => renderLatexToHTML(wrapBareLatex(item)))
       } : q));
       setExtractedQuestions(parsedQuestions);
       setStatus('review');
