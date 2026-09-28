@@ -634,7 +634,12 @@ IMPORTANT:
 
   const handleApprove = () => {
     if (!canImport) return;
-    confirmApprove();
+    confirmApprove(false);
+  };
+
+  const handleImportDirect = () => {
+    if (!canImportDirect) return;
+    confirmApprove(true);
   };
 
   const handleSettingChange = (e) => {
@@ -648,19 +653,25 @@ IMPORTANT:
     }));
   };
 
-  const confirmApprove = async () => {
+  // direct=true skips the reviewer entirely: questions land straight in the Question
+  // Bank as Approved, but flagged reviewed:false since nobody but the typist/admin who
+  // extracted them has actually looked them over.
+  const confirmApprove = async (direct = false) => {
     setStatus('saving');
     setErrorMsg('');
     try {
       const reviewer = reviewerEmail.trim().toLowerCase();
-      if (!pairMode) await setDoc(doc(db, 'site_settings', 'ai_review'), { reviewerEmail: reviewer }, { merge: true });
+      if (!direct && !pairMode) await setDoc(doc(db, 'site_settings', 'ai_review'), { reviewerEmail: reviewer }, { merge: true });
       const pairFields = pairMode
         ? { pairId: localStorage.getItem('pair_id'), typedBy: sessionStorage.getItem('auth_name') || 'Typist' }
         : {};
+      const reviewFields = direct
+        ? { status: 'Approved', reviewed: false, reviewedBy: '' }
+        : { status: 'In Review', reviewed: false, reviewerEmail: reviewer };
 
       for (const question of extractedQuestions) {
-        await addDoc(collection(db, 'question_bank'), { 
-          ...question, 
+        await addDoc(collection(db, 'question_bank'), {
+          ...question,
           department: importSettings.department,
           year: importSettings.year,
           subject: importSettings.subject,
@@ -673,9 +684,8 @@ IMPORTANT:
           fillBlankRangeEnd: question.fillBlankRangeEnd || '',
           matchColumn1: question.matchColumn1 || ['', ''],
           matchColumn2: question.matchColumn2 || ['', ''],
-          status: 'In Review',
-          reviewerEmail: reviewer,
           source: 'AI Generator',
+          ...reviewFields,
           ...pairFields,
           isPremium: importAsPremium,
           createdAt: new Date().toISOString(),
@@ -712,11 +722,13 @@ IMPORTANT:
   };
 
   const canImport = isValidReviewerEmail && !!importSettings.department && !!importSettings.year && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
+  // Skipping the reviewer doesn't need a reviewer email - just the attributes every question needs.
+  const canImportDirect = !!importSettings.department && !!importSettings.year && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
 
   const importDetailsForm = (
     <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
       <h3 className="text-lg font-bold text-slate-800 mb-1">Import Details</h3>
-      <p className="text-sm text-slate-500 font-medium mb-4">These details apply to every extracted question. Once you click Approve & Import, the questions are sent straight to the reviewer.</p>
+      <p className="text-sm text-slate-500 font-medium mb-4">These details apply to every extracted question. "Approve & Import" sends them to the reviewer first; "Import Directly" skips the reviewer and adds them to the Question Bank right away, flagged as Not Reviewed.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Department</label>
@@ -851,13 +863,23 @@ IMPORTANT:
           <p className="text-slate-500 font-medium mt-1">Upload a PDF document and let the engine automatically extract and format questions.</p>
         </div>
         {status === 'review' && (
-          <button 
-            onClick={handleApprove}
-            disabled={!canImport}
-            className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(147,51,234,0.3)] flex items-center gap-2"
-          >
-            <Database size={18} /> Approve & Import
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleApprove}
+              disabled={!canImport}
+              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(147,51,234,0.3)] flex items-center gap-2"
+            >
+              <Database size={18} /> Approve & Import
+            </button>
+            <button
+              onClick={handleImportDirect}
+              disabled={!canImportDirect}
+              title="Skips the reviewer - the questions go straight into the Question Bank, flagged as Not Reviewed"
+              className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] flex items-center gap-2"
+            >
+              <Upload size={18} /> Import Directly (Skip Review)
+            </button>
+          </div>
         )}
       </div>
 

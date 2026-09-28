@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Loader from '../Loader';
-import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft, Upload } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 
@@ -436,14 +436,32 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setFormData(prev => ({ ...prev, [field]: '' }));
   };
 
-  const handleSubmit = async (e, forcedStatus = null) => {
+  // A typist/reviewer approving normally has actually looked the question over, so it's
+  // marked reviewed. A direct "skip review" import has not been looked at by anyone but
+  // the person who typed/extracted it, so it lands in the bank flagged as Not Reviewed.
+  const applyReviewFields = (payload, finalStatus, skipReview, authName, prevReviewedBy, prevStatus) => {
+    if (finalStatus !== 'Approved') {
+      payload.reviewed = false;
+      return payload;
+    }
+    if (skipReview) {
+      payload.reviewed = false;
+      payload.reviewedBy = '';
+    } else {
+      payload.reviewed = true;
+      if (!prevReviewedBy || prevStatus !== 'Approved') payload.reviewedBy = authName;
+    }
+    return payload;
+  };
+
+  const handleSubmit = async (e, forcedStatus = null, skipReview = false) => {
     e.preventDefault();
     const form = e.target.closest('form');
     if (form && !form.checkValidity()) {
       form.reportValidity();
       return;
     }
-    
+
     // Duplicate Check
     const payloadHash = `${stripHtmlAndNormalize(formData.questionText)}_${formData.questionImageUrl || ''}`;
     if (payloadHash !== '_') {
@@ -457,7 +475,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         return;
       }
     }
-    
+
     const finalStatus = forcedStatus || formData.status || 'Approved';
     const authName = sessionStorage.getItem('auth_name') || 'Unknown';
     const nowIso = new Date().toISOString();
@@ -466,11 +484,11 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     if (formData.createdAt) payload.createdAt = formData.createdAt;
     else if (!isEditing) payload.createdAt = nowIso;
     else delete payload.createdAt;
-    
+
     if (!isEditing) payload.typedBy = authName;
-    if (finalStatus === 'Approved' && (!formData.reviewedBy || formData.status !== 'Approved')) payload.reviewedBy = authName;
+    payload = applyReviewFields(payload, finalStatus, skipReview, authName, formData.reviewedBy, formData.status);
     if (pairId) payload.pairId = pairId;
-    
+
     // Optimistic UI Update & close instantly
     setIsCreatorOpen(false);
     
@@ -497,7 +515,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }
   };
 
-  const handleSaveAndNext = async (e, forcedStatus = null) => {
+  const handleSaveAndNext = async (e, forcedStatus = null, skipReview = false) => {
     e.preventDefault();
     const form = e.target.closest('form');
     if (form && !form.checkValidity()) {
@@ -529,9 +547,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     else delete payload.createdAt;
     
     if (!isEditing) payload.typedBy = authName;
-    if (finalStatus === 'Approved' && (!formData.reviewedBy || formData.status !== 'Approved')) payload.reviewedBy = authName;
+    payload = applyReviewFields(payload, finalStatus, skipReview, authName, formData.reviewedBy, formData.status);
     if (pairId) payload.pairId = pairId;
-    
+
     // Reset form instantly
     openAddCreator();
     
@@ -711,25 +729,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const totalSubjects = new Set(filteredQuestions.map(q => q.subject).filter(Boolean)).size;
   const pendingReview = filteredQuestions.filter(q => q.status === 'In Review').length;
 
-  const formatDate = (isoString) => {
-    if (!isoString) return '';
-    const d = new Date(isoString);
-    if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
-
-  const formatDateTime = (isoString) => {
-    const d = new Date(isoString);
-    return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
-
-  // Edited more than a minute after creation counts as modified
-  const wasModified = (q) => {
-    if (!q.updatedAt) return false;
-    if (!q.createdAt) return true;
-    return new Date(q.updatedAt).getTime() - new Date(q.createdAt).getTime() > 60000;
-  };
-
   return (
     <>
       <div className="relative flex flex-col xl:flex-row gap-8 w-full min-h-[900px] p-4 sm:p-6 lg:p-8 overflow-x-clip z-0 bg-[#F8FAFC]">
@@ -887,27 +886,23 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               <table className="w-full text-left border-collapse table-fixed min-w-[900px]">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[5%]">ID</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[25%]">Question</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[12%]">Type</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[10%]">Status</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[10%]">Marks</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[10%]">Difficulty</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[12%]">Dept</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[8%]">Date</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[8%] text-right">Actions</th>
+                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[8%]">ID</th>
+                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[45%]">Question</th>
+                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[15%]">Type</th>
+                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[15%]">Status</th>
+                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[17%] text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]">
                   {loading ? (
                     <tr>
-                      <td colSpan="9" className="py-12 text-center">
+                      <td colSpan="5" className="py-12 text-center">
                         <Loader />
                       </td>
                     </tr>
                   ) : filteredQuestions.length === 0 ? (
                     <tr>
-                      <td colSpan="9" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
+                      <td colSpan="5" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
                         No questions found matching your criteria.
                       </td>
                     </tr>
@@ -953,36 +948,19 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                           </div>
                         </td>
                         <td className="py-4 px-4 h-[82px]">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full border text-[11px] font-[800] ${
-                            q.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                            q.status === 'In Review' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                            'bg-slate-100 text-slate-600 border-slate-200'
-                          }`}>
-                            {q.status || 'Draft'}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 h-[82px]">
-                          <span className="text-[14px] font-[600] text-[#0F172A]">{q.mark?.split(' ')[0] || '1'} Mark</span>
-                        </td>
-                        <td className="py-4 px-4 h-[82px]">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full border text-[12px] font-[700] ${
-                            q.difficultyLevel === 'Hard' ? 'bg-red-50 text-red-600 border-red-100' :
-                            q.difficultyLevel === 'Medium' ? 'bg-orange-50 text-orange-600 border-orange-100' :
-                            'bg-green-50 text-green-600 border-green-100'
-                          }`}>
-                            {q.difficultyLevel || 'Easy'}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 h-[82px] truncate">
-                          <span className="text-[14px] font-[500] text-[#0F172A] truncate block" title={q.department || 'All'}>{q.department || 'All'}</span>
-                        </td>
-                        <td className="py-4 px-4 h-[82px]">
-                          <div className="flex flex-col leading-tight" title={[q.createdAt && `Created: ${formatDateTime(q.createdAt)}`, wasModified(q) && `Modified: ${formatDateTime(q.updatedAt)}`].filter(Boolean).join(' | ')}>
-                            <span className="text-[13px] font-[500] text-[#64748B]">{formatDate(q.createdAt) || '—'}</span>
-                            {wasModified(q) && (
-                              <span className="text-[11px] font-[500] text-[#94A3B8] mt-1">Edited {formatDate(q.updatedAt)}</span>
-                            )}
-                          </div>
+                          {q.status === 'Approved' && q.reviewed === false ? (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full border text-[11px] font-[800] bg-amber-50 text-amber-600 border-amber-100" title="Imported directly into the Question Bank, skipping reviewer approval">
+                              <AlertTriangle size={12} /> Not Reviewed
+                            </span>
+                          ) : (
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full border text-[11px] font-[800] ${
+                              q.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                              q.status === 'In Review' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                              'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}>
+                              {q.status || 'Draft'}
+                            </span>
+                          )}
                         </td>
                         <td className="py-4 px-4 h-[82px] text-right">
                           <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
@@ -1001,7 +979,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       </tr>
                       {expandedId === q.id && (
                         <tr className="bg-[#F8FAFF] border-b border-[#EEF2F7]">
-                          <td colSpan="9" className="px-4 py-6">
+                          <td colSpan="5" className="px-4 py-6">
                             <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative cursor-default" onClick={(e) => e.stopPropagation()}>
                               <h4 className="text-[16px] font-bold text-slate-800 mb-4 flex items-start gap-2">
                                 {q.isImported && <Sparkles size={16} className="text-purple-600 mt-1 flex-shrink-0" title="AI Imported" />}
@@ -1666,13 +1644,25 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       >
                         <Check size={16} /> Save & Close (Send to Review)
                       </button>
-                      <button 
+                      <button
                         type="button"
                         onClick={(e) => handleSaveAndNext(e, 'Draft')}
                         className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-[800] text-[13px] transition-colors shadow-sm"
                       >
                         <Save size={16} /> Save to Draft
                       </button>
+                      <div className="pt-2 mt-2 border-t border-slate-200 space-y-2">
+                        <p className="text-[11px] font-[700] text-amber-600 flex items-center gap-1.5">
+                          <AlertTriangle size={13} /> Skips your reviewer - the question goes straight into the Question Bank, flagged as Not Reviewed.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={(e) => handleSubmit(e, 'Approved', true)}
+                          className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-amber-500/20"
+                        >
+                          <Upload size={16} /> Import to Question Bank (Skip Review)
+                        </button>
+                      </div>
                     </>
                   )
                 ) : (
