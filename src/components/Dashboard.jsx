@@ -8,6 +8,7 @@ import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, 
 import { ref, listAll, getDownloadURL } from 'firebase/storage';
 import StudentLiveClasses from './StudentLiveClasses';
 import RecordingPlayerModal from './shared/RecordingPlayerModal';
+import RoleSwitcher from './shared/RoleSwitcher';
 import StudentTests from './StudentTests';
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
@@ -481,6 +482,9 @@ export default function Dashboard() {
     sessionStorage.removeItem('auth_role');
     sessionStorage.removeItem('auth_email');
     sessionStorage.removeItem('auth_name');
+    sessionStorage.removeItem('auth_roles');
+    localStorage.removeItem('pair_id');
+    localStorage.removeItem('pair_role');
     window.dispatchEvent(new Event('storage'));
     navigate('/');
   };
@@ -848,6 +852,7 @@ export default function Dashboard() {
                   <span className="text-[11px] font-semibold text-slate-400 truncate">{sessionStorage.getItem('auth_email') || ''}</span>
                 </div>
               </div>
+              <RoleSwitcher onNavigate={() => setIsMobileNavOpen(false)} />
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-red-500 hover:bg-red-50 transition-all"
@@ -937,6 +942,7 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+          <RoleSwitcher collapsed={isCollapsed} />
           <button
             onClick={handleLogout}
             title="Log Out"

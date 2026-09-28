@@ -11,7 +11,7 @@ import {
   Calendar,
   Plus,
   Clock,
-  BookOpen, PenTool, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud, MoreHorizontal, Trophy
+  BookOpen, Presentation, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud, MoreHorizontal, Trophy, Award
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import LiveTestOverlay, { startLiveTest } from '../liveTest/LiveTestOverlay';
@@ -973,7 +973,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
             className={`flex flex-col items-center justify-center w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 shrink-0 rounded-full transition-all shadow-lg ${whiteboardOn ? 'bg-purple-600 text-white' : 'bg-slate-700 text-white hover:bg-slate-600'}`}
             title={whiteboardOn ? "Stop Whiteboard" : "Start Whiteboard"}
           >
-            <PenTool size={16} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
+            <Presentation size={16} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
           </button>
 
           {/* Screen Share Button */}
@@ -1526,6 +1526,53 @@ export default function LiveClasses({ department }) {
     });
     return () => unsubscribe();
   }, [department]);
+
+  // Past classes that ended with a post-class quiz attached, so results stay
+  // visible to the teacher long after the live session itself is gone.
+  const [pastQuizzes, setPastQuizzes] = useState([]);
+  const [viewingQuizSession, setViewingQuizSession] = useState(null);
+  const [quizResults, setQuizResults] = useState([]);
+  const [quizResultsLoading, setQuizResultsLoading] = useState(false);
+
+  useEffect(() => {
+    const teacherEmail = sessionStorage.getItem('auth_email');
+    if (!teacherEmail) return;
+
+    const q = query(
+      collection(db, 'live_sessions'),
+      where('teacherEmail', '==', teacherEmail),
+      where('status', '==', 'ended')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const sessions = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(s => s.postClassQuiz?.questions?.length > 0);
+      sessions.sort((a, b) => (b.endedAt?.toMillis() || 0) - (a.endedAt?.toMillis() || 0));
+      setPastQuizzes(sessions);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Live-updating so a result that comes in after the teacher opens the modal shows up immediately.
+  useEffect(() => {
+    if (!viewingQuizSession) {
+      setQuizResults([]);
+      return;
+    }
+    setQuizResultsLoading(true);
+    const unsubscribe = onSnapshot(
+      collection(db, 'live_sessions', viewingQuizSession.id, 'quiz_results'),
+      (snapshot) => {
+        const results = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        results.sort((a, b) => (b.score || 0) - (a.score || 0) || (a.submittedAt?.toMillis() || 0) - (b.submittedAt?.toMillis() || 0));
+        setQuizResults(results);
+        setQuizResultsLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [viewingQuizSession]);
 
   const handleConfirmStartMeet = async (e) => {
     if (e) e.preventDefault();
@@ -2147,9 +2194,85 @@ export default function LiveClasses({ department }) {
           <button className="w-full py-2.5 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-100">
             View All Recordings
           </button>
+
+          {/* Post-Class Quiz Results */}
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 pt-2">
+            <Award className="text-amber-500" size={20} /> Post-Class Quiz Results
+          </h3>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+            {pastQuizzes.length === 0 ? (
+              <p className="text-slate-400 text-sm font-medium text-center py-4">No post-class quizzes yet.</p>
+            ) : (
+              pastQuizzes.map(session => (
+                <button
+                  key={session.id}
+                  onClick={() => setViewingQuizSession(session)}
+                  className="w-full text-left flex items-center justify-between gap-2 p-3 bg-white rounded-xl shadow-sm border border-slate-100 hover:border-amber-200 transition-colors group"
+                >
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-bold text-slate-800 line-clamp-1">{session.topic}</h4>
+                    <p className="text-[11px] text-slate-500 font-bold">
+                      {session.endedAt?.toMillis ? new Date(session.endedAt.toMillis()).toLocaleDateString() : ''} - {session.postClassQuiz.questions.length} question{session.postClassQuiz.questions.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-amber-600 text-xs font-bold flex items-center gap-1">
+                    View <ChevronRight size={14} />
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
         </div>
 
       </div>
+
+      {/* Post-Class Quiz Results Modal */}
+      {viewingQuizSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="min-w-0">
+                <h2 className="text-xl font-[900] text-slate-800">Quiz Results</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5 truncate">{viewingQuizSession.topic}</p>
+              </div>
+              <button onClick={() => setViewingQuizSession(null)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors shrink-0">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-3">
+              {quizResultsLoading ? (
+                <p className="text-slate-400 text-sm font-medium text-center py-6">Loading...</p>
+              ) : quizResults.length === 0 ? (
+                <p className="text-slate-400 text-sm font-medium text-center py-6">No students have submitted this quiz yet.</p>
+              ) : (
+                <>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    {quizResults.length} submission{quizResults.length !== 1 ? 's' : ''} - out of {viewingQuizSession.postClassQuiz.questions.length} question{viewingQuizSession.postClassQuiz.questions.length !== 1 ? 's' : ''}
+                  </p>
+                  {quizResults.map((r, idx) => (
+                    <div key={r.id} className="flex items-center justify-between gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${idx === 0 ? 'bg-yellow-100 text-yellow-700' : idx === 1 ? 'bg-slate-200 text-slate-700' : idx === 2 ? 'bg-amber-100/60 text-amber-700' : 'bg-white text-slate-500 border border-slate-200'}`}>
+                          {idx + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-800 text-sm truncate">{r.name || 'Student'}</p>
+                          <p className="text-[11px] text-slate-400 font-semibold truncate">{r.email}</p>
+                        </div>
+                      </div>
+                      <div className="font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg shrink-0">
+                        {r.score} / {viewingQuizSession.postClassQuiz.questions.length}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Start Instant Class Modal */}
       {isStartModalOpen && (
