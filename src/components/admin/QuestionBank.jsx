@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Loader from '../Loader';
-import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft, Upload } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft, Upload, ClipboardPaste } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 
@@ -434,6 +434,51 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   const removeImage = (field) => {
     setFormData(prev => ({ ...prev, [field]: '' }));
+  };
+
+  // Clipboard text is escaped (not inserted as raw HTML) so pasted markup can't inject scripts.
+  const escapeHtml = (text) => text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/\n/g, '<br>');
+
+  const handlePasteExplanation = async () => {
+    if (!navigator.clipboard) {
+      showToast("Clipboard access isn't available in this browser. Use Ctrl+V instead.", "error");
+      return;
+    }
+    try {
+      if (navigator.clipboard.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const imageType = item.types.find(t => t.startsWith('image/'));
+          if (imageType) {
+            const blob = await item.getType(imageType);
+            if (blob.size > 1048576) {
+              showToast("Image is too large. Please paste an image under 1MB.", "error");
+              return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => setFormData(prev => ({ ...prev, explanationImageUrl: reader.result }));
+            reader.readAsDataURL(blob);
+            showToast("Image pasted into explanation", "success");
+            return;
+          }
+        }
+      }
+      const text = await navigator.clipboard.readText();
+      if (!text) {
+        showToast("Clipboard is empty.", "error");
+        return;
+      }
+      setFormData(prev => ({
+        ...prev,
+        explanation: prev.explanation ? `${prev.explanation}<br>${escapeHtml(text)}` : escapeHtml(text)
+      }));
+      showToast("Text pasted into explanation", "success");
+    } catch (err) {
+      console.error("Paste failed", err);
+      showToast("Couldn't read the clipboard. Allow clipboard permission or use Ctrl+V.", "error");
+    }
   };
 
   // A typist/reviewer approving normally has actually looked the question over, so it's
@@ -1325,11 +1370,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       <div className="w-px h-5 bg-slate-200 mx-2"></div>
                       <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertUnorderedList', false, null)} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg" title="Bullet List"><List size={16}/></button>
                       <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertOrderedList', false, null)} className="p-2 text-[#111827] hover:bg-slate-50 rounded-lg" title="Numbered List"><ListTodo size={16}/></button>
-                      <div className="ml-auto flex">
+                      <div className="ml-auto flex items-center gap-1">
+                         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handlePasteExplanation} className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-[800] text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-lg transition-colors" title="Paste copied text or image into the explanation"><ClipboardPaste size={15}/> Paste</button>
                          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('removeFormat', false, null)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-lg" title="Clear Formatting"><Eraser size={16}/></button>
                       </div>
                     </div>
-                    <RichTextEditor 
+                    <RichTextEditor
                       name="explanation"
                       value={formData.explanation}
                       onChange={handleInputChange}
