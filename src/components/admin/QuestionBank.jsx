@@ -3,7 +3,21 @@ import { createPortal } from 'react-dom';
 import Loader from '../Loader';
 import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft, Upload, ClipboardPaste } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore';
+
+// Engineering Mathematics and Aptitude banks are shared by every department.
+const isCommonDeptName = (name) => {
+  const n = (name || '').trim().toLowerCase();
+  return n === 'engineering mathematics' || n.includes('aptitude');
+};
+const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+
+// A department may be stored as "Mechanical (ME)" or just "ME" - accept both forms.
+const deptNameVariants = (name) => {
+  if (!name) return [];
+  const code = (name.match(/\(([^)]+)\)/) || [])[1];
+  return code ? [name, code.trim()] : [name];
+};
 
 const stripHtmlAndNormalize = (htmlString) => {
   if (!htmlString) return '';
@@ -139,7 +153,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const [currentId, setCurrentId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkAction, setBulkAction] = useState(null); // 'delete' | 'premium' | null
+  const [isBulkWorking, setIsBulkWorking] = useState(false);
   const [hasOpenedInitial, setHasOpenedInitial] = useState(false);
   
   const [isSymbolPaletteOpen, setIsSymbolPaletteOpen] = useState(false);
@@ -206,6 +222,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   // Go back to page 1 whenever the filters or the page size change
   useEffect(() => {
     setCurrentPage(1);
+    setSelectedIds([]);
   }, [search, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, pageSize]);
 
   useEffect(() => {
@@ -252,13 +269,22 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const fetchQuestions = async () => {
     setLoading(true);
     try {
-      // Teachers are locked to their own department: scope the query at the
-      // Firestore level (not just client-side filtering) so other departments'
-      // question content is never sent to their browser at all.
+      const attrSnapshot = await getDocs(collection(db, 'question_attributes'));
+      const attrData = attrSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAttributes(attrData);
+
+      // Teachers are locked to their own department (plus the shared Engineering
+      // Mathematics / Aptitude banks): scope the query at the Firestore level (not just
+      // client-side filtering) so other departments' questions never reach their browser.
       const questionsRef = collection(db, 'question_bank');
-      const qSnapshot = await getDocs(
-        lockedDepartment ? query(questionsRef, where('department', '==', lockedDepartment)) : questionsRef
-      );
+      let qSnapshot;
+      if (lockedDepartment) {
+        const commonNames = attrData.filter(a => a.type === 'department' && isCommonDeptName(a.name)).map(a => a.name);
+        const allowed = [...new Set([...deptNameVariants(lockedDepartment), ...commonNames])].slice(0, 30);
+        qSnapshot = await getDocs(query(questionsRef, where('department', 'in', allowed)));
+      } else {
+        qSnapshot = await getDocs(questionsRef);
+      }
       let qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       // Deduplication Logic
@@ -301,10 +327,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       }
 
       setQuestions(qData);
-      
-      const attrSnapshot = await getDocs(collection(db, 'question_attributes'));
-      const attrData = attrSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAttributes(attrData);
     } catch (e) {
       console.error("Failed to fetch data", e);
     }
@@ -661,21 +683,45 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setIsCreatorOpen(true);
   };
 
-  const handleDelete = (id) => {
-    setDeleteConfirmId(id);
+  const toggleSelected = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
-  const confirmDelete = async () => {
-    if (!deleteConfirmId) return;
-    try {
-      await deleteDoc(doc(db, 'question_bank', deleteConfirmId));
-      setDeleteConfirmId(null);
-      showToast("Question deleted successfully", "success");
-      fetchQuestions();
-    } catch (e) {
-      console.error("Failed to delete question", e);
-      showToast("Failed to delete question", "error");
+  // Firestore batches cap at 500 writes, so large selections are split into chunks.
+  const runBulk = async (ids, applyToBatch) => {
+    for (let i = 0; i < ids.length; i += 450) {
+      const batch = writeBatch(db);
+      ids.slice(i, i + 450).forEach(id => applyToBatch(batch, doc(db, 'question_bank', id)));
+      await batch.commit();
     }
+  };
+
+  const confirmBulkAction = async () => {
+    // Only act on questions that are still visible under the current filters
+    const visibleIds = new Set(filteredQuestions.map(q => q.id));
+    const ids = selectedIds.filter(id => visibleIds.has(id) && !id.startsWith('temp-'));
+    if (ids.length === 0) { setBulkAction(null); return; }
+    setIsBulkWorking(true);
+    try {
+      if (bulkAction === 'delete') {
+        await runBulk(ids, (batch, ref) => batch.delete(ref));
+        setQuestions(prev => prev.filter(q => !ids.includes(q.id)));
+        showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} deleted`, "success");
+      } else if (bulkAction === 'premium') {
+        const makePremium = !isPremiumView;
+        const updatedAt = new Date().toISOString();
+        await runBulk(ids, (batch, ref) => batch.update(ref, { isPremium: makePremium, updatedAt }));
+        setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, isPremium: makePremium, updatedAt } : q));
+        showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} moved to the ${makePremium ? 'Premium Question Bank' : 'Question Bank'}`, "success");
+      }
+      setSelectedIds([]);
+    } catch (e) {
+      console.error("Bulk action failed", e);
+      showToast("Something went wrong. Some questions may not have been updated.", "error");
+      fetchQuestions();
+    }
+    setIsBulkWorking(false);
+    setBulkAction(null);
   };
 
   const openAddCreator = () => {
@@ -715,22 +761,31 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   const filteredQuestions = questions.filter(q => {
     const matchesSearch = q.questionText?.toLowerCase().includes(search.toLowerCase());
-    const matchesDept = selectedFolder 
-      ? (selectedFolder === 'Uncategorized' ? (!q.department || q.department.trim() === '') : q.department === selectedFolder)
-      : (filterDept === 'All' || q.department === filterDept);
+    const matchesDept = lockedDepartment
+      ? (deptNameVariants(lockedDepartment).includes(q.department) || isCommonDeptName(q.department))
+      : selectedFolder
+        ? (selectedFolder === 'Uncategorized' ? (!q.department || q.department.trim() === '') : q.department === selectedFolder)
+        : (filterDept === 'All' || q.department === filterDept);
     const matchesSubject = filterSubject === 'All' || q.subject === filterSubject;
     const matchesTopic = filterTopic === 'All' || q.topic === filterTopic;
     const matchesYear = filterYear === 'All' || q.year === filterYear;
     const matchesMark = filterMark === 'All' || q.mark === filterMark;
     const matchesDifficulty = filterDifficulty === 'All' || q.difficultyLevel === filterDifficulty;
-    const matchesStatus = filterStatus === 'All' || q.status === filterStatus;
+    const matchesStatus = filterStatus === 'All'
+      || (filterStatus === 'Not Reviewed' ? (q.status === 'Approved' && q.reviewed === false) : q.status === filterStatus);
     const matchesType = filterType === 'All' || q.questionType === filterType;
+
+    // Questions still with a reviewer (In Review) or sent back (Draft) belong to the typist/reviewer
+    // pair only - nobody else sees them until the reviewer approves them.
+    if (userRole !== 'typist' && (q.status === 'In Review' || q.status === 'Draft')) return false;
 
     // Default Role Filtering Logic
     let roleMatches = true;
     if (userRole === 'typist') {
       const myEmail = (sessionStorage.getItem('auth_email') || '').toLowerCase();
-      roleMatches = q.pairId === pairId || (!!q.reviewerEmail && q.reviewerEmail.toLowerCase() === myEmail);
+      roleMatches = q.pairId === pairId || (!!q.reviewerEmail && q.reviewerEmail.toLowerCase() === myEmail)
+        // Shared banks are visible in the approved Question Bank tab only - Drafts / Pending Review stay pair-only
+        || (externalFilter === 'Approved' && isCommonDeptName(q.department));
     }
 
     // Premium View Filtering
@@ -750,6 +805,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const safePage = Math.min(currentPage, totalPages);
   const pageStart = (safePage - 1) * pageSize;
   const paginatedQuestions = filteredQuestions.slice(pageStart, pageStart + pageSize);
+  const pageIds = paginatedQuestions.map(q => q.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id));
+  const togglePageSelection = () => {
+    setSelectedIds(prev => allPageSelected
+      ? prev.filter(id => !pageIds.includes(id))
+      : [...new Set([...prev, ...pageIds])]);
+  };
+  const canMovePremium = userRole === 'admin' || userRole === 'typist';
 
   const handleGoToPage = (e) => {
     if (e) e.preventDefault();
@@ -773,6 +836,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const mcqPercentage = totalQuestions === 0 ? 0 : Math.round((mcqQuestions / totalQuestions) * 100);
   const totalSubjects = new Set(filteredQuestions.map(q => q.subject).filter(Boolean)).size;
   const pendingReview = filteredQuestions.filter(q => q.status === 'In Review').length;
+  const notReviewedCount = filteredQuestions.filter(q => q.status === 'Approved' && q.reviewed === false).length;
 
   return (
     <>
@@ -860,7 +924,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   { label: 'Total Questions', value: totalQuestions, icon: FileText, color: 'blue' },
                   { label: 'Subjects', value: totalSubjects, icon: Bookmark, color: 'purple' },
                   { label: 'MCQ Questions', value: `${mcqPercentage}%`, icon: CheckCircle2, color: 'green' },
-                  { label: 'Pending Review', value: pendingReview, icon: AlertCircle, color: 'orange' },
+                  userRole === 'typist'
+                    ? { label: 'Pending Review', value: pendingReview, icon: AlertCircle, color: 'orange' }
+                    : { label: 'Not Reviewed', value: notReviewedCount, icon: AlertCircle, color: 'orange' },
                 ].map((stat, i) => (
                   <div key={i} className="bg-white rounded-[20px] border border-[#EEF2F7] p-5 shadow-[0_8px_24px_rgba(15,23,42,0.03)] flex items-center gap-5 hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(15,23,42,0.06)] transition-all duration-300">
                     <div className={`w-[54px] h-[54px] rounded-full bg-${stat.color}-50 flex items-center justify-center shrink-0 border border-${stat.color}-100`}>
@@ -891,7 +957,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               {/* FILTERS */}
               <div className="flex flex-wrap items-center gap-3">
                 {[
-                  { label: 'Status', plural: 'Statuses', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: ['Draft', 'In Review', 'Approved'] },
+                  { label: 'Status', plural: 'Statuses', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: userRole === 'typist' ? ['Draft', 'In Review', 'Approved'] : ['Approved', 'Not Reviewed'] },
                   { label: 'Type', plural: 'Types', val: filterType, setter: setFilterType, icon: Layers, opts: questionTypes },
                   { label: 'Subject', plural: 'Subjects', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
                   { label: 'Topic', plural: 'Topics', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
@@ -925,14 +991,56 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 </button>
               </div>
 
+          {/* BULK ACTION BAR */}
+          {selectedIds.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
+              <span className="text-[13px] font-[800] text-blue-800">{selectedIds.length} selected</span>
+              <div className="flex flex-wrap items-center gap-2 ml-auto">
+                {canMovePremium && (
+                  <button
+                    type="button"
+                    onClick={() => setBulkAction('premium')}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-[800] bg-amber-500 hover:bg-amber-600 text-white transition-colors shadow-sm"
+                  >
+                    <Star size={15} /> {isPremiumView ? 'Move back to Question Bank' : 'Move to Premium'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setBulkAction('delete')}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-[800] bg-red-600 hover:bg-red-700 text-white transition-colors shadow-sm"
+                >
+                  <Trash2 size={15} /> Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds([])}
+                  className="px-3 py-2 rounded-xl text-[13px] font-[800] text-slate-500 hover:text-slate-800 hover:bg-white transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* QUESTION TABLE */}
           <div className="bg-white border border-[#EEF2F7] rounded-[24px] shadow-[0_10px_28px_rgba(15,23,42,0.05)] flex flex-col mb-8">
             <div className="w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <table className="w-full text-left border-collapse table-fixed min-w-[900px]">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
+                    <th className="py-5 pl-4 pr-0 w-[4%]">
+                      <input
+                        type="checkbox"
+                        checked={allPageSelected}
+                        onChange={togglePageSelection}
+                        disabled={pageIds.length === 0}
+                        title="Select all questions on this page"
+                        className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
+                      />
+                    </th>
                     <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[8%]">ID</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[45%]">Question</th>
+                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[41%]">Question</th>
                     <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[15%]">Type</th>
                     <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[15%]">Status</th>
                     <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[17%] text-right">Actions</th>
@@ -941,13 +1049,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 <tbody className="divide-y divide-[#EEF2F7]">
                   {loading ? (
                     <tr>
-                      <td colSpan="5" className="py-12 text-center">
+                      <td colSpan="6" className="py-12 text-center">
                         <Loader />
                       </td>
                     </tr>
                   ) : filteredQuestions.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
+                      <td colSpan="6" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
                         No questions found matching your criteria.
                       </td>
                     </tr>
@@ -956,8 +1064,16 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       <React.Fragment key={q.id}>
                         <tr 
                           onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}
-                          className="group hover:bg-[#F8FAFF] transition-colors duration-200 cursor-pointer"
+                          className={`group transition-colors duration-200 cursor-pointer ${selectedIds.includes(q.id) ? 'bg-blue-50/60 hover:bg-blue-50' : 'hover:bg-[#F8FAFF]'}`}
                         >
+                          <td className="py-4 pl-4 pr-0 h-[82px]" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.includes(q.id)}
+                              onChange={() => toggleSelected(q.id)}
+                              className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
+                            />
+                          </td>
                           <td className="py-4 px-4 h-[82px]">
                             <span className="text-[13px] font-[700] text-[#64748B] bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm inline-flex items-center justify-center min-w-[28px]">
                               {pageStart + index + 1}
@@ -978,8 +1094,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                                 )}
                                 <span className="truncate">{stripHtmlAndNormalize(q.questionText) || 'Untitled Question'}</span>
                               </span>
-                              <span className="text-[13px] font-[500] text-[#64748B] truncate block">
-                                {q.subject || 'No Subject'}
+                              <span className="text-[13px] font-[500] text-[#64748B] truncate flex items-center gap-1.5">
+                                {isCommonDeptName(q.department) && (
+                                  <span className="shrink-0 bg-violet-50 border border-violet-200 text-violet-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                    {toTitleCase(q.department)}
+                                  </span>
+                                )}
+                                <span className="truncate">{q.subject || 'No Subject'}</span>
                               </span>
                             </div>
                           </div>
@@ -1014,17 +1135,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                               className="w-[36px] h-[36px] flex items-center justify-center rounded-[10px] bg-white text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition-colors border border-[#EEF2F7]">
                               <Edit2 size={16} />
                             </button>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); handleDelete(q.id); }}
-                              className="w-[36px] h-[36px] flex items-center justify-center rounded-[10px] bg-white text-[#64748B] hover:text-[#EF4444] hover:bg-red-50 shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition-colors border border-[#EEF2F7]">
-                              <Trash2 size={16} />
-                            </button>
                           </div>
                         </td>
                       </tr>
                       {expandedId === q.id && (
                         <tr className="bg-[#F8FAFF] border-b border-[#EEF2F7]">
-                          <td colSpan="5" className="px-4 py-6">
+                          <td colSpan="6" className="px-4 py-6">
                             <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative cursor-default" onClick={(e) => e.stopPropagation()}>
                               <h4 className="text-[16px] font-bold text-slate-800 mb-4 flex items-start gap-2">
                                 {q.isImported && <Sparkles size={16} className="text-purple-600 mt-1 flex-shrink-0" title="AI Imported" />}
@@ -1145,7 +1261,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         <div className="fixed inset-0 bg-[#f4f7fb] z-[99999] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
           
           {/* TOP BAR */}
-          <div className="min-h-[60px] bg-white px-4 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div className="min-h-[60px] bg-white border-b border-slate-100 px-4 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
               <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-lg">
                 <BookOpen size={16} className="text-indigo-600" />
@@ -1155,9 +1271,17 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               <div className="bg-slate-100 px-3 py-1 rounded-full text-[12px] font-[700] text-slate-500">
                 1 Saved
               </div>
+              <div className="w-px h-5 bg-slate-200 hidden sm:block"></div>
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-[900] text-[#111827]">Questions:</span>
+                <div className="w-7 h-7 rounded-full bg-[#059669] text-white flex items-center justify-center font-[800] text-[13px] shadow-sm">1</div>
+              </div>
             </div>
             <div className="flex items-center gap-4">
-              <button 
+              <button type="button" className="flex items-center gap-1.5 text-[#059669] hover:text-emerald-700 font-[800] text-[13px] bg-white hover:bg-emerald-50 px-4 py-2 rounded-full transition-colors border-[1.5px] border-[#059669]">
+                <Plus size={16} /> Add Question
+              </button>
+              <button
                 type="button" 
                 onClick={() => setIsSymbolPaletteOpen(!isSymbolPaletteOpen)}
                 className={`p-2 rounded-lg transition-colors shadow-sm ${isSymbolPaletteOpen ? 'bg-[#5b32ea] text-white' : 'text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200'}`}
@@ -1173,17 +1297,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 <X size={16} /> Done
               </button>
             </div>
-          </div>
-
-          {/* SECOND TOOLBAR */}
-          <div className="min-h-[60px] bg-white border-b border-slate-100 px-4 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
-            <div className="flex items-center gap-3">
-              <span className="text-[13px] font-[900] text-[#111827]">Questions:</span>
-              <div className="w-7 h-7 rounded-full bg-[#059669] text-white flex items-center justify-center font-[800] text-[13px] shadow-sm">1</div>
-            </div>
-            <button type="button" className="flex items-center gap-1.5 text-[#059669] hover:text-emerald-700 font-[800] text-[13px] bg-white hover:bg-emerald-50 px-4 py-2 rounded-full transition-colors border-[1.5px] border-[#059669]">
-              <Plus size={16} /> Add Question
-            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="flex-1 flex overflow-hidden">
@@ -1580,17 +1693,17 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
             {/* RIGHT SIDEBAR: ATTRIBUTES & ACTIONS */}
             <div className="w-80 shrink-0 bg-[#f8fafc] border-l border-slate-200 flex flex-col z-10 relative">
-              <div className="p-6 pb-2 flex items-center gap-2">
+              <div className="px-5 pt-4 pb-1 flex items-center gap-2">
                 <Tag size={16} className="text-indigo-600" />
                 <h3 className="text-[13px] font-[900] text-[#111827] uppercase tracking-wider">Question Attributes</h3>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div className="shrink-0 px-5 py-3 space-y-3">
                 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-[12px] font-[800] text-[#111827]">Department <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="department" required value={formData.department} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                    <select name="department" required value={formData.department} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- Select Department --</option>
                       {departments.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
@@ -1598,10 +1711,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-[12px] font-[800] text-[#111827]">Subject <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="subject" required value={formData.subject} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                    <select name="subject" required value={formData.subject} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- Select Subject --</option>
                       {subjects.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -1609,10 +1722,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-[12px] font-[800] text-[#111827]">Topic <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="topic" required value={formData.topic} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                    <select name="topic" required value={formData.topic} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- Select Topic --</option>
                       {topics.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
@@ -1620,10 +1733,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-[12px] font-[800] text-[#111827]">Year <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="year" required value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                    <select name="year" required value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- Select Year --</option>
                       {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
@@ -1631,10 +1744,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-[12px] font-[800] text-[#111827]">Mark <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="mark" required value={formData.mark} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                    <select name="mark" required value={formData.mark} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- Select Mark --</option>
                       {marks.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
@@ -1642,10 +1755,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-[12px] font-[800] text-[#111827]">Difficulty Level <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="difficultyLevel" required value={formData.difficultyLevel} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                    <select name="difficultyLevel" required value={formData.difficultyLevel} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- Select Difficulty --</option>
                       {difficulties.map(df => <option key={df} value={df}>{df}</option>)}
                     </select>
@@ -1655,7 +1768,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               </div>
 
               {/* Action Buttons */}
-              <div className="p-6 bg-[#f8fafc] space-y-4">
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 bg-[#f8fafc] space-y-3 border-t border-slate-200">
                 {userRole === 'typist' ? (
                   pairRole === 'reviewer' ? (
                     <>
@@ -1814,28 +1927,38 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         document.body
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmId && createPortal(
+      {/* Bulk Action Confirmation Modal */}
+      {bulkAction && createPortal(
         <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 pb-4">
-              <h3 className="text-[18px] font-[900] text-slate-800 mb-2">Delete Question</h3>
+              <h3 className="text-[18px] font-[900] text-slate-800 mb-2">
+                {bulkAction === 'delete'
+                  ? `Delete ${selectedIds.length} Question${selectedIds.length === 1 ? '' : 's'}`
+                  : isPremiumView ? 'Move back to Question Bank' : 'Move to Premium Question Bank'}
+              </h3>
               <p className="text-[14px] font-[500] text-slate-500 leading-relaxed">
-                Are you sure you want to delete this question? This action cannot be undone.
+                {bulkAction === 'delete'
+                  ? `Are you sure you want to delete ${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'}? This action cannot be undone.`
+                  : isPremiumView
+                    ? `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be removed from the Premium Question Bank and moved to the regular Question Bank.`
+                    : `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be moved to the Premium Question Bank.`}
               </p>
             </div>
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
-              <button 
-                onClick={() => setDeleteConfirmId(null)}
-                className="px-4 py-2 text-[13px] font-[800] text-slate-600 hover:text-slate-800 transition-colors"
+              <button
+                onClick={() => setBulkAction(null)}
+                disabled={isBulkWorking}
+                className="px-4 py-2 text-[13px] font-[800] text-slate-600 hover:text-slate-800 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
-              <button 
-                onClick={confirmDelete}
-                className="px-5 py-2 text-[13px] font-[800] bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm shadow-red-500/20"
+              <button
+                onClick={confirmBulkAction}
+                disabled={isBulkWorking}
+                className={`px-5 py-2 text-[13px] font-[800] text-white rounded-lg transition-colors shadow-sm disabled:opacity-60 ${bulkAction === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-500 hover:bg-amber-600'}`}
               >
-                Delete
+                {isBulkWorking ? 'Working...' : bulkAction === 'delete' ? 'Delete' : 'Move'}
               </button>
             </div>
           </div>

@@ -138,12 +138,27 @@ export default function TeacherDashboard() {
     if (!teacherDepartment) return;
     const fetchCourseOverview = async () => {
       try {
-        const [testsSnap, questionsCountSnap, recordingsCountSnap, classesSnap] = await Promise.all([
+        // Count exactly what the teacher's Question Bank shows: their department (stored as
+        // "Mechanical (ME)" or "ME") plus the shared Engineering Mathematics / Aptitude banks,
+        // approved only (reviewed or skip-review) - never questions still with a reviewer.
+        const attrSnap = await getDocs(collection(db, 'question_attributes'));
+        const commonDeptNames = attrSnap.docs
+          .map(d => d.data())
+          .filter(a => a.type === 'department' && (((a.name || '').trim().toLowerCase() === 'engineering mathematics') || (a.name || '').toLowerCase().includes('aptitude')))
+          .map(a => a.name);
+        const shortCode = ((teacherDepartment.match(/\(([^)]+)\)/) || [])[1] || '').trim();
+        const allowedDepts = [...new Set([teacherDepartment, shortCode, ...commonDeptNames].filter(Boolean))].slice(0, 30);
+
+        const [testsSnap, questionsSnap, recordingsCountSnap, classesSnap] = await Promise.all([
           getDocs(query(collection(db, 'tests'), where('department', '==', teacherDepartment))),
-          getCountFromServer(query(collection(db, 'question_bank'), where('department', '==', teacherDepartment))),
+          getDocs(query(collection(db, 'question_bank'), where('department', 'in', allowedDepts))),
           getCountFromServer(query(collection(db, 'recordings'), where('department', '==', teacherDepartment))),
           getDocs(query(collection(db, 'scheduled_classes'), where('department', '==', teacherDepartment))),
         ]);
+        const questionsCount = questionsSnap.docs.filter(d => {
+          const status = d.data().status;
+          return !status || status === 'Approved';
+        }).length;
 
         const tests = testsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         tests.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
@@ -151,7 +166,7 @@ export default function TeacherDashboard() {
 
         setCourseStats({
           testsCount: tests.length,
-          questionsCount: questionsCountSnap.data().count,
+          questionsCount,
           recordingsCount: recordingsCountSnap.data().count,
         });
 

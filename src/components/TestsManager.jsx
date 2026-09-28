@@ -150,13 +150,48 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     }
   };
 
-  // Cascading lists helper
-  const selectedDeptObj = attributes.find(a => a.type === 'department' && a.name === selectedDept);
-  const selectedSubjectObj = attributes.find(a => a.type === 'subject' && a.name === selectedSubject);
+  // The pills use full names like "Computer Science (CSE)", but department attributes and
+  // question records store the short code ("CSE"), so accept either form.
+  const matchesSelectedDept = (value) => {
+    const v = (value || '').trim().toLowerCase();
+    const full = (selectedDept || '').trim().toLowerCase();
+    const code = ((selectedDept || '').match(/\(([^)]+)\)/) || [])[1];
+    return v === full || (!!code && v === code.trim().toLowerCase());
+  };
 
-  const subjectsList = attributes
-    .filter(a => a.type === 'subject' && (!selectedDeptObj || a.parentId === selectedDeptObj.id))
-    .map(a => a.name);
+  // Cascading lists helper
+  const selectedDeptObj = selectedDept ? attributes.find(a => a.type === 'department' && matchesSelectedDept(a.name)) : null;
+
+  // Engineering Mathematics and Aptitude subjects are common to every department, so they're
+  // offered alongside the selected department's own subjects.
+  const isCommonDeptName = (name) => {
+    const n = (name || '').trim().toLowerCase();
+    return n === 'engineering mathematics' || n.includes('aptitude');
+  };
+  const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  const commonDeptObjs = attributes.filter(a => a.type === 'department' && isCommonDeptName(a.name) && a.id !== selectedDeptObj?.id);
+
+  const deptSubjectAttrs = attributes.filter(a => a.type === 'subject' && (selectedDept ? (!!selectedDeptObj && a.parentId === selectedDeptObj.id) : true));
+
+  const subjectsList = [
+    ...deptSubjectAttrs.map(a => ({ name: a.name, label: a.name, attr: a, commonDept: null })),
+    ...(selectedDept ? commonDeptObjs.flatMap(dept =>
+      attributes
+        .filter(a => a.type === 'subject' && a.parentId === dept.id)
+        .map(a => ({ name: a.name, label: `${toTitleCase(dept.name)} : ${a.name}`, attr: a, commonDept: dept }))
+    ) : [])
+  ];
+
+  const selectedSubjectEntry = subjectsList.find(s => s.name === selectedSubject);
+  const selectedSubjectObj = selectedSubjectEntry?.attr || attributes.find(a => a.type === 'subject' && a.name === selectedSubject);
+  const selectedCommonDept = selectedSubjectEntry?.commonDept || null;
+
+  // Questions for a common subject are stored under that common department (e.g. Aptitude)
+  const questionDeptMatches = (value) => (
+    selectedCommonDept
+      ? (value || '').trim().toLowerCase() === (selectedCommonDept.name || '').trim().toLowerCase() || matchesSelectedDept(value)
+      : matchesSelectedDept(value)
+  );
 
   const topicsList = attributes
     .filter(a => a.type === 'topic' && (!selectedSubjectObj || a.parentId === selectedSubjectObj.id))
@@ -165,7 +200,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   // Helper to count available questions per topic (robust trimming & case-insensitive matching)
   const getTopicCounts = (topicName) => {
     const pool = questions.filter(q => 
-      (q.department || '').trim().toLowerCase() === (selectedDept || '').trim().toLowerCase() &&
+      questionDeptMatches(q.department) &&
       (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
       (q.topic || '').trim().toLowerCase() === (topicName || '').trim().toLowerCase()
     );
@@ -176,7 +211,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   // Filtered pool of questions based on Step 2 Hierarchy (combines selected topics, case-insensitive)
   const availablePool = questions.filter(q => {
-    if (selectedDept && (q.department || '').trim().toLowerCase() !== selectedDept.trim().toLowerCase()) return false;
+    if (selectedDept && !questionDeptMatches(q.department)) return false;
     if (selectedSubject && (q.subject || '').trim().toLowerCase() !== selectedSubject.trim().toLowerCase()) return false;
     if (selectedTopics.length > 0) {
       const qTopic = (q.topic || '').trim().toLowerCase();
@@ -982,21 +1017,26 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                       <label className="text-[13px] font-[900] text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
                         <BookOpen className="text-blue-500" size={16} /> 2. Select Subjects
                       </label>
+                      {subjectsList.length === 0 && (
+                        <div className="text-slate-400 text-xs font-semibold py-2">No subjects are set up for this department yet. Add them in the Attributes tab.</div>
+                      )}
                       <div className="flex flex-wrap gap-2">
-                        {subjectsList.map(subName => {
-                          const isSelected = selectedSubject === subName;
+                        {subjectsList.map(sub => {
+                          const isSelected = selectedSubject === sub.name;
                           return (
                             <button
-                              key={subName}
+                              key={sub.attr.id}
                               type="button"
-                              onClick={() => { setSelectedSubject(subName); setSelectedTopics([]); }}
+                              onClick={() => { setSelectedSubject(sub.name); setSelectedTopics([]); }}
                               className={`px-4 py-2.5 text-xs font-bold rounded-xl border transition-all ${
-                                isSelected 
-                                  ? 'bg-[#2563EB] border-transparent text-white shadow-md shadow-blue-500/25' 
-                                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                isSelected
+                                  ? 'bg-[#2563EB] border-transparent text-white shadow-md shadow-blue-500/25'
+                                  : sub.commonDept
+                                    ? 'bg-violet-50 border-violet-200 text-violet-700 hover:bg-violet-100'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                               }`}
                             >
-                              {subName}
+                              {sub.label}
                             </button>
                           );
                         })}

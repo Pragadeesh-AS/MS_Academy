@@ -1404,9 +1404,19 @@ export default function LiveClasses({ department }) {
         };
         const teacherFullDept = departmentMapping[department] || department || 'All Departments';
 
+        const shortCode = ((teacherFullDept.match(/\(([^)]+)\)/) || [])[1] || '').trim();
+        const isCommonBank = (name) => {
+          const n = (name || '').trim().toLowerCase();
+          return n === 'engineering mathematics' || n.includes('aptitude');
+        };
+
         const filtered = qData.filter(q => {
+          // Questions still waiting on (or sent back by) a reviewer must never be shown
+          if (q.status && q.status !== 'Approved') return false;
           if (teacherFullDept === 'All Departments') return true;
-          return q.department === teacherFullDept || q.department === 'All Departments' || q.department === 'ALL' || !q.department;
+          return q.department === teacherFullDept || (!!shortCode && q.department === shortCode)
+            || isCommonBank(q.department)
+            || q.department === 'All Departments' || q.department === 'ALL' || !q.department;
         });
 
         setDepartmentQuestions(filtered);
