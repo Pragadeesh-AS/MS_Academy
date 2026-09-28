@@ -3,8 +3,9 @@ import { User, Mail, Lock, TrendingUp, BookOpen, Trophy, Quote, Phone } from 'lu
 import signupImage from '../assets/signup2.png';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, sendPasswordResetEmail, setPersistence, browserSessionPersistence } from 'firebase/auth';
-import { collection, getDocs, query, where, updateDoc, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, updateDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import { resolveUserRoles, pickPrimaryRole, switchToRole, ADMIN_EMAILS } from '../utils/roles';
 
 export default function LoginSignup() {
   const [isLogin, setIsLogin] = useState(true);
@@ -63,52 +64,28 @@ export default function LoginSignup() {
     }
   };
 
-  const checkTeacherRole = async (email) => {
-    try {
-      const q = query(collection(db, 'invited_teachers'), where('email', '==', email));
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        const docId = querySnapshot.docs[0].id;
-        await updateDoc(doc(db, 'invited_teachers', docId), { status: 'Accepted', lastLogin: serverTimestamp() });
-        return true;
-      }
-    } catch (e) {
-      console.error("Failed to check teacher database in Firestore:", e);
-    }
-    return false;
-  };
+  // Resolves every role this email is assigned to (an admin may have invited
+  // the same address as teacher, typist, reviewer and/or student), lands the
+  // user on the highest-priority one, and remembers the full set so the
+  // dashboards can offer a "switch role" control.
+  const finalizeLogin = async (user, fallbackName) => {
+    const roles = await resolveUserRoles(user.email);
 
-  const checkTypistRole = async (email) => {
-    try {
-      let q = query(collection(db, 'invited_typists'), where('typistEmail', '==', email));
-      let querySnapshot = await getDocs(q);
-      let pairRole = 'typist';
-      
-      if (querySnapshot.empty) {
-        q = query(collection(db, 'invited_typists'), where('reviewerEmail', '==', email));
-        querySnapshot = await getDocs(q);
-        pairRole = 'reviewer';
-      }
-      
-      if (!querySnapshot.empty) {
-        const docId = querySnapshot.docs[0].id;
-        localStorage.setItem('pair_id', docId);
-        localStorage.setItem('pair_role', pairRole);
-        return true;
-      }
+    const byRole = (r) => roles.find(x => x.role === r);
+    const existingName = byRole('student')?.name || byRole('teacher')?.name
+      || byRole('typist')?.name || byRole('reviewer')?.name || null;
+    const userName = existingName || fallbackName || user.displayName || user.email.split('@')[0];
 
-      // Reviewer set by the admin for AI-extracted questions
-      const aiSnap = await getDoc(doc(db, 'site_settings', 'ai_review'));
-      if (aiSnap.exists() && (aiSnap.data().reviewerEmail || '').toLowerCase() === (email || '').toLowerCase()) {
-        localStorage.setItem('pair_id', 'ai-review');
-        localStorage.setItem('pair_role', 'reviewer');
-        return true;
-      }
-    } catch (e) {
-      console.error("Failed to check typist database in Firestore:", e);
+    if (byRole('student')) {
+      await markStudentAsActive(user.email, userName);
     }
-    return false;
+
+    sessionStorage.setItem('auth_email', user.email);
+    sessionStorage.setItem('auth_name', userName);
+    sessionStorage.setItem('auth_roles', JSON.stringify(roles));
+
+    const primary = pickPrimaryRole(roles);
+    switchToRole(primary, navigate);
   };
 
   const handleSubmit = async (e) => {
@@ -134,12 +111,11 @@ export default function LoginSignup() {
     try {
       if (isLogin) {
         let userCredential;
-        const adminEmails = ['msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
-        
+
         try {
           userCredential = await signInWithEmailAndPassword(auth, email, password);
         } catch (authErr) {
-          if (authErr.code === 'auth/invalid-credential' && adminEmails.includes(email.toLowerCase())) {
+          if (authErr.code === 'auth/invalid-credential' && ADMIN_EMAILS.includes(email.toLowerCase())) {
             // Auto-create admin account if it doesn't exist
             try {
               userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -153,109 +129,25 @@ export default function LoginSignup() {
             throw authErr;
           }
         }
-        
+
         const elapsed = Date.now() - startTime;
         if (elapsed < 1500) {
           await new Promise(resolve => setTimeout(resolve, 1500 - elapsed));
         }
 
         const user = userCredential.user;
-
-        // Check if the authenticated user has the registered admin email
-        if (adminEmails.includes(user.email.toLowerCase())) {
-          sessionStorage.setItem('auth_role', 'admin');
-          sessionStorage.setItem('auth_email', user.email);
-          sessionStorage.setItem('auth_name', 'MS Academy Admin');
-          window.dispatchEvent(new Event('storage'));
-          navigate('/admin', { replace: true });
-        } else {
-          const isTeacher = await checkTeacherRole(user.email);
-          const isTypist = await checkTypistRole(user.email);
-          
-          // Try to fetch existing name from database
-          let existingName = null;
-          try {
-            const studentQ = query(collection(db, 'joined_students'), where('email', '==', user.email));
-            const studentSnap = await getDocs(studentQ);
-            if (!studentSnap.empty && studentSnap.docs[0].data().name) {
-              existingName = studentSnap.docs[0].data().name;
-            } else if (isTeacher) {
-              const teacherQ = query(collection(db, 'invited_teachers'), where('email', '==', user.email));
-              const teacherSnap = await getDocs(teacherQ);
-              if (!teacherSnap.empty && teacherSnap.docs[0].data().name) {
-                existingName = teacherSnap.docs[0].data().name;
-              }
-            } else if (isTypist) {
-              const typistQ = query(collection(db, 'invited_typists'), where('typistEmail', '==', user.email));
-              const typistSnap = await getDocs(typistQ);
-              if (!typistSnap.empty && typistSnap.docs[0].data().typistName) {
-                existingName = typistSnap.docs[0].data().typistName;
-              }
-            }
-          } catch (e) {
-            console.error("Error fetching existing name", e);
-          }
-
-          const userName = existingName || user.displayName || user.email.split('@')[0];
-          
-          if (isTeacher) {
-            sessionStorage.setItem('auth_role', 'teacher');
-            sessionStorage.setItem('auth_email', user.email);
-            sessionStorage.setItem('auth_name', userName);
-            window.dispatchEvent(new Event('storage'));
-            navigate('/teacher-dashboard', { replace: true });
-          } else if (isTypist) {
-            sessionStorage.setItem('auth_role', 'typist');
-            sessionStorage.setItem('auth_email', user.email);
-            sessionStorage.setItem('auth_name', userName);
-            window.dispatchEvent(new Event('storage'));
-            navigate('/typist-dashboard', { replace: true });
-          } else {
-            // Regular student auth
-            await markStudentAsActive(user.email, userName);
-            sessionStorage.setItem('auth_role', 'student');
-            sessionStorage.setItem('auth_email', user.email);
-            sessionStorage.setItem('auth_name', userName);
-            window.dispatchEvent(new Event('storage'));
-            navigate('/student', { replace: true });
-          }
-        }
+        await finalizeLogin(user, ADMIN_EMAILS.includes(user.email.toLowerCase()) ? 'MS Academy Admin' : null);
       } else {
         // Registration / signup flow
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        
+
         const elapsed = Date.now() - startTime;
         if (elapsed < 1500) {
           await new Promise(resolve => setTimeout(resolve, 1500 - elapsed));
         }
 
         const user = userCredential.user;
-        const userName = name || user.email.split('@')[0];
-        
-        const isTeacher = await checkTeacherRole(user.email);
-        const isTypist = await checkTypistRole(user.email);
-        
-        if (isTeacher) {
-          sessionStorage.setItem('auth_role', 'teacher');
-          sessionStorage.setItem('auth_email', user.email);
-          sessionStorage.setItem('auth_name', userName);
-          window.dispatchEvent(new Event('storage'));
-          navigate('/teacher-dashboard', { replace: true });
-        } else if (isTypist) {
-          sessionStorage.setItem('auth_role', 'typist');
-          sessionStorage.setItem('auth_email', user.email);
-          sessionStorage.setItem('auth_name', userName);
-          window.dispatchEvent(new Event('storage'));
-          navigate('/typist-dashboard', { replace: true });
-        } else {
-          // Always student if not an invited teacher
-          await markStudentAsActive(user.email, userName, department, plan);
-          sessionStorage.setItem('auth_role', 'student');
-          sessionStorage.setItem('auth_email', user.email);
-          sessionStorage.setItem('auth_name', userName);
-          window.dispatchEvent(new Event('storage'));
-          navigate('/student', { replace: true });
-        }
+        await finalizeLogin(user, name);
       }
     } catch (err) {
       console.error(err);
@@ -272,65 +164,7 @@ export default function LoginSignup() {
   const handleGoogleUser = async (user) => {
     try {
       const userEmail = user.email || '';
-      const adminEmails = ['msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
-      if (adminEmails.includes(userEmail.toLowerCase())) {
-        sessionStorage.setItem('auth_role', 'admin');
-        sessionStorage.setItem('auth_email', userEmail);
-        sessionStorage.setItem('auth_name', 'MS Academy Admin');
-        window.dispatchEvent(new Event('storage'));
-        navigate('/admin', { replace: true });
-        return;
-      }
-
-      const isTeacher = await checkTeacherRole(userEmail);
-      const isTypist = await checkTypistRole(userEmail);
-      
-      // Fetch existing name from database if it exists
-      let existingName = null;
-      try {
-        const studentQ = query(collection(db, 'joined_students'), where('email', '==', userEmail));
-        const studentSnap = await getDocs(studentQ);
-        if (!studentSnap.empty && studentSnap.docs[0].data().name) {
-          existingName = studentSnap.docs[0].data().name;
-        } else if (isTeacher) {
-          const teacherQ = query(collection(db, 'invited_teachers'), where('email', '==', userEmail));
-          const teacherSnap = await getDocs(teacherQ);
-          if (!teacherSnap.empty && teacherSnap.docs[0].data().name) {
-            existingName = teacherSnap.docs[0].data().name;
-          }
-        } else if (isTypist) {
-          const typistQ = query(collection(db, 'invited_typists'), where('typistEmail', '==', userEmail));
-          const typistSnap = await getDocs(typistQ);
-          if (!typistSnap.empty && typistSnap.docs[0].data().typistName) {
-            existingName = typistSnap.docs[0].data().typistName;
-          }
-        }
-      } catch (e) {
-        console.error("Error fetching existing name", e);
-      }
-
-      const userName = existingName || user.displayName || userEmail.split('@')[0] || 'User';
-      
-      if (isTeacher) {
-        sessionStorage.setItem('auth_role', 'teacher');
-        sessionStorage.setItem('auth_email', userEmail);
-        sessionStorage.setItem('auth_name', userName);
-        window.dispatchEvent(new Event('storage'));
-        navigate('/teacher-dashboard', { replace: true });
-      } else if (isTypist) {
-        sessionStorage.setItem('auth_role', 'typist');
-        sessionStorage.setItem('auth_email', userEmail);
-        sessionStorage.setItem('auth_name', userName);
-        window.dispatchEvent(new Event('storage'));
-        navigate('/typist-dashboard', { replace: true });
-      } else {
-        await markStudentAsActive(userEmail, userName);
-        sessionStorage.setItem('auth_role', 'student');
-        sessionStorage.setItem('auth_email', userEmail);
-        sessionStorage.setItem('auth_name', userName);
-        window.dispatchEvent(new Event('storage'));
-        navigate('/student', { replace: true });
-      }
+      await finalizeLogin(user, ADMIN_EMAILS.includes(userEmail.toLowerCase()) ? 'MS Academy Admin' : null);
     } catch (err) {
       console.error(err);
       setError(err.message);

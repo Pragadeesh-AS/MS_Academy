@@ -107,6 +107,7 @@ export default function App() {
       sessionStorage.removeItem('auth_role');
       sessionStorage.removeItem('auth_email');
       sessionStorage.removeItem('auth_name');
+      sessionStorage.removeItem('auth_roles');
       localStorage.removeItem('student_department');
       localStorage.removeItem('pair_id');
       localStorage.removeItem('pair_role');
@@ -300,7 +301,10 @@ export default function App() {
                     sessionStorage.removeItem('auth_role');
                     sessionStorage.removeItem('auth_email');
                     sessionStorage.removeItem('auth_name');
+                    sessionStorage.removeItem('auth_roles');
                     localStorage.removeItem('student_department');
+                    localStorage.removeItem('pair_id');
+                    localStorage.removeItem('pair_role');
                     setUserRole(null);
                     setUserName(null);
                     navigate('/login');
@@ -389,7 +393,10 @@ export default function App() {
                           sessionStorage.removeItem('auth_role');
                           sessionStorage.removeItem('auth_email');
                           sessionStorage.removeItem('auth_name');
+                          sessionStorage.removeItem('auth_roles');
                           localStorage.removeItem('student_department');
+                          localStorage.removeItem('pair_id');
+                          localStorage.removeItem('pair_role');
                           setUserRole(null);
                           setUserName(null);
                           navigate('/login');

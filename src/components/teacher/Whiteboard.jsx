@@ -237,8 +237,17 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
              mixCtx.fillStyle = '#ffffff';
              mixCtx.fillRect(0, 0, mixCanvas.width, mixCanvas.height);
           }
-          
+
           mixCtx.drawImage(activeCanvasEl, 0, 0);
+
+          // Small academy logo pinned to the top of every whiteboard page/stream
+          if (watermarkImg.complete && watermarkImg.naturalWidth > 0) {
+            const logoH = 36;
+            const logoW = (logoH / watermarkImg.naturalHeight) * watermarkImg.naturalWidth;
+            mixCtx.globalAlpha = 0.9;
+            mixCtx.drawImage(watermarkImg, (mixCanvas.width - logoW) / 2, 10, logoW, logoH);
+            mixCtx.globalAlpha = 1.0;
+          }
         };
         
         drawMixFrame();
@@ -847,7 +856,12 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
           <img src={logoImg} alt="Academy Logo" className="w-[300px] object-contain" />
         </div>
       )}
-      
+
+      {/* Small academy logo pinned to the top of every whiteboard page */}
+      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+        <img src={logoImg} alt="Academy Logo" className="h-8 sm:h-9 object-contain opacity-90 drop-shadow" />
+      </div>
+
       {/* Dynamic Canvas Container */}
       <div className="w-full h-full touch-none pointer-events-auto z-10" ref={containerRef}></div>
       

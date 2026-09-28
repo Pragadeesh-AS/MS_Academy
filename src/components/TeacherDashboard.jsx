@@ -14,6 +14,7 @@ import { TrendingUp, ShieldAlert } from 'lucide-react';
 import ReportedQuestions from './admin/ReportedQuestions';
 import QuestionBank from './admin/QuestionBank';
 import { gateCoursesData } from './GateCourses';
+import RoleSwitcher from './shared/RoleSwitcher';
 
 const sidebarNavItems = [
   { key: 'courses', label: 'My Courses', icon: BookOpen },
@@ -172,6 +173,9 @@ export default function TeacherDashboard() {
     sessionStorage.removeItem('auth_role');
     sessionStorage.removeItem('auth_email');
     sessionStorage.removeItem('auth_name');
+    sessionStorage.removeItem('auth_roles');
+    localStorage.removeItem('pair_id');
+    localStorage.removeItem('pair_role');
     window.dispatchEvent(new Event('storage'));
     navigate('/');
   };
@@ -237,6 +241,7 @@ export default function TeacherDashboard() {
                   <span className="text-[11px] font-semibold text-slate-400 truncate">{sessionStorage.getItem('auth_email') || ''}</span>
                 </div>
               </div>
+              <RoleSwitcher onNavigate={() => setIsMobileNavOpen(false)} />
               <button
                 onClick={() => { handleLogout(); setIsMobileNavOpen(false); }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl font-bold transition-all"
@@ -296,6 +301,7 @@ export default function TeacherDashboard() {
               </div>
             )}
           </div>
+          <RoleSwitcher collapsed={isCollapsed} />
           <button
             onClick={handleLogout}
             className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 text-red-500 hover:bg-red-50 rounded-xl font-bold transition-all`}

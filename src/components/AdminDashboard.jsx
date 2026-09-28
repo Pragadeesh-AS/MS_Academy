@@ -29,6 +29,7 @@ import TestsManager from './TestsManager';
 import ReportedQuestions from './admin/ReportedQuestions';
 import InvoiceGenerator from './admin/InvoiceGenerator';
 import BlogManager from './admin/BlogManager';
+import RoleSwitcher from './shared/RoleSwitcher';
 
 const loadImage = (src) => new Promise((resolve, reject) => {
   const img = new Image();
@@ -375,6 +376,9 @@ export default function AdminDashboard() {
     sessionStorage.removeItem('auth_role');
     sessionStorage.removeItem('auth_email');
     sessionStorage.removeItem('auth_name');
+    sessionStorage.removeItem('auth_roles');
+    localStorage.removeItem('pair_id');
+    localStorage.removeItem('pair_role');
     window.dispatchEvent(new Event('storage'));
     navigate('/login');
   };
@@ -934,6 +938,7 @@ export default function AdminDashboard() {
                   <span className="text-[12px] font-semibold text-slate-400 truncate">{sessionStorage.getItem('auth_email') || ''}</span>
                 </div>
               </div>
+              <RoleSwitcher dark onNavigate={() => setIsMobileNavOpen(false)} />
               <button
                 onClick={() => { setIsMobileNavOpen(false); handleLogout(); }}
                 className="w-full flex items-center gap-3 px-2 py-2.5 mt-2 rounded-xl font-bold text-[14px] text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors"
@@ -1142,6 +1147,7 @@ export default function AdminDashboard() {
               )}
             </div>
 
+            <RoleSwitcher dark collapsed={isCollapsed} />
             <button
               onClick={handleLogout}
               className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-2'} py-2.5 mt-2 rounded-xl font-bold text-[14px] text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors`}
