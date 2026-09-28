@@ -343,8 +343,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       selectedTopics.forEach(topic => {
       const alloc = allocations[topic] || { q1: 0, q2: 0 };
       
-      const topicPool = questions.filter(q => 
-        (q.department || '').trim().toLowerCase() === (selectedDept || '').trim().toLowerCase() &&
+      const topicPool = questions.filter(q =>
+        questionDeptMatches(q.department) &&
         (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
         (q.topic || '').trim().toLowerCase() === topic.trim().toLowerCase() &&
         !manualIdsSet.has(q.id) // exclude manually selected ones
@@ -1091,8 +1091,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
               {step === 3 && (() => {
                 
                 // --- MANUAL MODE LOGIC ---
-                const topicPool = questions.filter(q => 
-                  (q.department || '').trim().toLowerCase() === (selectedDept || '').trim().toLowerCase() &&
+                const topicPool = questions.filter(q =>
+                  questionDeptMatches(q.department) &&
                   (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
                   selectedTopics.map(t => t.toLowerCase()).includes((q.topic || '').trim().toLowerCase())
                 );
