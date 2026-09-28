@@ -287,10 +287,22 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       }
       let qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+      // Questions referenced by a test must never be auto-deleted, or that test shows
+      // "Question content not found" to students.
+      const usedInTests = new Set();
+      try {
+        const testsSnap = await getDocs(collection(db, 'tests'));
+        testsSnap.docs.forEach(t => (t.data().questions || []).forEach(id => usedInTests.add(id)));
+      } catch (err) {
+        console.error("Failed to load tests for duplicate check - skipping cleanup", err);
+        usedInTests.add('__unknown__');
+      }
+      const testsKnown = !usedInTests.has('__unknown__');
+
       // Deduplication Logic
-      // When copies collide, keep the premium one (so a premium import is never
-      // lost to an older normal copy), then prefer the Approved one.
-      const rank = (q) => (q.isPremium === true ? 2 : 0) + (q.status === 'Approved' ? 1 : 0);
+      // When copies collide, keep the one a test uses, then the premium one (so a premium
+      // import is never lost to an older normal copy), then prefer the Approved one.
+      const rank = (q) => (usedInTests.has(q.id) ? 4 : 0) + (q.isPremium === true ? 2 : 0) + (q.status === 'Approved' ? 1 : 0);
       const keeper = new Map();
       const duplicateIds = [];
 
@@ -304,12 +316,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         const current = keeper.get(hash);
         if (!current) {
           keeper.set(hash, q);
-        } else if (rank(q) > rank(current)) {
-          duplicateIds.push(current.id);
-          keeper.set(hash, q);
-        } else {
-          duplicateIds.push(q.id);
+          return;
         }
+        const [keep, drop] = rank(q) > rank(current) ? [q, current] : [current, q];
+        keeper.set(hash, keep);
+        // Leave both copies in place if the "extra" one is used by a test (or tests couldn't be checked)
+        if (testsKnown && !usedInTests.has(drop.id)) duplicateIds.push(drop.id);
       });
 
       if (duplicateIds.length > 0) {
