@@ -498,7 +498,7 @@ export default function AIGenerator({ pairMode = false }) {
   };
 
   const fileToGenerativePart = async (fileObj) => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64Data = reader.result.split(',')[1];
@@ -506,6 +506,7 @@ export default function AIGenerator({ pairMode = false }) {
           inlineData: { data: base64Data, mimeType: fileObj.type }
         });
       };
+      reader.onerror = () => reject(reader.error || new Error('Failed to read the file.'));
       reader.readAsDataURL(fileObj);
     });
   };
@@ -523,12 +524,10 @@ export default function AIGenerator({ pairMode = false }) {
       if (apiKey) {
         let apiSuccess = false;
         const modelsToTry = [
-          "gemini-3.5-flash-lite",
-          "gemini-3.6-flash",
           "gemini-2.0-flash",
           "gemini-1.5-flash",
           "gemini-1.5-flash-8b",
-          "gemini-1.0-pro"
+          "gemini-1.5-pro"
         ];
         
         console.log("Attempting to use Gemini API for extraction...");
@@ -568,17 +567,21 @@ IMPORTANT:
 
         for (const modelName of modelsToTry) {
           if (apiSuccess) break;
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 60000);
           try {
             console.log(`Trying model: ${modelName}...`);
-            const interaction = await ai.interactions.create({
-                model: modelName,
-                input: [
-                    { type: "text", text: prompt },
-                    { type: "document", data: pdfPart.inlineData.data, mime_type: pdfPart.inlineData.mimeType }
-                ]
+            const response = await ai.models.generateContent({
+              model: modelName,
+              contents: [
+                { text: prompt },
+                pdfPart
+              ],
+              config: { abortSignal: controller.signal }
             });
-            const responseText = interaction.output_text;
-            
+            const responseText = response.text;
+            if (!responseText) throw new Error('Empty response from model');
+
             const cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
             parsedQuestions = JSON.parse(cleanJson);
             parsedQuestions = parsedQuestions.map(q => ({
@@ -596,6 +599,8 @@ IMPORTANT:
             apiSuccess = true;
           } catch (modelError) {
             console.warn(`Model ${modelName} failed:`, modelError.message || modelError);
+          } finally {
+            clearTimeout(timeoutId);
           }
         }
         
