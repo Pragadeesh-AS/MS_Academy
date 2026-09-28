@@ -378,6 +378,21 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: currentYear - 1990 + 1}, (_, i) => (currentYear - i).toString()); // 1990 to current year, descending
   const marks = attributes.filter(a => a.type === 'mark').map(a => a.name);
+
+  // The Marks pills ("1 Mark (-0.33)") and the Mark attribute dropdown ("1", "2") store
+  // different strings, so link them by the mark number and save the attribute's value.
+  const markNumber = (value) => {
+    const m = String(value || '').match(/\d+(\.\d+)?/);
+    return m ? parseFloat(m[0]) : null;
+  };
+  const markOptionFor = (value) => {
+    if (marks.includes(value)) return value;
+    const n = markNumber(value);
+    return n === null ? '' : (marks.find(m => markNumber(m) === n) || '');
+  };
+  const setMarkNumber = (n) => {
+    setFormData(prev => ({ ...prev, mark: marks.find(m => markNumber(m) === n) || `${n} Mark (-${n === 2 ? '0.66' : '0.33'})` }));
+  };
   const difficulties = attributes.filter(a => a.type === 'difficulty').map(a => a.name);
   const questionTypes = ['Single Choice', 'Multiple Choice', 'Fill in Blanks', 'Match'];
 
@@ -546,7 +561,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     const finalStatus = forcedStatus || formData.status || 'Approved';
     const authName = sessionStorage.getItem('auth_name') || 'Unknown';
     const nowIso = new Date().toISOString();
-    let payload = { ...formData, status: finalStatus, updatedAt: nowIso };
+    let payload = { ...formData, mark: markOptionFor(formData.mark) || formData.mark, status: finalStatus, updatedAt: nowIso };
     // Creation date is stamped once; edits must never overwrite it
     if (formData.createdAt) payload.createdAt = formData.createdAt;
     else if (!isEditing) payload.createdAt = nowIso;
@@ -607,7 +622,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     const finalStatus = forcedStatus || formData.status || 'Approved';
     const authName = sessionStorage.getItem('auth_name') || 'Unknown';
     const nowIso = new Date().toISOString();
-    let payload = { ...formData, status: finalStatus, updatedAt: nowIso };
+    let payload = { ...formData, mark: markOptionFor(formData.mark) || formData.mark, status: finalStatus, updatedAt: nowIso };
     // Creation date is stamped once; edits must never overwrite it
     if (formData.createdAt) payload.createdAt = formData.createdAt;
     else if (!isEditing) payload.createdAt = nowIso;
@@ -1341,10 +1356,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
                   <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                     <span className="text-[13px] font-[900] text-[#111827] whitespace-nowrap">Marks:</span>
-                    <button type="button" onClick={() => setFormData({...formData, mark: '1 Mark (-0.33)'})} className={`whitespace-nowrap px-4 sm:px-5 py-2 text-[13px] font-[800] rounded-full transition-colors ${formData.mark === '1 Mark (-0.33)' ? 'border-[1.5px] border-blue-600 text-blue-600 bg-white shadow-sm' : 'text-slate-500'}`}>1 Mark (-0.33)</button>
-                    <button type="button" onClick={() => setFormData({...formData, mark: '2 Mark (-0.66)'})} className={`whitespace-nowrap px-4 sm:px-5 py-2 text-[13px] font-[800] rounded-full transition-colors ${formData.mark === '2 Mark (-0.66)' ? 'border-[1.5px] border-blue-600 text-blue-600 bg-white shadow-sm' : 'text-slate-500'}`}>2 Mark (-0.66)</button>
+                    <button type="button" onClick={() => setMarkNumber(1)} className={`whitespace-nowrap px-4 sm:px-5 py-2 text-[13px] font-[800] rounded-full transition-colors ${markNumber(formData.mark) === 1 ? 'border-[1.5px] border-blue-600 text-blue-600 bg-white shadow-sm' : 'text-slate-500'}`}>1 Mark (-0.33)</button>
+                    <button type="button" onClick={() => setMarkNumber(2)} className={`whitespace-nowrap px-4 sm:px-5 py-2 text-[13px] font-[800] rounded-full transition-colors ${markNumber(formData.mark) === 2 ? 'border-[1.5px] border-blue-600 text-blue-600 bg-white shadow-sm' : 'text-slate-500'}`}>2 Mark (-0.66)</button>
                     <span className="bg-red-50 border-[1.5px] border-red-200 text-red-600 text-[13px] font-[900] px-3 sm:px-4 py-2 rounded-full flex items-center gap-1.5 sm:gap-2 ml-1 sm:ml-2 shadow-sm whitespace-nowrap">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></div> Neg: {formData.mark.includes('2') ? '-0.66' : '-0.33'}
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></div> Neg: {markNumber(formData.mark) === 2 ? '-0.66' : '-0.33'}
                     </span>
                   </div>
                 </div>
@@ -1747,7 +1762,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 <div className="space-y-1">
                   <label className="text-[12px] font-[800] text-[#111827]">Mark <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="mark" required value={formData.mark} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                    <select name="mark" required value={markOptionFor(formData.mark)} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- Select Mark --</option>
                       {marks.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
