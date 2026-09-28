@@ -217,7 +217,7 @@ export default function App() {
       {/* Navigation Bar - Hide on Login, Admin, Teacher Dashboard, Typist Dashboard, and Student Portal */}
       {(location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student')) && (
       <>
-      <div className="w-full fixed top-2 inset-x-0 z-50">
+      <div className="hidden md:block w-full fixed top-2 inset-x-0 z-50">
         <motion.nav 
           initial={false}
           animate={{
@@ -465,7 +465,7 @@ export default function App() {
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 1, duration: 0.8 }}
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] pointer-events-none"
+        className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] pointer-events-none"
       >
         <div className="px-5 py-2.5 rounded-full bg-white/70 backdrop-blur-md border border-[#1d4ed8]/20 shadow-[0_8px_30px_rgba(29,78,216,0.15)] flex items-center gap-2">
           <Sparkles size={14} className="text-[#1d4ed8] animate-pulse" />

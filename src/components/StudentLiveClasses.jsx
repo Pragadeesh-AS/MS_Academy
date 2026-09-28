@@ -496,7 +496,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
             {/* Small floating PIP videos container (Vertical Stack) */}
             <div 
               onClick={(e) => { e.stopPropagation(); resetControlsTimeout(); }}
-              className={`absolute bottom-28 right-6 z-[90] flex flex-col gap-3 max-h-[calc(100vh-250px)] overflow-y-auto pl-2 custom-scrollbar transition-all duration-500 ${!showControls ? 'opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto' : 'opacity-100'}`}
+              className={`absolute bottom-28 right-6 z-[90] flex flex-col gap-3 max-h-[calc(100vh-250px)] overflow-y-auto pl-2 custom-scrollbar transition-all duration-500 ${!showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
             >
               {unpinnedTiles}
             </div>
@@ -509,7 +509,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
       {/* Custom Control Bar (Glassmorphic Theme mimicking Navbar) */}
       <div
         onClick={(e) => { e.stopPropagation(); resetControlsTimeout(); }}
-        className={`absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 sm:gap-6 px-4 sm:px-8 py-3 sm:py-4 rounded-full z-[100] transition-all duration-500 hover:scale-[1.02] max-w-[95vw] ${!showControls ? 'opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto' : 'opacity-100'}`}
+        className={`absolute bottom-4 sm:bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 sm:gap-6 px-4 sm:px-8 py-3 sm:py-4 rounded-full z-[100] transition-all duration-500 hover:scale-[1.02] max-w-[95vw] ${!showControls ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
         style={{
           backgroundColor: "rgba(255, 255, 255, 0.15)",
           backdropFilter: "blur(24px) saturate(180%)",
@@ -1274,7 +1274,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
         })()}
 
         {/* Top Header overlay for aesthetics */}
-        <div className={`absolute top-0 inset-x-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/80 to-transparent pointer-events-none transition-opacity duration-500 ${!showControls ? 'opacity-0 md:opacity-100' : 'opacity-100'}`}>
+        <div className={`absolute top-0 inset-x-0 p-4 flex items-center justify-between z-10 bg-gradient-to-b from-black/80 to-transparent pointer-events-none transition-opacity duration-500 ${!showControls ? 'opacity-0' : 'opacity-100'}`}>
            <div className="flex items-center gap-3">
              <div className="bg-red-500/20 text-red-500 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 backdrop-blur-md border border-red-500/30">
                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
