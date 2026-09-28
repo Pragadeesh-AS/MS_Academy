@@ -524,12 +524,13 @@ export default function AIGenerator({ pairMode = false }) {
       if (apiKey) {
         let apiSuccess = false;
         const modelsToTry = [
-          "gemini-3.5-flash-lite",
           "gemini-3.6-flash",
+          "gemini-3.5-flash-lite",
           "gemini-3.7-flash",
           "gemini-3.8-flash",
           "gemini-flash-latest"
         ];
+        let lastError = null;
         
         console.log("Attempting to use Gemini API for extraction...");
         const ai = new GoogleGenAI({ apiKey });
@@ -566,8 +567,13 @@ IMPORTANT:
 - For Match type questions, optionA, optionB, optionC and optionD MUST be filled with the answer choices exactly as printed in the PDF (for example "P-2, Q-1, R-4, S-3"). Never leave them empty, and set correctAnswer to the letter of the correct choice.
 - The response MUST be a pure JSON array parseable by JSON.parse().`;
 
-        for (const modelName of modelsToTry) {
+        // 503 "high demand" errors from Gemini are transient, so fail over to the next model
+        // quickly (1 SDK retry instead of ~30s of backoff) and make a second pass if all were busy.
+        const attempts = [...modelsToTry, ...modelsToTry];
+        for (let i = 0; i < attempts.length; i++) {
           if (apiSuccess) break;
+          const modelName = attempts[i];
+          if (i === modelsToTry.length) await new Promise(r => setTimeout(r, 5000));
           try {
             console.log(`Trying model: ${modelName}...`);
             const interaction = await ai.interactions.create({
@@ -576,7 +582,7 @@ IMPORTANT:
                     { type: "text", text: prompt },
                     { type: "document", data: pdfPart.inlineData.data, mime_type: pdfPart.inlineData.mimeType }
                 ]
-            }, { timeout: 90000 });
+            }, { timeout: 120000, maxRetries: 1 });
             const responseText = interaction.output_text;
             if (!responseText) throw new Error('Empty response from model');
 
@@ -596,12 +602,16 @@ IMPORTANT:
             console.log(`Successfully extracted via Gemini API using ${modelName}.`);
             apiSuccess = true;
           } catch (modelError) {
+            lastError = modelError;
             console.warn(`Model ${modelName} failed:`, modelError.message || modelError);
           }
         }
-        
+
         if (!apiSuccess) {
-          setErrorMsg("All Gemini AI models failed. Please check your API key or try again later.");
+          const busy = /503|high demand|unavailable|overloaded/i.test(String(lastError?.message || lastError));
+          setErrorMsg(busy
+            ? "Google's Gemini servers are busy right now. Please wait a minute and click Retry."
+            : "All Gemini AI models failed. Please check your API key or try again later.");
           setStatus('error');
           return;
         }
