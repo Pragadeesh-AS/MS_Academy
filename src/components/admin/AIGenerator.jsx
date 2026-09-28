@@ -524,10 +524,11 @@ export default function AIGenerator({ pairMode = false }) {
       if (apiKey) {
         let apiSuccess = false;
         const modelsToTry = [
-          "gemini-2.0-flash",
-          "gemini-1.5-flash",
-          "gemini-1.5-flash-8b",
-          "gemini-1.5-pro"
+          "gemini-3.5-flash-lite",
+          "gemini-3.6-flash",
+          "gemini-3.7-flash",
+          "gemini-3.8-flash",
+          "gemini-flash-latest"
         ];
         
         console.log("Attempting to use Gemini API for extraction...");
@@ -567,25 +568,22 @@ IMPORTANT:
 
         for (const modelName of modelsToTry) {
           if (apiSuccess) break;
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 60000);
           try {
             console.log(`Trying model: ${modelName}...`);
-            const response = await ai.models.generateContent({
-              model: modelName,
-              contents: [
-                { text: prompt },
-                pdfPart
-              ],
-              config: { abortSignal: controller.signal }
-            });
-            const responseText = response.text;
+            const interaction = await ai.interactions.create({
+                model: modelName,
+                input: [
+                    { type: "text", text: prompt },
+                    { type: "document", data: pdfPart.inlineData.data, mime_type: pdfPart.inlineData.mimeType }
+                ]
+            }, { timeout: 90000 });
+            const responseText = interaction.output_text;
             if (!responseText) throw new Error('Empty response from model');
 
             const cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
             parsedQuestions = JSON.parse(cleanJson);
             parsedQuestions = parsedQuestions.map(q => ({
-              ...q, 
+              ...q,
               isImported: true,
               questionText: renderLatexToHTML(q.questionText),
               optionA: renderLatexToHTML(q.optionA),
@@ -594,13 +592,11 @@ IMPORTANT:
               optionD: renderLatexToHTML(q.optionD),
               explanation: renderLatexToHTML(q.explanation)
             }));
-            
+
             console.log(`Successfully extracted via Gemini API using ${modelName}.`);
             apiSuccess = true;
           } catch (modelError) {
             console.warn(`Model ${modelName} failed:`, modelError.message || modelError);
-          } finally {
-            clearTimeout(timeoutId);
           }
         }
         
