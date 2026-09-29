@@ -530,6 +530,16 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         shape = new fabric.Triangle({ ...shapeProps, width: 0, height: 0 });
       } else if (activeShape === 'line') {
         shape = new fabric.Line([startX, startY, startX, startY], shapeProps);
+      } else if (activeShape === 'diamond') {
+        shape = new fabric.Polygon([{x: 50, y: 0}, {x: 100, y: 50}, {x: 50, y: 100}, {x: 0, y: 50}], { ...shapeProps, scaleX: 0.01, scaleY: 0.01 });
+      } else if (activeShape === 'pentagon') {
+        shape = new fabric.Polygon([{x: 50, y: 0}, {x: 100, y: 38}, {x: 81, y: 100}, {x: 19, y: 100}, {x: 0, y: 38}], { ...shapeProps, scaleX: 0.01, scaleY: 0.01 });
+      } else if (activeShape === 'hexagon') {
+        shape = new fabric.Polygon([{x: 50, y: 0}, {x: 100, y: 25}, {x: 100, y: 75}, {x: 50, y: 100}, {x: 0, y: 75}, {x: 0, y: 25}], { ...shapeProps, scaleX: 0.01, scaleY: 0.01 });
+      } else if (activeShape === 'octagon') {
+        shape = new fabric.Polygon([{x: 30, y: 0}, {x: 70, y: 0}, {x: 100, y: 30}, {x: 100, y: 70}, {x: 70, y: 100}, {x: 30, y: 100}, {x: 0, y: 70}, {x: 0, y: 30}], { ...shapeProps, scaleX: 0.01, scaleY: 0.01 });
+      } else if (activeShape === 'star') {
+        shape = new fabric.Polygon([{x: 50, y: 0}, {x: 61, y: 35}, {x: 98, y: 35}, {x: 68, y: 57}, {x: 79, y: 91}, {x: 50, y: 70}, {x: 21, y: 91}, {x: 32, y: 57}, {x: 2, y: 35}, {x: 39, y: 35}], { ...shapeProps, scaleX: 0.01, scaleY: 0.01 });
       }
       
       if (shape) {
@@ -552,6 +562,13 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         shape.set({ left: Math.min(startX, pointer.x), top: Math.min(startY, pointer.y) });
       } else if (activeShape === 'line') {
         shape.set({ x2: pointer.x, y2: pointer.y });
+      } else if (['diamond', 'pentagon', 'hexagon', 'octagon', 'star'].includes(activeShape)) {
+        shape.set({ 
+          scaleX: Math.abs(startX - pointer.x) / (shape.width || 1), 
+          scaleY: Math.abs(startY - pointer.y) / (shape.height || 1),
+          left: Math.min(startX, pointer.x),
+          top: Math.min(startY, pointer.y)
+        });
       }
       
       fCanvas.renderAll();
