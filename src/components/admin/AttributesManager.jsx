@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Loader from '../Loader';
 import { Plus, Edit2, Trash2, ChevronDown, Search, MoreHorizontal, CheckCircle2, Bookmark, LayoutList, Trophy, Star, Clock, Landmark, FileText } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore';
 
 const attributeTypes = [
   { id: 'department', name: 'Department', childOf: null, icon: Landmark, iconBg: 'bg-blue-100', iconColor: 'text-blue-600' },
@@ -24,20 +24,17 @@ export default function AttributesManager() {
   const [editingAttr, setEditingAttr] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
-  const fetchAttributes = async () => {
-    setLoading(true);
-    try {
-      const snapshot = await getDocs(collection(db, 'question_attributes'));
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAttributes(data);
-    } catch (error) {
-      console.error("Error fetching attributes:", error);
-    }
-    setLoading(false);
-  };
-
+  // Shared by the admin, typist and reviewer dashboards - listen live so a change made in
+  // one of them shows up in the others without a reload.
   useEffect(() => {
-    fetchAttributes();
+    const unsub = onSnapshot(collection(db, 'question_attributes'), (snapshot) => {
+      setAttributes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching attributes:", error);
+      setLoading(false);
+    });
+    return () => unsub();
   }, []);
   const handleAdd = async (customName = null, customParent = null) => {
     const nameToAdd = (customName !== null ? customName : newValue).trim();
@@ -53,7 +50,6 @@ export default function AttributesManager() {
       });
       setNewValue('');
       setNewParent('');
-      fetchAttributes();
     } catch (error) {
       console.error("Error adding attribute:", error);
     }
@@ -62,7 +58,6 @@ export default function AttributesManager() {
     if (!deletingId) return;
     try {
       await deleteDoc(doc(db, 'question_attributes', deletingId));
-      fetchAttributes();
     } catch (error) {
       console.error("Error deleting attribute:", error);
     }
@@ -76,7 +71,6 @@ export default function AttributesManager() {
       await updateDoc(doc(db, 'question_attributes', editingAttr.id), {
         name: editingAttr.name.trim()
       });
-      fetchAttributes();
     } catch (error) {
       console.error("Error updating attribute:", error);
     }

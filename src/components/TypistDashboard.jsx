@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { BookOpen, FileEdit, ClipboardCheck, Sparkles, LogOut, ChevronLeft, ChevronRight, Menu, X, CheckCircle2, Clock } from 'lucide-react';
+import { BookOpen, FileEdit, ClipboardCheck, Sparkles, LogOut, ChevronLeft, ChevronRight, Menu, X, CheckCircle2, Clock, Tag } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import QuestionBank from './admin/QuestionBank';
 import AIGenerator from './admin/AIGenerator';
+import AttributesManager from './admin/AttributesManager';
 import RoleSwitcher from './shared/RoleSwitcher';
 
 export default function TypistDashboard() {
@@ -189,6 +190,15 @@ export default function TypistDashboard() {
           {(closeOnClick || !isCollapsed) && <span>Pending Review</span>}
         </button>
       )}
+
+      {/* Same attributes as the admin panel - one shared Firestore collection */}
+      <button
+        onClick={() => { setActiveTab('attributes'); if (closeOnClick) setIsMobileNavOpen(false); }}
+        className={`w-full flex items-center ${!closeOnClick && isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'attributes' ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50'}`}
+      >
+        <Tag size={18} />
+        {(closeOnClick || !isCollapsed) && <span>Attributes</span>}
+      </button>
     </>
   );
 
@@ -390,7 +400,9 @@ export default function TypistDashboard() {
         })()}
 
         <div>
-          {activeTab === 'ai' && pairRole === 'typist' ? (
+          {activeTab === 'attributes' ? (
+            <AttributesManager />
+          ) : activeTab === 'ai' && pairRole === 'typist' ? (
             <AIGenerator pairMode />
           ) : (
             <QuestionBank externalFilter={activeTab === 'review' ? 'In Review' : activeTab === 'draft' ? 'Draft' : 'Approved'} />
