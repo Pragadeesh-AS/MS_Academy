@@ -10,9 +10,10 @@ import TeacherQuestionBank from './teacher/TeacherQuestionBank';
 import TestsManager from './TestsManager';
 import TeacherStudents from './teacher/TeacherStudents';
 import Analytics from './admin/Analytics';
-import { TrendingUp, ShieldAlert } from 'lucide-react';
+import { TrendingUp, ShieldAlert, Tag } from 'lucide-react';
 import ReportedQuestions from './admin/ReportedQuestions';
 import QuestionBank from './admin/QuestionBank';
+import AttributesManager from './admin/AttributesManager';
 import { gateCoursesData } from './GateCourses';
 import RoleSwitcher from './shared/RoleSwitcher';
 
@@ -21,6 +22,7 @@ const sidebarNavItems = [
   { key: 'live', label: 'Live Classes', icon: Video },
   { key: 'students', label: 'Students', icon: Users },
   { key: 'questions', label: 'Question Bank', icon: BookOpen },
+  { key: 'attributes', label: 'Attributes', icon: Tag },
   { key: 'tests', label: 'Test Modules', icon: Calendar },
   { key: 'analytics', label: 'Analytics', icon: TrendingUp },
   { key: 'reported', label: "Reported Q's", icon: ShieldAlert },
@@ -515,6 +517,8 @@ export default function TeacherDashboard() {
             onEditQuestion={(qId) => { setEditQuestionId(qId); setActiveTab('questions'); }}
           />
         )}
+        {/* Same attributes as the admin panel, limited to this teacher's department's subjects/topics */}
+        {activeTab === 'attributes' && <AttributesManager lockedDepartment={teacherDepartment || '__none__'} />}
         {activeTab === 'analytics' && <Analytics joinedStudents={joinedStudents} department={teacherDepartment} />}
         {activeTab === 'reported' && (
           <ReportedQuestions 

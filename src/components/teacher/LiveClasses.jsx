@@ -1349,12 +1349,16 @@ export default function LiveClasses({ department }) {
   const [startClassData, setStartClassData] = useState({ subject: '', topic: '', bundleId: '', isCommonClass: false, scheduledId: null });
 
   // Subjects the teacher can pick for a class: their department's subjects + the shared
-  // Engineering Mathematics / Aptitude subjects (from the admin Attributes tab)
+  // Engineering Mathematics / Aptitude subjects (from the admin Attributes tab). Listened to live,
+  // so a subject added in Attributes shows up here without reloading the page.
   const [subjectAttributes, setSubjectAttributes] = useState([]);
   useEffect(() => {
-    getDocs(collection(db, 'question_attributes'))
-      .then(snap => setSubjectAttributes(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
-      .catch(err => console.error('Failed to load subjects:', err));
+    const unsub = onSnapshot(
+      collection(db, 'question_attributes'),
+      snap => setSubjectAttributes(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      err => console.error('Failed to load subjects:', err)
+    );
+    return () => unsub();
   }, []);
   const subjectOptions = useMemo(() => subjectOptionsFor(subjectAttributes, department), [subjectAttributes, department]);
 

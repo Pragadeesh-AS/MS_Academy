@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { sameDepartment } from '../../utils/subjects';
 import Loader from '../Loader';
 import { Plus, Edit2, Trash2, ChevronDown, Search, MoreHorizontal, CheckCircle2, Bookmark, LayoutList, Trophy, Star, Clock, Landmark, FileText } from 'lucide-react';
 import { db } from '../../firebase';
@@ -12,11 +13,13 @@ const attributeTypes = [
   { id: 'difficulty', name: 'Difficulty Level', childOf: null, icon: Star, iconBg: 'bg-pink-100', iconColor: 'text-pink-500' },
 ];
 
-export default function AttributesManager() {
-  const [activeTab, setActiveTab] = useState('department');
+// `lockedDepartment` (teachers): only that department's subjects and topics are shown and editable -
+// no Department / Mark / Difficulty tabs, and new subjects always go under their department.
+export default function AttributesManager({ lockedDepartment = null }) {
+  const [activeTab, setActiveTab] = useState(lockedDepartment ? 'subject' : 'department');
   const [newValue, setNewValue] = useState('');
   const [newParent, setNewParent] = useState('');
-  const [attributes, setAttributes] = useState([]);
+  const [allAttributes, setAllAttributes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -28,7 +31,7 @@ export default function AttributesManager() {
   // one of them shows up in the others without a reload.
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'question_attributes'), (snapshot) => {
-      setAttributes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setAllAttributes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
     }, (error) => {
       console.error("Error fetching attributes:", error);
@@ -36,9 +39,27 @@ export default function AttributesManager() {
     });
     return () => unsub();
   }, []);
+
+  // The teacher's own department attribute ("CSE" and "Computer Science (CSE)" both match)
+  const ownDept = lockedDepartment
+    ? allAttributes.find(a => a.type === 'department' && sameDepartment(a.name, lockedDepartment))
+    : null;
+  // What this user can see and manage: everything, or for a teacher their department's subtree
+  const attributes = useMemo(() => {
+    if (!lockedDepartment) return allAttributes;
+    if (!ownDept) return [];
+    const subjects = allAttributes.filter(a => a.type === 'subject' && a.parentId === ownDept.id);
+    const subjectIds = new Set(subjects.map(s => s.id));
+    return [ownDept, ...subjects, ...allAttributes.filter(a => a.type === 'topic' && subjectIds.has(a.parentId))];
+  }, [allAttributes, lockedDepartment, ownDept]);
+  const visibleTypes = lockedDepartment ? attributeTypes.filter(t => t.id === 'subject' || t.id === 'topic') : attributeTypes;
+  // A teacher's new subject always goes under their own department
+  const lockedParent = lockedDepartment && activeTab === 'subject' ? (ownDept?.id || '') : null;
+  const parentValue = lockedParent ?? newParent;
+
   const handleAdd = async (customName = null, customParent = null) => {
     const nameToAdd = (customName !== null ? customName : newValue).trim();
-    const parentToAdd = customParent !== null ? customParent : newParent;
+    const parentToAdd = lockedParent ?? (customParent !== null ? customParent : newParent);
     if (!nameToAdd) return;
     
     try {
@@ -135,7 +156,7 @@ export default function AttributesManager() {
         
         {/* Sidebar Items */}
         <div className="p-4 pt-0 flex flex-col gap-1">
-          {attributeTypes.map(attr => {
+          {visibleTypes.map(attr => {
             const count = attributes.filter(a => a.type === attr.id).length;
             const isActive = activeTab === attr.id;
             const Icon = attr.icon;
@@ -202,8 +223,15 @@ export default function AttributesManager() {
               </h2>
               <div className="flex flex-col gap-1 mt-1">
                 <p className="text-[14px] font-[500] text-[#64748B]">
-                  Manage system-wide options for {activeAttribute.name}.
+                  {lockedDepartment
+                    ? `Manage the ${activeAttribute.name.toLowerCase()}s of your department${ownDept ? ` (${ownDept.name})` : ''}.`
+                    : `Manage system-wide options for ${activeAttribute.name}.`}
                 </p>
+                {lockedDepartment && !loading && !ownDept && (
+                  <p className="text-[13px] font-[600] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">
+                    Your department isn&apos;t set up in Attributes yet - ask the admin to add it, then you can add subjects here.
+                  </p>
+                )}
                 <p className="text-[14px] font-[500] text-[#64748B]">
                   Add new values or organize existing ones to keep the platform structured.
                 </p>
@@ -248,7 +276,8 @@ export default function AttributesManager() {
             {activeAttribute.childOf && (
               <div className="w-full md:w-[240px] relative shrink-0">
                 <select 
-                  value={newParent}
+                  value={parentValue}
+                  disabled={lockedParent !== null}
                   onChange={(e) => setNewParent(e.target.value)}
                   className="w-full h-[52px] pl-4 pr-10 appearance-none bg-white border border-[#EEF2F7] rounded-[12px] text-[14px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all shadow-sm cursor-pointer"
                 >
@@ -263,7 +292,7 @@ export default function AttributesManager() {
 
             <button 
               onClick={() => {
-                if (!newValue.trim() || (activeAttribute.childOf && !newParent)) {
+                if (!newValue.trim() || (activeAttribute.childOf && !parentValue)) {
                   setEditingAttr({ id: 'NEW', name: newValue });
                 } else {
                   handleAdd();
@@ -418,7 +447,7 @@ export default function AttributesManager() {
             <form onSubmit={(e) => {
               e.preventDefault();
               if (editingAttr.id === 'NEW') {
-                handleAdd(editingAttr.name, newParent);
+                handleAdd(editingAttr.name, parentValue);
                 setEditingAttr(null);
               } else {
                 confirmEdit(e);
@@ -442,7 +471,8 @@ export default function AttributesManager() {
                     <label className="text-[13px] font-[600] text-[#0F172A] ml-1">Parent {attributeTypes.find(a => a.id === activeAttribute.childOf)?.name}</label>
                     <div className="relative">
                       <select 
-                        value={newParent}
+                        value={parentValue}
+                        disabled={lockedParent !== null}
                         onChange={(e) => setNewParent(e.target.value)}
                         className="w-full h-[52px] pl-5 pr-12 appearance-none bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer shadow-sm"
                         required
@@ -468,7 +498,7 @@ export default function AttributesManager() {
                 </button>
                 <button 
                   type="submit"
-                  disabled={!editingAttr.name.trim() || (editingAttr.id === 'NEW' && activeAttribute.childOf && !newParent)}
+                  disabled={!editingAttr.name.trim() || (editingAttr.id === 'NEW' && activeAttribute.childOf && !parentValue)}
                   className="px-7 py-2.5 rounded-full font-[600] text-white bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-slate-300 transition-all text-[14px]"
                 >
                   {editingAttr.id === 'NEW' ? 'Create' : 'Save Changes'}
