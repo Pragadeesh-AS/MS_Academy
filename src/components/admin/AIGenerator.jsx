@@ -128,6 +128,163 @@ const applyNatFields = (q) => {
   return { ...base, fillBlankAnswer: pick.answer, fillBlankPrecision: precision };
 };
 
+// ---------- Diagram extraction ----------
+// The AI reports where each figure sits (page + box); we render that page with pdf.js and crop it
+// into the same image fields the Question Bank editor uses.
+const IMAGE_TARGETS = {
+  question: 'questionImageUrl',
+  explanation: 'explanationImageUrl',
+  optionA: 'optionAImage',
+  optionB: 'optionBImage',
+  optionC: 'optionCImage',
+  optionD: 'optionDImage'
+};
+const PAGE_RENDER_SCALE = 2.5;
+const MAX_IMAGE_WIDTH = 1000;
+// Images are stored as base64 inside the question doc, and Firestore caps a doc at 1 MiB
+const MAX_IMAGE_BYTES = 250 * 1024;
+const CROP_PADDING = 0.012;
+
+// box_2d is [ymin, xmin, ymax, xmax] on a 0-1000 scale; returns page fractions or null if unusable
+const normalizeBox = (box) => {
+  if (!Array.isArray(box) || box.length !== 4) return null;
+  let nums = box.map(Number);
+  if (nums.some(n => !Number.isFinite(n))) return null;
+  if (nums.every(n => n <= 1)) nums = nums.map(n => n * 1000); // model answered in 0-1 fractions
+  const [y0, x0, y1, x1] = nums.map(n => Math.min(1000, Math.max(0, n)) / 1000);
+  const rect = { top: Math.min(y0, y1), left: Math.min(x0, x1), bottom: Math.max(y0, y1), right: Math.max(x0, x1) };
+  if (rect.bottom - rect.top < 0.01 || rect.right - rect.left < 0.01) return null;
+  return rect;
+};
+
+const makeCanvas = (w, h) => {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w));
+  c.height = Math.max(1, Math.round(h));
+  return c;
+};
+
+// Shrinks the crop to its drawn content (plus a small margin) so loose AI boxes don't leave big white borders
+const trimWhitespace = (canvas, margin = 12) => {
+  const { width, height } = canvas;
+  const data = canvas.getContext('2d').getImageData(0, 0, width, height).data;
+  let top = height, left = width, bottom = -1, right = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (data[i] < 245 || data[i + 1] < 245 || data[i + 2] < 245) {
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+    }
+  }
+  if (bottom < 0) return null; // blank region - the box missed the figure
+  top = Math.max(0, top - margin);
+  left = Math.max(0, left - margin);
+  bottom = Math.min(height - 1, bottom + margin);
+  right = Math.min(width - 1, right + margin);
+  const out = makeCanvas(right - left + 1, bottom - top + 1);
+  out.getContext('2d').drawImage(canvas, left, top, out.width, out.height, 0, 0, out.width, out.height);
+  return out;
+};
+
+const cropRegion = (pageCanvas, rect) => {
+  const W = pageCanvas.width, H = pageCanvas.height;
+  const sx = Math.floor(Math.max(0, rect.left - CROP_PADDING) * W);
+  const sy = Math.floor(Math.max(0, rect.top - CROP_PADDING) * H);
+  const ex = Math.ceil(Math.min(1, rect.right + CROP_PADDING) * W);
+  const ey = Math.ceil(Math.min(1, rect.bottom + CROP_PADDING) * H);
+  const crop = makeCanvas(ex - sx, ey - sy);
+  crop.getContext('2d').drawImage(pageCanvas, sx, sy, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  return trimWhitespace(crop);
+};
+
+const scaleCanvas = (canvas, factor) => {
+  const out = makeCanvas(canvas.width * factor, canvas.height * factor);
+  const ctx = out.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(canvas, 0, 0, out.width, out.height);
+  return out;
+};
+
+// Several figures for the same slot (e.g. two diagrams in one question) are stacked into one image
+const stackCanvases = (canvases, gap = 16) => {
+  if (canvases.length === 1) return canvases[0];
+  const width = Math.max(...canvases.map(c => c.width));
+  const height = canvases.reduce((sum, c) => sum + c.height, 0) + gap * (canvases.length - 1);
+  const out = makeCanvas(width, height);
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  let y = 0;
+  for (const c of canvases) {
+    ctx.drawImage(c, Math.round((width - c.width) / 2), y);
+    y += c.height + gap;
+  }
+  return out;
+};
+
+const dataUrlBytes = (url) => Math.ceil((url.length - url.indexOf(',') - 1) * 0.75);
+
+// PNG keeps line diagrams crisp; fall back to JPEG and then smaller sizes to stay under the size cap
+const canvasToDataUrl = (canvas) => {
+  let c = canvas.width > MAX_IMAGE_WIDTH ? scaleCanvas(canvas, MAX_IMAGE_WIDTH / canvas.width) : canvas;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const png = c.toDataURL('image/png');
+    if (dataUrlBytes(png) <= MAX_IMAGE_BYTES) return png;
+    const jpg = c.toDataURL('image/jpeg', 0.85);
+    if (dataUrlBytes(jpg) <= MAX_IMAGE_BYTES) return jpg;
+    c = scaleCanvas(c, 0.75);
+  }
+  return c.toDataURL('image/jpeg', 0.7);
+};
+
+// Crops every figure the AI located and stores it on the question; `images` itself is dropped
+const attachDiagramImages = async (fileObj, questions) => {
+  const strip = questions.map(({ images, ...rest }) => rest);
+  if (!questions.some(q => Array.isArray(q.images) && q.images.length > 0)) return strip;
+
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await fileObj.arrayBuffer()) }).promise;
+  // Only the last rendered page is kept - questions come in page order and full pages are large
+  let cached = { num: 0, canvas: null };
+  const renderPage = async (num) => {
+    if (cached.num === num) return cached.canvas;
+    const page = await pdf.getPage(num);
+    const viewport = page.getViewport({ scale: PAGE_RENDER_SCALE });
+    const canvas = makeCanvas(viewport.width, viewport.height);
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    cached = { num, canvas };
+    return canvas;
+  };
+
+  try {
+    const result = [];
+    for (let qi = 0; qi < questions.length; qi++) {
+      const q = strip[qi];
+      const crops = {};
+      for (const img of Array.isArray(questions[qi].images) ? questions[qi].images : []) {
+        const field = IMAGE_TARGETS[img?.target] || IMAGE_TARGETS.question;
+        const pageNum = parseInt(img?.page, 10);
+        const rect = normalizeBox(img?.box_2d);
+        if (!rect || !(pageNum >= 1 && pageNum <= pdf.numPages)) continue;
+        try {
+          const crop = cropRegion(await renderPage(pageNum), rect);
+          if (crop) (crops[field] ||= []).push(crop);
+        } catch (err) {
+          console.warn(`Could not crop a figure for question ${qi + 1}:`, err);
+        }
+      }
+      for (const [field, list] of Object.entries(crops)) q[field] = canvasToDataUrl(stackCanvases(list));
+      result.push(q);
+    }
+    return result;
+  } finally {
+    pdf.destroy();
+  }
+};
+
 export default function AIGenerator({ pairMode = false }) {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState('idle'); // idle | uploading | analyzing | review | success | error
@@ -288,6 +445,36 @@ export default function AIGenerator({ pairMode = false }) {
     });
     
     return processed;
+  };
+
+  const escapeHTML = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Inline styles so code keeps its look wherever the saved HTML is shown (question bank, tests)
+  const MONO_FONT = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace";
+  const CODE_BLOCK_STYLE = `background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin:8px 0;overflow-x:auto;white-space:pre;font-family:${MONO_FONT};font-size:0.85em;font-weight:500;line-height:1.5;text-align:left`;
+  const INLINE_CODE_STYLE = `background:#f1f5f9;border-radius:4px;padding:1px 5px;font-family:${MONO_FONT};font-size:0.9em`;
+
+  // Turns AI-extracted text into HTML: ```fenced``` code keeps its lines and indentation,
+  // `inline code` gets a monospace chip, $...$ goes through KaTeX, and everything else is
+  // escaped so text like <class 'dict'> shows up instead of being swallowed as an HTML tag.
+  const formatExtractedText = (text) => {
+    if (!text) return text;
+    const parts = String(text).split(/(```[\s\S]*?```)/g);
+    return parts.map((part, i) => {
+      if (i % 2 === 1) {
+        const code = part.replace(/^```[\w+#.-]*[ \t]*\n?/, '').replace(/\n?```$/, '');
+        return `<pre style="${CODE_BLOCK_STYLE}"><code>${escapeHTML(code)}</code></pre>`;
+      }
+      // The <pre> already breaks the line, so drop the newlines that touch it
+      let prose = part;
+      if (i > 0) prose = prose.replace(/^\s*\n/, '');
+      if (i < parts.length - 1) prose = prose.replace(/\n\s*$/, '');
+      return prose.split(/(`[^`\n]+`)/g).map((seg, j) => {
+        if (j % 2 === 1) return `<code style="${INLINE_CODE_STYLE}">${escapeHTML(seg.slice(1, -1))}</code>`;
+        return seg.split(/(\$[^$]+\$)/g)
+          .map((s, k) => (k % 2 === 1 ? renderLatexToHTML(s) : renderLatexToHTML(escapeHTML(s)).replace(/\n/g, '<br/>')))
+          .join('');
+      }).join('');
+    }).join('');
   };
 
   const parseQuestionsFromText = (text) => {
@@ -557,12 +744,21 @@ Each object must have exactly these fields:
   "difficultyLevel": "Easy" | "Medium" | "Hard",
   "explanation": "Explanation or calculation (use LaTeX inside $...$ for all math/equations)",
   "matchColumn1": ["Item P", "Item Q", "Item R", "Item S"], (Only for Match questions, array of exactly 4 strings, LaTeX inside $...$ for any math/equations, e.g. "$4\\\\sigma/R$")
-  "matchColumn2": ["Item 1", "Item 2", "Item 3", "Item 4"] (Only for Match questions, array of exactly 4 strings, LaTeX inside $...$ for any math/equations, e.g. "$\\\\sigma (1/R_1 + 1/R_2)$")
+  "matchColumn2": ["Item 1", "Item 2", "Item 3", "Item 4"], (Only for Match questions, array of exactly 4 strings, LaTeX inside $...$ for any math/equations, e.g. "$\\\\sigma (1/R_1 + 1/R_2)$")
+  "images": [{ "target": "question" | "optionA" | "optionB" | "optionC" | "optionD" | "explanation", "page": 1, "box_2d": [ymin, xmin, ymax, xmax] }] (Figures belonging to this question - use [] when there are none)
 }
 IMPORTANT:
 - For equations, fractions, subscripts, or math symbols, use standard LaTeX formatting enclosed in $...$ (e.g., $m^2K$, $\\\\frac{1}{U}$). YOU MUST double-escape all backslashes so the output is valid JSON (e.g. use \\\\frac instead of \\frac).
 - This applies to matchColumn1 and matchColumn2 too - every expression containing a LaTeX command (\\\\sigma, \\\\Delta, \\\\frac, subscripts like R_1, etc.) MUST be wrapped in $...$. Never output a bare backslash command outside $...$ anywhere in the JSON.
 - For Fill in the Blanks (NAT) questions, read the answer key / answer line carefully. Put a single value in fillBlankAnswer, or if a range of accepted answers is given, set fillBlankMode to \"Numeric Range\" and fill fillBlankRangeStart and fillBlankRangeEnd. Never put units in these fields.
+- CODE: If a question or explanation contains a code snippet (Python, C, Java, SQL, shell, etc.), put it inside a fenced block: three backticks + language name, a newline, the code, a newline, three backticks (e.g. "Determine val:\\n\`\`\`python\\ndef f(x):\\n    return x\\n\`\`\`"). Keep every line break (as \\n) and every leading space of indentation exactly as printed. Never flatten code onto one line and never use $...$ inside code.
+- Short inline code such as identifiers, keywords or literals (e.g. __annotations__, 'return', None) goes in single backticks.
+- Copy option text exactly as printed, including angle brackets and quotes (e.g. <class 'dict'>). Options are plain text: use single backticks for code-like options, never HTML. Do not include the ✓ tick mark in the option text; use it only to set the correct answer.
+- DIAGRAMS: For every figure drawn as a graphic - diagram, graph, plot, circuit, tree, flowchart, geometric figure, chemical structure, photo, or a table - add one entry to "images" of the question it belongs to:
+  - "page": the 1-based index of the page within this PDF file (the file's first page is 1; ignore printed page numbers).
+  - "box_2d": [ymin, xmin, ymax, xmax] normalized to 0-1000 of that page's height and width, drawn tightly around the whole figure including its labels and caption, but NOT the question text, options, code, or the question's header bar/border.
+  - "target": "question" for a figure in the question body; "optionA"-"optionD" when that option is itself a figure (then its option text should be empty); "explanation" for a figure in the solution/explanation.
+  - Never make images for code snippets, equations or plain text - transcribe those as text. Do not describe the figure in the text, but keep references like "the figure below".
 - For Match type questions, extract the columns accurately.
 - For Match type questions, optionA, optionB, optionC and optionD MUST be filled with the answer choices exactly as printed in the PDF (for example "P-2, Q-1, R-4, S-3"). Never leave them empty, and set correctAnswer to the letter of the correct choice.
 - The response MUST be a pure JSON array parseable by JSON.parse().`;
@@ -589,17 +785,18 @@ IMPORTANT:
             const responseText = interaction.output_text;
             if (!responseText) throw new Error('Empty response from model');
 
-            const cleanJson = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            // Only strip a fence wrapped around the whole reply - fences inside the strings are code blocks
+            const cleanJson = responseText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
             parsedQuestions = JSON.parse(cleanJson);
             parsedQuestions = parsedQuestions.map(q => ({
               ...q,
               isImported: true,
-              questionText: renderLatexToHTML(q.questionText),
-              optionA: renderLatexToHTML(q.optionA),
-              optionB: renderLatexToHTML(q.optionB),
-              optionC: renderLatexToHTML(q.optionC),
-              optionD: renderLatexToHTML(q.optionD),
-              explanation: renderLatexToHTML(q.explanation)
+              questionText: formatExtractedText(q.questionText),
+              optionA: formatExtractedText(q.optionA),
+              optionB: formatExtractedText(q.optionB),
+              optionC: formatExtractedText(q.optionC),
+              optionD: formatExtractedText(q.optionD),
+              explanation: formatExtractedText(q.explanation)
             }));
 
             console.log(`Successfully extracted via Gemini API using ${modelName}.`);
@@ -621,6 +818,14 @@ IMPORTANT:
           setStatus('error');
           return;
         }
+
+        try {
+          parsedQuestions = await attachDiagramImages(file, parsedQuestions);
+        } catch (imgErr) {
+          // Text extraction still worked - keep the questions and let images be added by hand
+          console.error('Diagram cropping failed:', imgErr);
+          parsedQuestions = parsedQuestions.map(({ images, ...rest }) => rest);
+        }
       } else {
         console.log("No VITE_GEMINI_API_KEY found. Using pdf.js fallback...");
         const text = await extractTextFromPDF(file);
@@ -637,8 +842,8 @@ IMPORTANT:
       // Match items may contain $...$ LaTeX; render them like the question text so they show as symbols
       parsedQuestions = parsedQuestions.map(q => (q.questionType === 'Match' ? {
         ...q,
-        matchColumn1: (q.matchColumn1 || []).map(item => renderLatexToHTML(wrapBareLatex(item))),
-        matchColumn2: (q.matchColumn2 || []).map(item => renderLatexToHTML(wrapBareLatex(item)))
+        matchColumn1: (q.matchColumn1 || []).map(item => formatExtractedText(wrapBareLatex(item))),
+        matchColumn2: (q.matchColumn2 || []).map(item => formatExtractedText(wrapBareLatex(item)))
       } : q));
       setExtractedQuestions(parsedQuestions);
       setStatus('review');
@@ -728,6 +933,24 @@ IMPORTANT:
     setShowImportModal(false);
     setImportSettings({ department: '', year: '', subject: '', topic: '', mark: '', difficultyLevel: 'Auto' });
   };
+
+  const removeExtractedImage = (index, field) => {
+    setExtractedQuestions(prev => prev.map((q, i) => (i === index ? { ...q, [field]: '' } : q)));
+  };
+
+  const renderExtractedImage = (q, idx, field, alt, className) => q[field] && (
+    <div className="relative inline-block group/img">
+      <img src={q[field]} alt={alt} className={`rounded-lg border border-slate-200 bg-white ${className}`} />
+      <button
+        type="button"
+        onClick={() => removeExtractedImage(idx, field)}
+        className="absolute -top-2 -right-2 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full shadow opacity-0 group-hover/img:opacity-100 transition-opacity"
+        title="Remove image"
+      >
+        <X size={12} />
+      </button>
+    </div>
+  );
 
   const removeQuestion = (index) => {
     const newQuestions = [...extractedQuestions];
@@ -1053,7 +1276,11 @@ IMPORTANT:
                   </div>
                   
                   <h4 className="text-lg font-bold text-slate-900 mb-4" dangerouslySetInnerHTML={{ __html: q.questionText }}></h4>
-                  
+
+                  {q.questionImageUrl && (
+                    <div className="mb-6">{renderExtractedImage(q, idx, 'questionImageUrl', 'Question diagram', 'max-h-80 max-w-full')}</div>
+                  )}
+
                   {q.questionType === 'Match' && q.matchColumn1 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
                       <div className="space-y-2 border border-slate-200 rounded-xl p-4 bg-slate-50">
@@ -1078,7 +1305,10 @@ IMPORTANT:
                           <span className={`w-6 h-6 rounded flex flex-shrink-0 items-center justify-center font-bold ${((q.questionType === 'Single Choice' || q.questionType === 'Match') && q.correctAnswer === opt) || (q.questionType === 'Multiple Choice' && q.correctAnswers.includes(opt)) ? 'bg-green-200 text-green-800' : 'bg-white border border-slate-300'}`}>
                             {opt}
                           </span>
-                          <span dangerouslySetInnerHTML={{ __html: q[`option${opt}`] }}></span>
+                          <div className="min-w-0 space-y-2">
+                            <span dangerouslySetInnerHTML={{ __html: q[`option${opt}`] }}></span>
+                            {renderExtractedImage(q, idx, `option${opt}Image`, `Option ${opt} diagram`, 'max-h-40 max-w-full')}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1101,6 +1331,9 @@ IMPORTANT:
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                     <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Explanation / Calculation</h5>
                     <p className="text-sm text-slate-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: q.explanation }}></p>
+                    {q.explanationImageUrl && (
+                      <div className="mt-3">{renderExtractedImage(q, idx, 'explanationImageUrl', 'Explanation diagram', 'max-h-64 max-w-full')}</div>
+                    )}
                   </div>
                 </div>
               ))}
