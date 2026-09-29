@@ -1,7 +1,26 @@
 import React, { useRef, useState, useEffect } from 'react';
 import * as fabric from 'fabric';
-import { PenTool, Eraser, Trash2, Highlighter, Plus, MousePointer2, Palette, X, Shapes, Square, Circle, Triangle, Minus, ArrowRight, Hexagon, Diamond, Pentagon, Octagon, Star, ChevronLeft, ChevronRight, Type } from 'lucide-react';
+import { PenTool, Eraser, Trash2, Highlighter, Plus, MousePointer2, Palette, X, Shapes, Square, Circle, Triangle, Minus, ArrowRight, Hexagon, Diamond, Pentagon, Octagon, Star, ChevronLeft, ChevronRight, Type, Hand, Undo, Redo } from 'lucide-react';
 import logoImg from '../../assets/msgate_logo.png';
+
+// Fix Fabric.js clipping bugs when panning the board
+fabric.Object.prototype.skipOffscreen = false;
+
+function PenIcon({ size = 24, ...props }) {
+  return (
+    <svg width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" {...props}>
+      <path fill="currentColor" d="m227.32 73.37l-44.69-44.68a16 16 0 0 0-22.63 0L36.69 152A15.86 15.86 0 0 0 32 163.31V208a16 16 0 0 0 16 16h44.69a15.86 15.86 0 0 0 11.31-4.69l83.67-83.66l3.48 13.9l-36.8 36.79a8 8 0 0 0 11.31 11.32l40-40a8 8 0 0 0 2.11-7.6l-6.9-27.61L227.32 96a16 16 0 0 0 0-22.63M48 179.31L76.69 208H48Zm48 25.38L51.31 160L136 75.31L180.69 120Zm96-96L147.32 64l24-24L216 84.69Z"/>
+    </svg>
+  );
+}
+
+function HighlighterIcon({ size = 24, ...props }) {
+  return (
+    <svg width={size} height={size} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" {...props}>
+      <path fill="currentColor" d="M253.66 106.34a8 8 0 0 0-11.32 0L192 156.69L107.31 72l50.35-50.34a8 8 0 1 0-11.32-11.32L96 60.69a16 16 0 0 0-2.82 18.81L72 100.69a16 16 0 0 0 0 22.62l4.69 4.69l-58.35 58.34a8 8 0 0 0 3.13 13.25l72 24A7.9 7.9 0 0 0 96 224a8 8 0 0 0 5.66-2.34L136 187.31l4.69 4.69a16 16 0 0 0 22.62 0l21.19-21.18a16 16 0 0 0 18.81-2.82l50.35-50.34a8 8 0 0 0 0-11.32M93.84 206.85l-55-18.35L88 139.31L124.69 176ZM152 180.69L83.31 112L104 91.31L172.69 160Z"/>
+    </svg>
+  );
+}
 
 export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId = 'whiteboard-canvas' }) {
   const canvasRef = useRef(null);
@@ -21,102 +40,122 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
   
   const [activeShape, setActiveShape] = useState('rectangle');
   const [showShapeOptions, setShowShapeOptions] = useState(false);
-  const snapshotRef = useRef(null);
   
-  // Pagination State
-  const [pagesData, setPagesData] = useState([null]);
+  const [pagesData, setPagesData] = useState([{ id: Date.now(), data: null }]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
   const saveCurrentPage = () => {
     if (fabricRef.current) {
-      const json = fabricRef.current.toJSON();
+      const data = fabricRef.current.toJSON();
       setPagesData(prev => {
         const newPages = [...prev];
-        newPages[currentPageIndex] = json;
+        newPages[currentPageIndex].data = data;
         return newPages;
       });
     }
   };
 
-  const goToPage = (index) => {
-    if (index < 0 || index >= pagesData.length) return;
-    if (index === currentPageIndex) return;
-    saveCurrentPage();
-    setCurrentPageIndex(index);
-    const targetData = pagesData[index];
-    if (fabricRef.current) {
-      fabricRef.current.clear();
-      if (targetData) {
-        // Prevent WebRTC glitch by keeping dimensions constant and forcing transparent background
-        const safeData = { 
-          ...targetData, 
-          background: 'transparent',
-          width: fabricRef.current.width,
-          height: fabricRef.current.height
-        };
-        fabricRef.current.loadFromJSON(safeData, () => {
-          fabricRef.current.backgroundColor = 'transparent';
-          fabricRef.current.renderAll();
-        });
-      } else {
-        fabricRef.current.backgroundColor = 'transparent';
-        fabricRef.current.renderAll();
-      }
-    }
-  };
-
-  const addNewPage = () => {
-    saveCurrentPage();
-    setPagesData(prev => [...prev, null]);
-    setCurrentPageIndex(pagesData.length);
-    if (fabricRef.current) {
+  const loadPage = async (index, currentPages = pagesData) => {
+    if (!fabricRef.current) return;
+    isHistoryProcessingRef.current = true;
+    const pageData = currentPages[index].data;
+    if (pageData) {
+      await fabricRef.current.loadFromJSON(pageData);
+      fabricRef.current.renderAll();
+    } else {
       fabricRef.current.clear();
       fabricRef.current.backgroundColor = 'transparent';
       fabricRef.current.renderAll();
     }
+    // Restore settings
+    fabricRef.current.isDrawingMode = (activeTool === 'pen' || activeTool === 'highlighter' || activeTool === 'eraser');
+    
+    // Reset History for new page
+    historyRef.current = [fabricRef.current.toJSON()];
+    historyStepRef.current = 0;
+    setCanUndo(false);
+    setCanRedo(false);
+    isHistoryProcessingRef.current = false;
   };
 
-  const removeCurrentPage = () => {
-    if (pagesData.length <= 1) {
-      if (fabricRef.current) {
-        fabricRef.current.clear();
-        fabricRef.current.backgroundColor = 'transparent';
-        fabricRef.current.renderAll();
-      }
-      setPagesData([null]);
-      return;
+  const handleNextPage = async () => {
+    saveCurrentPage();
+    let newPages = [...pagesData];
+    if (currentPageIndex === newPages.length - 1) {
+      newPages.push({ id: Date.now(), data: null });
+      setPagesData(newPages);
     }
-    
-    setPagesData(prev => {
-      const newPages = [...prev];
-      newPages.splice(currentPageIndex, 1);
-      
-      const newIndex = currentPageIndex >= newPages.length ? newPages.length - 1 : currentPageIndex;
-      setCurrentPageIndex(newIndex);
-      
-      const targetData = newPages[newIndex];
-      if (fabricRef.current) {
-        fabricRef.current.clear();
-        if (targetData) {
-          // Prevent WebRTC glitch by keeping dimensions constant
-          const safeData = { 
-            ...targetData, 
-            background: 'transparent',
-            width: fabricRef.current.width,
-            height: fabricRef.current.height
-          };
-          fabricRef.current.loadFromJSON(safeData, () => {
-            fabricRef.current.backgroundColor = 'transparent';
-            fabricRef.current.renderAll();
-          });
-        } else {
-          fabricRef.current.backgroundColor = 'transparent';
-          fabricRef.current.renderAll();
-        }
-      }
-      return newPages;
-    });
+    setCurrentPageIndex(prev => prev + 1);
+    await loadPage(currentPageIndex + 1, newPages);
   };
+
+  const handlePrevPage = async () => {
+    if (currentPageIndex > 0) {
+      saveCurrentPage();
+      setCurrentPageIndex(prev => prev - 1);
+      await loadPage(currentPageIndex - 1, pagesData);
+    }
+  };
+
+  const snapshotRef = useRef(null);
+  
+  // History / Undo / Redo
+  const historyRef = useRef([]);
+  const historyStepRef = useRef(-1);
+  const isHistoryProcessingRef = useRef(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const historyTimeoutRef = useRef(null);
+
+  const saveHistory = () => {
+    if (isHistoryProcessingRef.current) return;
+    if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
+    historyTimeoutRef.current = setTimeout(() => {
+      if (!fabricRef.current || isHistoryProcessingRef.current) return;
+      const json = fabricRef.current.toJSON();
+      
+      const currentHistory = historyRef.current;
+      const currentStep = historyStepRef.current;
+      
+      const newHistory = currentHistory.slice(0, currentStep + 1);
+      newHistory.push(json);
+      
+      // Keep last 50 steps
+      if (newHistory.length > 50) newHistory.shift();
+      
+      historyRef.current = newHistory;
+      historyStepRef.current = newHistory.length - 1;
+      
+      setCanUndo(historyStepRef.current > 0);
+      setCanRedo(false);
+    }, 150);
+  };
+
+  const handleUndo = async () => {
+    if (historyStepRef.current > 0) {
+      isHistoryProcessingRef.current = true;
+      historyStepRef.current -= 1;
+      await fabricRef.current.loadFromJSON(historyRef.current[historyStepRef.current]);
+      fabricRef.current.renderAll();
+      setCanUndo(historyStepRef.current > 0);
+      setCanRedo(true);
+      isHistoryProcessingRef.current = false;
+    }
+  };
+
+  const handleRedo = async () => {
+    if (historyStepRef.current < historyRef.current.length - 1) {
+      isHistoryProcessingRef.current = true;
+      historyStepRef.current += 1;
+      await fabricRef.current.loadFromJSON(historyRef.current[historyStepRef.current]);
+      fabricRef.current.renderAll();
+      setCanUndo(true);
+      setCanRedo(historyStepRef.current < historyRef.current.length - 1);
+      isHistoryProcessingRef.current = false;
+    }
+  };
+
 
   const startPosRef = useRef({ x: 0, y: 0 });
   const lastPosRef = useRef({ x: 0, y: 0 });
@@ -228,8 +267,8 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
              
              if (watermarkImg.complete && watermarkImg.naturalWidth > 0) {
                  mixCtx.globalAlpha = 0.05; 
-                 const w = 300;
-                 const h = (300 / watermarkImg.naturalWidth) * watermarkImg.naturalHeight;
+                 const w = 150;
+                 const h = (150 / watermarkImg.naturalWidth) * watermarkImg.naturalHeight;
                  mixCtx.drawImage(watermarkImg, (mixCanvas.width - w) / 2, (mixCanvas.height - h) / 2, w, h);
                  mixCtx.globalAlpha = 1.0;
              }
@@ -335,9 +374,17 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
 
     if (activeTool === 'select') {
       fCanvas.selection = true;
+      fCanvas.defaultCursor = 'default';
       fCanvas.forEachObject(obj => {
         obj.selectable = true;
         obj.evented = true;
+      });
+    } else if (activeTool === 'pan') {
+      fCanvas.selection = false;
+      fCanvas.defaultCursor = 'grab';
+      fCanvas.forEachObject(obj => {
+        obj.selectable = false;
+        obj.evented = false;
       });
     } else if (activeTool === 'text') {
       fCanvas.selection = false;
@@ -421,6 +468,33 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     };
   }, [activeTool]);
 
+  // Handle History Tracking
+  useEffect(() => {
+    const fCanvas = fabricRef.current;
+    if (!fCanvas) return;
+    
+    if (historyRef.current.length === 0) {
+      historyRef.current = [fCanvas.toJSON()];
+      historyStepRef.current = 0;
+    }
+    
+    const onHistoryEvent = () => {
+      saveHistory();
+    };
+
+    fCanvas.on('path:created', onHistoryEvent);
+    fCanvas.on('object:modified', onHistoryEvent);
+    fCanvas.on('object:removed', onHistoryEvent);
+    fCanvas.on('text:changed', onHistoryEvent);
+    
+    return () => {
+      fCanvas.off('path:created', onHistoryEvent);
+      fCanvas.off('object:modified', onHistoryEvent);
+      fCanvas.off('object:removed', onHistoryEvent);
+      fCanvas.off('text:changed', onHistoryEvent);
+    };
+  }, []);
+
   // Handle Shapes Drawing Logic
   useEffect(() => {
     const fCanvas = fabricRef.current;
@@ -488,6 +562,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       isDrawingShape = false;
       if (shape) {
         shape.setCoords(); // Update hit boxes
+        saveHistory();
       }
       shape = null;
     };
@@ -502,6 +577,72 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       fCanvas.off('mouse:up', onMouseUp);
     };
   }, [activeTool, activeShape, activeColor, penSize]);
+
+  // Handle Pan Logic
+  useEffect(() => {
+    const fCanvas = fabricRef.current;
+    if (!fCanvas) return;
+
+    let isPanning = false;
+    let lastPosX = 0;
+    let lastPosY = 0;
+
+    const onMouseDown = (opt) => {
+      if (activeTool === 'pan' || (opt.e.altKey === true)) {
+        isPanning = true;
+        fCanvas.selection = false;
+        fCanvas.defaultCursor = 'grabbing';
+        lastPosX = opt.e.clientX;
+        lastPosY = opt.e.clientY;
+      }
+    };
+
+    const onMouseMove = (opt) => {
+      if (isPanning) {
+        const e = opt.e;
+        const vpt = fCanvas.viewportTransform;
+        vpt[4] += e.clientX - lastPosX;
+        vpt[5] += e.clientY - lastPosY;
+        fCanvas.requestRenderAll();
+        lastPosX = e.clientX;
+        lastPosY = e.clientY;
+      }
+    };
+
+    const onMouseUp = () => {
+      if (isPanning) {
+        fCanvas.setViewportTransform(fCanvas.viewportTransform);
+        isPanning = false;
+        if (activeTool === 'pan') {
+          fCanvas.defaultCursor = 'grab';
+        } else {
+          fCanvas.defaultCursor = 'default';
+          fCanvas.selection = true;
+        }
+      }
+    };
+    
+    const onWheel = (opt) => {
+      const vpt = fCanvas.viewportTransform;
+      vpt[4] -= opt.e.deltaX;
+      vpt[5] -= opt.e.deltaY;
+      fCanvas.requestRenderAll();
+      opt.e.preventDefault();
+      opt.e.stopPropagation();
+    };
+
+    fCanvas.on('mouse:down', onMouseDown);
+    fCanvas.on('mouse:move', onMouseMove);
+    fCanvas.on('mouse:up', onMouseUp);
+    fCanvas.on('mouse:wheel', onWheel);
+
+    return () => {
+      fCanvas.off('mouse:down', onMouseDown);
+      fCanvas.off('mouse:move', onMouseMove);
+      fCanvas.off('mouse:up', onMouseUp);
+      fCanvas.off('mouse:wheel', onWheel);
+    };
+  }, [activeTool]);
 
   // Handle Text Tool Logic
   useEffect(() => {
@@ -592,6 +733,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       fabricRef.current.clear();
       fabricRef.current.backgroundColor = 'transparent';
       fabricRef.current.renderAll();
+      saveHistory();
     }
   };
 
@@ -667,7 +809,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     setShowBoardColors(false);
     setShowShapeOptions(false);
     
-    if (activeTool === 'select' || activeTool === 'text' || isMenuOpen) return; // Disable manual drawing in select/text modes or when menu is open
+    if (activeTool === 'select' || activeTool === 'text' || activeTool === 'pan' || isMenuOpen) return; // Disable manual drawing in select/text/pan modes or when menu is open
 
     const { x, y } = getCoordinates(e);
     const canvas = canvasRef.current;
@@ -704,7 +846,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
   };
 
   const draw = (e) => {
-    if (!isDrawing || activeTool === 'select') return;
+    if (!isDrawing || activeTool === 'select' || activeTool === 'pan') return;
     e.preventDefault();
     const { x, y } = getCoordinates(e);
     const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true });
@@ -848,22 +990,70 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     }
   };
 
+  // Handle Keyboard Delete
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't delete if user is typing in an input or textarea
+      if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      
+      const fCanvas = fabricRef.current;
+      if (!fCanvas) return;
+
+      // Don't delete if a Fabric IText is currently in editing mode
+      const activeObject = fCanvas.getActiveObject();
+      if (activeObject && activeObject.isEditing) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+        e.preventDefault();
+        return;
+      }
+      
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        handleRedo();
+        e.preventDefault();
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const activeObjects = fCanvas.getActiveObjects();
+        if (activeObjects && activeObjects.length > 0) {
+          e.preventDefault();
+          activeObjects.forEach(obj => {
+            fCanvas.remove(obj);
+          });
+          fCanvas.discardActiveObject();
+          fCanvas.renderAll();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <div className={`relative w-full h-full flex flex-col whiteboard-container`} style={{ backgroundColor: isOverlay ? 'transparent' : boardColor }}>
       {/* Watermark for teacher view */}
       {!isOverlay && (
         <div className="absolute inset-0 z-0 flex items-center justify-center pointer-events-none opacity-[0.05]">
-          <img src={logoImg} alt="Academy Logo" className="w-[300px] object-contain" />
+          <img src={logoImg} alt="Academy Logo" className="object-contain" style={{ width: '150px', height: 'auto', opacity: 0.1 }} />
         </div>
       )}
 
       {/* Small academy logo pinned to the top of every whiteboard page */}
       <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-        <img src={logoImg} alt="Academy Logo" className="h-8 sm:h-9 object-contain opacity-90 drop-shadow" />
+        <img src={logoImg} alt="Academy Logo" className="opacity-90 drop-shadow object-contain" style={{ width: '120px', height: 'auto', maxHeight: '40px' }} />
       </div>
 
       {/* Dynamic Canvas Container */}
       <div className="w-full h-full touch-none pointer-events-auto z-10" ref={containerRef}></div>
+      
+      
       
       {/* Static Left Sidebar Menu */}
       <div className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-50 flex items-start gap-2 sm:gap-4 pointer-events-none max-h-[92vh]">
@@ -872,20 +1062,28 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         <div className="bg-slate-800 rounded-2xl p-2 shadow-2xl border border-slate-700 flex flex-col items-center gap-2 pointer-events-auto max-h-[92vh] overflow-y-auto sm:overflow-visible">
           {[
             { id: 'select', icon: <MousePointer2 size={18} />, label: 'Select' },
+            { id: 'pan', icon: <Hand size={18} />, label: 'Pan Board' },
             { id: 'text', icon: <Type size={18} />, label: 'Text' },
             { id: 'shapes', icon: <Shapes size={18} />, label: 'Shapes' },
-            { id: 'pen', icon: <PenTool size={18} />, label: 'Pen' },
-            { id: 'highlighter', icon: <Highlighter size={18} />, label: 'Highlight' },
+            { id: 'pen', icon: <PenIcon size={18} />, label: 'Pen' },
             { id: 'eraser', icon: <Eraser size={18} />, label: 'Eraser' },
+            { id: 'highlighter', icon: <HighlighterIcon size={18} />, label: 'Highlight' },
             { id: 'colors', icon: <Palette size={18} />, label: 'Colors' },
+            { id: 'undo', icon: <Undo size={18} />, label: 'Undo', disabled: !canUndo },
+            { id: 'redo', icon: <Redo size={18} />, label: 'Redo', disabled: !canRedo },
             { id: 'clear', icon: <Trash2 size={18} />, label: 'Clear' },
           ].map((item) => {
             const isActive = activeTool === item.id || (item.id === 'colors' && showBoardColors);
             return (
               <div key={item.id} className="relative group">
                 <button
+                  disabled={item.disabled}
                   onClick={() => {
-                    if (item.id === 'clear') {
+                    if (item.id === 'undo') {
+                      handleUndo();
+                    } else if (item.id === 'redo') {
+                      handleRedo();
+                    } else if (item.id === 'clear') {
                       clearBoard();
                     } else if (item.id === 'colors') {
                       setShowBoardColors(!showBoardColors);
@@ -931,7 +1129,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                       }
                     }
                   }}
-                  className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${isActive ? 'bg-indigo-100 text-indigo-600 shadow-md' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                  className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${isActive ? 'bg-indigo-100 text-indigo-600 shadow-md' : 'text-slate-300 hover:bg-slate-700 hover:text-white'} ${item.disabled ? 'opacity-30 cursor-not-allowed hover:bg-transparent hover:text-slate-300' : ''}`}
                   title={item.label}
                 >
                   {item.icon}
@@ -971,47 +1169,19 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
           })}
           
           {/* Pagination Controls */}
-          <div className="w-8 h-px bg-slate-700 my-1 shrink-0"></div>
-          <div className="flex flex-col items-center gap-1.5 shrink-0 pb-1">
-            <button
-              onClick={() => goToPage(currentPageIndex - 1)}
-              disabled={currentPageIndex === 0}
-              className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 ${currentPageIndex === 0 ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
-              title="Previous Page"
-            >
+          <div className="w-full h-px bg-slate-700 my-1" />
+          <div className="flex flex-col items-center gap-2">
+            <button onClick={handlePrevPage} disabled={currentPageIndex === 0} className="w-10 h-8 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg disabled:opacity-50 disabled:hover:text-slate-300 disabled:hover:bg-transparent transition-colors" title="Previous Page">
               <ChevronLeft size={18} />
             </button>
-            
-            <span className="text-[10px] text-slate-400 font-bold select-none tracking-widest">
-              {currentPageIndex + 1}/{pagesData.length}
-            </span>
-
-            <button
-              onClick={() => goToPage(currentPageIndex + 1)}
-              disabled={currentPageIndex === pagesData.length - 1}
-              className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 ${currentPageIndex === pagesData.length - 1 ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:bg-slate-700 hover:text-white'}`}
-              title="Next Page"
-            >
-              <ChevronRight size={18} />
-            </button>
-
-            <button
-              onClick={addNewPage}
-              className="flex items-center justify-center w-9 h-9 rounded-xl text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 transition-all duration-200 mt-1"
-              title="New Blank Page"
-            >
-              <Plus size={18} />
-            </button>
-
-            <button
-              onClick={removeCurrentPage}
-              disabled={pagesData.length <= 1}
-              className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 mt-1 ${pagesData.length <= 1 ? 'text-slate-600 cursor-not-allowed hidden' : 'text-red-400 bg-red-500/10 hover:bg-red-500/20'}`}
-              title="Delete Page"
-            >
-              <Trash2 size={16} />
+            <div className="text-slate-200 font-medium text-xs whitespace-nowrap text-center">
+              {currentPageIndex + 1} / {pagesData.length}
+            </div>
+            <button onClick={handleNextPage} className="w-10 h-8 flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors" title={currentPageIndex === pagesData.length - 1 ? "New Page" : "Next Page"}>
+              {currentPageIndex === pagesData.length - 1 ? <Plus size={18} /> : <ChevronRight size={18} />}
             </button>
           </div>
+
         </div>
 
         {/* Popout Panels Container */}

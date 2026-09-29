@@ -141,6 +141,17 @@ export const useLiveRecording = ({
                const wbRect = el.getBoundingClientRect();
                const x = wbRect.x - rect.x;
                const y = wbRect.y - rect.y;
+               
+               // Fix: Capture Whiteboard background color since canvas itself is transparent
+               const wbContainer = el.closest('.whiteboard-container');
+               if (wbContainer && (!el.classList.contains('upper-canvas'))) {
+                   const bgColor = window.getComputedStyle(wbContainer).backgroundColor;
+                   if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+                       ctx.fillStyle = bgColor;
+                       ctx.fillRect(x, y, wbRect.width, wbRect.height);
+                   }
+               }
+
                ctx.drawImage(el, x, y, wbRect.width, wbRect.height);
            } else if (el.tagName.toLowerCase() === 'video') {
                if (el.readyState < 2 || el.paused) return;
@@ -238,7 +249,6 @@ export const useLiveRecording = ({
       const combinedStream = new MediaStream(tracks);
       
       const types = [
-        'video/mp4',
         'video/webm;codecs=h264,opus',
         'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp8,opus',
@@ -279,7 +289,7 @@ export const useLiveRecording = ({
         const type = mediaRecorder.mimeType || 'video/webm';
         const blob = new Blob(recordedChunksRef.current, { type });
         
-        let ext = 'mp4'; // Forced to mp4 as requested by user (Fake MP4 wrapper for WebM on Chrome)
+        let ext = 'webm';
         
         const defaultName = `LiveClass_Recording_${new Date().toISOString().replace(/:/g, '-')}`;
         setPendingRecording({ blob, ext, defaultName, duration: recordingTime });

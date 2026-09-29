@@ -95,48 +95,48 @@ export default function App() {
   }, []);
 
   // Idle Timeout Logic
-  useEffect(() => {
-    // Only apply timeout if user is logged in
-    if (!userRole) return;
-
-    let idleTimeout;
-    const IDLE_TIME_MS = 30 * 60 * 1000; // 30 minutes (configurable)
-
-    const logoutUser = () => {
-      // Clear session data
-      sessionStorage.removeItem('auth_role');
-      sessionStorage.removeItem('auth_email');
-      sessionStorage.removeItem('auth_name');
-      sessionStorage.removeItem('auth_roles');
-      localStorage.removeItem('student_department');
-      localStorage.removeItem('pair_id');
-      localStorage.removeItem('pair_role');
-      
-      // Update local state
-      setUserRole(null);
-      setUserName(null);
-      
-      // Redirect to session expired page
-      navigate('/session-expired');
-    };
-
-    const resetTimer = () => {
-      if (idleTimeout) clearTimeout(idleTimeout);
-      idleTimeout = setTimeout(logoutUser, IDLE_TIME_MS);
-    };
-
-    // Set initial timer
-    resetTimer();
-
-    // Listen to user activity across the app
-    const events = ['mousemove', 'keydown', 'mousedown', 'scroll', 'touchstart'];
-    events.forEach(event => window.addEventListener(event, resetTimer));
-
-    return () => {
-      if (idleTimeout) clearTimeout(idleTimeout);
-      events.forEach(event => window.removeEventListener(event, resetTimer));
-    };
-  }, [userRole, navigate]);
+  // useEffect(() => {
+  //   // Only apply timeout if user is logged in
+  //   if (!userRole) return;
+  // 
+  //   let idleTimeout;
+  //   const IDLE_TIME_MS = 30 * 60 * 1000; // 30 minutes (configurable)
+  // 
+  //   const logoutUser = () => {
+  //     // Clear session data
+  //     sessionStorage.removeItem('auth_role');
+  //     sessionStorage.removeItem('auth_email');
+  //     sessionStorage.removeItem('auth_name');
+  //     sessionStorage.removeItem('auth_roles');
+  //     localStorage.removeItem('student_department');
+  //     localStorage.removeItem('pair_id');
+  //     localStorage.removeItem('pair_role');
+  //     
+  //     // Update local state
+  //     setUserRole(null);
+  //     setUserName(null);
+  //     
+  //     // Redirect to session expired page
+  //     navigate('/session-expired');
+  //   };
+  // 
+  //   const resetTimer = () => {
+  //     if (idleTimeout) clearTimeout(idleTimeout);
+  //     idleTimeout = setTimeout(logoutUser, IDLE_TIME_MS);
+  //   };
+  // 
+  //   // Set initial timer
+  //   resetTimer();
+  // 
+  //   // Listen to user activity across the app
+  //   const events = ['mousemove', 'keydown', 'mousedown', 'scroll', 'touchstart'];
+  //   events.forEach(event => window.addEventListener(event, resetTimer));
+  // 
+  //   return () => {
+  //     if (idleTimeout) clearTimeout(idleTimeout);
+  //     events.forEach(event => window.removeEventListener(event, resetTimer));
+  //   };
+  // }, [userRole, navigate]);
 
   useEffect(() => {
     const handleScroll = () => {
