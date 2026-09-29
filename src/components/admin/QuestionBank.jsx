@@ -1192,13 +1192,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                           </td>
                           <td className="py-4 px-4 h-[82px] max-w-0">
                           <div className="flex items-center gap-4">
-                            <div className="w-[42px] h-[42px] rounded-[12px] bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
-                              <FileText size={20} className="text-[#2563EB]" />
-                            </div>
                             <div className="flex flex-col gap-1 w-full max-w-full overflow-hidden">
                               <span className="text-[15px] font-[600] text-[#0F172A] truncate block flex items-center gap-1.5" title={stripHtmlAndNormalize(q.questionText)}>
                                 {q.isImported && <Sparkles size={14} className="text-purple-500 shrink-0" />}
-                                {(userRole === 'admin' || userRole === 'typist') && q.isPremium && (
+                                {(userRole === 'admin' || userRole === 'typist') && q.isPremium && !isPremiumView && (
                                   <span className="shrink-0 flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-600 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                                     <span className="text-amber-500">★</span> Premium
                                   </span>
@@ -1222,18 +1219,19 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                             <span className="inline-flex items-center justify-center min-w-[72px] px-4 py-1.5 rounded-full bg-[#7C3AED] text-white text-[12px] font-[800] tracking-wide shadow-sm" title={q.questionType}>
                               {questionTypeShort(q.questionType)}
                             </span>
-                            <span
-                              className={`shrink-0 px-2 py-0.5 rounded-full border text-[10px] font-[800] ${getQuestionCategory(q) === 'Numerical' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}
-                              title={q.questionCategory ? 'Set on this question' : 'Auto-detected'}
-                            >
-                              {getQuestionCategory(q) === 'Numerical' ? 'NUM' : 'THY'}
-                            </span>
+                            {getQuestionCategory(q) === 'Numerical' && (
+                              <span
+                                className="shrink-0 px-2 py-0.5 rounded-full border text-[10px] font-[800] bg-sky-50 text-sky-700 border-sky-200"
+                                title={q.questionCategory ? 'Set on this question' : 'Auto-detected'}
+                              >
+                                NUM
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-4 px-4 h-[82px]" onClick={(e) => e.stopPropagation()}>
                           {(() => {
                             const n = markNumberOf(q.mark) || 1;
-                            const neg = negativeMarkFor(q);
                             return (
                               <div className="flex flex-col items-start gap-1">
                                 {canQuickEdit ? (
@@ -1253,9 +1251,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                                 ) : (
                                   <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[11.5px] font-[800]">{n}M</span>
                                 )}
-                                <span className={`text-[10.5px] font-[800] ${neg ? 'text-red-500' : 'text-slate-400'}`}>
-                                  {neg ? `Neg: -${neg}` : 'No negative'}
-                                </span>
                               </div>
                             );
                           })()}
