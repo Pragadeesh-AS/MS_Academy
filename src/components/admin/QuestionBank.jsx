@@ -6,6 +6,7 @@ import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore';
 import { questionFingerprint, isEmptyQuestion } from '../../utils/questionDuplicates';
 import { QUESTION_CATEGORIES, getQuestionCategory, inferQuestionCategory } from '../../utils/questionCategory';
+import { markNumberOf, markLabelFor, negativeMarkFor } from '../../utils/marking';
 
 // Engineering Mathematics and Aptitude banks are shared by every department.
 const isCommonDeptName = (name) => {
@@ -407,8 +408,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     const n = markNumber(value);
     return n === null ? '' : (marks.find(m => markNumber(m) === n) || '');
   };
+  // Same label the list's quick 1M/2M toggle saves, so the row and the editor always agree
   const setMarkNumber = (n) => {
-    setFormData(prev => ({ ...prev, mark: marks.find(m => markNumber(m) === n) || `${n} Mark (-${n === 2 ? '0.66' : '0.33'})` }));
+    setFormData(prev => ({ ...prev, mark: markLabelFor(n, marks) }));
   };
   const difficulties = attributes.filter(a => a.type === 'difficulty').map(a => a.name);
   const questionTypes = ['Single Choice', 'Multiple Choice', 'Fill in Blanks', 'Match'];
@@ -578,6 +580,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     const authName = sessionStorage.getItem('auth_name') || 'Unknown';
     const nowIso = new Date().toISOString();
     let payload = { ...formData, mark: markOptionFor(formData.mark) || formData.mark, status: finalStatus, updatedAt: nowIso };
+    payload.negativeMark = negativeMarkFor(payload);
     // Creation date is stamped once; edits must never overwrite it
     if (formData.createdAt) payload.createdAt = formData.createdAt;
     else if (!isEditing) payload.createdAt = nowIso;
@@ -638,6 +641,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     const authName = sessionStorage.getItem('auth_name') || 'Unknown';
     const nowIso = new Date().toISOString();
     let payload = { ...formData, mark: markOptionFor(formData.mark) || formData.mark, status: finalStatus, updatedAt: nowIso };
+    payload.negativeMark = negativeMarkFor(payload);
     // Creation date is stamped once; edits must never overwrite it
     if (formData.createdAt) payload.createdAt = formData.createdAt;
     else if (!isEditing) payload.createdAt = nowIso;
@@ -727,6 +731,47 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }
   };
 
+  // --- Quick actions from the list (admin, and the reviewer of a typist pair) ---
+  const canQuickEdit = userRole === 'admin' || (userRole === 'typist' && pairRole === 'reviewer');
+
+  // Marks straight from the row: saves the mark label and the matching negative mark
+  const handleQuickMark = async (q, n) => {
+    if (markNumberOf(q.mark) === n || String(q.id).startsWith('temp-')) return;
+    const update = { mark: markLabelFor(n, marks), updatedAt: new Date().toISOString() };
+    update.negativeMark = negativeMarkFor({ ...q, ...update });
+    setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, ...update } : x));
+    try {
+      await updateDoc(doc(db, 'question_bank', q.id), update);
+      showToast(`Set to ${n} mark${n > 1 ? 's' : ''}${update.negativeMark ? ` (-${update.negativeMark} for a wrong answer)` : ' (no negative marking)'}`, "success");
+    } catch (e) {
+      console.error("Failed to update marks", e);
+      showToast("Failed to update marks. Changes reverted.", "error");
+      fetchQuestions();
+    }
+  };
+
+  const needsApproval = (q) => q.status !== 'Approved' || q.reviewed === false;
+  const approvalFields = () => ({
+    status: 'Approved',
+    reviewed: true,
+    reviewedBy: sessionStorage.getItem('auth_name') || 'Admin',
+    updatedAt: new Date().toISOString()
+  });
+
+  const handleQuickApprove = async (q) => {
+    if (String(q.id).startsWith('temp-')) return;
+    const update = approvalFields();
+    setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, ...update } : x));
+    try {
+      await updateDoc(doc(db, 'question_bank', q.id), update);
+      showToast("Question approved", "success");
+    } catch (e) {
+      console.error("Failed to approve question", e);
+      showToast("Failed to approve. Changes reverted.", "error");
+      fetchQuestions();
+    }
+  };
+
   const confirmBulkAction = async () => {
     // Only act on questions that are still visible under the current filters
     const visibleIds = new Set(filteredQuestions.map(q => q.id));
@@ -744,6 +789,22 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         await runBulk(ids, (batch, ref) => batch.update(ref, { isPremium: makePremium, updatedAt }));
         setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, isPremium: makePremium, updatedAt } : q));
         showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} moved to the ${makePremium ? 'Premium Question Bank' : 'Question Bank'}`, "success");
+      } else if (bulkAction === 'approve') {
+        const update = approvalFields();
+        await runBulk(ids, (batch, ref) => batch.update(ref, update));
+        setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, ...update } : q));
+        showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} approved`, "success");
+      } else if (bulkAction === 'mark1' || bulkAction === 'mark2') {
+        const n = bulkAction === 'mark2' ? 2 : 1;
+        const mark = markLabelFor(n, marks);
+        const updatedAt = new Date().toISOString();
+        // Negative mark depends on each question's type (MCQ/Match only), so it's set per question
+        const byId = new Map(questions.map(q => [q.id, q]));
+        await runBulk(ids, (batch, ref) => batch.update(ref, {
+          mark, updatedAt, negativeMark: negativeMarkFor({ ...byId.get(ref.id), mark })
+        }));
+        setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, mark, updatedAt, negativeMark: negativeMarkFor({ ...q, mark }) } : q));
+        showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} set to ${n} mark${n > 1 ? 's' : ''}`, "success");
       }
       setSelectedIds([]);
     } catch (e) {
@@ -1030,6 +1091,21 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
             <div className="mb-3 flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
               <span className="text-[13px] font-[800] text-blue-800">{selectedIds.length} selected</span>
               <div className="flex flex-wrap items-center gap-2 ml-auto">
+                {canQuickEdit && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setBulkAction('approve')}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-[800] bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm"
+                    >
+                      <CheckCircle2 size={15} /> Approve
+                    </button>
+                    <div className="flex items-center bg-white border border-blue-200 rounded-xl p-0.5">
+                      <button type="button" onClick={() => setBulkAction('mark1')} className="px-3 py-1.5 rounded-lg text-[12.5px] font-[800] text-blue-700 hover:bg-blue-50">Set 1 Mark</button>
+                      <button type="button" onClick={() => setBulkAction('mark2')} className="px-3 py-1.5 rounded-lg text-[12.5px] font-[800] text-blue-700 hover:bg-blue-50">Set 2 Marks</button>
+                    </div>
+                  </>
+                )}
                 {canMovePremium && (
                   <button
                     type="button"
@@ -1074,22 +1150,23 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       />
                     </th>
                     <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[8%]">ID</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[41%]">Question</th>
+                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[31%]">Question</th>
                     <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[15%]">Type</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[15%]">Status</th>
-                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[17%] text-right">Actions</th>
+                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[14%]">Marks</th>
+                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[13%]">Status</th>
+                    <th className="py-5 px-4 text-[12px] font-bold text-[#0B1220] uppercase tracking-wider w-[15%] text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]">
                   {loading ? (
                     <tr>
-                      <td colSpan="6" className="py-12 text-center">
+                      <td colSpan="7" className="py-12 text-center">
                         <Loader />
                       </td>
                     </tr>
                   ) : filteredQuestions.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
+                      <td colSpan="7" className="py-12 text-center text-[#64748B] font-[500] text-[15px]">
                         No questions found matching your criteria.
                       </td>
                     </tr>
@@ -1153,6 +1230,36 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                             </span>
                           </div>
                         </td>
+                        <td className="py-4 px-4 h-[82px]" onClick={(e) => e.stopPropagation()}>
+                          {(() => {
+                            const n = markNumberOf(q.mark) || 1;
+                            const neg = negativeMarkFor(q);
+                            return (
+                              <div className="flex flex-col items-start gap-1">
+                                {canQuickEdit ? (
+                                  <div className="inline-flex bg-slate-100 p-0.5 rounded-full" role="group" aria-label="Marks">
+                                    {[1, 2].map(v => (
+                                      <button
+                                        key={v}
+                                        type="button"
+                                        onClick={() => handleQuickMark(q, v)}
+                                        title={`${v} mark${v > 1 ? 's' : ''}`}
+                                        className={`px-2.5 py-1 rounded-full text-[11.5px] font-[800] transition-colors ${n === v ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                      >
+                                        {v}M
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[11.5px] font-[800]">{n}M</span>
+                                )}
+                                <span className={`text-[10.5px] font-[800] ${neg ? 'text-red-500' : 'text-slate-400'}`}>
+                                  {neg ? `Neg: -${neg}` : 'No negative'}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                        </td>
                         <td className="py-4 px-4 h-[82px]">
                           {q.status === 'Approved' && q.reviewed === false ? (
                             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full border text-[11px] font-[800] bg-amber-50 text-amber-600 border-amber-100" title="Imported directly into the Question Bank, skipping reviewer approval">
@@ -1169,9 +1276,19 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                           )}
                         </td>
                         <td className="py-4 px-4 h-[82px] text-right">
-                          <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                            <button 
+                          <div className="flex items-center justify-end gap-2">
+                            {canQuickEdit && needsApproval(q) && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleQuickApprove(q); }}
+                                title="Approve this question"
+                                className="h-[36px] px-3 flex items-center gap-1.5 rounded-[10px] bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-[800] shadow-sm transition-colors"
+                              >
+                                <CheckCircle2 size={15} /> Approve
+                              </button>
+                            )}
+                            <button
                               onClick={(e) => { e.stopPropagation(); handleEdit(q); }}
+                              title="Edit question"
                               className="w-[36px] h-[36px] flex items-center justify-center rounded-[10px] bg-white text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 shadow-[0_2px_8px_rgba(15,23,42,0.05)] transition-colors border border-[#EEF2F7]">
                               <Edit2 size={16} />
                             </button>
@@ -1180,7 +1297,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       </tr>
                       {expandedId === q.id && (
                         <tr className="bg-[#F8FAFF] border-b border-[#EEF2F7]">
-                          <td colSpan="6" className="px-4 py-6">
+                          <td colSpan="7" className="px-4 py-6">
                             <div className="bg-white p-6 rounded-2xl border border-blue-100 shadow-sm relative cursor-default" onClick={(e) => e.stopPropagation()}>
                               <h4 className="text-[16px] font-bold text-slate-800 mb-4 flex items-start gap-2">
                                 {q.isImported && <Sparkles size={16} className="text-purple-600 mt-1 flex-shrink-0" title="AI Imported" />}
@@ -1419,7 +1536,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                     <button type="button" onClick={() => setMarkNumber(1)} className={`whitespace-nowrap px-4 sm:px-5 py-2 text-[13px] font-[800] rounded-full transition-colors ${markNumber(formData.mark) === 1 ? 'border-[1.5px] border-blue-600 text-blue-600 bg-white shadow-sm' : 'text-slate-500'}`}>1 Mark (-0.33)</button>
                     <button type="button" onClick={() => setMarkNumber(2)} className={`whitespace-nowrap px-4 sm:px-5 py-2 text-[13px] font-[800] rounded-full transition-colors ${markNumber(formData.mark) === 2 ? 'border-[1.5px] border-blue-600 text-blue-600 bg-white shadow-sm' : 'text-slate-500'}`}>2 Mark (-0.66)</button>
                     <span className="bg-red-50 border-[1.5px] border-red-200 text-red-600 text-[13px] font-[900] px-3 sm:px-4 py-2 rounded-full flex items-center gap-1.5 sm:gap-2 ml-1 sm:ml-2 shadow-sm whitespace-nowrap">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></div> Neg: {markNumber(formData.mark) === 2 ? '-0.66' : '-0.33'}
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></div> {negativeMarkFor(formData) ? `Neg: -${negativeMarkFor(formData)}` : 'No negative (MSQ/NAT)'}
                     </span>
                   </div>
                 </div>
@@ -2010,14 +2127,20 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               <h3 className="text-[18px] font-[900] text-slate-800 mb-2">
                 {bulkAction === 'delete'
                   ? `Delete ${selectedIds.length} Question${selectedIds.length === 1 ? '' : 's'}`
-                  : isPremiumView ? 'Move back to Question Bank' : 'Move to Premium Question Bank'}
+                  : bulkAction === 'approve' ? `Approve ${selectedIds.length} Question${selectedIds.length === 1 ? '' : 's'}`
+                    : bulkAction === 'mark1' || bulkAction === 'mark2' ? `Set ${bulkAction === 'mark2' ? '2 Marks' : '1 Mark'}`
+                      : isPremiumView ? 'Move back to Question Bank' : 'Move to Premium Question Bank'}
               </h3>
               <p className="text-[14px] font-[500] text-slate-500 leading-relaxed">
                 {bulkAction === 'delete'
                   ? `Are you sure you want to delete ${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'}? This action cannot be undone.`
-                  : isPremiumView
-                    ? `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be removed from the Premium Question Bank and moved to the regular Question Bank.`
-                    : `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be moved to the Premium Question Bank.`}
+                  : bulkAction === 'approve'
+                    ? `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be marked Approved and Reviewed by you.`
+                    : bulkAction === 'mark1' || bulkAction === 'mark2'
+                      ? `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be worth ${bulkAction === 'mark2' ? '2 marks' : '1 mark'}. MCQ and Match questions get ${bulkAction === 'mark2' ? '-0.66' : '-0.33'} for a wrong answer; MSQ and NAT have no negative marking.`
+                      : isPremiumView
+                        ? `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be removed from the Premium Question Bank and moved to the regular Question Bank.`
+                        : `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be moved to the Premium Question Bank.`}
               </p>
             </div>
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
@@ -2031,9 +2154,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               <button
                 onClick={confirmBulkAction}
                 disabled={isBulkWorking}
-                className={`px-5 py-2 text-[13px] font-[800] text-white rounded-lg transition-colors shadow-sm disabled:opacity-60 ${bulkAction === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-500 hover:bg-amber-600'}`}
+                className={`px-5 py-2 text-[13px] font-[800] text-white rounded-lg transition-colors shadow-sm disabled:opacity-60 ${bulkAction === 'delete' ? 'bg-red-600 hover:bg-red-700' : bulkAction === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : bulkAction === 'mark1' || bulkAction === 'mark2' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-amber-500 hover:bg-amber-600'}`}
               >
-                {isBulkWorking ? 'Working...' : bulkAction === 'delete' ? 'Delete' : 'Move'}
+                {isBulkWorking ? 'Working...' : bulkAction === 'delete' ? 'Delete' : bulkAction === 'approve' ? 'Approve' : bulkAction === 'mark1' || bulkAction === 'mark2' ? 'Apply' : 'Move'}
               </button>
             </div>
           </div>

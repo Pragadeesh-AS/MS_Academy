@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { db, storage } from '../../firebase';
-import { collection, query, getDocs, deleteDoc, doc, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, deleteDoc, updateDoc, doc, onSnapshot, orderBy } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { Video, Trash2, Search, Clock, Users, BookOpen, Folder, FolderOpen, ChevronRight } from 'lucide-react';
 import Loader from '../Loader';
 import RecordingPlayerModal from '../shared/RecordingPlayerModal';
+import { groupBySubject, subjectOptionsFor, NO_SUBJECT } from '../../utils/subjects';
 
 function VideoDuration({ url, storedDuration }) {
   const [duration, setDuration] = useState('Loading...');
@@ -134,6 +135,23 @@ export default function RecordingsManager() {
   };
 
 
+  // Subjects per department, for moving older recordings (saved before classes had a subject)
+  const [attributes, setAttributes] = useState([]);
+  useEffect(() => {
+    getDocs(collection(db, 'question_attributes'))
+      .then(snap => setAttributes(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(err => console.error('Failed to load subjects:', err));
+  }, []);
+
+  const handleSetSubject = async (recording, subject) => {
+    try {
+      await updateDoc(doc(db, 'recordings', recording.id), { subject });
+    } catch (err) {
+      console.error('Failed to move recording to subject:', err);
+      alert('Failed to move the recording. Please try again.');
+    }
+  };
+
   const handleDelete = (recording) => {
     setConfirmDialog({
       message: "Are you sure you want to completely delete this recording? This will permanently remove the video file from storage.",
@@ -230,8 +248,28 @@ export default function RecordingsManager() {
                   <ChevronRight size={20} className={`text-slate-400 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
                 </button>
                 {expanded && (
-                  <div className="p-5 pt-1 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {folder.items.map(rec => (
+                  <div className="p-4 pt-3 border-t border-slate-100 space-y-3">
+                    {groupBySubject(folder.items).map(subjectFolder => {
+                      const key = `${folder.name}::${subjectFolder.name}`;
+                      const subjectOpen = isSearching || !!openFolders[key];
+                      return (
+                        <div key={key} className="border border-slate-200 rounded-xl overflow-hidden">
+                          <button
+                            onClick={() => toggleFolder(key)}
+                            className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              {subjectOpen ? <FolderOpen size={20} className="text-blue-500 shrink-0" /> : <Folder size={20} className="text-blue-500 shrink-0" />}
+                              <span className={`font-bold truncate ${subjectFolder.name === NO_SUBJECT ? 'text-slate-500 italic' : 'text-slate-800'}`}>{subjectFolder.name}</span>
+                              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600 shrink-0">
+                                {subjectFolder.items.length} {subjectFolder.items.length === 1 ? 'recording' : 'recordings'}
+                              </span>
+                            </div>
+                            <ChevronRight size={18} className={`text-slate-400 shrink-0 transition-transform ${subjectOpen ? 'rotate-90' : ''}`} />
+                          </button>
+                          {subjectOpen && (
+                  <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {subjectFolder.items.map(rec => (
             <div key={rec.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow group flex flex-col h-full relative">
               <div className="h-40 bg-slate-900 relative flex items-center justify-center group-hover:bg-slate-800 transition-colors">
                 <Video size={48} className="text-slate-700 group-hover:text-blue-500 transition-colors" />
@@ -275,14 +313,23 @@ export default function RecordingsManager() {
                   </div>
                 </div>
 
-                <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-blue-50 text-blue-700">
-                    {rec.department || 'General'}
-                  </span>
-                  
-                  <button 
+                <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <select
+                    value={rec.subject || ''}
+                    onChange={(e) => handleSetSubject(rec, e.target.value)}
+                    className="min-w-0 flex-1 text-xs font-bold px-2 py-1.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 outline-none cursor-pointer"
+                    title="Move this recording to a subject folder"
+                  >
+                    <option value="">{NO_SUBJECT}</option>
+                    {rec.subject && !subjectOptionsFor(attributes, rec.department).some(o => o.name === rec.subject) && (
+                      <option value={rec.subject}>{rec.subject}</option>
+                    )}
+                    {subjectOptionsFor(attributes, rec.department).map(o => <option key={o.name} value={o.name}>{o.label}</option>)}
+                  </select>
+
+                  <button
                     onClick={(e) => { e.stopPropagation(); handleDelete(rec); }}
-                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
                       title="Delete Recording"
                     >
                       <Trash2 size={18} />
@@ -291,6 +338,11 @@ export default function RecordingsManager() {
               </div>
             </div>
           ))}
+                  </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -38,6 +38,7 @@ import AgoraRTC, {
 } from "agora-rtc-react";
 import Whiteboard from './Whiteboard';
 import { useLiveRecording } from './hooks/useLiveRecording';
+import { subjectOptionsFor, groupBySubject } from '../../utils/subjects';
 // Extracted component to handle whiteboard sharing as an independent client
 const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) => {
   const [wbClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
@@ -332,6 +333,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [qbSeconds, setQbSeconds] = useState(60);
   const [newRecordingName, setNewRecordingName] = useState('');
   const [sessionBundleId, setSessionBundleId] = useState('free');
+  // Subject / title the teacher picked when starting the class - the recording is filed under the subject
+  const [sessionInfo, setSessionInfo] = useState({ subject: '', topic: '', openToAllDepartments: false });
 
 
   
@@ -376,6 +379,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.bundleId) setSessionBundleId(data.bundleId);
+        setSessionInfo({ subject: data.subject || '', topic: data.topic || '', openToAllDepartments: !!data.openToAllDepartments });
         setLiveTest(data.liveTest || null);
         if (data.activeQuestionState) {
           setActiveQuestionState(data.activeQuestionState);
@@ -503,8 +507,14 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           fileName,
           url,
           teacherName,
+          teacherEmail: sessionStorage.getItem('auth_email') || '',
           duration,
           department: department || 'General',
+          // Recordings are grouped Department -> Subject folders
+          subject: sessionInfo.subject || '',
+          topic: sessionInfo.topic || '',
+          sessionId: sessionId || '',
+          openToAllDepartments: sessionInfo.openToAllDepartments,
           bundleId: sessionBundleId || 'free',
           createdAt: serverTimestamp()
         });
@@ -1334,9 +1344,50 @@ export default function LiveClasses({ department }) {
     }
   };
 
-  const [newClass, setNewClass] = useState({ topic: '', date: '', time: '', selectedStudents: [], bundleId: '', isCommonClass: false });
+  const [newClass, setNewClass] = useState({ subject: '', topic: '', date: '', time: '', selectedStudents: [], bundleId: '', isCommonClass: false });
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [startClassData, setStartClassData] = useState({ topic: '', bundleId: '', isCommonClass: false, scheduledId: null });
+  const [startClassData, setStartClassData] = useState({ subject: '', topic: '', bundleId: '', isCommonClass: false, scheduledId: null });
+
+  // Subjects the teacher can pick for a class: their department's subjects + the shared
+  // Engineering Mathematics / Aptitude subjects (from the admin Attributes tab)
+  const [subjectAttributes, setSubjectAttributes] = useState([]);
+  useEffect(() => {
+    getDocs(collection(db, 'question_attributes'))
+      .then(snap => setSubjectAttributes(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(err => console.error('Failed to load subjects:', err));
+  }, []);
+  const subjectOptions = useMemo(() => subjectOptionsFor(subjectAttributes, department), [subjectAttributes, department]);
+
+  const subjectSelect = (value, onChange) => (
+    <div>
+      <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Subject</label>
+      <select
+        required
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-slate-700 font-medium"
+      >
+        <option value="">Select the subject of this class...</option>
+        {/* A subject saved on a scheduled class that no longer exists in Attributes stays selectable */}
+        {value && !subjectOptions.some(o => o.name === value) && <option value={value}>{value}</option>}
+        {subjectOptions.filter(o => !o.common).length > 0 && (
+          <optgroup label="Your department">
+            {subjectOptions.filter(o => !o.common).map(o => <option key={o.name} value={o.name}>{o.label}</option>)}
+          </optgroup>
+        )}
+        {subjectOptions.filter(o => o.common).length > 0 && (
+          <optgroup label="Common subjects">
+            {subjectOptions.filter(o => o.common).map(o => <option key={o.name} value={o.name}>{o.label}</option>)}
+          </optgroup>
+        )}
+      </select>
+      <p className="text-xs text-slate-400 mt-1">
+        {subjectOptions.length === 0
+          ? 'No subjects are set up for your department yet - ask the admin to add them in the Attributes tab.'
+          : "The class recording is saved in this subject's folder."}
+      </p>
+    </div>
+  );
   const [availableBundles, setAvailableBundles] = useState([]);
 
   const [activeSessions, setActiveSessions] = useState([]);
@@ -1521,6 +1572,8 @@ export default function LiveClasses({ department }) {
   };
 
   const [recentRecordings, setRecentRecordings] = useState([]);
+  const [showAllRecordings, setShowAllRecordings] = useState(false);
+  const [openSubjectFolders, setOpenSubjectFolders] = useState({});
 
   useEffect(() => {
     let q;
@@ -1596,6 +1649,7 @@ export default function LiveClasses({ department }) {
         teacherName,
         teacherEmail,
         department: department || 'General',
+        subject: startClassData.subject || '',
         topic: startClassData.topic || "Instant Live Session",
         status: 'live',
         bundleId: startClassData.bundleId || 'free',
@@ -1672,7 +1726,7 @@ export default function LiveClasses({ department }) {
 
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
-    if (!newClass.topic || !newClass.date || !newClass.time) return;
+    if (!newClass.subject || !newClass.topic || !newClass.date || !newClass.time) return;
 
     const combinedDateTime = `${newClass.date}T${newClass.time}`;
 
@@ -1694,6 +1748,10 @@ export default function LiveClasses({ department }) {
             <h2>Hello ${student.name},</h2>
             <p>A new live class has been scheduled for you!</p>
             <table style="margin: 20px 0; border-collapse: collapse; width: 100%; max-width: 500px;">
+              <tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; width: 120px;">Subject</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${newClass.subject}</td>
+              </tr>
               <tr>
                 <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; width: 120px;">Topic</td>
                 <td style="padding: 10px; border: 1px solid #ddd;">${newClass.topic}</td>
@@ -1724,6 +1782,7 @@ export default function LiveClasses({ department }) {
 
     try {
       await addDoc(collection(db, 'scheduled_classes'), {
+        subject: newClass.subject,
         topic: newClass.topic,
         time: combinedDateTime,
         students: newClass.selectedStudents.length || departmentStudents.length,
@@ -1740,7 +1799,7 @@ export default function LiveClasses({ department }) {
     }
 
     setIsScheduleModalOpen(false);
-    setNewClass({ topic: "", date: "", time: "", selectedStudents: [], bundleId: '', isCommonClass: false });
+    setNewClass({ subject: '', topic: "", date: "", time: "", selectedStudents: [], bundleId: '', isCommonClass: false });
   };
 
   const confirmCancelScheduledClass = async () => {
@@ -2062,7 +2121,7 @@ export default function LiveClasses({ department }) {
             <Calendar size={18} /> Schedule Class
           </button>
           <button
-            onClick={() => { setStartClassData({ topic: '', bundleId: '', isCommonClass: false, scheduledId: null }); setIsStartModalOpen(true); }}
+            onClick={() => { setStartClassData({ subject: '', topic: '', bundleId: '', isCommonClass: false, scheduledId: null }); setIsStartModalOpen(true); }}
             className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] flex items-center gap-2"
           >
             <Plus size={18} strokeWidth={2.5} /> Start Instant Class
@@ -2146,7 +2205,7 @@ export default function LiveClasses({ department }) {
                   <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2 mt-2 sm:mt-0">
                     <button
                       onClick={() => {
-                        setStartClassData({ topic: cls.topic, bundleId: cls.bundleId || '', isCommonClass: !!cls.openToAllDepartments, scheduledId: cls.id });
+                        setStartClassData({ subject: cls.subject || '', topic: cls.topic, bundleId: cls.bundleId || '', isCommonClass: !!cls.openToAllDepartments, scheduledId: cls.id });
                         setIsStartModalOpen(true);
                       }}
                       className="w-full sm:w-auto px-6 py-2.5 bg-blue-50 text-blue-700 font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center gap-2"
@@ -2188,9 +2247,12 @@ export default function LiveClasses({ department }) {
                     <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
                       <PlayCircle size={18} />
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-800 line-clamp-1">{rec.fileName}</h4>
-                      <p className="text-[11px] text-slate-500 font-bold">{new Date(rec.createdAt?.toMillis() || Date.now()).toLocaleDateString()}</p>
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-bold text-slate-800 line-clamp-1">{rec.topic || rec.fileName}</h4>
+                      <p className="text-[11px] text-slate-500 font-bold truncate">
+                        {rec.subject ? <span className="text-purple-600">{rec.subject} • </span> : null}
+                        {new Date(rec.createdAt?.toMillis() || Date.now()).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
                   <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Watch Recording">
@@ -2201,7 +2263,10 @@ export default function LiveClasses({ department }) {
             )}
           </div>
 
-          <button className="w-full py-2.5 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-100">
+          <button
+            onClick={() => setShowAllRecordings(true)}
+            className="w-full py-2.5 text-sm font-bold text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-transparent hover:border-blue-100"
+          >
             View All Recordings
           </button>
 
@@ -2236,6 +2301,67 @@ export default function LiveClasses({ department }) {
         </div>
 
       </div>
+
+      {/* All Recordings - one folder per subject */}
+      {showAllRecordings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-[900] text-slate-800">All Recordings</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">{department || 'All Departments'} • grouped by subject</p>
+              </div>
+              <button onClick={() => setShowAllRecordings(false)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors shrink-0">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-3">
+              {recentRecordings.length === 0 ? (
+                <p className="text-slate-400 text-sm font-medium text-center py-6">No recordings yet.</p>
+              ) : groupBySubject(recentRecordings).map(folder => {
+                const open = !!openSubjectFolders[folder.name];
+                return (
+                  <div key={folder.name} className="border border-slate-200 rounded-2xl overflow-hidden">
+                    <button
+                      onClick={() => setOpenSubjectFolders(prev => ({ ...prev, [folder.name]: !prev[folder.name] }))}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors"
+                    >
+                      <span className="flex items-center gap-2 font-bold text-slate-800 text-sm">
+                        <ChevronRight size={16} className={`text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+                        {folder.name}
+                      </span>
+                      <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-full">
+                        {folder.items.length} video{folder.items.length !== 1 ? 's' : ''}
+                      </span>
+                    </button>
+                    {open && (
+                      <div className="p-3 space-y-2">
+                        {folder.items.map(rec => (
+                          <button
+                            key={rec.id}
+                            onClick={() => setPlayingRecording({ id: rec.id, url: rec.url, duration: rec.duration })}
+                            className="w-full text-left flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-100 hover:border-purple-200 transition-colors"
+                          >
+                            <div className="w-9 h-9 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                              <PlayCircle size={16} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-slate-800 truncate">{rec.topic || rec.fileName}</p>
+                              <p className="text-[11px] text-slate-500 font-bold truncate">
+                                {rec.teacherName} • {new Date(rec.createdAt?.toMillis?.() || Date.now()).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Post-Class Quiz Results Modal */}
       {viewingQuizSession && (
@@ -2297,6 +2423,8 @@ export default function LiveClasses({ department }) {
 
             <div className="p-6">
               <form id="start-form" onSubmit={handleConfirmStartMeet} className="space-y-5">
+                {subjectSelect(startClassData.subject, (subject) => setStartClassData(prev => ({ ...prev, subject })))}
+
                 <div>
                   <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Class Topic / Title</label>
                   <input
@@ -2356,6 +2484,8 @@ export default function LiveClasses({ department }) {
 
             <div className="p-6 overflow-y-auto">
               <form id="schedule-form" onSubmit={handleScheduleSubmit} className="space-y-6">
+                {subjectSelect(newClass.subject, (subject) => setNewClass(prev => ({ ...prev, subject })))}
+
                 <div>
                   <label className="block text-[13px] font-bold text-slate-700 mb-1.5">Class Topic</label>
                   <input

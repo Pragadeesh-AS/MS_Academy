@@ -252,6 +252,150 @@ const cleanBareLatex = (text) => text
   .replace(/\\(?:text|textbf|mathrm)\s*\{([^{}]*)\}/g, '$1')
   .replace(/\\([a-zA-Z]+)(?![a-zA-Z])/g, (m, name) => LATEX_SYMBOLS[name] ?? m);
 
+// ---------- Missing $ delimiters ----------
+// The AI sometimes drops one "$" of a pair ("Slope = \frac{a}{b} = \frac{c}{d}$.") or none at all,
+// leaving raw LaTeX in the text. Each line is repaired before rendering: the stray "$" is found by
+// checking which pairing leaves maths in the $...$ parts and English outside them, then the bare
+// LaTeX run is wrapped in $...$ from where the formula starts to where the sentence resumes.
+
+// Marks a "$" that is plain text (e.g. "$5 and $10"), restored after rendering
+const LITERAL_DOLLAR = '';
+// Something only LaTeX looks like: a \command or a braced super/subscript
+const LATEX_TRIGGER = /\\[a-zA-Z]{2,}|[\^_]\{/;
+const MATH_CHAR = /[0-9\s=+\-*/().,<>|!'^_[\]]/;
+
+// An ordinary word - a formula doesn't contain these outside braces (differentials like dx are fine)
+const isProseWord = (w) => w.length >= 2 && !LATEX_FUNCTIONS.has(w) && !/^d[a-zA-Z]$/.test(w);
+
+const countProseWords = (s) => {
+  let depth = 0;
+  let count = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') depth = Math.max(0, depth - 1);
+    else if (/[A-Za-z]/.test(ch)) {
+      let j = i;
+      while (j < s.length && /[A-Za-z]/.test(s[j])) j++;
+      const attached = /[\\_^]/.test(s[i - 1] || '');
+      if (depth === 0 && !attached && isProseWord(s.slice(i, j))) count++;
+      i = j - 1;
+    }
+  }
+  return count;
+};
+
+// Grows a formula outward from the LaTeX at [from, to) until ordinary words start on each side
+const expandMathRun = (text, from, to) => {
+  let start = from;
+  let depth = 0;
+  for (let i = from - 1; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === '}') { depth++; start = i; continue; }
+    if (ch === '{') { if (depth === 0) break; depth--; start = i; continue; }
+    if (depth > 0 || ch === '\\') { start = i; continue; }
+    if (/[A-Za-z]/.test(ch)) {
+      let k = i;
+      while (k > 0 && /[A-Za-z]/.test(text[k - 1])) k--;
+      const command = text[k - 1] === '\\';
+      const attached = /[_^]/.test(text[k - 1] || '') || /[_^{(]/.test(text[i + 1] || '');
+      if (!command && !attached && isProseWord(text.slice(k, i + 1))) break;
+      start = command ? k - 1 : k;
+      i = start;
+      continue;
+    }
+    if (MATH_CHAR.test(ch)) { start = i; continue; }
+    break;
+  }
+
+  let end = to;
+  depth = 0;
+  for (let i = to; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') { depth++; end = i + 1; continue; }
+    if (ch === '}') { if (depth === 0) break; depth--; end = i + 1; continue; }
+    if (depth > 0) { end = i + 1; continue; }
+    if (ch === '\\') {
+      let k = i + 1;
+      while (k < text.length && /[A-Za-z]/.test(text[k])) k++;
+      end = Math.max(k, i + 2);
+      i = end - 1;
+      continue;
+    }
+    if (/[A-Za-z]/.test(ch)) {
+      let k = i;
+      while (k < text.length && /[A-Za-z]/.test(text[k])) k++;
+      const attached = /[_^]/.test(text[i - 1] || '') || /[_^{(]/.test(text[k] || '');
+      if (!attached && isProseWord(text.slice(i, k))) break;
+      end = k;
+      i = k - 1;
+      continue;
+    }
+    if (MATH_CHAR.test(ch)) { end = i + 1; continue; }
+    break;
+  }
+
+  // Leave the sentence's own spacing, "=" lead-in and punctuation outside the formula
+  while (start < end && /[\s=,.;:]/.test(text[start])) start++;
+  while (end > start && /[\s,.;:]/.test(text[end - 1])) end--;
+  return [start, end];
+};
+
+const wrapBareLatexRuns = (text) => {
+  const trigger = new RegExp(LATEX_TRIGGER.source, 'g');
+  let out = '';
+  let pos = 0;
+  let m;
+  while ((m = trigger.exec(text))) {
+    if (m.index < pos) continue;
+    // For "^{" / "_{" start the forward scan before the brace so the group is read whole
+    const to = m[0].startsWith('\\') ? m.index + m[0].length : m.index + 1;
+    const [s, e] = expandMathRun(text, m.index, to);
+    const start = Math.max(s, pos);
+    if (e <= start) continue;
+    out += `${text.slice(pos, start)}$${text.slice(start, e)}$`;
+    pos = e;
+    trigger.lastIndex = e;
+  }
+  return out + text.slice(pos);
+};
+
+// Lower is better: English inside $...$ is very wrong, LaTeX left outside is fixable
+const scoreDollarSplit = (line) => line.split('$').reduce((score, part, k) => (
+  score + (k % 2 === 1 ? 2 * countProseWords(part) : (LATEX_TRIGGER.test(part) ? 1 : 0))
+), 0);
+
+const repairLine = (line) => {
+  const dollars = [];
+  for (let i = 0; i < line.length; i++) if (line[i] === '$' && line[i - 1] !== '\\') dollars.push(i);
+  if (dollars.length === 0) return LATEX_TRIGGER.test(line) ? wrapBareLatexRuns(line) : line;
+
+  let fixed = line;
+  if (dollars.length % 2 === 1) {
+    // Drop the one "$" that makes the rest pair up best (it can only sit at an even position)
+    let best = null;
+    for (let c = 0; c < dollars.length; c += 2) {
+      const candidate = line.slice(0, dollars[c]) + line.slice(dollars[c] + 1);
+      const score = scoreDollarSplit(candidate);
+      if (best === null || score < best.score) best = { score, candidate };
+    }
+    fixed = best.candidate;
+  }
+
+  return fixed.split('$').map((part, k) => {
+    if (k % 2 === 0) return LATEX_TRIGGER.test(part) ? wrapBareLatexRuns(part) : part;
+    // "$5 and $10": the pair holds words and no LaTeX, so these are plain dollar signs
+    if (!/[\\^_]/.test(part) && countProseWords(part) > 0) return `${LITERAL_DOLLAR}${part}${LITERAL_DOLLAR}`;
+    return `$${part}$`;
+  }).join('');
+};
+
+// $$...$$ display blocks may span lines, so they're kept whole; everything else is fixed per line
+const repairMathDelimiters = (text) => text
+  .split(/(\$\$[\s\S]+?\$\$)/)
+  .map((chunk, i) => (i % 2 === 1 ? chunk : chunk.split('\n').map(repairLine).join('\n')))
+  .join('');
+
 // ---------- Complete extraction ----------
 // Big PDFs are extracted a few pages per request so one reply never runs out of output room
 const PAGES_PER_BATCH = 4;
@@ -681,14 +825,15 @@ export default function AIGenerator({ pairMode = false }) {
       if (i < parts.length - 1) prose = prose.replace(/\n\s*$/, '');
       return prose.split(/(`[^`\n]+`)/g).map((seg, j) => {
         if (j % 2 === 1) return `<code style="${INLINE_CODE_STYLE}">${escapeHTML(seg.slice(1, -1))}</code>`;
-        return seg.split(/(\$\$[^$]+\$\$|\$[^$]+\$)/g)
+        return repairMathDelimiters(seg).split(/(\$\$[^$]+\$\$|\$[^$]+\$)/g)
           .map((s, k) => {
             if (k % 2 === 1) return s.startsWith('$$') ? renderMath(s.slice(2, -2), true) : renderMath(s.slice(1, -1));
             // A lone "$" (e.g. "$5") is just text
             return renderLatexToHTML(cleanBareLatex(escapeHTML(s)))
               .replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>') // "**Concept:**" labels
               .replace(/\*\*/g, '') // half of a bold run that was split by a formula
-              .replace(/\n/g, '<br/>');
+              .replace(/\n/g, '<br/>')
+              .replace(new RegExp(LITERAL_DOLLAR, 'g'), '$');
           })
           .join('');
       }).join('');

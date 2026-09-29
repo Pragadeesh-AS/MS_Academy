@@ -6,6 +6,7 @@ import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, Re
 import GateTestInterface from './student/GateTestInterface';
 import logoImg from '../assets/msgate_logo.png';
 import { RELEASE_MODES, releaseMode, releaseAtMillis, areSolutionsVisible, formatReleaseTime } from '../utils/solutionRelease';
+import { positiveMarkFor, negativeMarkFor } from '../utils/marking';
 
 // Older AI imports stored NAT questions as 'Fill in the Blanks'; the test screens expect 'Fill in Blanks'
 const normalizeQuestion = (q) => (
@@ -143,13 +144,10 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     handleSubmitTest(testQuestions, activeTest, selectedAnswers);
   };
 
-  // "q.mark" is stored as a label like "1 Mark (-0.33)" / "2 Mark (-0.66)" - pull both
-  // numbers back out of it instead of relying on a separate field.
-  const positiveMarks = (q) => parseFloat(q.mark) || 1;
-  const negativeMarks = (q) => {
-    const match = (q.mark || '').match(/\(([-.\d]+)\)/);
-    return match ? Math.abs(parseFloat(match[1])) || 0 : 0;
-  };
+  // Marks come from the shared GATE scheme (utils/marking), not the label text - a label can be a
+  // bare "2" from the Mark attribute, and MSQ/NAT never lose marks whatever the label says.
+  const positiveMarks = positiveMarkFor;
+  const negativeMarks = negativeMarkFor;
 
   const handleSubmitTest = async (questionsList, test, answers) => {
     setLoading(true);

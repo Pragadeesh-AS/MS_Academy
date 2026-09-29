@@ -4,6 +4,7 @@ import { Clock, User, ChevronRight, ChevronLeft, Info, HelpCircle, AlertTriangle
 import Draggable from 'react-draggable';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { positiveMarkFor, negativeMarkFor } from '../../utils/marking';
 
 export default function GateTestInterface({ test, testQuestions, onSubmit, onCancel, studentName }) {
   const [mode, setMode] = useState('login'); // login, instructions1, instructions2, taking
@@ -454,7 +455,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
                       {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => parseFloat(q.mark) || 1))].join('/')}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-red-600">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => parseFloat(q.negativeMark) || 0))].join('/')}
+                      {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => negativeMarkFor(q)))].join('/')}
                     </td>
                   </tr>
                 )}
@@ -557,7 +558,7 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
             
             <div className="flex items-center justify-between px-4 py-1.5 border-b border-gray-300 text-sm font-bold">
               <div>Question Type: {currentQ?.questionType === 'Fill in Blanks' ? 'NAT' : 'MCQ'}</div>
-              <div className="font-normal text-gray-600">Marks for correct answer: <span className="text-green-600">{currentQ?.mark || '1'}</span> | Negative Marks: <span className="text-red-500">{currentQ?.negativeMark || '0'}</span></div>
+              <div className="font-normal text-gray-600">Marks for correct answer: <span className="text-green-600">{positiveMarkFor(currentQ)}</span> | Negative Marks: <span className="text-red-500">{negativeMarkFor(currentQ)}</span></div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 flex flex-col">

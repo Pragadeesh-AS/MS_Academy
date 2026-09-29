@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate, Link } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut, Folder, Package } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut, Folder, Package, ArrowLeft } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -9,6 +9,7 @@ import { ref, listAll, getDownloadURL } from 'firebase/storage';
 import StudentLiveClasses from './StudentLiveClasses';
 import RecordingPlayerModal from './shared/RecordingPlayerModal';
 import RoleSwitcher from './shared/RoleSwitcher';
+import { groupBySubject, NO_SUBJECT } from '../utils/subjects';
 import StudentTests from './StudentTests';
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
@@ -161,6 +162,7 @@ export default function Dashboard() {
   });
 
   const [recordings, setRecordings] = useState([]);
+  const [recordingSubject, setRecordingSubject] = useState(null); // open subject folder (null = folder list)
   const [notes, setNotes] = useState([]);
   const [playingRecording, setPlayingRecording] = useState(null); // { id, url, duration? }
   const [viewingNoteUrl, setViewingNoteUrl] = useState(null);
@@ -1111,9 +1113,50 @@ export default function Dashboard() {
                     Once live classes are completed, their recordings will automatically appear here for you to review.
                   </p>
                 </div>
-              ) : (
+              ) : (() => {
+                const subjectFolders = groupBySubject(recordings);
+                const openFolder = subjectFolders.length === 1
+                  ? subjectFolders[0]
+                  : subjectFolders.find(f => f.name === recordingSubject) || null;
+
+                // Subject folders first; a folder opens into its videos
+                if (!openFolder) {
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {subjectFolders.map(folder => (
+                        <button
+                          key={folder.name}
+                          onClick={() => setRecordingSubject(folder.name)}
+                          className="text-left bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:shadow-md hover:border-purple-200 transition-all flex items-center gap-4"
+                        >
+                          <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
+                            <Folder size={24} />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className={`font-bold text-lg truncate ${folder.name === NO_SUBJECT ? 'text-slate-500' : 'text-slate-800'}`}>{folder.name}</h3>
+                            <p className="text-sm text-slate-500 font-medium">{folder.items.length} recording{folder.items.length !== 1 ? 's' : ''}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                }
+
+                return (
+                <div className="space-y-4">
+                  {subjectFolders.length > 1 && (
+                    <button
+                      onClick={() => setRecordingSubject(null)}
+                      className="inline-flex items-center gap-2 text-sm font-bold text-purple-700 hover:text-purple-900"
+                    >
+                      <ArrowLeft size={16} /> All subjects
+                    </button>
+                  )}
+                  <h3 className="text-lg font-[900] text-slate-800 flex items-center gap-2">
+                    <Folder size={20} className="text-purple-500" /> {openFolder.name}
+                  </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {recordings.map(rec => (
+                  {openFolder.items.map(rec => (
                     <div key={rec.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:shadow-md hover:border-purple-200 transition-all group">
                       <div className="aspect-video bg-slate-200 rounded-xl mb-4 relative overflow-hidden group-cursor-pointer flex items-center justify-center">
                          {!canAccessRecording(rec) ? (
@@ -1127,7 +1170,7 @@ export default function Dashboard() {
                          </span>
                          <VideoDuration url={rec.url} storedDuration={rec.duration} />
                       </div>
-                      <h3 className="font-bold text-slate-800 text-lg line-clamp-2 mb-1">{rec.fileName}</h3>
+                      <h3 className="font-bold text-slate-800 text-lg line-clamp-2 mb-1">{rec.topic || rec.fileName}</h3>
                       <p className="text-sm text-slate-500 font-medium">By {rec.teacherName}</p>
                       
                       {!canAccessRecording(rec) ? (
@@ -1142,7 +1185,9 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-              )}
+                </div>
+                );
+              })()}
             </div>
           </div>
         )}
