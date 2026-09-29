@@ -68,7 +68,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [bundles, setBundles] = useState([]);
 
   const [selectedDept, setSelectedDept] = useState(department || '');
-  const [selectedSubject, setSelectedSubject] = useState('');
+  const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [selectedTopics, setSelectedTopics] = useState([]); // Array support for multiple topics
   const [allocations, setAllocations] = useState({}); // { topicName: { q1: count, q2: count } }
   const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'manual' | 'both'
@@ -191,26 +191,26 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     ) : [])
   ];
 
-  const selectedSubjectEntry = subjectsList.find(s => s.name === selectedSubject);
-  const selectedSubjectObj = selectedSubjectEntry?.attr || attributes.find(a => a.type === 'subject' && a.name === selectedSubject);
-  const selectedCommonDept = selectedSubjectEntry?.commonDept || null;
+    // New question dept matcher that supports multiple subjects
+  const questionDeptMatches = (qDept, qSubject) => {
+    const subEntry = subjectsList.find(s => (s.name || '').trim().toLowerCase() === (qSubject || '').trim().toLowerCase());
+    if (subEntry && subEntry.commonDept) {
+      return (qDept || '').trim().toLowerCase() === (subEntry.commonDept.name || '').trim().toLowerCase() || matchesSelectedDept(qDept);
+    }
+    return matchesSelectedDept(qDept);
+  };
 
-  // Questions for a common subject are stored under that common department (e.g. Aptitude)
-  const questionDeptMatches = (value) => (
-    selectedCommonDept
-      ? (value || '').trim().toLowerCase() === (selectedCommonDept.name || '').trim().toLowerCase() || matchesSelectedDept(value)
-      : matchesSelectedDept(value)
-  );
-
-  const topicsList = attributes
-    .filter(a => a.type === 'topic' && (!selectedSubjectObj || a.parentId === selectedSubjectObj.id))
+    const topicsList = attributes
+    .filter(a => a.type === 'topic' && (selectedSubjects.length === 0 || selectedSubjects.some(subName => {
+      const subEntry = subjectsList.find(s => s.name === subName);
+      return subEntry && a.parentId === subEntry.attr.id;
+    })))
     .map(a => a.name);
 
   // Helper to count available questions per topic (robust trimming & case-insensitive matching)
   const getTopicCounts = (topicName) => {
     const pool = questions.filter(q => 
-      questionDeptMatches(q.department) &&
-      (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
+      questionDeptMatches(q.department, q.subject) && selectedSubjects.some(sub => (q.subject || '').trim().toLowerCase() === sub.toLowerCase()) &&
       (q.topic || '').trim().toLowerCase() === (topicName || '').trim().toLowerCase()
     );
     const pool1 = pool.filter(q => markValue(q) === 1);
@@ -256,8 +256,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   // Filtered pool of questions based on Step 2 Hierarchy (combines selected topics, case-insensitive)
   const availablePool = questions.filter(q => {
-    if (selectedDept && !questionDeptMatches(q.department)) return false;
-    if (selectedSubject && (q.subject || '').trim().toLowerCase() !== selectedSubject.trim().toLowerCase()) return false;
+    if (selectedDept && !questionDeptMatches(q.department, q.subject)) return false;
+      if (selectedSubjects.length > 0 && !selectedSubjects.some(sub => (q.subject || '').trim().toLowerCase() === sub.toLowerCase())) return false;
     if (selectedTopics.length > 0) {
       const qTopic = (q.topic || '').trim().toLowerCase();
       const match = selectedTopics.some(t => t.trim().toLowerCase() === qTopic);
@@ -295,7 +295,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   const getStep2Warning = () => {
     if (!selectedDept) return "Please select a target department";
-    if (!selectedSubject) return "Please select a subject";
+    if (selectedSubjects.length === 0) return 'Please select at least one subject';
     if (selectedTopics.length === 0) return "Please select at least one topic";
     return null;
   };
@@ -402,8 +402,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       const cells = selectedTopics.flatMap(topic => {
         const alloc = allocations[topic] || { q1: 0, q2: 0 };
         const topicPool = questions.filter(q =>
-          questionDeptMatches(q.department) &&
-          (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
+          questionDeptMatches(q.department, q.subject) && selectedSubjects.some(sub => (q.subject || '').trim().toLowerCase() === sub.toLowerCase()) &&
           (q.topic || '').trim().toLowerCase() === topic.trim().toLowerCase() &&
           !manualIdsSet.has(q.id) // exclude manually selected ones
         );
@@ -465,7 +464,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       theoryCount: hasCategorySplit ? theoryTarget : null,
       scheduledTime,
       department: selectedDept,
-      subject: selectedSubject || 'General',
+      subject: selectedSubjects.join(', ') || 'General',
       topic: selectedTopics.join(', ') || 'All Topics',
       questions: finalQuestionIds,
       allocations,
@@ -516,7 +515,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setTheoryCount('');
     setScheduledTime('');
     setSelectedDept(department || '');
-    setSelectedSubject('');
+    setSelectedSubjects([]);
     setSelectedTopics([]);
     setAllocations({});
     setSelectionMode('auto');
@@ -542,7 +541,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setScheduledTime(test.scheduledTime || '');
     setBundleId(test.bundleId || '');
     setSelectedDept(test.department || department || '');
-    setSelectedSubject(test.subject && test.subject !== 'General' ? test.subject : '');
+    setSelectedSubjects(test.subject && test.subject !== 'General' ? test.subject.split(',').map(s => s.trim()).filter(Boolean) : []);
     setSelectedTopics(
       test.topic && test.topic !== 'All Topics'
         ? test.topic.split(',').map(t => t.trim()).filter(Boolean)
@@ -1197,7 +1196,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                             key={code}
                             type="button"
                             disabled={isTeacher && department && department !== fullName}
-                            onClick={() => { setSelectedDept(fullName); setSelectedSubject(''); setSelectedTopics([]); }}
+                            onClick={() => { setSelectedDept(fullName); setSelectedSubjects([]); setSelectedTopics([]); }}
                             className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
                               isSelected 
                                 ? 'bg-[#F59E0B] border-transparent text-white shadow-md shadow-amber-500/20' 
@@ -1222,13 +1221,21 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                       )}
                       <div className="flex flex-wrap gap-2">
                         {subjectsList.map(sub => {
-                          const isSelected = selectedSubject === sub.name;
-                          return (
-                            <button
-                              key={sub.attr.id}
-                              type="button"
-                              onClick={() => { setSelectedSubject(sub.name); setSelectedTopics([]); }}
-                              className={`px-4 py-2.5 text-xs font-bold rounded-xl border transition-all ${
+                            const isSelected = selectedSubjects.includes(sub.name);
+                            return (
+                              <button
+                                key={sub.attr.id}
+                                type="button"
+                                onClick={() => { 
+                                  setSelectedSubjects(prev => {
+                                    if (prev.includes(sub.name)) {
+                                      return prev.filter(s => s !== sub.name);
+                                    } else {
+                                      return [...prev, sub.name];
+                                    }
+                                  });
+                                }}
+                                className={`px-4 py-2.5 text-xs font-bold rounded-xl border transition-all ${
                                 isSelected
                                   ? 'bg-[#2563EB] border-transparent text-white shadow-md shadow-blue-500/25'
                                   : sub.commonDept
@@ -1245,7 +1252,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   )}
 
                   {/* Select Topics */}
-                  {selectedSubject && (
+                  {selectedSubjects.length > 0 && (
                     <div className="space-y-2.5 border-t border-slate-100 pt-4 animate-in fade-in duration-300">
                       <label className="text-[13px] font-[900] text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
                         <Layers className="text-purple-500" size={16} /> 3. Select Topics (Showing Available Questions in DB)
@@ -1292,8 +1299,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                 
                 // --- MANUAL MODE LOGIC ---
                 const topicPool = questions.filter(q =>
-                  questionDeptMatches(q.department) &&
-                  (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
+                  questionDeptMatches(q.department, q.subject) && selectedSubjects.some(sub => (q.subject || '').trim().toLowerCase() === sub.toLowerCase()) &&
                   selectedTopics.map(t => t.toLowerCase()).includes((q.topic || '').trim().toLowerCase())
                 );
                 
@@ -1382,7 +1388,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                           {/* Card Header */}
                           <div className="flex items-start justify-between">
                             <div>
-                              <div className="text-[10px] font-[900] text-slate-400 uppercase tracking-wider">{selectedSubject}</div>
+                              <div className="text-[10px] font-[900] text-slate-400 uppercase tracking-wider">{selectedSubjects.join(", ")}</div>
                               <h4 className="text-[15px] font-[800] text-slate-850">{topic}</h4>
                             </div>
                             <div className="flex flex-col items-end gap-1">

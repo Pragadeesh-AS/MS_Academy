@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Clock, User, ChevronRight, ChevronLeft, Info, HelpCircle, AlertTriangle, Calculator } from 'lucide-react';
 import Draggable from 'react-draggable';
@@ -6,7 +6,53 @@ import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { positiveMarkFor, negativeMarkFor } from '../../utils/marking';
 
-export default function GateTestInterface({ test, testQuestions, onSubmit, onCancel, studentName }) {
+export default function GateTestInterface({ test, testQuestions: rawTestQuestions, onSubmit, onCancel, studentName }) {
+  const { orderedQuestions: testQuestions, sections } = useMemo(() => {
+    const aptitudeQs = [];
+    const mathsQs = [];
+    const coreQs = [];
+    
+    // Categorize
+    rawTestQuestions.forEach(q => {
+      const dept = (q.department || '').trim().toLowerCase();
+      if (dept.includes('aptitude') || dept === 'general aptitude') {
+        aptitudeQs.push(q);
+      } else if (dept.includes('mathematics') || dept.includes('maths') || dept === 'engineering mathematics') {
+        mathsQs.push(q);
+      } else {
+        coreQs.push(q);
+      }
+    });
+
+    const sortByMarks = (qs) => [...qs].sort((a, b) => (parseFloat(a.mark) || 1) - (parseFloat(b.mark) || 1));
+
+    const sortedAptitude = sortByMarks(aptitudeQs);
+    const sortedMaths = sortByMarks(mathsQs);
+    const sortedCore = sortByMarks(coreQs);
+
+    const coreSectionQs = [...sortedMaths, ...sortedCore];
+
+    const newSections = [];
+    let ordered = [];
+
+    if (sortedAptitude.length > 0) {
+      newSections.push({ id: 'aptitude', name: 'General Aptitude', startIndex: 0, count: sortedAptitude.length });
+      ordered = ordered.concat(sortedAptitude);
+    }
+
+    if (coreSectionQs.length > 0) {
+      const coreDeptName = coreQs.length > 0 ? coreQs[0].department : (mathsQs.length > 0 ? mathsQs[0].department : test.department);
+      newSections.push({ id: 'core', name: coreDeptName || 'Core Subject', startIndex: ordered.length, count: coreSectionQs.length });
+      ordered = ordered.concat(coreSectionQs);
+    }
+    
+    if (newSections.length === 0) {
+      newSections.push({ id: 'all', name: 'All Sections', startIndex: 0, count: ordered.length });
+    }
+
+    return { orderedQuestions: ordered, sections: newSections };
+  }, [rawTestQuestions, test.department]);
+
   const [mode, setMode] = useState('login'); // login, instructions1, instructions2, taking
   
   // Login State
@@ -508,6 +554,8 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
   };
 
   const TakingScreen = () => {
+    const activeSectionIndex = sections.findIndex(s => currentIdx >= s.startIndex && currentIdx < s.startIndex + s.count);
+    const activeSection = activeSectionIndex >= 0 ? sections[activeSectionIndex] : sections[0];
     const currentQ = testQuestions[currentIdx];
     
     // Calculate stats
@@ -554,10 +602,17 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
 
           {/* Left Panel */}
           <div className="flex-1 flex flex-col border-r border-gray-400 bg-white lg:min-h-0">
-            <div className="flex bg-[#EAF2FA] border-b border-gray-300 text-sm">
-              <div className="px-4 py-1.5 bg-[#1589C9] text-white font-bold border-r border-gray-300 flex items-center gap-2">
-                All Sections <Info size={14} className="bg-white text-[#1589C9] rounded-full"/>
-              </div>
+            <div className="flex bg-[#EAF2FA] border-b border-gray-300 text-sm overflow-x-auto">
+              {sections.map((sec, i) => (
+                <div 
+                  key={sec.id}
+                  onClick={() => jumpToQuestion(sec.startIndex)}
+                  className={`px-4 py-1.5 font-bold border-r border-gray-300 flex items-center gap-2 cursor-pointer transition-colors ${activeSectionIndex === i ? 'bg-[#1589C9] text-white' : 'bg-[#EAF2FA] text-[#1589C9] hover:bg-[#d5e7f7]'}`}
+                >
+                  {sec.name}
+                  <Info size={14} className={`rounded-full ${activeSectionIndex === i ? 'bg-white text-[#1589C9]' : 'text-[#1589C9]'}`} />
+                </div>
+              ))}
             </div>
             
             <div className="flex items-center justify-between px-4 py-1.5 border-b border-gray-300 text-sm font-bold">
@@ -702,12 +757,13 @@ export default function GateTestInterface({ test, testQuestions, onSubmit, onCan
               <div className="flex items-center gap-2 col-span-2"><div className="w-6 h-6 flex justify-center items-center bg-purple-600 text-white rounded-full relative">{stats.answered_marked} <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border border-white"></div></div> Answered & Marked for Review (will also be evaluated)</div>
             </div>
 
-            <div className="bg-[#1589C9] text-white px-3 py-1.5 font-bold text-sm">All Sections</div>
+            <div className="bg-[#1589C9] text-white px-3 py-1.5 font-bold text-sm">{activeSection.name}</div>
             <div className="p-1 bg-[#86B4D6] text-white text-xs font-bold text-center">Choose a Question</div>
             
             <div className="flex-1 overflow-y-auto p-3 bg-[#EAF2FA]">
               <div className="flex flex-wrap gap-2">
                 {testQuestions.map((q, idx) => {
+                  if (idx < activeSection.startIndex || idx >= activeSection.startIndex + activeSection.count) return null;
                   const s = getQuestionStatus(q.id);
                   let styleClass = "w-8 h-8 flex justify-center items-center font-bold text-sm cursor-pointer shadow-sm";
                   let extra = null;
