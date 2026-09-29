@@ -5,6 +5,7 @@ import { collection, addDoc, doc, getDoc, getDocs, setDoc } from 'firebase/fires
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import { GoogleGenAI } from '@google/genai';
 import katex from 'katex';
+import { findDuplicateQuestions } from '../../utils/questionDuplicates';
 import 'katex/dist/katex.min.css';
 
 // Configure the worker for PDF.js using a CDN
@@ -126,6 +127,211 @@ const applyNatFields = (q) => {
     };
   }
   return { ...base, fillBlankAnswer: pick.answer, fillBlankPrecision: precision };
+};
+
+// ---------- LaTeX safety net ----------
+// The AI's LaTeX is not always valid (e.g. "10^1^\circ"). KaTeX's non-throwing mode shows such
+// formulas as red source code, so every formula is rendered strictly, repaired and retried on
+// failure, and as a last resort turned into readable plain text - never shown as an error.
+const escapeHTML = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const LATEX_SYMBOLS = {
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η',
+  theta: 'θ', vartheta: 'ϑ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ', pi: 'π',
+  rho: 'ρ', sigma: 'σ', tau: 'τ', upsilon: 'υ', phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+  times: '×', cdot: '·', div: '÷', pm: '±', mp: '∓', circ: '°', degree: '°', infty: '∞', approx: '≈',
+  neq: '≠', ne: '≠', leq: '≤', le: '≤', geq: '≥', ge: '≥', ll: '≪', gg: '≫', to: '→', rightarrow: '→',
+  leftarrow: '←', Rightarrow: '⇒', Leftarrow: '⇐', leftrightarrow: '↔', Leftrightarrow: '⇔',
+  partial: '∂', nabla: '∇', sum: '∑', prod: '∏', int: '∫', oint: '∮', propto: '∝', equiv: '≡', sim: '∼',
+  simeq: '≃', cdots: '⋯', ldots: '…', dots: '…', angle: '∠', perp: '⊥', parallel: '∥', in: '∈', notin: '∉',
+  forall: '∀', exists: '∃', hbar: 'ℏ', ell: 'ℓ', prime: '′', therefore: '∴', because: '∵', cup: '∪',
+  cap: '∩', subset: '⊂', subseteq: '⊆', emptyset: '∅', neg: '¬', land: '∧', lor: '∨', oplus: '⊕',
+  uparrow: '↑', downarrow: '↓', triangle: '△', square: '□', bullet: '•', star: '⋆', langle: '⟨', rangle: '⟩'
+};
+const LATEX_FUNCTIONS = new Set(['sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'log', 'ln', 'exp', 'lim', 'max', 'min', 'det', 'sinh', 'cosh', 'tanh', 'arcsin', 'arccos', 'arctan']);
+// Commands whose "\b", "\f", "\n", "\r", "\t" start collides with a JSON escape (see repairJsonBackslashes)
+const LATEX_COMMANDS = new Set([
+  ...Object.keys(LATEX_SYMBOLS), ...LATEX_FUNCTIONS,
+  'text', 'textbf', 'textit', 'textrm', 'textdegree', 'tfrac', 'dfrac', 'frac', 'binom', 'bar', 'boldsymbol', 'bf',
+  'begin', 'bmatrix', 'big', 'bigg', 'bigl', 'bigr', 'biggl', 'biggr', 'bot', 'boxed', 'right', 'rm', 'rceil',
+  'rfloor', 'rbrace', 'rvert', 'rVert', 'nabla', 'not', 'newline', 'nleq', 'ngeq', 'nmid', 'nparallel',
+  'nexists', 'nless', 'ngtr', 'theta', 'tau', 'tan', 'tanh', 'tilde', 'triangle', 'therefore', 'times', 'tfrac', 'nu'
+]);
+
+// The AI is told to double every backslash, but sometimes writes "\times" or "\frac" in the JSON.
+// JSON.parse turns "\t"/"\f"/"\b"/"\n"/"\r" into control characters ("\times" -> TAB + "imes") and
+// rejects "\D", "\{" etc. outright, so fix those backslashes before parsing.
+const repairJsonBackslashes = (raw) => raw.replace(/\\(\\|u[0-9a-fA-F]{4}|[a-zA-Z]+|[\s\S])/g, (m, tok) => {
+  if (tok === '\\' || /^u[0-9a-fA-F]{4}$/.test(tok) || tok === '"' || tok === '/') return m;
+  if (/^[a-zA-Z]/.test(tok)) {
+    const first = tok[0];
+    if (first === 'b' || first === 'f') return '\\' + m; // a real backspace/form feed never appears here
+    if ('nrt'.includes(first)) return LATEX_COMMANDS.has(tok) ? '\\' + m : m; // "\nThe" stays a newline
+    return '\\' + m; // "\Delta", "\sigma", "\underline": invalid JSON escapes
+  }
+  return '\\' + m; // "\{", "\,", "\%" ...
+});
+
+// Brace-balanced script argument: {..}, \command, or one character
+const SCRIPT_ARG = String.raw`(?:\{[^{}]*\}|\\[a-zA-Z]+|[^\s{}\\^_])`;
+
+const balanceBraces = (src) => {
+  let depth = 0;
+  let out = '';
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '\\' && i + 1 < src.length) { out += ch + src[++i]; continue; }
+    if (ch === '{') depth++;
+    if (ch === '}') { if (depth === 0) continue; depth--; }
+    out += ch;
+  }
+  return out + '}'.repeat(depth);
+};
+
+// Always-safe clean-up: over-escaped "\\times" (a line break + "times") and siunitx-style macros
+const normalizeLatex = (src) => {
+  let s = String(src);
+  if (!s.includes('\\begin')) s = s.replace(/\\\\(?=[a-zA-Z])/g, '\\');
+  return s
+    // siunitx first, while its unit argument still has no nested braces
+    .replace(/\\(?:SI|qty)\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '$1\\,\\mathrm{$2}')
+    .replace(/\\(?:si|unit)\s*\{([^{}]*)\}/g, '\\mathrm{$1}')
+    .replace(/\\(?:degree|textdegree)(?![a-zA-Z])/g, '^{\\circ}')
+    .replace(/\\celsius(?![a-zA-Z])/g, '{}^{\\circ}\\mathrm{C}')
+    .replace(/\\ohm(?![a-zA-Z])/g, '\\Omega')
+    .replace(/\\micro(?![a-zA-Z])/g, '\\mu')
+    .replace(/\\percent(?![a-zA-Z])/g, '\\%')
+    .replace(/\^?\s*°/g, '^{\\circ}');
+};
+
+// Fixes for LaTeX KaTeX rejected
+const repairLatex = (src) => balanceBraces(normalizeLatex(src))
+  // "10^1^\circ" -> "10^1{}^\circ" (double superscript), same for subscripts
+  .replace(new RegExp(`(\\^${SCRIPT_ARG})(?=\\s*\\^)`, 'g'), '$1{}')
+  .replace(new RegExp(`(_${SCRIPT_ARG})(?=\\s*_)`, 'g'), '$1{}')
+  // Unpaired \left / \right
+  .replace(/\\(?:left|right)\s*\./g, '')
+  .replace(/\\(?:left|right)(?![a-zA-Z])/g, '')
+  // A trailing ^ or _ with nothing after it
+  .replace(/[\^_]\s*$/, '');
+
+// Last resort: readable text with <sup>/<sub>, e.g. "T_\infty = 25^\circ\text{C}" -> T<sub>∞</sub> = 25<sup>°</sup>C
+const latexToReadableHTML = (src) => {
+  let s = escapeHTML(normalizeLatex(src));
+  for (let i = 0; i < 4; i++) {
+    s = s.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, '($1)/($2)')
+      .replace(/\\sqrt\s*\{([^{}]*)\}/g, '√($1)')
+      .replace(/\\(?:text|textbf|textit|textrm|mathrm|mathbf|mathit|mathcal|boldsymbol|operatorname|vec|hat|bar|overline|underline)\s*\{([^{}]*)\}/g, '$1');
+  }
+  s = s.replace(/\\([a-zA-Z]+)/g, (m, name) => LATEX_SYMBOLS[name] ?? (LATEX_FUNCTIONS.has(name) ? name : ''))
+    .replace(/\^\s*\{([^{}]*)\}/g, '<sup>$1</sup>')
+    .replace(/\^\s*([^\s<])/g, '<sup>$1</sup>')
+    .replace(/_\s*\{([^{}]*)\}/g, '<sub>$1</sub>')
+    .replace(/_\s*([^\s<])/g, '<sub>$1</sub>')
+    .replace(/\\[,;:! ]/g, ' ')
+    .replace(/\\([%$#&_{}])/g, '$1')
+    .replace(/[{}]/g, '')
+    .replace(/~/g, '&nbsp;');
+  return `<span style="font-family:KaTeX_Main,'Times New Roman',serif">${s}</span>`;
+};
+
+const renderMath = (math, displayMode = false) => {
+  const render = (src) => katex.renderToString(src, { throwOnError: true, strict: 'ignore', output: 'html', displayMode });
+  const normalized = normalizeLatex(math);
+  try { return render(normalized); } catch { /* try the repaired version */ }
+  try { return render(repairLatex(math)); } catch (err) {
+    console.warn('Unrenderable LaTeX, showing it as text:', math, err?.message);
+  }
+  return latexToReadableHTML(math);
+};
+
+// Stray LaTeX the AI left outside $...$ in normal text: turn known commands into their symbols
+const cleanBareLatex = (text) => text
+  .replace(/\\(?:text|textbf|mathrm)\s*\{([^{}]*)\}/g, '$1')
+  .replace(/\\([a-zA-Z]+)(?![a-zA-Z])/g, (m, name) => LATEX_SYMBOLS[name] ?? m);
+
+// ---------- Complete extraction ----------
+// Big PDFs are extracted a few pages per request so one reply never runs out of output room
+const PAGES_PER_BATCH = 4;
+const MAX_CONTINUATIONS = 6;
+
+const stripJsonFence = (text) => text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+// Parses the model's JSON array. If the reply was cut off part-way, every question that was
+// fully written is still recovered (complete: false tells the caller to fetch the rest).
+const parseQuestionArray = (text) => {
+  const clean = repairJsonBackslashes(stripJsonFence(text));
+  try {
+    const value = JSON.parse(clean);
+    return { items: Array.isArray(value) ? value : (value?.questions || [value]), complete: true };
+  } catch { /* salvage below */ }
+
+  const items = [];
+  let depth = 0, inString = false, escaped = false, start = -1;
+  for (let i = Math.max(0, clean.indexOf('[') + 1); i < clean.length; i++) {
+    const ch = clean[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{') { if (depth === 0) start = i; depth++; }
+    else if (ch === '}' && depth > 0) {
+      depth--;
+      if (depth === 0) {
+        try { items.push(JSON.parse(clean.slice(start, i + 1))); } catch { /* skip a broken object */ }
+      }
+    }
+  }
+  return { items, complete: false };
+};
+
+const questionNumberOf = (q) => {
+  const m = String(q?.questionNumber ?? '').match(/\d+/);
+  return m ? parseInt(m[0], 10) : null;
+};
+
+// Same question returned by two neighbouring page batches
+const questionKey = (q) => String(q?.questionText || '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 160);
+const contentLength = (q) => ['questionText', 'optionA', 'optionB', 'optionC', 'optionD', 'explanation']
+  .reduce((sum, f) => sum + String(q?.[f] || '').length, 0);
+
+const dedupeQuestions = (questions) => {
+  const out = [];
+  const seen = new Map();
+  for (const q of questions) {
+    const key = questionKey(q);
+    if (key && seen.has(key)) {
+      const idx = seen.get(key);
+      if (contentLength(q) > contentLength(out[idx])) out[idx] = q; // keep the fuller copy
+      continue;
+    }
+    if (key) seen.set(key, out.length);
+    out.push(q);
+  }
+  return out;
+};
+
+// Gaps in the numbering (Q3, Q5 -> Q4 missing), as { afterIndex, numbers }
+const findNumberGaps = (questions) => {
+  const gaps = [];
+  for (let i = 1; i < questions.length; i++) {
+    const a = questionNumberOf(questions[i - 1]);
+    const b = questionNumberOf(questions[i]);
+    if (a === null || b === null || b - a < 2 || b - a > 10) continue;
+    gaps.push({ afterIndex: i - 1, numbers: Array.from({ length: b - a - 1 }, (_, k) => a + 1 + k) });
+  }
+  return gaps;
+};
+
+const countPdfPages = async (fileObj) => {
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await fileObj.arrayBuffer()) }).promise;
+  const count = pdf.numPages;
+  pdf.destroy();
+  return count;
 };
 
 // ---------- Diagram extraction ----------
@@ -289,6 +495,11 @@ export default function AIGenerator({ pairMode = false }) {
   const [file, setFile] = useState(null);
   const [status, setStatus] = useState('idle'); // idle | uploading | analyzing | review | success | error
   const [errorMsg, setErrorMsg] = useState('');
+  const [progressMsg, setProgressMsg] = useState('');
+  // Pages / question numbers the extraction could not fully recover, shown on the review screen
+  const [extractionWarnings, setExtractionWarnings] = useState([]);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const [importSummary, setImportSummary] = useState(null); // { imported, skipped }
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [importAsPremium, setImportAsPremium] = useState(false);
   // Extracted questions go to this person for review before they reach the question bank
@@ -435,19 +646,14 @@ export default function AIGenerator({ pairMode = false }) {
       .replace(/mm\s*3\b/g, 'mm³')
       .replace(/cm\s*3\b/g, 'cm³');
 
-    // Convert any $...$ LaTeX blocks directly to HTML using KaTeX
-    processed = processed.replace(/\$([^\$]+)\$/g, (match, math) => {
-      try {
-        return katex.renderToString(math, { throwOnError: false, output: 'html' });
-      } catch (e) {
-        return match;
-      }
-    });
-    
+    // Convert any $$...$$ / $...$ LaTeX blocks directly to HTML using KaTeX
+    processed = processed.replace(/\$\$([^$]+)\$\$|\$([^$]+)\$/g, (match, display, inline) => (
+      display !== undefined ? renderMath(display, true) : renderMath(inline)
+    ));
+
     return processed;
   };
 
-  const escapeHTML = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   // Inline styles so code keeps its look wherever the saved HTML is shown (question bank, tests)
   const MONO_FONT = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace";
   const CODE_BLOCK_STYLE = `background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin:8px 0;overflow-x:auto;white-space:pre;font-family:${MONO_FONT};font-size:0.85em;font-weight:500;line-height:1.5;text-align:left`;
@@ -458,7 +664,11 @@ export default function AIGenerator({ pairMode = false }) {
   // escaped so text like <class 'dict'> shows up instead of being swallowed as an HTML tag.
   const formatExtractedText = (text) => {
     if (!text) return text;
-    const parts = String(text).split(/(```[\s\S]*?```)/g);
+    const parts = String(text)
+      // \( ... \) and \[ ... \] are also LaTeX delimiters - bring them to the $ form
+      .replace(/\\\(([\s\S]+?)\\\)/g, (m, math) => `$${math}$`)
+      .replace(/\\\[([\s\S]+?)\\\]/g, (m, math) => `$$${math}$$`)
+      .split(/(```[\s\S]*?```)/g);
     return parts.map((part, i) => {
       if (i % 2 === 1) {
         const code = part.replace(/^```[\w+#.-]*[ \t]*\n?/, '').replace(/\n?```$/, '');
@@ -470,8 +680,15 @@ export default function AIGenerator({ pairMode = false }) {
       if (i < parts.length - 1) prose = prose.replace(/\n\s*$/, '');
       return prose.split(/(`[^`\n]+`)/g).map((seg, j) => {
         if (j % 2 === 1) return `<code style="${INLINE_CODE_STYLE}">${escapeHTML(seg.slice(1, -1))}</code>`;
-        return seg.split(/(\$[^$]+\$)/g)
-          .map((s, k) => (k % 2 === 1 ? renderLatexToHTML(s) : renderLatexToHTML(escapeHTML(s)).replace(/\n/g, '<br/>')))
+        return seg.split(/(\$\$[^$]+\$\$|\$[^$]+\$)/g)
+          .map((s, k) => {
+            if (k % 2 === 1) return s.startsWith('$$') ? renderMath(s.slice(2, -2), true) : renderMath(s.slice(1, -1));
+            // A lone "$" (e.g. "$5") is just text
+            return renderLatexToHTML(cleanBareLatex(escapeHTML(s)))
+              .replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>') // "**Concept:**" labels
+              .replace(/\*\*/g, '') // half of a bold run that was split by a formula
+              .replace(/\n/g, '<br/>');
+          })
           .join('');
       }).join('');
     }).join('');
@@ -702,14 +919,15 @@ export default function AIGenerator({ pairMode = false }) {
     if (!file) return;
     setStatus('uploading');
     setErrorMsg('');
-    
+    setProgressMsg('');
+    setExtractionWarnings([]);
+
     try {
       setStatus('analyzing');
       let parsedQuestions = [];
       
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       if (apiKey) {
-        let apiSuccess = false;
         const modelsToTry = [
           "gemini-3.6-flash",
           "gemini-3.5-flash-lite",
@@ -723,13 +941,14 @@ export default function AIGenerator({ pairMode = false }) {
         const ai = new GoogleGenAI({ apiKey });
         const pdfPart = await fileToGenerativePart(file);
         
-        const prompt = `You are a specialized AI that extracts multiple-choice and numerical questions from PDF documents.
-Read the attached PDF and extract all questions. 
+        const prompt = `You are a specialized AI that transcribes multiple-choice and numerical questions from PDF documents into JSON, completely and word for word.
+Read the attached PDF and extract the questions described in SCOPE at the end.
 Respond ONLY with a valid JSON array of objects. Do not include markdown code blocks (\`\`\`json) or any other text.
 Each object must have exactly these fields:
 {
+  "questionNumber": "The question's label exactly as printed, e.g. \\"Q1\\", \\"12\\", \\"Q3(a)\\"",
   "questionType": "Single Choice" | "Multiple Choice" | "Fill in the Blanks" | "Match",
-  "questionText": "Text of the question (Do NOT include the question number). Use LaTeX inside $...$ for all math/equations.",
+  "questionText": "The COMPLETE question exactly as printed, word for word: every sentence, given data, list, note and instruction (e.g. \\"Round off to two decimal places\\", \\"Answer in kJ\\"). Do NOT include the question number or header label. Use LaTeX inside $...$ for all math/equations.",
   "optionA": "Option A text",
   "optionB": "Option B text",
   "optionC": "Option C text",
@@ -740,15 +959,19 @@ Each object must have exactly these fields:
   "fillBlankMode": "For NAT only: \"Numeric Range\" if the PDF states a range of accepted answers (e.g. \"2.4 to 2.6\", \"between 2.4 and 2.6\", \"2.5 ± 0.1\"), otherwise \"Exact Match\"",
   "fillBlankRangeStart": "For NAT with a range only: the lowest accepted value as plain digits, else empty string",
   "fillBlankRangeEnd": "For NAT with a range only: the highest accepted value as plain digits, else empty string",
-  "topic": "Extracted Topic",
+  "topic": "The title printed in the question's header (e.g. \\"Function Annotations\\"), else a short topic",
   "difficultyLevel": "Easy" | "Medium" | "Hard",
-  "explanation": "Explanation or calculation (use LaTeX inside $...$ for all math/equations)",
+  "explanation": "The COMPLETE solution exactly as printed: everything after the options/answer, e.g. Concept, Reasoning, Given, Formula, Calculation, every step, the final answer line and any notes. Start each labelled part on its own line with the label in bold, e.g. \\"**Concept:** Metadata and Type Hinting.\\\\n**Reasoning:** Python stores ...\\". Use LaTeX inside $...$ for all math/equations. Empty string only if the PDF has no solution.",
   "matchColumn1": ["Item P", "Item Q", "Item R", "Item S"], (Only for Match questions, array of exactly 4 strings, LaTeX inside $...$ for any math/equations, e.g. "$4\\\\sigma/R$")
   "matchColumn2": ["Item 1", "Item 2", "Item 3", "Item 4"], (Only for Match questions, array of exactly 4 strings, LaTeX inside $...$ for any math/equations, e.g. "$\\\\sigma (1/R_1 + 1/R_2)$")
   "images": [{ "target": "question" | "optionA" | "optionB" | "optionC" | "optionD" | "explanation", "page": 1, "box_2d": [ymin, xmin, ymax, xmax] }] (Figures belonging to this question - use [] when there are none)
 }
 IMPORTANT:
+- COMPLETENESS IS THE TOP PRIORITY. Extract every question in SCOPE - never skip one, including long questions and ones with diagrams, tables, code or unusual layouts. Transcribe everything; never shorten, summarize, paraphrase, merge or "clean up" any text in the question, options or solution. When unsure whether something belongs, include it.
+- Keep the structure: separate paragraphs, calculation steps, list items and sub-parts with \\n, keep their numbering/bullets, and put each equation step of a calculation on its own line.
 - For equations, fractions, subscripts, or math symbols, use standard LaTeX formatting enclosed in $...$ (e.g., $m^2K$, $\\\\frac{1}{U}$). YOU MUST double-escape all backslashes so the output is valid JSON (e.g. use \\\\frac instead of \\frac).
+- Every $...$ must compile in KaTeX: balanced braces, never two superscripts or two subscripts in a row (write $25^{\\\\circ}\\\\text{C}$, never $10^1^\\\\circ$), degrees as ^{\\\\circ}, only standard LaTeX math commands (no siunitx such as \\\\SI or \\\\si, no custom macros, no \\\\( \\\\) or \\\\[ \\\\] delimiters).
+- Copy every number, unit and symbol exactly as printed in the PDF. Never rewrite a value into another form (if the PDF says 25°C, write $25^{\\\\circ}\\\\text{C}$, not 2.5 × 10^1). Do not add, drop, summarize or reword any text; keep the full question and full explanation.
 - This applies to matchColumn1 and matchColumn2 too - every expression containing a LaTeX command (\\\\sigma, \\\\Delta, \\\\frac, subscripts like R_1, etc.) MUST be wrapped in $...$. Never output a bare backslash command outside $...$ anywhere in the JSON.
 - For Fill in the Blanks (NAT) questions, read the answer key / answer line carefully. Put a single value in fillBlankAnswer, or if a range of accepted answers is given, set fillBlankMode to \"Numeric Range\" and fill fillBlankRangeStart and fillBlankRangeEnd. Never put units in these fields.
 - CODE: If a question or explanation contains a code snippet (Python, C, Java, SQL, shell, etc.), put it inside a fenced block: three backticks + language name, a newline, the code, a newline, three backticks (e.g. "Determine val:\\n\`\`\`python\\ndef f(x):\\n    return x\\n\`\`\`"). Keep every line break (as \\n) and every leading space of indentation exactly as printed. Never flatten code onto one line and never use $...$ inside code.
@@ -763,61 +986,135 @@ IMPORTANT:
 - For Match type questions, optionA, optionB, optionC and optionD MUST be filled with the answer choices exactly as printed in the PDF (for example "P-2, Q-1, R-4, S-3"). Never leave them empty, and set correctAnswer to the letter of the correct choice.
 - The response MUST be a pure JSON array parseable by JSON.parse().`;
 
-        // 503 "high demand" errors from Gemini are transient, so fail over to the next model
-        // quickly (1 SDK retry instead of ~30s of backoff) and make a second pass if all were busy.
-        const attempts = [...modelsToTry, ...modelsToTry];
         const quotaExhausted = new Set();
-        for (let i = 0; i < attempts.length; i++) {
-          if (apiSuccess) break;
-          const modelName = attempts[i];
-          // A 429 means the daily free-tier quota for that model is used up - retrying it is pointless
-          if (quotaExhausted.has(modelName)) continue;
-          if (i === modelsToTry.length) await new Promise(r => setTimeout(r, 5000));
-          try {
-            console.log(`Trying model: ${modelName}...`);
-            const interaction = await ai.interactions.create({
-                model: modelName,
-                input: [
-                    { type: "text", text: prompt },
-                    { type: "document", data: pdfPart.inlineData.data, mime_type: pdfPart.inlineData.mimeType }
-                ]
-            }, { timeout: 120000, maxRetries: 1 });
-            const responseText = interaction.output_text;
-            if (!responseText) throw new Error('Empty response from model');
-
-            // Only strip a fence wrapped around the whole reply - fences inside the strings are code blocks
-            const cleanJson = responseText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-            parsedQuestions = JSON.parse(cleanJson);
-            parsedQuestions = parsedQuestions.map(q => ({
-              ...q,
-              isImported: true,
-              questionText: formatExtractedText(q.questionText),
-              optionA: formatExtractedText(q.optionA),
-              optionB: formatExtractedText(q.optionB),
-              optionC: formatExtractedText(q.optionC),
-              optionD: formatExtractedText(q.optionD),
-              explanation: formatExtractedText(q.explanation)
-            }));
-
-            console.log(`Successfully extracted via Gemini API using ${modelName}.`);
-            apiSuccess = true;
-          } catch (modelError) {
-            lastError = modelError;
-            if (/429|rate limit|quota/i.test(String(modelError?.message || modelError))) quotaExhausted.add(modelName);
-            console.warn(`Model ${modelName} failed:`, modelError.message || modelError);
-          }
-        }
-
-        if (!apiSuccess) {
+        const failureMessage = () => {
           const busy = /503|high demand|unavailable|overloaded/i.test(String(lastError?.message || lastError));
-          setErrorMsg(quotaExhausted.size > 0
+          return quotaExhausted.size > 0
             ? "The Gemini API key has reached its daily free-tier limit. Enable billing for the key's Google project (ai.dev/rate-limit) or try again tomorrow."
             : busy
               ? "Google's Gemini servers are busy right now. Please wait a minute and click Retry."
-              : "All Gemini AI models failed. Please check your API key or try again later.");
+              : "All Gemini AI models failed. Please check your API key or try again later.";
+        };
+
+        // Sends the prompt plus one SCOPE instruction. 503 "high demand" errors from Gemini are
+        // transient, so fail over to the next model quickly (1 SDK retry instead of ~30s of
+        // backoff) and make a second pass if all were busy.
+        const askGemini = async (scope) => {
+          const attempts = [...modelsToTry, ...modelsToTry];
+          for (let i = 0; i < attempts.length; i++) {
+            const modelName = attempts[i];
+            // A 429 means the daily free-tier quota for that model is used up - retrying it is pointless
+            if (quotaExhausted.has(modelName)) continue;
+            if (i === modelsToTry.length) await new Promise(r => setTimeout(r, 5000));
+            try {
+              console.log(`Trying model: ${modelName}...`);
+              const interaction = await ai.interactions.create({
+                  model: modelName,
+                  input: [
+                      { type: "text", text: `${prompt}\n\nSCOPE: ${scope}` },
+                      { type: "document", data: pdfPart.inlineData.data, mime_type: pdfPart.inlineData.mimeType }
+                  ]
+              }, { timeout: 300000, maxRetries: 1 });
+              const responseText = interaction.output_text;
+              if (!responseText) throw new Error('Empty response from model');
+              const { items, complete } = parseQuestionArray(responseText);
+              // "incomplete" = the reply hit the output limit; salvaged questions are still usable
+              const truncated = !complete || ['incomplete', 'budget_exceeded'].includes(interaction.status);
+              if (!complete && items.length === 0) throw new Error('Reply was not valid JSON');
+              console.log(`Extracted ${items.length} question(s) via ${modelName}${truncated ? ' (reply was cut off)' : ''}.`);
+              return { items, truncated };
+            } catch (modelError) {
+              lastError = modelError;
+              if (/429|rate limit|quota/i.test(String(modelError?.message || modelError))) quotaExhausted.add(modelName);
+              console.warn(`Model ${modelName} failed:`, modelError.message || modelError);
+            }
+          }
+          throw new Error(failureMessage());
+        };
+
+        const warnings = [];
+        const pageLabel = (from, to) => (from === to ? `page ${from}` : `pages ${from}-${to}`);
+        const rangeScope = (from, to, total) => (from === 1 && to === total
+          ? 'Extract every question in the whole PDF.'
+          : `Extract ONLY the questions that START on ${pageLabel(from, to)} of this PDF (1-based page index within the file). A question that starts in this range but continues onto a later page must still be extracted completely, including its options and full solution from the following page(s). Skip questions that start before page ${from} or after page ${to}.`);
+
+        // Extracts a page range; if the reply is cut off, the range is split, or on a single page
+        // the extraction continues after the last complete question until nothing is left.
+        const extractRange = async (from, to, total) => {
+          const collected = [];
+          let scope = rangeScope(from, to, total);
+          for (let round = 0; round <= MAX_CONTINUATIONS; round++) {
+            const { items, truncated } = await askGemini(scope);
+            collected.push(...items);
+            if (!truncated) return collected;
+            if (round === 0 && to > from && items.length === 0) {
+              const mid = Math.floor((from + to) / 2);
+              return [...await extractRange(from, mid, total), ...await extractRange(mid + 1, to, total)];
+            }
+            const last = collected[collected.length - 1];
+            if (!last) break;
+            setProgressMsg(`Reply was long - continuing ${pageLabel(from, to)} after question ${last.questionNumber || collected.length}...`);
+            scope = `${rangeScope(from, to, total)} The questions up to and including question ${JSON.stringify(last.questionNumber || '')} (the one beginning "${String(last.questionText || '').slice(0, 80)}") are already extracted - start with the question right after it.`;
+          }
+          warnings.push(`The AI reply for ${pageLabel(from, to)} kept getting cut off - check the last questions from those pages.`);
+          return collected;
+        };
+
+        const totalPages = await countPdfPages(file);
+        let rawQuestions = [];
+        let batchError = null;
+        for (let from = 1; from <= totalPages; from += PAGES_PER_BATCH) {
+          const to = Math.min(totalPages, from + PAGES_PER_BATCH - 1);
+          setProgressMsg(totalPages > PAGES_PER_BATCH ? `Extracting ${pageLabel(from, to)} of ${totalPages}...` : 'Extracting questions...');
+          try {
+            rawQuestions.push(...await extractRange(from, to, totalPages));
+          } catch (batchErr) {
+            // Keep what the other pages produced and flag the pages that failed
+            batchError = batchErr;
+            warnings.push(`Could not extract ${pageLabel(from, to)}: ${batchErr.message}`);
+          }
+        }
+        if (rawQuestions.length === 0 && batchError) {
+          setErrorMsg(batchError.message);
           setStatus('error');
           return;
         }
+        rawQuestions = dedupeQuestions(rawQuestions);
+
+        // Numbering gaps usually mean the AI skipped a question - ask for exactly those again
+        const gaps = findNumberGaps(rawQuestions);
+        if (gaps.length > 0) {
+          const missing = gaps.flatMap(g => g.numbers);
+          setProgressMsg(`Recovering skipped question(s) ${missing.join(', ')}...`);
+          let recovered = [];
+          try {
+            ({ items: recovered } = await askGemini(`Extract ONLY the question(s) numbered ${missing.join(', ')} (by their printed question labels) - they were missed earlier. Return each of them completely.`));
+          } catch (gapErr) {
+            console.warn('Could not recover skipped questions:', gapErr);
+          }
+          const known = new Set(rawQuestions.map(questionKey));
+          // Insert from the last gap backwards so earlier indexes stay valid
+          for (const gap of [...gaps].reverse()) {
+            const found = recovered
+              .filter(q => gap.numbers.includes(questionNumberOf(q)) && !known.has(questionKey(q)))
+              .sort((a, b) => questionNumberOf(a) - questionNumberOf(b));
+            rawQuestions.splice(gap.afterIndex + 1, 0, ...found);
+            const stillMissing = gap.numbers.filter(n => !found.some(q => questionNumberOf(q) === n));
+            if (stillMissing.length) warnings.push(`Question ${stillMissing.join(', ')} could not be extracted - please add ${stillMissing.length > 1 ? 'them' : 'it'} manually.`);
+          }
+        }
+
+        setExtractionWarnings(warnings);
+        parsedQuestions = rawQuestions.map(({ questionNumber, ...q }) => ({
+          ...q,
+          isImported: true,
+          questionText: formatExtractedText(q.questionText),
+          optionA: formatExtractedText(q.optionA),
+          optionB: formatExtractedText(q.optionB),
+          optionC: formatExtractedText(q.optionC),
+          optionD: formatExtractedText(q.optionD),
+          explanation: formatExtractedText(q.explanation)
+        }));
 
         try {
           parsedQuestions = await attachDiagramImages(file, parsedQuestions);
@@ -847,6 +1144,7 @@ IMPORTANT:
       } : q));
       setExtractedQuestions(parsedQuestions);
       setStatus('review');
+      markDuplicates(parsedQuestions);
     } catch (err) {
       console.error("PDF Parsing Error", err);
       setErrorMsg(err.message || "Failed to parse the PDF document.");
@@ -875,12 +1173,55 @@ IMPORTANT:
     }));
   };
 
+  const loadQuestionBank = async () => {
+    const snap = await getDocs(collection(db, 'question_bank'));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  };
+
+  const describeDuplicate = (match) => (match.source === 'bank'
+    ? { source: 'bank', id: match.question.id, status: match.question.status || '', subject: match.question.subject || '' }
+    : { source: 'batch' });
+
+  // Flags extracted questions that are already in the Question Bank (or repeat another question
+  // from the same PDF) so the review screen shows which ones the import will skip.
+  const markDuplicates = async (list) => {
+    setCheckingDuplicates(true);
+    try {
+      const matches = await findDuplicateQuestions(list, await loadQuestionBank());
+      // Match by object, not index - the reviewer may have removed questions meanwhile
+      setExtractedQuestions(prev => prev.map(q => {
+        const i = list.indexOf(q);
+        return i === -1 ? q : { ...q, _duplicate: matches[i] ? describeDuplicate(matches[i]) : null };
+      }));
+    } catch (err) {
+      console.error('Duplicate check failed:', err);
+    } finally {
+      setCheckingDuplicates(false);
+    }
+  };
+
   // direct=true skips the reviewer entirely: questions land straight in the Question
   // Bank as Approved, but flagged reviewed:false since nobody but the typist/admin who
   // extracted them has actually looked them over.
   const confirmApprove = async (direct = false) => {
     setStatus('saving');
     setErrorMsg('');
+
+    // Re-check against the bank as it is right now (someone may have added questions since the
+    // review screen opened); duplicates are skipped and everything else is imported.
+    let matches;
+    try {
+      matches = await findDuplicateQuestions(extractedQuestions, await loadQuestionBank());
+    } catch (err) {
+      console.error('Duplicate check failed:', err);
+      setErrorMsg("Couldn't check the Question Bank for duplicates, so nothing was imported. Please try again.");
+      setStatus('review');
+      return;
+    }
+    const toImport = extractedQuestions.filter((_, i) => !matches[i]);
+    const skipped = extractedQuestions.length - toImport.length;
+    const imported = new Set();
+
     try {
       const reviewer = reviewerEmail.trim().toLowerCase();
       if (!direct && !pairMode) await setDoc(doc(db, 'site_settings', 'ai_review'), { reviewerEmail: reviewer }, { merge: true });
@@ -891,7 +1232,8 @@ IMPORTANT:
         ? { status: 'Approved', reviewed: false, reviewedBy: '' }
         : { status: 'In Review', reviewed: false, reviewerEmail: reviewer };
 
-      for (const question of extractedQuestions) {
+      for (const original of toImport) {
+        const { _duplicate, ...question } = original;
         await addDoc(collection(db, 'question_bank'), {
           ...question,
           department: importSettings.department,
@@ -913,14 +1255,18 @@ IMPORTANT:
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
+        imported.add(original);
       }
+      setImportSummary({ imported: toImport.length, skipped });
       setStatus('success');
       setTimeout(() => {
         resetState();
-      }, 3000);
+      }, toImport.length === 0 ? 5000 : 3000);
     } catch (error) {
       console.error("Error importing questions:", error);
-      setErrorMsg("Failed to import questions to database.");
+      // Drop the ones that did get saved, so pressing Import again can't save them twice
+      setExtractedQuestions(prev => prev.filter(q => !imported.has(q)));
+      setErrorMsg(`Failed to import questions to database.${imported.size ? ` ${imported.size} question(s) were saved before the error and were removed from this list.` : ''}`);
       setStatus('review');
     }
   };
@@ -930,6 +1276,9 @@ IMPORTANT:
     setStatus('idle');
     setErrorMsg('');
     setExtractedQuestions([]);
+    setExtractionWarnings([]);
+    setProgressMsg('');
+    setImportSummary(null);
     setShowImportModal(false);
     setImportSettings({ department: '', year: '', subject: '', topic: '', mark: '', difficultyLevel: 'Auto' });
   };
@@ -961,6 +1310,7 @@ IMPORTANT:
     }
   };
 
+  const duplicateCount = extractedQuestions.filter(q => q._duplicate).length;
   const canImport = isValidReviewerEmail && !!importSettings.department && !!importSettings.year && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
   // Skipping the reviewer doesn't need a reviewer email - just the attributes every question needs.
   const canImportDirect = !!importSettings.department && !!importSettings.year && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
@@ -1189,7 +1539,7 @@ IMPORTANT:
             {status === 'saving' && "Importing to Database..."}
           </h3>
           <p className="text-slate-500 font-medium max-w-sm">
-            {status === 'analyzing' ? "We are reading the document text and matching question patterns." : "Please do not close this window."}
+            {status === 'analyzing' ? (progressMsg || "We are reading the document text and matching question patterns.") : "Please do not close this window."}
           </p>
         </div>
       )}
@@ -1199,8 +1549,17 @@ IMPORTANT:
           <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6">
             <CheckCircle2 size={48} />
           </div>
-          <h3 className="text-2xl font-black text-slate-800 mb-2">Successfully Imported!</h3>
-          <p className="text-slate-500 font-medium">The extracted questions have been sent to the reviewer. They reach the Question Bank once approved.</p>
+          <h3 className="text-2xl font-black text-slate-800 mb-2">
+            {importSummary && importSummary.imported === 0 ? 'Nothing New to Import' : 'Successfully Imported!'}
+          </h3>
+          <p className="text-slate-500 font-medium">
+            {importSummary && importSummary.imported === 0
+              ? `All ${importSummary.skipped} question(s) are already in the Question Bank, so no duplicates were added.`
+              : `${importSummary ? `${importSummary.imported} question(s) imported. ` : ''}The extracted questions have been sent to the reviewer. They reach the Question Bank once approved.`}
+          </p>
+          {importSummary?.skipped > 0 && importSummary.imported > 0 && (
+            <p className="text-amber-700 font-semibold mt-2">{importSummary.skipped} duplicate question(s) were skipped.</p>
+          )}
         </div>
       )}
 
@@ -1255,10 +1614,41 @@ IMPORTANT:
                 <p className="text-sm text-blue-700 mt-1">We successfully extracted {extractedQuestions.length} questions from <strong>{file?.name}</strong>. Please review them before importing.</p>
               </div>
             </div>
-  
+            {checkingDuplicates && (
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-medium text-slate-600">
+                Checking the Question Bank for duplicates...
+              </div>
+            )}
+            {!checkingDuplicates && duplicateCount > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-4">
+                <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+                  <Database size={20} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-amber-900">{duplicateCount} duplicate question{duplicateCount > 1 ? 's' : ''} found</h4>
+                  <p className="text-sm text-amber-800 mt-1">
+                    {duplicateCount > 1 ? 'They are' : 'It is'} marked below and will be skipped. The other {extractedQuestions.length - duplicateCount} question(s) will be imported.
+                  </p>
+                </div>
+              </div>
+            )}
+            {extractionWarnings.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-4">
+                <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+                  <AlertCircle size={20} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-amber-900">Some content may be missing</h4>
+                  <ul className="text-sm text-amber-800 mt-1 list-disc pl-5 space-y-0.5">
+                    {extractionWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                  </ul>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-6">
               {extractedQuestions.map((q, idx) => (
-                <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm relative group">
+                <div key={idx} className={`bg-white border rounded-2xl p-6 shadow-sm relative group ${q._duplicate ? 'border-amber-300 opacity-60' : 'border-slate-200'}`}>
                   <button 
                     onClick={() => removeQuestion(idx)}
                     className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
@@ -1273,6 +1663,13 @@ IMPORTANT:
                     </span>
                     <span className={`text-xs font-semibold px-3 py-1 rounded-md ${q.difficultyLevel === 'Hard' ? 'bg-red-100 text-red-700' : q.difficultyLevel === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>{q.difficultyLevel}</span>
                     <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-md">{q.subject} • {q.topic}</span>
+                    {q._duplicate && (
+                      <span className="text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1 rounded-md">
+                        {q._duplicate.source === 'bank'
+                          ? `Already in Question Bank${q._duplicate.subject ? ` (${q._duplicate.subject}${q._duplicate.status ? `, ${q._duplicate.status}` : ''})` : ''} - will be skipped`
+                          : 'Repeats another question in this PDF - will be skipped'}
+                      </span>
+                    )}
                   </div>
                   
                   <h4 className="text-lg font-bold text-slate-900 mb-4" dangerouslySetInnerHTML={{ __html: q.questionText }}></h4>

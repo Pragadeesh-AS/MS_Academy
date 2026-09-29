@@ -4,6 +4,7 @@ import Loader from '../Loader';
 import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft, Upload, ClipboardPaste } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore';
+import { questionFingerprint, isEmptyQuestion } from '../../utils/questionDuplicates';
 
 // Engineering Mathematics and Aptitude banks are shared by every department.
 const isCommonDeptName = (name) => {
@@ -307,8 +308,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       const duplicateIds = [];
 
       qData.forEach(q => {
-        // Create a unique hash for the question based on text and image, ignoring HTML and whitespace differences
-        const hash = `${stripHtmlAndNormalize(q.questionText)}_${q.questionImageUrl || ''}`;
+        // Same text, options and images (ignoring HTML and whitespace differences) = same question.
+        // Options are part of it, so two different questions with the same stem are both kept.
+        const hash = questionFingerprint(q);
 
         // If hash is just '_', it means both text and image are empty.
         // We might not want to deduplicate completely empty shells aggressively unless they are truly duplicates.
@@ -557,12 +559,11 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }
 
     // Duplicate Check
-    const payloadHash = `${stripHtmlAndNormalize(formData.questionText)}_${formData.questionImageUrl || ''}`;
-    if (payloadHash !== '_') {
+    if (!isEmptyQuestion(formData)) {
+      const payloadHash = questionFingerprint(formData);
       const isDuplicate = questions.some(q => {
         if (isEditing && q.id === currentId) return false;
-        const qHash = `${stripHtmlAndNormalize(q.questionText)}_${q.questionImageUrl || ''}`;
-        return qHash === payloadHash;
+        return questionFingerprint(q) === payloadHash;
       });
       if (isDuplicate) {
         showToast("Duplicate Entry: This question already exists in the question bank.", "error");
@@ -618,12 +619,11 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }
     
     // Duplicate Check
-    const payloadHash = `${stripHtmlAndNormalize(formData.questionText)}_${formData.questionImageUrl || ''}`;
-    if (payloadHash !== '_') {
+    if (!isEmptyQuestion(formData)) {
+      const payloadHash = questionFingerprint(formData);
       const isDuplicate = questions.some(q => {
         if (isEditing && q.id === currentId) return false;
-        const qHash = `${stripHtmlAndNormalize(q.questionText)}_${q.questionImageUrl || ''}`;
-        return qHash === payloadHash;
+        return questionFingerprint(q) === payloadHash;
       });
       if (isDuplicate) {
         showToast("Duplicate Entry: This question already exists in the question bank.", "error");
