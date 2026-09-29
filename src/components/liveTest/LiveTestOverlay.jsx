@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { db } from '../../firebase';
 import { doc, setDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { motion, useReducedMotion } from 'motion/react';
 import { Timer, Trophy, CheckCircle2, XCircle, Clock, ChevronRight, Lock, X, Check, Flame, Zap, Eraser } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -69,7 +70,7 @@ export const POWER_UPS = {
   double: { label: '2X', hint: 'Double points on this question' },
   fiftyFifty: { label: '50-50', hint: 'Remove half of the wrong options' },
   eraser: { label: 'Eraser', hint: 'Remove one wrong option' },
-  jeopardy: { label: 'Double Jeopardy', hint: `Double points if right - lose ${BASE_POINTS} per mark if wrong` },
+  jeopardy: { label: 'Double Jeopardy', hint: `Double points if right - lose up to ${BASE_POINTS} per mark if wrong` },
 };
 const POWER_UPS_PER_STUDENT = 3;
 
@@ -121,16 +122,20 @@ export const buildLeaderboard = (liveTest, participants) =>
       let score = 0;
       let correct = 0;
       let time = 0;
+      const deltas = []; // points actually gained/lost on each question, after the floor below
       liveTest.questions.forEach((q, i) => {
         if (!isScored(liveTest, i)) return;
         const a = p.liveAnswers?.[answerKey(liveTest, i)];
-        score += questionPoints(liveTest, q, a, p, i).points;
+        // A score never drops below 0 - Double Jeopardy can only take away points already earned
+        const next = Math.max(0, score + questionPoints(liveTest, q, a, p, i).points);
+        deltas[i] = next - score;
+        score = next;
         if (isOnTime(liveTest, a) && checkAnswer(q, a.answer)) {
           correct += 1;
           time += a.timeMs;
         }
       });
-      return { id: p.id, name: p.name || 'Student', score, correct, time };
+      return { id: p.id, name: p.name || 'Student', score, correct, time, deltas };
     })
     .sort((a, b) => b.score - a.score || a.time - b.time);
 
@@ -155,8 +160,9 @@ export const startLiveTest = async (sessionId, questions, secondsPerQuestion) =>
 };
 
 // Keeps every device on the same clock so the stopwatch matches on all screens.
+// `ready` stays false until the server time has actually been measured.
 const useServerOffset = (sessionId, myUid) => {
-  const [offset, setOffset] = useState(0);
+  const [clock, setClock] = useState({ offset: 0, ready: false });
   useEffect(() => {
     if (!sessionId || myUid === undefined || myUid === null) return undefined;
     const ref = doc(db, 'live_sessions', sessionId, 'participants', String(myUid));
@@ -165,13 +171,13 @@ const useServerOffset = (sessionId, myUid) => {
     unsub = onSnapshot(ref, (snap) => {
       const t = snap.data()?.clockProbe;
       if (t?.toMillis && !snap.metadata.hasPendingWrites) {
-        setOffset(t.toMillis() - Date.now());
+        setClock({ offset: t.toMillis() - Date.now(), ready: true });
         unsub();
       }
     });
     return () => unsub();
   }, [sessionId, myUid]);
-  return offset;
+  return clock;
 };
 
 const LeaderboardList = ({ rows, myId, limit = 10 }) => (
@@ -205,6 +211,132 @@ const TILE_STYLES = {
 const TILE_COLUMNS = { 1: 'lg:grid-cols-1', 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' };
 // Question/option HTML can carry inline colours from the editor - force it to the game's text colour.
 const INHERIT_TEXT = '[&_*]:text-inherit!';
+
+// Reveal choreography: the tiles shake for REVEAL_SHAKE_S, then the right answer pops and the
+// result banner + celebration come in.
+const REVEAL_SHAKE_S = 0.6;
+const SHAKE_X = [0, -8, 8, -6, 6, -3, 3, 0];
+const CONFETTI_COLORS = ['#F87171', '#FBBF24', '#34D399', '#60A5FA', '#A78BFA', '#F472B6', '#FFFFFF'];
+
+// Correct answer: confetti bursts over the whole screen - two party poppers fire from the bottom
+// corners right up to the top, a burst explodes from the centre in every direction, and a shower
+// rains down from the top edge across the full width.
+const PartyPoppers = () => {
+  const pieces = useMemo(() => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const rand = (min, max) => min + Math.random() * (max - min);
+    const shape = (i) => {
+      const w = rand(6, 12);
+      const round = Math.random() < 0.3;
+      return { w, h: round ? w : rand(10, 18), round, color: CONFETTI_COLORS[i % CONFETTI_COLORS.length], rotate: rand(-600, 600) };
+    };
+    const list = [];
+
+    // Corner poppers: up and across, peaking near the top of the screen, then falling back down
+    for (let i = 0; i < 110; i++) {
+      const fromLeft = i % 2 === 0;
+      const dx = (fromLeft ? 1 : -1) * rand(0.15, 1) * vw;
+      const rise = rand(0.55, 1) * vh;
+      list.push({
+        ...shape(i), left: fromLeft ? vw * 0.04 : vw * 0.96, top: vh - 60,
+        x: [0, dx * 0.8, dx], y: [0, -rise, -rise + vh * 0.7], times: [0, 0.4, 1], ease: ['easeOut', 'easeIn'],
+        delay: REVEAL_SHAKE_S + rand(0, 0.2), duration: rand(2.4, 3.4),
+      });
+    }
+
+    // Centre burst: out in every direction, then drifting down
+    for (let i = 0; i < 80; i++) {
+      const angle = rand(0, Math.PI * 2);
+      const dist = rand(0.25, 0.7) * Math.max(vw, vh);
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist;
+      list.push({
+        ...shape(i), left: vw / 2, top: vh * 0.45,
+        x: [0, dx, dx * 1.08], y: [0, dy, dy + vh * 0.35], times: [0, 0.3, 1], ease: ['easeOut', 'easeIn'],
+        delay: REVEAL_SHAKE_S + 0.1 + rand(0, 0.1), duration: rand(2.2, 3),
+      });
+    }
+
+    // Shower from the top edge, swaying as it falls
+    for (let i = 0; i < 70; i++) {
+      const sway = rand(20, 60) * (Math.random() < 0.5 ? -1 : 1);
+      list.push({
+        ...shape(i), left: rand(0, vw), top: -24,
+        x: [0, sway, -sway / 2, sway / 3], y: [0, vh * 0.35, vh * 0.7, vh + 60], times: [0, 0.33, 0.66, 1], ease: 'linear',
+        delay: REVEAL_SHAKE_S + 0.3 + rand(0, 1.2), duration: rand(2.6, 3.8),
+      });
+    }
+    return list.map((p, id) => ({ ...p, id }));
+  }, []);
+
+  const emojis = [
+    { key: 'l', char: '🎉', style: { left: '2%', bottom: '1%' }, flip: false },
+    { key: 'r', char: '🎉', style: { right: '2%', bottom: '1%' }, flip: true },
+    { key: 'c', char: '🎊', style: { left: '50%', top: '45%', translate: '-50% -50%' }, flip: false },
+  ];
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[510] overflow-hidden" aria-hidden="true">
+      {pieces.map(p => (
+        <motion.span
+          key={p.id}
+          className={`absolute ${p.round ? 'rounded-full' : 'rounded-[2px]'}`}
+          style={{ left: p.left, top: p.top, width: p.w, height: p.h, backgroundColor: p.color }}
+          initial={{ x: 0, y: 0, opacity: 0 }}
+          animate={{ x: p.x, y: p.y, rotate: p.rotate, opacity: [1, 1, 0] }}
+          transition={{
+            duration: p.duration, delay: p.delay, times: p.times, ease: p.ease,
+            rotate: { duration: p.duration, delay: p.delay, ease: 'linear' },
+            opacity: { duration: p.duration, delay: p.delay, times: [0, 0.8, 1] },
+          }}
+        />
+      ))}
+      {emojis.map(e => (
+        <motion.span
+          key={e.key}
+          className={`absolute ${e.key === 'c' ? 'text-7xl md:text-8xl' : 'text-6xl md:text-7xl'}`}
+          style={e.style}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: [0, 1.4, 1, 1, 0], opacity: [0, 1, 1, 1, 0], rotate: [0, e.flip ? 15 : -15, 0, 0, 0] }}
+          transition={{ duration: 2.6, delay: REVEAL_SHAKE_S - 0.1, times: [0, 0.12, 0.25, 0.85, 1] }}
+        >
+          <span className={`inline-block ${e.flip ? '-scale-x-100' : ''}`}>{e.char}</span>
+        </motion.span>
+      ))}
+    </div>
+  );
+};
+
+// Wrong / no answer: a sobbing face with tears rolling down, then it fades away.
+const CryingFace = () => (
+  <div className="pointer-events-none fixed inset-0 z-[510] flex items-center justify-center" aria-hidden="true">
+    <motion.div
+      className="relative"
+      initial={{ scale: 0, y: 60, opacity: 0 }}
+      animate={{ scale: [0, 1.15, 1, 1, 0.6], y: [60, 0, 0, 0, 30], opacity: [0, 1, 1, 1, 0] }}
+      transition={{ duration: 3, delay: REVEAL_SHAKE_S, times: [0, 0.15, 0.25, 0.8, 1] }}
+    >
+      <motion.div
+        className="text-[110px] md:text-[150px] leading-none select-none"
+        animate={{ rotate: [0, -7, 7, -7, 7, 0] }}
+        transition={{ duration: 1.2, delay: REVEAL_SHAKE_S + 0.4, repeat: 1 }}
+      >
+        😢
+      </motion.div>
+      {[{ left: '27%', delay: 0 }, { left: '66%', delay: 0.35 }].map((tear, i) => (
+        <motion.span
+          key={i}
+          className="absolute top-[58%] w-3 h-4 md:w-4 md:h-5 rounded-[50%_50%_50%_50%/60%_60%_40%_40%] bg-sky-300"
+          style={{ left: tear.left }}
+          initial={{ y: 0, opacity: 0 }}
+          animate={{ y: [0, 70], opacity: [0, 1, 0] }}
+          transition={{ duration: 0.9, delay: REVEAL_SHAKE_S + 0.5 + tear.delay, repeat: 2, repeatDelay: 0.2, ease: 'easeIn' }}
+        />
+      ))}
+    </motion.div>
+  </div>
+);
 
 const GameLeaderboard = ({ rows, myId, limit = 5 }) => (
   <div className="space-y-2">
@@ -255,8 +387,11 @@ const CountdownRing = ({ remainingMs, totalSeconds }) => {
 // The overlay itself - one component for both roles.
 // ---------------------------------------------------------------------------
 export default function LiveTestOverlay({ liveTest, participants, myUid, sessionId, isTeacher }) {
-  const offset = useServerOffset(sessionId, myUid);
+  const { offset, ready: clockReady } = useServerOffset(sessionId, myUid);
   const [now, setNow] = useState(Date.now());
+  // When this screen first saw the current question - the fallback clock (see elapsedAt)
+  const seenRef = useRef({ key: null, at: 0 });
+  const reduceMotion = useReducedMotion();
   const [draft, setDraft] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -270,10 +405,17 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
   const phase = liveTest.phase;
   const totalMs = liveTest.secondsPerQuestion * 1000;
   const startedAt = liveTest.questionStartedAt?.toMillis ? liveTest.questionStartedAt.toMillis() : null;
-  const serverNow = now + offset;
-  const elapsed = startedAt ? Math.max(0, serverNow - startedAt) : 0;
+  const questionKey = answerKey(liveTest, index);
+  if (seenRef.current.key !== questionKey) seenRef.current = { key: questionKey, at: Date.now() };
+  // Server-synced time once the clock offset is measured; until then (or if the probe never comes
+  // back) count from when the question arrived on this screen, so the timer always runs down even
+  // on a device whose clock is wrong.
+  const elapsedAt = (localNow) => (clockReady && startedAt
+    ? Math.max(0, localNow + offset - startedAt)
+    : Math.max(0, localNow - seenRef.current.at));
+  const elapsed = elapsedAt(now);
   const remainingMs = phase === 'question' ? Math.max(0, totalMs - elapsed) : 0;
-  const timeIsUp = phase === 'question' && !!startedAt && remainingMs === 0;
+  const timeIsUp = phase === 'question' && remainingMs === 0;
 
   const me = participants.find(p => p.id === String(myUid));
   const myAnswer = me?.liveAnswers?.[answerKey(liveTest, index)];
@@ -302,7 +444,7 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
     if (locked || submitting || value === null || value === '' || (Array.isArray(value) && value.length === 0)) return;
     setSubmitting(true);
     try {
-      const timeMs = Math.min(totalMs, Math.max(0, serverNow - (startedAt || serverNow)));
+      const timeMs = Math.min(totalMs, elapsedAt(Date.now()));
       await setDoc(
         doc(db, 'live_sessions', sessionId, 'participants', String(myUid)),
         { liveAnswers: { [answerKey(liveTest, index)]: { answer: value, timeMs } } },
@@ -377,8 +519,8 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
     const total = liveTest.questions.length;
     const accuracy = mine && total ? Math.round((mine.correct / total) * 100) : 0;
     return (
-      <div className="fixed inset-0 z-[500] overflow-y-auto bg-[#1C0B2B] text-white">
-        <div className="w-full max-w-xl mx-auto px-4 py-8 md:py-12">
+      <div className="fixed inset-0 z-[500] flex flex-col overflow-y-auto bg-[#1C0B2B] text-white">
+        <div className="w-full max-w-xl m-auto px-4 py-8 md:py-12">
           <div className="text-center mb-6">
             <Trophy size={48} className="mx-auto text-yellow-400 mb-3" />
             <h3 className="text-2xl md:text-3xl font-black">Quiz complete!</h3>
@@ -579,9 +721,11 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
   const tileState = (opt) => {
     if (removed.includes(opt)) return 'opacity-15 grayscale';
     if (revealed) {
-      if (isCorrectOpt(opt)) return 'ring-4 ring-emerald-400';
-      if (isPicked(opt)) return 'ring-4 ring-red-500';
-      return 'opacity-25';
+      // Held back until the shake is over, so the answer isn't given away mid-shake
+      const wait = reduceMotion ? '' : ' delay-[600ms]';
+      if (isCorrectOpt(opt)) return `ring-4 ring-emerald-400${wait}`;
+      if (isPicked(opt)) return `ring-4 ring-red-500${wait}`;
+      return `opacity-25${wait}`;
     }
     if (locked) return isPicked(opt) ? 'ring-4 ring-white' : 'opacity-35';
     if (isPicked(opt)) return 'ring-4 ring-white -translate-y-1';
@@ -618,10 +762,20 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
         </div>
       </div>
 
-      <div className="flex-1 w-full max-w-5xl mx-auto px-3 md:px-6 pb-6 flex flex-col gap-4">
+      {/* Celebration once the cards have finished shaking */}
+      {revealed && !reduceMotion && (wasCorrect ? <PartyPoppers key={`party-${questionKey}`} /> : <CryingFace key={`cry-${questionKey}`} />)}
+
+      {/* Vertically centred in the space under the top bar (falls back to top-aligned when it overflows) */}
+      <div className="flex-1 w-full max-w-5xl mx-auto px-3 md:px-6 pb-6 flex flex-col justify-center-safe gap-4">
         {/* Feedback banner after the reveal */}
         {revealed && (
-          <div className={`rounded-2xl px-5 py-4 text-center shadow-[0_6px_0_rgba(0,0,0,0.25)] ${!locked ? 'bg-white/15' : wasCorrect ? 'bg-emerald-500' : 'bg-red-500'}`}>
+          <motion.div
+            key={`banner-${questionKey}`}
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.7 }}
+            animate={reduceMotion ? {} : wasCorrect ? { opacity: 1, scale: [0.7, 1.08, 1] } : { opacity: 1, scale: 1, x: SHAKE_X }}
+            transition={{ delay: REVEAL_SHAKE_S, duration: 0.5 }}
+            className={`rounded-2xl px-5 py-4 text-center shadow-[0_6px_0_rgba(0,0,0,0.25)] ${!locked ? 'bg-white/15' : wasCorrect ? 'bg-emerald-500' : 'bg-red-500'}`}
+          >
             <div className="text-2xl md:text-3xl font-black flex items-center justify-center gap-2">
               {!locked ? <><Clock size={26} /> Time&apos;s up</> : wasCorrect ? <><CheckCircle2 size={28} /> Correct!</> : <><XCircle size={28} /> Incorrect</>}
             </div>
@@ -635,10 +789,14 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
             ) : (
               <p className="mt-1 text-sm md:text-base font-bold text-white/90">
                 {!locked ? "You didn't answer this question" : `Correct answer: ${correctAnswerText(question)}`}
-                {myPoints.jeopardyLoss > 0 && <span className="block mt-1 text-lg font-black">Double Jeopardy: -{myPoints.jeopardyLoss} pts</span>}
+                {myPoints.jeopardyLoss > 0 && (
+                  <span className="block mt-1 text-lg font-black">
+                    {mine?.deltas?.[index] < 0 ? `Double Jeopardy: ${mine.deltas[index]} pts` : 'Double Jeopardy - no points to lose yet'}
+                  </span>
+                )}
               </p>
             )}
-          </div>
+          </motion.div>
         )}
 
         {/* Question card */}
@@ -669,12 +827,18 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
         ) : (
           <div className={`grid grid-cols-1 sm:grid-cols-2 ${TILE_COLUMNS[visibleOptions.length] || 'lg:grid-cols-4'} gap-3 md:gap-4`}>
             {visibleOptions.map(opt => (
-              <button
+              <motion.button
                 key={opt}
                 type="button"
                 disabled={inputsDisabled || removed.includes(opt)}
                 onClick={() => toggleOption(opt)}
-                className={`relative flex items-center justify-center text-center min-h-[88px] sm:min-h-[140px] lg:min-h-[200px] px-4 pt-10 pb-5 rounded-2xl text-base md:text-lg font-bold text-white transition-all duration-200 disabled:cursor-default ${TILE_STYLES[opt]} ${tileState(opt)}`}
+                // Reveal: every card shakes, then the correct one pops
+                animate={revealed && !reduceMotion
+                  ? { x: SHAKE_X, scale: isCorrectOpt(opt) ? [1, 1.08, 1] : 1 }
+                  : { x: 0, scale: 1 }}
+                transition={{ x: { duration: REVEAL_SHAKE_S }, scale: { delay: REVEAL_SHAKE_S, duration: 0.45 } }}
+                // No CSS transition on transform - it would smear motion's per-frame shake
+                className={`relative flex items-center justify-center text-center min-h-[88px] sm:min-h-[140px] lg:min-h-[200px] px-4 pt-10 pb-5 rounded-2xl text-base md:text-lg font-bold text-white transition-[opacity,translate,filter,box-shadow] duration-200 disabled:cursor-default ${TILE_STYLES[opt]} ${tileState(opt)}`}
               >
                 <span className="absolute top-2.5 left-2.5 w-7 h-7 rounded-lg bg-black/20 flex items-center justify-center text-sm font-black">{opt}</span>
                 {multi && !revealed && (
@@ -682,14 +846,18 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
                     {isPicked(opt) && <Check size={16} strokeWidth={4} />}
                   </span>
                 )}
-                {revealed && isCorrectOpt(opt) && (
-                  <span className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center"><Check size={16} strokeWidth={4} /></span>
-                )}
-                {revealed && isPicked(opt) && !isCorrectOpt(opt) && (
-                  <span className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-red-600 ring-2 ring-white flex items-center justify-center"><X size={16} strokeWidth={4} /></span>
+                {revealed && (isCorrectOpt(opt) || isPicked(opt)) && (
+                  <motion.span
+                    initial={reduceMotion ? false : { scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: REVEAL_SHAKE_S, type: 'spring', stiffness: 500, damping: 18 }}
+                    className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-full ring-2 ring-white flex items-center justify-center ${isCorrectOpt(opt) ? 'bg-emerald-500' : 'bg-red-600'}`}
+                  >
+                    {isCorrectOpt(opt) ? <Check size={16} strokeWidth={4} /> : <X size={16} strokeWidth={4} />}
+                  </motion.span>
                 )}
                 <span className={`min-w-0 break-words drop-shadow-sm ${INHERIT_TEXT}`} dangerouslySetInnerHTML={{ __html: question[`option${opt}`] }} />
-              </button>
+              </motion.button>
             ))}
           </div>
         )}
