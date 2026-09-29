@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { db } from '../../firebase';
 import { doc, setDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { Timer, Trophy, CheckCircle2, XCircle, Clock, ChevronRight, Lock, X } from 'lucide-react';
+import { Timer, Trophy, CheckCircle2, XCircle, Clock, ChevronRight, Lock, X, Check, Flame, Zap, Eraser } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Scoring helpers - answers are always checked against the question-bank record
@@ -54,6 +54,66 @@ const answerKey = (liveTest, index) => `${liveTest.testId}_${index}`;
 // Late answers (tampered clocks) are ignored; a small grace covers network delay.
 const isOnTime = (liveTest, a) => a && a.timeMs <= liveTest.secondsPerQuestion * 1000 + 2500;
 
+// ---------------------------------------------------------------------------
+// Wayground-style points and power-ups
+// ---------------------------------------------------------------------------
+// A correct answer earns 600 points per mark, plus up to 400 per mark for speed (full bonus for
+// an instant answer, none at the buzzer). Wrong or missed answers earn nothing.
+const BASE_POINTS = 600;
+const SPEED_POINTS = 400;
+
+// Each student gets POWER_UPS_PER_STUDENT of these per test; each can be used once, on the
+// question that is live when they tap it. Used power-ups are stored on the participant doc as
+// livePowerUps[`${testId}_${type}`] = questionIndex.
+export const POWER_UPS = {
+  double: { label: '2X', hint: 'Double points on this question' },
+  fiftyFifty: { label: '50-50', hint: 'Remove half of the wrong options' },
+  eraser: { label: 'Eraser', hint: 'Remove one wrong option' },
+  jeopardy: { label: 'Double Jeopardy', hint: `Double points if right - lose ${BASE_POINTS} per mark if wrong` },
+};
+const POWER_UPS_PER_STUDENT = 3;
+
+// Small stable hash, so every screen derives the same power-ups / removed options without storing them
+const hashString = (s) => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+};
+export const stableShuffle = (items, seed) =>
+  items.slice().sort((a, b) => hashString(`${seed}:${a}`) - hashString(`${seed}:${b}`));
+
+export const grantedPowerUps = (liveTest, uid) =>
+  stableShuffle(Object.keys(POWER_UPS), `${liveTest.testId}:${uid}`).slice(0, POWER_UPS_PER_STUDENT);
+
+export const powerUpKey = (liveTest, type) => `${liveTest.testId}_${type}`;
+// Question index a power-up was used on (undefined while unused)
+export const powerUpUsedOn = (p, liveTest, type) => p?.livePowerUps?.[powerUpKey(liveTest, type)];
+// Only power-ups the student was actually granted count towards the score
+const powerUpActive = (p, liveTest, type, index) =>
+  powerUpUsedOn(p, liveTest, type) === index && grantedPowerUps(liveTest, p.id).includes(type);
+
+// Points for one question: { points, base, speed, doubled, jeopardyLoss }
+export const questionPoints = (liveTest, q, a, p, index) => {
+  const marks = questionMarks(q);
+  const jeopardy = powerUpActive(p, liveTest, 'jeopardy', index);
+  if (!(isOnTime(liveTest, a) && checkAnswer(q, a.answer))) {
+    const loss = jeopardy ? BASE_POINTS * marks : 0;
+    return { points: -loss, base: 0, speed: 0, doubled: false, jeopardyLoss: loss };
+  }
+  const totalMs = liveTest.secondsPerQuestion * 1000;
+  const speedFactor = totalMs > 0 ? Math.max(0, 1 - a.timeMs / totalMs) : 0;
+  const base = BASE_POINTS * marks;
+  const speed = Math.round(SPEED_POINTS * marks * speedFactor);
+  const doubled = jeopardy || powerUpActive(p, liveTest, 'double', index);
+  return { points: (base + speed) * (doubled ? 2 : 1), base, speed, doubled, jeopardyLoss: 0 };
+};
+
+// A question only counts once it is revealed, so the score can't give the answer away early.
+const isScored = (liveTest, i) => i < liveTest.currentIndex || (i === liveTest.currentIndex && liveTest.phase !== 'question');
+
 export const buildLeaderboard = (liveTest, participants) =>
   participants
     .filter(p => p.role !== 'teacher')
@@ -62,9 +122,10 @@ export const buildLeaderboard = (liveTest, participants) =>
       let correct = 0;
       let time = 0;
       liveTest.questions.forEach((q, i) => {
+        if (!isScored(liveTest, i)) return;
         const a = p.liveAnswers?.[answerKey(liveTest, i)];
+        score += questionPoints(liveTest, q, a, p, i).points;
         if (isOnTime(liveTest, a) && checkAnswer(q, a.answer)) {
-          score += questionMarks(q);
           correct += 1;
           time += a.timeMs;
         }
@@ -130,6 +191,38 @@ const LeaderboardList = ({ rows, myId, limit = 10 }) => (
       </div>
     ))}
     {rows.length === 0 && <p className="text-sm text-slate-400 font-medium">No students have joined the test yet.</p>}
+  </div>
+);
+
+// --- Student game screen (Wayground style) ---------------------------------
+// Each option letter keeps its own colour tile, with a darker "3D" bottom edge.
+const TILE_STYLES = {
+  A: 'bg-[#2F6DAE] shadow-[0_6px_0_#1E4A78]',
+  B: 'bg-[#2C9CA6] shadow-[0_6px_0_#1C6C73]',
+  C: 'bg-[#E9A22A] shadow-[0_6px_0_#A87414]',
+  D: 'bg-[#D5546D] shadow-[0_6px_0_#963246]',
+};
+const TILE_COLUMNS = { 1: 'lg:grid-cols-1', 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' };
+// Question/option HTML can carry inline colours from the editor - force it to the game's text colour.
+const INHERIT_TEXT = '[&_*]:text-inherit!';
+
+const GameLeaderboard = ({ rows, myId, limit = 5 }) => (
+  <div className="space-y-2">
+    {rows.slice(0, limit).map((r, i) => (
+      <div key={r.id} className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl ${r.id === myId ? 'bg-[#8854F5] ring-2 ring-white/60' : 'bg-white/[0.07]'}`}>
+        <div className="flex items-center gap-3 min-w-0">
+          <span className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-sm font-black ${i === 0 ? 'bg-yellow-400 text-yellow-950' : i === 1 ? 'bg-slate-300 text-slate-800' : i === 2 ? 'bg-orange-400 text-orange-950' : 'bg-white/10 text-white/70'}`}>
+            {i + 1}
+          </span>
+          <span className="font-bold truncate">{r.name}{r.id === myId ? ' (You)' : ''}</span>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="font-black tabular-nums">{r.score} pts</div>
+          <div className="text-[11px] font-semibold text-white/50">{r.correct} correct · {(r.time / 1000).toFixed(1)}s</div>
+        </div>
+      </div>
+    ))}
+    {rows.length === 0 && <p className="text-sm text-white/50 font-medium">No students have joined the test yet.</p>}
   </div>
 );
 
@@ -260,6 +353,16 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
   const multi = isMultiQuestion(question);
   const isCorrectOpt = (opt) => (multi ? (question.correctAnswers || []).includes(opt) : question.correctAnswer === opt);
 
+  // Student screen extras - display only, the leaderboard scoring above is unchanged.
+  // Streak = run of consecutive on-time correct answers up to the last revealed question.
+  const streakUpTo = revealed || phase === 'finished' ? index : index - 1;
+  let myStreak = 0;
+  for (let i = 0; i <= streakUpTo; i++) {
+    const a = me?.liveAnswers?.[answerKey(liveTest, i)];
+    myStreak = isOnTime(liveTest, a) && checkAnswer(liveTest.questions[i], a.answer) ? myStreak + 1 : 0;
+  }
+  const mine = myRank >= 0 ? leaderboard[myRank] : null;
+
   const questionBlock = (
     <>
       <div className="text-[15px] md:text-[17px] font-semibold text-slate-900 leading-relaxed" dangerouslySetInnerHTML={{ __html: question.questionText }} />
@@ -269,7 +372,40 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
     </>
   );
 
-  // ------------------------------------------------------------------ finished
+  // ---------------------------------------------------------- finished (student)
+  if (phase === 'finished' && !isTeacher) {
+    const total = liveTest.questions.length;
+    const accuracy = mine && total ? Math.round((mine.correct / total) * 100) : 0;
+    return (
+      <div className="fixed inset-0 z-[500] overflow-y-auto bg-[#1C0B2B] text-white">
+        <div className="w-full max-w-xl mx-auto px-4 py-8 md:py-12">
+          <div className="text-center mb-6">
+            <Trophy size={48} className="mx-auto text-yellow-400 mb-3" />
+            <h3 className="text-2xl md:text-3xl font-black">Quiz complete!</h3>
+            {mine && <p className="mt-1 text-white/60 font-semibold">You finished #{myRank + 1} of {leaderboard.length}</p>}
+          </div>
+          {mine && (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                {[['Rank', `#${myRank + 1}`], ['Score', `${mine.score} pts`], ['Accuracy', `${accuracy}%`]].map(([label, value]) => (
+                  <div key={label} className="rounded-2xl bg-white/[0.07] p-4 text-center">
+                    <div className="text-xl md:text-2xl font-black tabular-nums">{value}</div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-white/50 mt-1">{label}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 mb-6 text-center text-sm font-semibold text-white/60">{mine.correct}/{total} correct</p>
+            </>
+          )}
+          <h4 className="text-xs font-black uppercase tracking-wider text-white/50 mb-3">Leaderboard</h4>
+          <GameLeaderboard rows={leaderboard} myId={String(myUid)} limit={10} />
+          <p className="mt-6 text-xs text-center font-semibold text-white/40">Waiting for your teacher to continue the class...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ------------------------------------------------------------------ finished (teacher)
   if (phase === 'finished') {
     return (
       <div className="fixed inset-0 z-[500] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4">
@@ -278,18 +414,10 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
             <h3 className="text-xl font-black text-slate-900 flex items-center gap-2"><Trophy className="text-yellow-500" /> Live Test Leaderboard</h3>
             {isTeacher && <button onClick={closeTest} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full" title="Close"><X size={18} /></button>}
           </div>
-          {!isTeacher && myRank >= 0 && (
-            <p className="text-sm font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 mb-4">
-              You finished #{myRank + 1} with {leaderboard[myRank].score} pts ({leaderboard[myRank].correct}/{liveTest.questions.length} correct)
-            </p>
-          )}
           <LeaderboardList rows={leaderboard} myId={String(myUid)} />
-          {isTeacher && (
-            <button onClick={closeTest} className="mt-5 w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">
-              Close Live Test & Continue Class
-            </button>
-          )}
-          {!isTeacher && <p className="mt-4 text-xs text-center font-semibold text-slate-400">Waiting for your teacher to continue the class...</p>}
+          <button onClick={closeTest} className="mt-5 w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">
+            Close Live Test & Continue Class
+          </button>
         </div>
       </div>
     );
@@ -404,98 +532,219 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
   const shownAnswer = locked ? myAnswer.answer : draft;
   const isPicked = (opt) => (Array.isArray(shownAnswer) ? shownAnswer.includes(opt) : shownAnswer === opt);
 
+  const fraction = totalMs > 0 ? Math.min(1, remainingMs / totalMs) : 0;
+  const secondsLeft = Math.ceil(remainingMs / 1000);
+  const urgent = phase === 'question' && (secondsLeft <= 5 || fraction <= 0.2);
+  const hasDraft = draft !== null && draft !== '' && (!Array.isArray(draft) || draft.length > 0);
+  const visibleOptions = ['A', 'B', 'C', 'D'].filter(opt => question[`option${opt}`]);
+
+  // --- Power-ups
+  const myId = String(myUid);
+  const myPowerUps = grantedPowerUps(liveTest, myId);
+  const usedOn = (type) => powerUpUsedOn(me, liveTest, type);
+  const activeHere = (type) => usedOn(type) === index;
+  const wrongOptions = numerical ? [] : visibleOptions.filter(opt => !isCorrectOpt(opt));
+  // Wrong options knocked out by 50-50 / Eraser on this question, in a fixed per-student order
+  const removedOptions = (extraType = null) => {
+    const on = (type) => type === extraType || activeHere(type);
+    const count = (on('fiftyFifty') ? Math.ceil(wrongOptions.length / 2) : 0) + (on('eraser') ? 1 : 0);
+    return stableShuffle(wrongOptions, `${liveTest.testId}:${myId}:${index}`).slice(0, count);
+  };
+  const removed = removedOptions();
+  const canUsePowerUp = (type) => {
+    if (usedOn(type) !== undefined || phase !== 'question' || inputsDisabled) return false;
+    if (type === 'fiftyFifty' || type === 'eraser') return wrongOptions.length > removed.length;
+    // 2X and Double Jeopardy don't stack on the same question
+    return !activeHere(type === 'double' ? 'jeopardy' : 'double');
+  };
+  const activatePowerUp = async (type) => {
+    if (!canUsePowerUp(type)) return;
+    if (type === 'fiftyFifty' || type === 'eraser') {
+      const gone = removedOptions(type);
+      setDraft(prev => (Array.isArray(prev) ? prev.filter(o => !gone.includes(o)) : gone.includes(prev) ? null : prev));
+    }
+    try {
+      await setDoc(
+        doc(db, 'live_sessions', sessionId, 'participants', myId),
+        { livePowerUps: { [powerUpKey(liveTest, type)]: index } },
+        { merge: true }
+      );
+    } catch (e) {
+      console.error('Failed to use power-up', e);
+    }
+  };
+  const activePowerUps = myPowerUps.filter(activeHere);
+  const myPoints = questionPoints(liveTest, question, myAnswer, me || { id: myId }, index);
+
+  const tileState = (opt) => {
+    if (removed.includes(opt)) return 'opacity-15 grayscale';
+    if (revealed) {
+      if (isCorrectOpt(opt)) return 'ring-4 ring-emerald-400';
+      if (isPicked(opt)) return 'ring-4 ring-red-500';
+      return 'opacity-25';
+    }
+    if (locked) return isPicked(opt) ? 'ring-4 ring-white' : 'opacity-35';
+    if (isPicked(opt)) return 'ring-4 ring-white -translate-y-1';
+    return 'hover:-translate-y-1 hover:brightness-110';
+  };
+
   return (
-    <div className="fixed inset-0 z-[500] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-3 md:p-6">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-y-auto p-5 md:p-8">
-        <div className="flex items-center justify-between gap-4 mb-5">
-          <div>
-            <span className="text-[11px] font-black uppercase tracking-widest text-white bg-red-500 px-2.5 py-1 rounded-full animate-pulse">Live Test</span>
-            <p className="mt-2 text-sm font-bold text-slate-500">
-              Question {index + 1} / {liveTest.questions.length} - {questionMarks(question)} {questionMarks(question) === 1 ? 'mark' : 'marks'}
-              {numerical ? ' - Numerical' : multi ? ' - Select all that apply' : ''}
-            </p>
+    <div className="fixed inset-0 z-[500] flex flex-col overflow-y-auto bg-[#1C0B2B] text-white">
+      {/* Timer bar - drains left to right like Wayground's */}
+      <div className="h-2 w-full shrink-0 bg-white/10">
+        <div
+          className={`h-full transition-[width] duration-300 ease-linear ${urgent ? 'bg-red-500' : 'bg-[#A78BFA]'}`}
+          style={{ width: `${phase === 'question' ? fraction * 100 : 0}%` }}
+        />
+      </div>
+
+      {/* Top bar: question counter, timer, streak, rank and score */}
+      <div className="flex items-center justify-between gap-2 px-3 md:px-6 py-3 shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1.5 rounded-lg bg-white/10 text-sm font-black tabular-nums">{index + 1}/{liveTest.questions.length}</span>
+          <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full bg-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse">Live</span>
+        </div>
+        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-black tabular-nums ${urgent ? 'bg-red-500 text-white' : 'bg-white/10'}`}>
+          <Timer size={15} /> {phase === 'question' ? `${secondsLeft}s` : "Time's up"}
+        </div>
+        <div className="flex items-center gap-2">
+          {myStreak >= 2 && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-orange-500/20 text-orange-300 text-sm font-black" title="Correct answers in a row">
+              <Flame size={15} /> {myStreak}
+            </span>
+          )}
+          {mine && <span className="hidden sm:inline-flex px-2.5 py-1.5 rounded-lg bg-white/10 text-sm font-black">#{myRank + 1}</span>}
+          <span className="px-3 py-1.5 rounded-lg bg-white text-[#1C0B2B] text-sm font-black tabular-nums">{mine ? mine.score : 0} pts</span>
+        </div>
+      </div>
+
+      <div className="flex-1 w-full max-w-5xl mx-auto px-3 md:px-6 pb-6 flex flex-col gap-4">
+        {/* Feedback banner after the reveal */}
+        {revealed && (
+          <div className={`rounded-2xl px-5 py-4 text-center shadow-[0_6px_0_rgba(0,0,0,0.25)] ${!locked ? 'bg-white/15' : wasCorrect ? 'bg-emerald-500' : 'bg-red-500'}`}>
+            <div className="text-2xl md:text-3xl font-black flex items-center justify-center gap-2">
+              {!locked ? <><Clock size={26} /> Time&apos;s up</> : wasCorrect ? <><CheckCircle2 size={28} /> Correct!</> : <><XCircle size={28} /> Incorrect</>}
+            </div>
+            {wasCorrect ? (
+              <>
+                <p className="mt-1 text-3xl md:text-4xl font-black tabular-nums">+{myPoints.points} pts</p>
+                <p className="mt-1 text-xs md:text-sm font-bold text-white/85">
+                  {myPoints.base} base + {myPoints.speed} speed bonus{myPoints.doubled ? ' · doubled' : ''}{myStreak >= 2 ? ` · ${myStreak} in a row!` : ''}
+                </p>
+              </>
+            ) : (
+              <p className="mt-1 text-sm md:text-base font-bold text-white/90">
+                {!locked ? "You didn't answer this question" : `Correct answer: ${correctAnswerText(question)}`}
+                {myPoints.jeopardyLoss > 0 && <span className="block mt-1 text-lg font-black">Double Jeopardy: -{myPoints.jeopardyLoss} pts</span>}
+              </p>
+            )}
           </div>
-          {phase === 'question' ? (
-            <CountdownRing remainingMs={remainingMs} totalSeconds={liveTest.secondsPerQuestion} />
-          ) : (
-            <div className="flex items-center gap-1.5 text-sm font-bold text-slate-400"><Timer size={16} /> Time&apos;s up</div>
+        )}
+
+        {/* Question card */}
+        <div className="rounded-2xl bg-white/[0.07] border border-white/10 px-5 py-6 md:px-8 md:py-10 flex flex-col items-center justify-center text-center">
+          <p className="text-[11px] font-black uppercase tracking-widest text-white/50 mb-3">
+            {questionMarks(question)} {questionMarks(question) === 1 ? 'mark' : 'marks'}
+            {numerical ? ' · Numerical' : multi ? ' · Select all that apply' : ''}
+          </p>
+          <div className={`text-lg md:text-2xl font-bold leading-snug break-words max-w-full ${INHERIT_TEXT}`} dangerouslySetInnerHTML={{ __html: question.questionText }} />
+          {question.questionImageUrl && (
+            <img src={question.questionImageUrl} alt="Question" className="mt-4 max-h-56 object-contain rounded-xl bg-white p-1" />
           )}
         </div>
 
-        <div className="mb-5">{questionBlock}</div>
-
+        {/* Answers */}
         {numerical ? (
-          <div className="mb-5">
-            <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Your answer</label>
+          <div className="w-full max-w-xl mx-auto">
             <input
               type="text"
               inputMode="decimal"
               disabled={inputsDisabled}
               value={locked ? String(myAnswer.answer) : (draft ?? '')}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Type your numerical answer"
-              className="w-full px-4 py-3 text-lg font-bold border-2 border-slate-200 rounded-2xl focus:outline-none focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-500"
+              placeholder="Type your answer"
+              className="w-full px-5 py-5 text-2xl md:text-3xl font-black text-center rounded-2xl bg-white text-[#1C0B2B] placeholder:text-slate-300 border-4 border-transparent focus:border-[#A78BFA] outline-none disabled:opacity-80 shadow-[0_6px_0_rgba(0,0,0,0.25)]"
             />
-            {revealed && (
-              <p className="mt-2 text-sm font-bold text-emerald-600">Correct answer: {correctAnswerText(question)}</p>
-            )}
           </div>
         ) : (
-          <div className="grid gap-3 mb-5">
-            {['A', 'B', 'C', 'D'].map(opt => {
-              const text = question[`option${opt}`];
-              if (!text) return null;
-              let style = 'border-slate-200 bg-white hover:bg-slate-50 text-slate-800';
-              if (revealed) {
-                if (isCorrectOpt(opt)) style = 'border-emerald-300 bg-emerald-50 text-emerald-800';
-                else if (isPicked(opt)) style = 'border-red-200 bg-red-50 text-red-700';
-                else style = 'border-slate-100 bg-slate-50 text-slate-400';
-              } else if (isPicked(opt)) {
-                style = 'border-indigo-400 bg-indigo-50 text-indigo-800';
-              }
-              return (
-                <button
-                  key={opt}
-                  type="button"
-                  disabled={inputsDisabled}
-                  onClick={() => toggleOption(opt)}
-                  className={`flex items-center gap-3 text-left p-4 rounded-2xl border-2 font-semibold transition-all disabled:cursor-default ${style}`}
-                >
-                  <span className="w-8 h-8 shrink-0 rounded-lg bg-white/80 border border-current/20 flex items-center justify-center font-black">{opt}</span>
-                  <span className="min-w-0 break-words" dangerouslySetInnerHTML={{ __html: text }} />
-                </button>
-              );
-            })}
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${TILE_COLUMNS[visibleOptions.length] || 'lg:grid-cols-4'} gap-3 md:gap-4`}>
+            {visibleOptions.map(opt => (
+              <button
+                key={opt}
+                type="button"
+                disabled={inputsDisabled || removed.includes(opt)}
+                onClick={() => toggleOption(opt)}
+                className={`relative flex items-center justify-center text-center min-h-[88px] sm:min-h-[140px] lg:min-h-[200px] px-4 pt-10 pb-5 rounded-2xl text-base md:text-lg font-bold text-white transition-all duration-200 disabled:cursor-default ${TILE_STYLES[opt]} ${tileState(opt)}`}
+              >
+                <span className="absolute top-2.5 left-2.5 w-7 h-7 rounded-lg bg-black/20 flex items-center justify-center text-sm font-black">{opt}</span>
+                {multi && !revealed && (
+                  <span className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-md border-2 border-white flex items-center justify-center ${isPicked(opt) ? 'bg-white text-[#1C0B2B]' : ''}`}>
+                    {isPicked(opt) && <Check size={16} strokeWidth={4} />}
+                  </span>
+                )}
+                {revealed && isCorrectOpt(opt) && (
+                  <span className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center"><Check size={16} strokeWidth={4} /></span>
+                )}
+                {revealed && isPicked(opt) && !isCorrectOpt(opt) && (
+                  <span className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-red-600 ring-2 ring-white flex items-center justify-center"><X size={16} strokeWidth={4} /></span>
+                )}
+                <span className={`min-w-0 break-words drop-shadow-sm ${INHERIT_TEXT}`} dangerouslySetInnerHTML={{ __html: question[`option${opt}`] }} />
+              </button>
+            ))}
           </div>
         )}
 
+        {/* Submit / waiting */}
         {phase === 'question' && (
           locked ? (
-            <div className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-700 font-bold"><Lock size={16} /> Answer locked - waiting for the timer</div>
+            <div className="self-center flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/10 font-bold"><Lock size={16} /> Answer submitted · waiting for the timer</div>
           ) : (
             <button
               onClick={() => submitAnswer(draft)}
-              disabled={submitting || timeIsUp || draft === null || draft === '' || (Array.isArray(draft) && draft.length === 0)}
-              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-colors"
+              disabled={submitting || timeIsUp || !hasDraft}
+              className="self-center w-full sm:w-auto sm:min-w-[280px] px-10 py-4 rounded-2xl bg-[#8854F5] hover:bg-[#7a45ec] shadow-[0_6px_0_#5B30B8] active:translate-y-1 active:shadow-[0_2px_0_#5B30B8] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:translate-y-0 text-lg font-black transition-all"
             >
-              Lock Answer
+              {hasDraft ? 'Submit' : multi ? 'Select all that apply' : numerical ? 'Type your answer' : 'Pick an answer'}
             </button>
           )
         )}
 
+        {/* Power-ups - each one disappears once used, like Wayground's */}
+        {phase === 'question' && (myPowerUps.some(t => usedOn(t) === undefined) || activePowerUps.length > 0) && (
+          <div className="flex flex-wrap items-center justify-center gap-2 md:gap-3">
+            {activePowerUps.map(type => (
+              <span key={`on-${type}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-400 text-yellow-950 text-xs font-black">
+                <Zap size={13} /> {POWER_UPS[type].label} active
+              </span>
+            ))}
+            {myPowerUps.filter(t => usedOn(t) === undefined).map(type => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => activatePowerUp(type)}
+                disabled={!canUsePowerUp(type)}
+                title={POWER_UPS[type].hint}
+                className="flex items-center gap-2 pl-2 pr-4 py-2 rounded-full bg-gradient-to-b from-[#9B6BFF] to-[#6D3FE0] shadow-[0_4px_0_#4B2A9E] active:translate-y-0.5 active:shadow-[0_2px_0_#4B2A9E] disabled:opacity-35 disabled:cursor-not-allowed disabled:active:translate-y-0 transition-all"
+              >
+                <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                  {type === 'eraser' ? <Eraser size={16} /> : type === 'jeopardy' ? <Zap size={16} /> : <span className="text-[11px] font-black">{type === 'double' ? '2X' : '½'}</span>}
+                </span>
+                <span className="text-left leading-tight">
+                  <span className="block text-sm font-black">{POWER_UPS[type].label}</span>
+                  <span className="hidden sm:block text-[10.5px] font-semibold text-white/75">{POWER_UPS[type].hint}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Leaderboard after each question */}
         {revealed && (
-          <div className="space-y-4">
-            <div className={`flex items-center gap-2 py-3 px-4 rounded-2xl font-bold ${!locked ? 'bg-slate-100 text-slate-500' : wasCorrect ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
-              {!locked ? <><Clock size={18} /> You did not answer this question</> : wasCorrect
-                ? <><CheckCircle2 size={18} /> Correct! +{questionMarks(question)} {questionMarks(question) === 1 ? 'mark' : 'marks'}</>
-                : <><XCircle size={18} /> Incorrect. Correct answer: {correctAnswerText(question)}</>}
-            </div>
-            <div>
-              <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-2">Leaderboard so far</h4>
-              <LeaderboardList rows={leaderboard} myId={String(myUid)} limit={5} />
-              {myRank >= 5 && <p className="mt-2 text-xs font-bold text-slate-500">Your rank: #{myRank + 1} ({leaderboard[myRank].score} pts)</p>}
-            </div>
-            <p className="text-xs text-center font-semibold text-slate-400">Waiting for your teacher to continue...</p>
+          <div className="w-full max-w-xl mx-auto mt-2">
+            <h4 className="text-xs font-black uppercase tracking-wider text-white/50 mb-2">Leaderboard</h4>
+            <GameLeaderboard rows={leaderboard} myId={String(myUid)} limit={5} />
+            {myRank >= 5 && <p className="mt-2 text-xs font-bold text-white/60">Your rank: #{myRank + 1} ({leaderboard[myRank].score} pts)</p>}
+            <p className="mt-4 text-xs text-center font-semibold text-white/40">Waiting for your teacher to continue...</p>
           </div>
         )}
       </div>
