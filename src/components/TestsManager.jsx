@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where, Timestamp } from 'firebase/firestore';
 import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2, FolderOpen, ArrowLeft } from 'lucide-react';
+
+import { isNumericalQuestion, getQuestionCategory } from '../utils/questionCategory';
+import {
+  RELEASE_MODES, releaseMode, releaseAtMillis, testEndMillis, areSolutionsVisible,
+  formatReleaseTime, releaseStatusLabel, solutionsEmail
+} from '../utils/solutionRelease';
 
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
@@ -53,6 +59,9 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [targetMarks, setTargetMarks] = useState(100);
   const [total1Mark, setTotal1Mark] = useState(30);
   const [total2Mark, setTotal2Mark] = useState(35);
+  // Optional split of the test's questions into numerical / theory ('' = no split, pick any)
+  const [numericalCount, setNumericalCount] = useState('');
+  const [theoryCount, setTheoryCount] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [bundleId, setBundleId] = useState(''); // '' means dept level, 'free' means free, 'specific_id' means exclusive
@@ -64,7 +73,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [allocations, setAllocations] = useState({}); // { topicName: { q1: count, q2: count } }
   const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'manual' | 'both'
   const [manualSelectedIds, setManualSelectedIds] = useState([]);
-  const [manualFilters, setManualFilters] = useState({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All' });
+  const [manualFilters, setManualFilters] = useState({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
 
   // Department mapping for pills
   const deptMapping = {
@@ -204,10 +213,46 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
       (q.topic || '').trim().toLowerCase() === (topicName || '').trim().toLowerCase()
     );
-    const q1 = pool.filter(q => markValue(q) === 1).length;
-    const q2 = pool.filter(q => markValue(q) === 2).length;
-    return { q1, q2 };
+    const pool1 = pool.filter(q => markValue(q) === 1);
+    const pool2 = pool.filter(q => markValue(q) === 2);
+    const n1 = pool1.filter(isNumericalQuestion).length;
+    const n2 = pool2.filter(isNumericalQuestion).length;
+    return { q1: pool1.length, q2: pool2.length, n1, n2, t1: pool1.length - n1, t2: pool2.length - n2 };
   };
+
+  // Numerical/theory split: both boxes empty = no split
+  const hasCategorySplit = numericalCount !== '' || theoryCount !== '';
+  const totalQuestionTarget = (parseInt(total1Mark) || 0) + (parseInt(total2Mark) || 0);
+  const numericalTarget = parseInt(numericalCount) || 0;
+  const theoryTarget = parseInt(theoryCount) || 0;
+
+  const handleNumericalCountChange = (value) => {
+    const n = value === '' ? '' : Math.max(0, parseInt(value) || 0);
+    setNumericalCount(n);
+    // Fill the other box so the two always add up to the question total
+    setTheoryCount(n === '' ? '' : Math.max(0, totalQuestionTarget - n));
+  };
+  const handleTheoryCountChange = (value) => {
+    const t = value === '' ? '' : Math.max(0, parseInt(value) || 0);
+    setTheoryCount(t);
+    setNumericalCount(t === '' ? '' : Math.max(0, totalQuestionTarget - t));
+  };
+
+  // Every topic x mark allocation can take between `lo` and `hi` numerical questions (the rest are
+  // theory), limited by how many of each the bank has. Returns the achievable numerical range.
+  const numericalRangeFor = (cells) => cells.reduce((r, c) => ({
+    min: r.min + Math.max(0, c.count - c.theory),
+    max: r.max + Math.min(c.count, c.numerical)
+  }), { min: 0, max: 0 });
+
+  const allocationCells = () => selectedTopics.flatMap(topic => {
+    const counts = getTopicCounts(topic);
+    const alloc = allocations[topic] || {};
+    return [
+      { count: Math.min(parseInt(alloc.q1) || 0, counts.q1), numerical: counts.n1, theory: counts.t1 },
+      { count: Math.min(parseInt(alloc.q2) || 0, counts.q2), numerical: counts.n2, theory: counts.t2 }
+    ];
+  });
 
   // Filtered pool of questions based on Step 2 Hierarchy (combines selected topics, case-insensitive)
   const availablePool = questions.filter(q => {
@@ -242,6 +287,9 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     if (!duration || duration <= 0) return "Please enter a valid time duration";
     if (!targetMarks || targetMarks <= 0) return "Please enter target total marks";
     if (!isFormulaValid) return "Formula sum does not match Target Total Marks";
+    if (hasCategorySplit && numericalTarget + theoryTarget !== totalQuestionTarget) {
+      return `Numerical (${numericalTarget}) + Theory (${theoryTarget}) must equal the total questions (${totalQuestionTarget})`;
+    }
     return null;
   };
 
@@ -280,6 +328,15 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       }
     });
     if (exceeds) return "Some allocations exceed the available questions in database";
+
+    if (hasCategorySplit) {
+      const range = numericalRangeFor(allocationCells());
+      if (numericalTarget < range.min || numericalTarget > range.max) {
+        return range.min === range.max
+          ? `These topic allocations allow exactly ${range.min} numerical question(s), not ${numericalTarget} - change the allocations or the numerical/theory split`
+          : `These topic allocations allow ${range.min}-${range.max} numerical questions, not ${numericalTarget} - change the allocations or the numerical/theory split`;
+      }
+    }
 
     return null;
   };
@@ -339,35 +396,57 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     }
 
     if (selectionMode === 'auto' || selectionMode === 'both') {
-      // Auto-pick matching questions topic-by-topic
-      selectedTopics.forEach(topic => {
-      const alloc = allocations[topic] || { q1: 0, q2: 0 };
-      
-      const topicPool = questions.filter(q =>
-        questionDeptMatches(q.department) &&
-        (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
-        (q.topic || '').trim().toLowerCase() === topic.trim().toLowerCase() &&
-        !manualIdsSet.has(q.id) // exclude manually selected ones
-      );
+      const shuffle = (arr) => [...arr].sort(() => 0.5 - Math.random());
 
-      // Pick 1-mark questions randomly
-      const pool1MarkIds = topicPool
-        .filter(q => markValue(q) === 1)
-        .map(q => q.id);
-      const pick1MarkCount = Math.min(alloc.q1, pool1MarkIds.length);
-      const shuffled1Mark = [...pool1MarkIds].sort(() => 0.5 - Math.random());
-      const final1MarkIds = shuffled1Mark.slice(0, pick1MarkCount);
-
-      // Pick 2-mark questions randomly
-      const pool2MarkIds = topicPool
-        .filter(q => markValue(q) === 2)
-        .map(q => q.id);
-      const pick2MarkCount = Math.min(alloc.q2, pool2MarkIds.length);
-      const shuffled2Mark = [...pool2MarkIds].sort(() => 0.5 - Math.random());
-      const final2MarkIds = shuffled2Mark.slice(0, pick2MarkCount);
-
-      finalQuestionIds.push(...final1MarkIds, ...final2MarkIds);
+      // One cell per topic x mark allocation, with its numerical and theory pools
+      const cells = selectedTopics.flatMap(topic => {
+        const alloc = allocations[topic] || { q1: 0, q2: 0 };
+        const topicPool = questions.filter(q =>
+          questionDeptMatches(q.department) &&
+          (q.subject || '').trim().toLowerCase() === (selectedSubject || '').trim().toLowerCase() &&
+          (q.topic || '').trim().toLowerCase() === topic.trim().toLowerCase() &&
+          !manualIdsSet.has(q.id) // exclude manually selected ones
+        );
+        return [[1, alloc.q1], [2, alloc.q2]].map(([mark, wanted]) => {
+          const pool = topicPool.filter(q => markValue(q) === mark);
+          const numericalPool = pool.filter(isNumericalQuestion).map(q => q.id);
+          const theoryPool = pool.filter(q => !isNumericalQuestion(q)).map(q => q.id);
+          return { count: Math.min(parseInt(wanted) || 0, pool.length), numericalPool, theoryPool, allIds: pool.map(q => q.id) };
+        });
       });
+
+      if (!hasCategorySplit) {
+        cells.forEach(c => finalQuestionIds.push(...shuffle(c.allIds).slice(0, c.count)));
+      } else {
+        // Numerical questions still needed from auto-pick (manual picks already count in "Both" mode)
+        const manualNumerical = questions.filter(q => manualIdsSet.has(q.id) && isNumericalQuestion(q)).length;
+        const lo = cells.map(c => Math.max(0, c.count - c.theoryPool.length));
+        const hi = cells.map(c => Math.min(c.count, c.numericalPool.length));
+        const minSum = lo.reduce((a, b) => a + b, 0);
+        const maxSum = hi.reduce((a, b) => a + b, 0);
+        let remaining = Math.min(maxSum, Math.max(minSum, numericalTarget - manualNumerical)) - minSum;
+
+        // Start every cell at its minimum, then hand out the remaining numerical picks round-robin
+        // in random order so they spread across topics instead of piling into the first one
+        const numericalPerCell = [...lo];
+        const order = shuffle(cells.map((_, i) => i));
+        while (remaining > 0) {
+          for (const i of order) {
+            if (remaining > 0 && numericalPerCell[i] < hi[i]) {
+              numericalPerCell[i] += 1;
+              remaining -= 1;
+            }
+          }
+        }
+
+        cells.forEach((c, i) => {
+          const n = numericalPerCell[i];
+          finalQuestionIds.push(
+            ...shuffle(c.numericalPool).slice(0, n),
+            ...shuffle(c.theoryPool).slice(0, c.count - n)
+          );
+        });
+      }
     }
 
     if (finalQuestionIds.length === 0) {
@@ -382,6 +461,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       targetMarks: parseInt(targetMarks),
       total1Mark: parseInt(total1Mark),
       total2Mark: parseInt(total2Mark),
+      numericalCount: hasCategorySplit ? numericalTarget : null,
+      theoryCount: hasCategorySplit ? theoryTarget : null,
       scheduledTime,
       department: selectedDept,
       subject: selectedSubject || 'General',
@@ -394,6 +475,14 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     try {
       if (editingTestId) {
         // Preserve status/solutionsUnlocked/createdBy/createdAt - editing only touches the spec fields above.
+        // A pending "N hours after the test ends" release moves with the test's new time/duration.
+        const existing = tests.find(t => t.id === editingTestId);
+        if (existing?.solutionsReleasePending && typeof existing.solutionsReleaseAfterHours === 'number') {
+          const newEnd = testEndMillis(testPayload);
+          if (newEnd !== null) {
+            testPayload.solutionsReleaseAt = Timestamp.fromMillis(newEnd + existing.solutionsReleaseAfterHours * 60 * 60 * 1000);
+          }
+        }
         await updateDoc(doc(db, 'tests', editingTestId), testPayload);
         showToast("Test template updated successfully!", "success");
       } else {
@@ -423,6 +512,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setTargetMarks(100);
     setTotal1Mark(30);
     setTotal2Mark(35);
+    setNumericalCount('');
+    setTheoryCount('');
     setScheduledTime('');
     setSelectedDept(department || '');
     setSelectedSubject('');
@@ -430,7 +521,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setAllocations({});
     setSelectionMode('auto');
     setManualSelectedIds([]);
-    setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All' });
+    setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
     setBundleId('');
     setStep(1);
   };
@@ -446,6 +537,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setTargetMarks(test.targetMarks || 100);
     setTotal1Mark(test.total1Mark ?? 30);
     setTotal2Mark(test.total2Mark ?? 35);
+    setNumericalCount(test.numericalCount ?? '');
+    setTheoryCount(test.theoryCount ?? '');
     setScheduledTime(test.scheduledTime || '');
     setBundleId(test.bundleId || '');
     setSelectedDept(test.department || department || '');
@@ -458,7 +551,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setAllocations(test.allocations || {});
     setSelectionMode('manual');
     setManualSelectedIds(test.questions || []);
-    setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All' });
+    setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
     setStep(3);
     setIsCreatorOpen(true);
   };
@@ -483,61 +576,124 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     }
   };
 
-  const handleToggleSolutions = async (test) => {
+  // Emails every student who has attempted the test that its solutions are out. Used by the manual
+  // unlock; scheduled releases are emailed by the releaseScheduledSolutions Cloud Function instead.
+  const emailSolutionsReleased = async (test) => {
+    const attemptsSnapshot = await getDocs(query(collection(db, 'test_attempts'), where('testId', '==', test.id)));
+    const uniqueEmails = [...new Set(attemptsSnapshot.docs.map(d => d.data().studentEmail).filter(Boolean))];
+    if (uniqueEmails.length === 0) return 0;
+
+    const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
+    if (!webhookUrl) {
+      console.warn("VITE_GAS_WEBHOOK_URL is not set. Skipping email.");
+      return uniqueEmails.length;
+    }
+    const { subject, html } = solutionsEmail(test.title);
+    // Send individual emails to protect student privacy (no group CCs)
+    uniqueEmails.forEach(email => {
+      fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ to_email: email, subject, message_html: html })
+      }).catch(e => console.error("Email fetch failed for", email, e));
+    });
+    return uniqueEmails.length;
+  };
+
+  // Answer Release dialog: which option is picked and its inputs
+  const [releaseTest, setReleaseTest] = useState(null);
+  const [releaseForm, setReleaseForm] = useState({ choice: 'locked', scheduleType: 'afterHours', hours: 2, dateTime: '' });
+  const [isSavingRelease, setIsSavingRelease] = useState(false);
+
+  const toDateTimeLocal = (ms) => {
+    const d = new Date(ms);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const openReleaseDialog = (test) => {
+    const mode = releaseMode(test);
+    const at = releaseAtMillis(test);
+    const hasHours = typeof test.solutionsReleaseAfterHours === 'number';
+    setReleaseForm({
+      choice: test.solutionsUnlocked ? 'unlocked'
+        : mode === RELEASE_MODES.IMMEDIATE ? 'immediate'
+          : mode === RELEASE_MODES.SCHEDULED ? 'scheduled'
+            : 'locked',
+      scheduleType: mode === RELEASE_MODES.SCHEDULED && !hasHours ? 'dateTime' : 'afterHours',
+      hours: hasHours ? test.solutionsReleaseAfterHours : 2,
+      dateTime: at ? toDateTimeLocal(at) : ''
+    });
+    setReleaseTest(test);
+  };
+
+  // The release time the dialog would save, or an error message
+  const plannedReleaseAt = (test, form) => {
+    if (form.scheduleType === 'afterHours') {
+      const end = testEndMillis(test);
+      if (end === null) return { error: 'This test has no schedule time, so "after the test ends" cannot be worked out. Pick a date & time instead.' };
+      const hours = parseFloat(form.hours);
+      if (!(hours >= 0)) return { error: 'Enter the number of hours.' };
+      return { at: end + hours * 60 * 60 * 1000 };
+    }
+    const at = new Date(form.dateTime).getTime();
+    if (!form.dateTime || Number.isNaN(at)) return { error: 'Pick the date & time to release the answers.' };
+    return { at };
+  };
+
+  const saveReleaseSettings = async () => {
+    const test = releaseTest;
+    if (!test) return;
+    const base = { solutionsReleasePending: false, solutionsReleaseAt: null, solutionsReleaseAfterHours: null };
+    let update;
+    let sendEmailsNow = false;
+
+    if (releaseForm.choice === 'locked') {
+      update = { ...base, solutionsReleaseMode: RELEASE_MODES.MANUAL, solutionsUnlocked: false };
+    } else if (releaseForm.choice === 'unlocked') {
+      update = { ...base, solutionsReleaseMode: RELEASE_MODES.MANUAL, solutionsUnlocked: true };
+      sendEmailsNow = !test.solutionsUnlocked;
+    } else if (releaseForm.choice === 'immediate') {
+      update = { ...base, solutionsReleaseMode: RELEASE_MODES.IMMEDIATE, solutionsUnlocked: false };
+    } else {
+      const { at, error } = plannedReleaseAt(test, releaseForm);
+      if (error) { showToast(error, 'error'); return; }
+      if (at <= Date.now()) { showToast('That time has already passed. Pick a future time, or choose "Unlocked now".', 'error'); return; }
+      update = {
+        solutionsReleaseMode: RELEASE_MODES.SCHEDULED,
+        solutionsUnlocked: false,
+        solutionsReleasePending: true,
+        solutionsReleaseAt: Timestamp.fromMillis(at),
+        solutionsReleaseAfterHours: releaseForm.scheduleType === 'afterHours' ? parseFloat(releaseForm.hours) : null
+      };
+    }
+
+    setIsSavingRelease(true);
     try {
-      const newStatus = !test.solutionsUnlocked;
-      await updateDoc(doc(db, 'tests', test.id), { solutionsUnlocked: newStatus });
-      setTests(prev => prev.map(t => t.id === test.id ? { ...t, solutionsUnlocked: newStatus } : t));
-      
-      if (newStatus) {
-        // Send email to students who took the test
+      await updateDoc(doc(db, 'tests', test.id), update);
+      setTests(prev => prev.map(t => t.id === test.id ? { ...t, ...update } : t));
+      setReleaseTest(null);
+
+      if (sendEmailsNow) {
         try {
-          const attemptsSnapshot = await getDocs(query(collection(db, 'test_attempts'), where('testId', '==', test.id)));
-          const uniqueEmails = [...new Set(attemptsSnapshot.docs.map(doc => doc.data().studentEmail).filter(Boolean))];
-          
-          if (uniqueEmails.length > 0) {
-            const emailSubject = `Solutions Unlocked: ${test.title}`;
-            const emailBody = `
-              <div style="font-family: sans-serif; padding: 20px;">
-                <h2>Solutions are now available!</h2>
-                <p>The solutions and explanations for the test <strong>${test.title}</strong> have been unlocked by your teacher.</p>
-                <p>You can now log in to your dashboard and review your detailed performance.</p>
-              </div>
-            `;
-            
-            const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
-            if (!webhookUrl) {
-              console.warn("VITE_GAS_WEBHOOK_URL is not set. Skipping email.");
-            } else {
-              // Send individual emails to protect student privacy (no group CCs)
-              uniqueEmails.forEach(email => {
-                const payload = { 
-                  to_email: email, 
-                  subject: emailSubject, 
-                  message_html: emailBody 
-                };
-                fetch(webhookUrl, {
-                  method: "POST",
-                  headers: { "Content-Type": "text/plain;charset=utf-8" },
-                  body: JSON.stringify(payload)
-                }).catch(e => console.error("Email fetch failed for", email, e));
-              });
-            }
-            
-            showToast(`Solutions unlocked & emailed ${uniqueEmails.length} students!`, 'success');
-          } else {
-            showToast('Solutions unlocked (no students attempted yet).', 'success');
-          }
+          const emailed = await emailSolutionsReleased({ ...test, ...update });
+          showToast(emailed > 0 ? `Solutions unlocked & emailed ${emailed} students!` : 'Solutions unlocked (no students attempted yet).', 'success');
         } catch (emailErr) {
           console.error("Failed to process unlock emails:", emailErr);
           showToast('Solutions unlocked, but failed to send emails.', 'error');
         }
+      } else if (update.solutionsReleaseMode === RELEASE_MODES.SCHEDULED) {
+        showToast(`Answers will be released on ${formatReleaseTime(releaseAtMillis(update))} and students emailed.`, 'success');
+      } else if (update.solutionsReleaseMode === RELEASE_MODES.IMMEDIATE) {
+        showToast('Students will see the answers right after they submit.', 'success');
       } else {
-        showToast('Solutions locked successfully.', 'success');
+        showToast(update.solutionsUnlocked ? 'Solutions unlocked.' : 'Solutions locked successfully.', 'success');
       }
     } catch (err) {
-      console.error("Failed to toggle solutions", err);
-      showToast("Failed to update solutions status.", "error");
+      console.error("Failed to save answer release settings", err);
+      showToast("Failed to update answer release settings.", "error");
+    } finally {
+      setIsSavingRelease(false);
     }
   };
 
@@ -787,9 +943,14 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
                 {/* Footer */}
                 <div className="mt-auto px-6 py-4 border-t border-[#EEF2F7] bg-slate-50/50 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[12.5px] min-w-0">
-                    <Calendar size={14} className="shrink-0" />
-                    <span className="truncate">{formatScheduled(test.scheduledTime) || 'Not scheduled'}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[12.5px] min-w-0">
+                      <Calendar size={14} className="shrink-0" />
+                      <span className="truncate">{formatScheduled(test.scheduledTime) || 'Not scheduled'}</span>
+                    </div>
+                    <div className={`text-[11px] font-[700] mt-0.5 truncate ${areSolutionsVisible(test) ? 'text-green-600' : releaseMode(test) === RELEASE_MODES.MANUAL ? 'text-amber-600' : 'text-indigo-600'}`}>
+                      {releaseStatusLabel(test)}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
@@ -800,15 +961,17 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                       <Edit2 size={17} />
                     </button>
                     <button
-                      onClick={() => handleToggleSolutions(test)}
+                      onClick={() => openReleaseDialog(test)}
                       className={`p-2 rounded-xl transition-colors inline-flex ${
-                        test.solutionsUnlocked
+                        areSolutionsVisible(test)
                           ? 'text-green-600 bg-green-50 hover:bg-green-100'
-                          : 'text-amber-500 bg-amber-50 hover:bg-amber-100'
+                          : releaseMode(test) === RELEASE_MODES.MANUAL
+                            ? 'text-amber-500 bg-amber-50 hover:bg-amber-100'
+                            : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
                       }`}
-                      title={test.solutionsUnlocked ? 'Lock Solutions' : 'Unlock Solutions'}
+                      title={`Answer release: ${releaseStatusLabel(test)}`}
                     >
-                      {test.solutionsUnlocked ? <Unlock size={17} /> : <Lock size={17} />}
+                      {areSolutionsVisible(test) ? <Unlock size={17} /> : releaseMode(test) === RELEASE_MODES.MANUAL ? <Lock size={17} /> : <Timer size={17} />}
                     </button>
                     {!isTeacher && (
                       <button
@@ -967,6 +1130,43 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                     </div>
                   </div>
 
+                  {/* Numerical / Theory split (optional) */}
+                  <div className="space-y-2">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <label className="text-[12px] font-[900] text-slate-800 uppercase tracking-wide">Numerical / Theory Split</label>
+                      <span className="text-[11px] font-semibold text-slate-400">Optional - leave empty to mix freely</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5 bg-sky-50/40 border border-sky-100 rounded-2xl p-4">
+                        <label className="text-[12px] font-[900] text-sky-800 uppercase tracking-wide">Numerical Questions</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={numericalCount}
+                          onChange={e => handleNumericalCountChange(e.target.value)}
+                          placeholder="Any"
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm mt-1"
+                        />
+                      </div>
+                      <div className="space-y-1.5 bg-rose-50/40 border border-rose-100 rounded-2xl p-4">
+                        <label className="text-[12px] font-[900] text-rose-800 uppercase tracking-wide">Theory Questions</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={theoryCount}
+                          onChange={e => handleTheoryCountChange(e.target.value)}
+                          placeholder="Any"
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm mt-1"
+                        />
+                      </div>
+                    </div>
+                    {hasCategorySplit && (
+                      <div className={`text-[11px] font-[800] ${numericalTarget + theoryTarget === totalQuestionTarget ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {numericalTarget} numerical + {theoryTarget} theory = {numericalTarget + theoryTarget} of {totalQuestionTarget} questions
+                      </div>
+                    )}
+                  </div>
+
                   {/* Formula Verification Block */}
                   <div className={`p-4 rounded-xl border flex items-center justify-between text-xs font-[800] tracking-wide ${isFormulaValid ? 'bg-emerald-50 border-emerald-250 text-emerald-700' : 'bg-red-50 border-red-200 text-red-600'}`}>
                     <div className="flex items-center gap-2">
@@ -1102,6 +1302,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   if (manualFilters.type !== 'All' && q.questionType !== manualFilters.type) return false;
                   if (manualFilters.difficulty !== 'All' && q.difficultyLevel !== manualFilters.difficulty) return false;
                   if (manualFilters.mark !== 'All' && q.mark !== manualFilters.mark) return false;
+                  if ((manualFilters.category || 'All') !== 'All' && getQuestionCategory(q) !== manualFilters.category) return false;
                   return true;
                 });
                 
@@ -1109,6 +1310,16 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                 // here even if it no longer matches the currently selected hierarchy filters -
                 // otherwise it would silently vanish from view while still being part of the test.
                 const manuallySelectedQuestions = questions.filter(q => manualSelectedIds.includes(q.id));
+                const manualNumericalCount = manuallySelectedQuestions.filter(isNumericalQuestion).length;
+                const manualTheoryCount = manuallySelectedQuestions.length - manualNumericalCount;
+                const categoryBadge = (q, size) => {
+                  const isNum = getQuestionCategory(q) === 'Numerical';
+                  return (
+                    <span className={`${size} font-bold uppercase rounded border ${isNum ? 'bg-sky-50 text-sky-700 border-sky-100' : 'bg-rose-50 text-rose-700 border-rose-100'}`}>
+                      {isNum ? 'Numerical' : 'Theory'}
+                    </span>
+                  );
+                };
                 const currentManualMarks = manuallySelectedQuestions.reduce((sum, q) => sum + (parseInt(q.mark) || 1), 0);
                 
                 const marksCap = parseInt(targetMarks) || 0;
@@ -1174,9 +1385,16 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                               <div className="text-[10px] font-[900] text-slate-400 uppercase tracking-wider">{selectedSubject}</div>
                               <h4 className="text-[15px] font-[800] text-slate-850">{topic}</h4>
                             </div>
-                            <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-xl text-xs font-[800] border border-blue-100/50">
-                              Available: {counts.q1} (1M) / {counts.q2} (2M)
-                            </span>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-xl text-xs font-[800] border border-blue-100/50">
+                                Available: {counts.q1} (1M) / {counts.q2} (2M)
+                              </span>
+                              <span className="text-[10.5px] font-[800] text-slate-500">
+                                <span className="text-sky-700">Numerical {counts.n1} / {counts.n2}</span>
+                                <span className="text-slate-300 mx-1.5">•</span>
+                                <span className="text-rose-700">Theory {counts.t1} / {counts.t2}</span>
+                              </span>
+                            </div>
                           </div>
 
                           {/* Inputs Row */}
@@ -1222,6 +1440,21 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                         {is2MarkMatch ? "Match" : "Mismatch"}
                       </span>
                     </div>
+                    {hasCategorySplit && (() => {
+                      const range = numericalRangeFor(allocationCells());
+                      const ok = numericalTarget >= range.min && numericalTarget <= range.max;
+                      return (
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                          <span>
+                            Numerical / Theory: <span className="font-mono">{numericalTarget} / {theoryTarget}</span>
+                            <span className="text-slate-400 font-semibold"> (these allocations allow {range.min === range.max ? range.min : `${range.min}-${range.max}`} numerical)</span>
+                          </span>
+                          <span className={`text-[11px] font-[800] uppercase ${ok ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {ok ? "Possible" : "Not Possible"}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                   </>
                   )}
@@ -1244,6 +1477,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                                   <div className="flex flex-wrap gap-1.5 mb-1.5">
                                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{q.topic}</span>
                                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">{q.questionType}</span>
+                                    {categoryBadge(q, 'text-[9px] px-1.5 py-0.5')}
                                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{q.mark} Mark</span>
                                   </div>
                                   <div className="text-[12.5px] text-slate-700 font-medium break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
@@ -1292,8 +1526,18 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                           <option value="All">All Marks</option>
                           {uniqueMarks.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
-                        
+                        <select className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none text-slate-700" value={manualFilters.category || 'All'} onChange={e => setManualFilters({...manualFilters, category: e.target.value})}>
+                          <option value="All">Numerical & Theory</option>
+                          <option value="Numerical">Numerical</option>
+                          <option value="Theory">Theory</option>
+                        </select>
+
                         <div className="ml-auto flex items-center gap-3">
+                           <div className="text-xs font-bold text-slate-500">
+                             Numerical: <span className="text-sky-700">{manualNumericalCount}{hasCategorySplit ? ` / ${numericalTarget}` : ''}</span>
+                             <span className="mx-1 text-slate-300">•</span>
+                             Theory: <span className="text-rose-700">{manualTheoryCount}{hasCategorySplit ? ` / ${theoryTarget}` : ''}</span>
+                           </div>
                            <div className="text-xs font-bold text-slate-500">Selected: <span className="text-indigo-600">{manualSelectedIds.length}</span></div>
                            <div className="text-xs font-bold text-slate-500">Marks: <span className={`${currentManualMarks === parseInt(targetMarks) ? 'text-green-600' : currentManualMarks > parseInt(targetMarks) ? 'text-red-500' : 'text-amber-500'}`}>{currentManualMarks} / {targetMarks}</span></div>
                         </div>
@@ -1318,6 +1562,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                                   <div className="flex flex-wrap gap-2 mb-2">
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-500">{q.topic}</span>
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">{q.questionType}</span>
+                                    {categoryBadge(q, 'text-[10px] px-2 py-0.5')}
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">{q.difficultyLevel || 'Easy'}</span>
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{q.mark}</span>
                                   </div>
@@ -1425,6 +1670,120 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       )}
 
       {/* Edit Access Control Modal */}
+      {releaseTest && (() => {
+        const planned = releaseForm.choice === 'scheduled' ? plannedReleaseAt(releaseTest, releaseForm) : null;
+        const testEnd = testEndMillis(releaseTest);
+        const option = (value, title, description) => (
+          <label className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors ${releaseForm.choice === value ? 'border-indigo-400 bg-indigo-50/60' : 'border-slate-200 hover:border-slate-300'}`}>
+            <input
+              type="radio"
+              name="releaseChoice"
+              checked={releaseForm.choice === value}
+              onChange={() => setReleaseForm(f => ({ ...f, choice: value }))}
+              className="mt-1 accent-indigo-600"
+            />
+            <span>
+              <span className="block text-[13.5px] font-[800] text-slate-800">{title}</span>
+              <span className="block text-[12px] font-medium text-slate-500 mt-0.5">{description}</span>
+            </span>
+          </label>
+        );
+        return (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 font-sans">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-[900] text-slate-900">Answer Release</h3>
+                  <p className="text-xs text-slate-400 font-semibold mt-0.5">{releaseTest.title}</p>
+                </div>
+                <button onClick={() => setReleaseTest(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-2.5">
+                {option('locked', 'Locked', 'Students only see their score. You unlock the answers yourself later.')}
+                {option('unlocked', 'Unlocked now', 'Answers are visible right away. Students who took the test are emailed.')}
+                {option('immediate', 'Right after each student submits', 'Every student sees the answers and solutions as soon as they finish the test.')}
+                {option('scheduled', 'Automatically at a set time', 'Answers unlock by themselves at the time you set, and students who took the test are emailed.')}
+
+                {releaseForm.choice === 'scheduled' && (
+                  <div className="ml-7 mt-1 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="flex bg-white border border-slate-200 p-1 rounded-lg">
+                      {[['afterHours', 'Hours after the test ends'], ['dateTime', 'Specific date & time']].map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setReleaseForm(f => ({ ...f, scheduleType: value }))}
+                          className={`flex-1 py-1.5 text-[12px] font-[800] rounded-md transition-all ${releaseForm.scheduleType === value ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {releaseForm.scheduleType === 'afterHours' ? (
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-[800] text-slate-600">Release after (hours)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={releaseForm.hours}
+                          onChange={e => setReleaseForm(f => ({ ...f, hours: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                        />
+                        <p className="text-[11.5px] font-medium text-slate-500">
+                          {testEnd !== null
+                            ? `The test ends ${formatReleaseTime(testEnd)} (start time + ${releaseTest.duration || 0} min).`
+                            : 'This test has no schedule time - use a specific date & time instead.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <label className="text-[12px] font-[800] text-slate-600">Release on</label>
+                        <input
+                          type="datetime-local"
+                          value={releaseForm.dateTime}
+                          onChange={e => setReleaseForm(f => ({ ...f, dateTime: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                        />
+                      </div>
+                    )}
+
+                    {planned?.error ? (
+                      <p className="text-[12px] font-[700] text-red-600">{planned.error}</p>
+                    ) : planned?.at && (
+                      <p className={`text-[12px] font-[800] ${planned.at > Date.now() ? 'text-indigo-700' : 'text-red-600'}`}>
+                        {planned.at > Date.now()
+                          ? `Answers will be released on ${formatReleaseTime(planned.at)}`
+                          : `${formatReleaseTime(planned.at)} has already passed - pick a later time.`}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+                <button
+                  onClick={() => setReleaseTest(null)}
+                  className="px-4 py-2 text-[13px] font-[800] text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveReleaseSettings}
+                  disabled={isSavingRelease}
+                  className="px-5 py-2 text-[13px] font-[800] text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm disabled:opacity-60"
+                >
+                  {isSavingRelease ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {editBundleTest && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 font-sans">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">

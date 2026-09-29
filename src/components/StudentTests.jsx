@@ -5,6 +5,7 @@ import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp
 import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
 import logoImg from '../assets/msgate_logo.png';
+import { RELEASE_MODES, releaseMode, releaseAtMillis, areSolutionsVisible, formatReleaseTime } from '../utils/solutionRelease';
 
 // Older AI imports stored NAT questions as 'Fill in the Blanks'; the test screens expect 'Fill in Blanks'
 const normalizeQuestion = (q) => (
@@ -27,6 +28,19 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const [testMode, setTestMode] = useState('list'); // 'list' | 'taking' | 'result'
   const [activeAttempt, setActiveAttempt] = useState(null);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+
+  // Re-checks a scheduled answer release the moment its time arrives, so a student sitting on the
+  // results screen sees the solutions appear without reloading
+  const [releaseClock, setReleaseClock] = useState(Date.now());
+  useEffect(() => {
+    if (releaseMode(activeTest) !== RELEASE_MODES.SCHEDULED) return undefined;
+    const at = releaseAtMillis(activeTest);
+    if (at === null || at <= Date.now()) return undefined;
+    // setTimeout can't wait longer than ~24.8 days; re-arm daily for anything further out
+    const wait = Math.min(at - Date.now() + 500, 24 * 60 * 60 * 1000);
+    const timer = setTimeout(() => setReleaseClock(Date.now()), wait);
+    return () => clearTimeout(timer);
+  }, [activeTest, releaseClock]);
 
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
@@ -310,7 +324,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         </div>
 
         {/* Detailed Question Review List */}
-        {activeTest.solutionsUnlocked ? (
+        {areSolutionsVisible(activeTest, releaseClock) ? (
           <div className="space-y-6">
             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <Eye size={20} className="text-blue-500" /> Review Questions
@@ -472,7 +486,9 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
             <Lock className="text-blue-500 mb-4" size={48} />
             <h3 className="text-xl font-bold text-slate-800 mb-2">Solutions Locked</h3>
             <p className="text-slate-500 max-w-md font-medium leading-relaxed">
-              Your score has been successfully recorded. Detailed solutions and explanations will be unlocked once your teacher reviews and releases them for this test.
+              {releaseMode(activeTest) === RELEASE_MODES.SCHEDULED && releaseAtMillis(activeTest) !== null
+                ? <>Your score has been successfully recorded. Detailed solutions and explanations will be released on <strong className="text-slate-700">{formatReleaseTime(releaseAtMillis(activeTest))}</strong>, and you'll get an email when they're available.</>
+                : 'Your score has been successfully recorded. Detailed solutions and explanations will be unlocked once your teacher reviews and releases them for this test.'}
             </p>
           </div>
         )}

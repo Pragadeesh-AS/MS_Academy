@@ -6,6 +6,7 @@ import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import { GoogleGenAI } from '@google/genai';
 import katex from 'katex';
 import { findDuplicateQuestions } from '../../utils/questionDuplicates';
+import { QUESTION_CATEGORIES, inferQuestionCategory } from '../../utils/questionCategory';
 import 'katex/dist/katex.min.css';
 
 // Configure the worker for PDF.js using a CDN
@@ -948,6 +949,7 @@ Each object must have exactly these fields:
 {
   "questionNumber": "The question's label exactly as printed, e.g. \\"Q1\\", \\"12\\", \\"Q3(a)\\"",
   "questionType": "Single Choice" | "Multiple Choice" | "Fill in the Blanks" | "Match",
+  "questionCategory": "Numerical" | "Theory" ("Numerical" when the answer is a numerical value that has to be calculated or worked out - every Fill in the Blanks/NAT question, and any MCQ/MSQ whose correct option is a number or a value with a unit. "Theory" for conceptual, definition, statement, reasoning or code-reading questions whose answer is not a computed value),
   "questionText": "The COMPLETE question exactly as printed, word for word: every sentence, given data, list, note and instruction (e.g. \\"Round off to two decimal places\\", \\"Answer in kJ\\"). Do NOT include the question number or header label. Use LaTeX inside $...$ for all math/equations.",
   "optionA": "Option A text",
   "optionB": "Option B text",
@@ -1136,6 +1138,13 @@ IMPORTANT:
       }
       
       parsedQuestions = parsedQuestions.map(applyNatFields);
+      // NAT is always numerical; otherwise keep the AI's call, or work it out from the options
+      parsedQuestions = parsedQuestions.map(q => ({
+        ...q,
+        questionCategory: q.questionType === 'Fill in Blanks'
+          ? 'Numerical'
+          : (QUESTION_CATEGORIES.includes(q.questionCategory) ? q.questionCategory : inferQuestionCategory(q))
+      }));
       // Match items may contain $...$ LaTeX; render them like the question text so they show as symbols
       parsedQuestions = parsedQuestions.map(q => (q.questionType === 'Match' ? {
         ...q,
@@ -1283,6 +1292,12 @@ IMPORTANT:
     setImportSettings({ department: '', year: '', subject: '', topic: '', mark: '', difficultyLevel: 'Auto' });
   };
 
+  const toggleCategory = (index) => {
+    setExtractedQuestions(prev => prev.map((q, i) => (i === index
+      ? { ...q, questionCategory: q.questionCategory === 'Numerical' ? 'Theory' : 'Numerical' }
+      : q)));
+  };
+
   const removeExtractedImage = (index, field) => {
     setExtractedQuestions(prev => prev.map((q, i) => (i === index ? { ...q, [field]: '' } : q)));
   };
@@ -1311,9 +1326,10 @@ IMPORTANT:
   };
 
   const duplicateCount = extractedQuestions.filter(q => q._duplicate).length;
-  const canImport = isValidReviewerEmail && !!importSettings.department && !!importSettings.year && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
+  // Regulation (year) is optional; the other attributes are required on every question.
+  const canImport = isValidReviewerEmail && !!importSettings.department && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
   // Skipping the reviewer doesn't need a reviewer email - just the attributes every question needs.
-  const canImportDirect = !!importSettings.department && !!importSettings.year && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
+  const canImportDirect = !!importSettings.department && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
 
   const importDetailsForm = (
     <div className="mt-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
@@ -1333,19 +1349,6 @@ IMPORTANT:
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">Regulation (Year)</label>
-                <select 
-                  name="year" 
-                  value={importSettings.year} 
-                  onChange={handleSettingChange}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                >
-                  <option value="">Select Regulation...</option>
-                  {years.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-              
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Subject</label>
                 <select
@@ -1374,31 +1377,45 @@ IMPORTANT:
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 md:col-span-2">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Marks</label>
-                  <select 
-                    name="mark" 
-                    value={importSettings.mark} 
-                    onChange={handleSettingChange}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                  >
-                    <option value="">Select Marks...</option>
-                    {markOptions.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Difficulty</label>
-                  <select 
-                    name="difficultyLevel" 
-                    value={importSettings.difficultyLevel} 
-                    onChange={handleSettingChange}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                  >
-                    <option value="Auto">Auto-detected from PDF</option>
-                    {difficultyLevels.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Marks</label>
+                <select
+                  name="mark"
+                  value={importSettings.mark}
+                  onChange={handleSettingChange}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                >
+                  <option value="">Select Marks...</option>
+                  {markOptions.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Difficulty</label>
+                <select
+                  name="difficultyLevel"
+                  value={importSettings.difficultyLevel}
+                  onChange={handleSettingChange}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                >
+                  <option value="Auto">Auto-detected from PDF</option>
+                  {difficultyLevels.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">
+                  Regulation (Year) <span className="font-medium text-slate-400">(Optional)</span>
+                </label>
+                <select
+                  name="year"
+                  value={importSettings.year}
+                  onChange={handleSettingChange}
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                >
+                  <option value="">No Regulation</option>
+                  {years.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
               </div>
 
               {pairMode ? (
@@ -1436,7 +1453,7 @@ IMPORTANT:
               </label>
       </div>
       {!canImport && (
-        <p className="mt-4 text-xs font-bold text-amber-600">Fill in Department, Regulation, Subject, Marks, Difficulty and a valid reviewer to enable Approve & Import.</p>
+        <p className="mt-4 text-xs font-bold text-amber-600">Fill in Department, Subject, Marks, Difficulty and a valid reviewer to enable Approve & Import.</p>
       )}
     </div>
   );
@@ -1663,6 +1680,14 @@ IMPORTANT:
                     </span>
                     <span className={`text-xs font-semibold px-3 py-1 rounded-md ${q.difficultyLevel === 'Hard' ? 'bg-red-100 text-red-700' : q.difficultyLevel === 'Medium' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>{q.difficultyLevel}</span>
                     <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-md">{q.subject} • {q.topic}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleCategory(idx)}
+                      title="Click to switch between Numerical and Theory"
+                      className={`text-xs font-bold px-3 py-1 rounded-md border transition-colors ${q.questionCategory === 'Numerical' ? 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100' : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'}`}
+                    >
+                      {q.questionCategory || 'Theory'} ⇄
+                    </button>
                     {q._duplicate && (
                       <span className="text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1 rounded-md">
                         {q._duplicate.source === 'bank'

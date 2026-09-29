@@ -5,6 +5,7 @@ import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, Che
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore';
 import { questionFingerprint, isEmptyQuestion } from '../../utils/questionDuplicates';
+import { QUESTION_CATEGORIES, getQuestionCategory, inferQuestionCategory } from '../../utils/questionCategory';
 
 // Engineering Mathematics and Aptitude banks are shared by every department.
 const isCommonDeptName = (name) => {
@@ -216,6 +217,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const [filterDifficulty, setFilterDifficulty] = useState('All');
   const [filterStatus, setFilterStatus] = useState(externalFilter || 'Approved');
   const [filterType, setFilterType] = useState('All');
+  const [filterCategory, setFilterCategory] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [goToPage, setGoToPage] = useState('');
@@ -224,7 +226,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   useEffect(() => {
     setCurrentPage(1);
     setSelectedIds([]);
-  }, [search, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, pageSize]);
+  }, [search, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, filterCategory, pageSize]);
 
   useEffect(() => {
     if (externalFilter !== null) {
@@ -234,6 +236,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   const [formData, setFormData] = useState({
     questionType: 'Single Choice',
+    questionCategory: '', // '' = auto-detect (see utils/questionCategory)
     questionText: '',
     questionImageUrl: '',
     explanation: '',
@@ -673,6 +676,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const handleEdit = (q) => {
     setFormData({
       questionType: q.questionType || 'Single Choice',
+      questionCategory: q.questionCategory || '',
       questionText: q.questionText || '',
       questionImageUrl: q.questionImageUrl || '',
       explanation: q.explanation || '',
@@ -754,6 +758,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const openAddCreator = () => {
     setFormData({
       questionType: 'Single Choice',
+      questionCategory: '',
       questionText: '',
       questionImageUrl: '',
       explanation: '',
@@ -801,6 +806,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     const matchesStatus = filterStatus === 'All'
       || (filterStatus === 'Not Reviewed' ? (q.status === 'Approved' && q.reviewed === false) : q.status === filterStatus);
     const matchesType = filterType === 'All' || q.questionType === filterType;
+    const matchesCategory = filterCategory === 'All' || getQuestionCategory(q) === filterCategory;
 
     // Questions still with a reviewer (In Review) or sent back (Draft) belong to the typist/reviewer
     // pair only - nobody else sees them until the reviewer approves them.
@@ -824,7 +830,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       premiumMatches = q.isPremium !== true;
     }
 
-    return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && matchesType && roleMatches && premiumMatches;
+    return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && matchesType && matchesCategory && roleMatches && premiumMatches;
   });
 
 
@@ -986,6 +992,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 {[
                   { label: 'Status', plural: 'Statuses', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: userRole === 'typist' ? ['Draft', 'In Review', 'Approved'] : ['Approved', 'Not Reviewed'] },
                   { label: 'Type', plural: 'Types', val: filterType, setter: setFilterType, icon: Layers, opts: questionTypes },
+                  { label: 'Category', plural: 'Categories', val: filterCategory, setter: setFilterCategory, icon: Calculator, opts: QUESTION_CATEGORIES },
                   { label: 'Subject', plural: 'Subjects', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
                   { label: 'Topic', plural: 'Topics', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
                   { label: 'Year', plural: 'Years', val: filterYear, setter: setFilterYear, icon: Clock, opts: years },
@@ -1010,7 +1017,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
                 <button
                   onClick={() => {
-                    setSearch(''); setFilterStatus('All'); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All'); setFilterType('All');
+                    setSearch(''); setFilterStatus('All'); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All'); setFilterType('All'); setFilterCategory('All');
                   }}
                   className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2"
                 >
@@ -1137,6 +1144,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                             <ChevronDown size={16} className={`shrink-0 text-purple-400 transition-transform duration-200 ${expandedId === q.id ? '' : '-rotate-90'}`} />
                             <span className="inline-flex items-center justify-center min-w-[72px] px-4 py-1.5 rounded-full bg-[#7C3AED] text-white text-[12px] font-[800] tracking-wide shadow-sm" title={q.questionType}>
                               {questionTypeShort(q.questionType)}
+                            </span>
+                            <span
+                              className={`shrink-0 px-2 py-0.5 rounded-full border text-[10px] font-[800] ${getQuestionCategory(q) === 'Numerical' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}
+                              title={q.questionCategory ? 'Set on this question' : 'Auto-detected'}
+                            >
+                              {getQuestionCategory(q) === 'Numerical' ? 'NUM' : 'THY'}
                             </span>
                           </div>
                         </td>
@@ -1350,6 +1363,41 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                         <option value="Match">Match (Column 1 ≤ Column 2)</option>
                       </select>
                       <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+
+                    {/* Numerical / Theory - used by the test creator's numerical/theory split */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex bg-slate-100 p-1 rounded-full" role="group" aria-label="Question category">
+                        {QUESTION_CATEGORIES.map(cat => {
+                          const active = getQuestionCategory(formData) === cat;
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => setFormData(prev => ({ ...prev, questionCategory: cat }))}
+                              className={`px-3.5 py-1.5 rounded-full text-[12px] font-[800] transition-all ${active
+                                ? (cat === 'Numerical' ? 'bg-sky-600 text-white shadow-sm' : 'bg-rose-600 text-white shadow-sm')
+                                : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                              {cat}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {formData.questionCategory ? (
+                        formData.questionCategory !== inferQuestionCategory(formData) && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, questionCategory: '' }))}
+                            className="text-[11px] font-[700] text-slate-400 hover:text-slate-600 underline"
+                            title={`Auto-detection would say ${inferQuestionCategory(formData)}`}
+                          >
+                            Reset to auto
+                          </button>
+                        )
+                      ) : (
+                        <span className="text-[11px] font-[700] text-slate-400">Auto-detected</span>
+                      )}
                     </div>
 
                     {(userRole === 'admin' || userRole === 'typist') && (
@@ -1761,10 +1809,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[12px] font-[800] text-[#111827]">Year <span className="text-red-500">*</span></label>
+                  <label className="text-[12px] font-[800] text-[#111827]">Year <span className="font-[600] text-slate-400">(Optional)</span></label>
                   <div className="relative">
-                    <select name="year" required value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
-                      <option value="">-- Select Year --</option>
+                    <select name="year" value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                      <option value="">-- No Year --</option>
                       {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
