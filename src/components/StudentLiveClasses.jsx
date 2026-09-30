@@ -41,6 +41,7 @@ import { PollCard } from './liveTest/PollCard';
 import ParticipantsPanel, { buildPeople } from './liveTest/ParticipantsPanel';
 import AnswerReview, { fetchQuestionBankCopies } from './liveTest/AnswerReview';
 import MatchColumns from './shared/MatchColumns';
+import QuestionExplainPanel from './liveTest/QuestionExplainPanel';
 import { gradeAnswer, normalizeQuestion } from '../utils/testGrading';
 import { positiveMarkFor } from '../utils/marking';
 
@@ -321,8 +322,9 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
               </div>
               <MatchColumns question={activeQuestionState.questions[activeQuestionState.currentIndex]} className={`${isPinned ? 'pl-20' : 'pl-12'} mb-6`} />
               
-              {/* Bottom: Options (Left 40%) */}
-              <div className="flex flex-col md:flex-row w-full gap-8">
+              {/* Bottom: Options (left 45%) | answer, explanation and writing space (right 55%) -
+                  same layout as the teacher's screen so their whiteboard writing lines up */}
+              <div className="flex flex-col md:flex-row w-full gap-8 flex-1 min-h-0">
                 <div id="qb-options-area" className="w-full md:w-[45%] min-w-0 flex flex-col">
                   {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
                     <div className={`${isPinned ? 'ml-20' : 'ml-10'} mb-6`}>
@@ -365,12 +367,17 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
                       );
                     })}
                   </div>
+                  {activeQuestionState.isAnswerRevealed && (
+                    <div className={`mt-6 ${isPinned ? 'ml-20' : 'ml-10'}`}>
+                      <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} participantEmails={participantEmails} />
+                    </div>
+                  )}
                 </div>
-                {activeQuestionState.isAnswerRevealed && (
-                  <div className="w-full md:w-[50%] flex flex-col pt-4 md:pt-0">
-                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} participantEmails={participantEmails} />
-                  </div>
-                )}
+                <QuestionExplainPanel
+                  question={activeQuestionState.questions[activeQuestionState.currentIndex]}
+                  revealed={activeQuestionState.isAnswerRevealed}
+                  isPinned={isPinned}
+                />
               </div>
             </div>
           </div>

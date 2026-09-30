@@ -279,12 +279,12 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
 
           mixCtx.drawImage(activeCanvasEl, 0, 0);
 
-          // Small academy logo pinned to the top of every whiteboard page/stream
+          // Academy logo pinned to the top-right corner of every whiteboard page/stream
           if (watermarkImg.complete && watermarkImg.naturalWidth > 0) {
-            const logoH = 36;
+            const logoH = 48;
             const logoW = (logoH / watermarkImg.naturalHeight) * watermarkImg.naturalWidth;
             mixCtx.globalAlpha = 0.9;
-            mixCtx.drawImage(watermarkImg, (mixCanvas.width - logoW) / 2, 10, logoW, logoH);
+            mixCtx.drawImage(watermarkImg, mixCanvas.width - logoW - 16, 12, logoW, logoH);
             mixCtx.globalAlpha = 1.0;
           }
         };
@@ -1162,9 +1162,10 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         </div>
       )}
 
-      {/* Small academy logo pinned to the top of every whiteboard page */}
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-        <img src={logoImg} alt="Academy Logo" className="opacity-90 drop-shadow object-contain" style={{ width: '120px', height: 'auto', maxHeight: '40px' }} />
+      {/* Academy logo pinned to the top-right corner of every whiteboard page - left of the
+          class's pin / unpin button that sits in the very corner */}
+      <div className="absolute top-3 right-20 z-20 pointer-events-none">
+        <img src={logoImg} alt="Academy Logo" className="opacity-90 drop-shadow object-contain" style={{ width: '150px', height: 'auto', maxHeight: '52px' }} />
       </div>
 
       {/* Dynamic Canvas Container */}
