@@ -332,17 +332,18 @@ export default function AttributesManager({ lockedDepartment = null }) {
                     className="relative flex flex-col p-5 bg-[#FFFFFF] border border-[#EEF2F7] rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] transition-all duration-300 group hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:border-[#2563EB]/40 min-h-[160px]"
                   >
                     {/* Top Row: Icon + Menu */}
-                    <div className="flex justify-between items-start w-full">
-                      <div className="flex gap-4">
-                        <div className={`w-[54px] h-[54px] rounded-full ${styles.bg} ${styles.text} ${styles.shadow} flex items-center justify-center font-[800] text-[18px] tracking-wide`}>
+                    <div className="flex justify-between items-start gap-2 w-full">
+                      {/* min-w-0 lets a long name shrink and truncate instead of running over the menu */}
+                      <div className="flex gap-4 min-w-0 flex-1">
+                        <div className={`w-[54px] h-[54px] shrink-0 rounded-full ${styles.bg} ${styles.text} ${styles.shadow} flex items-center justify-center font-[800] text-[18px] tracking-wide`}>
                           {getInitials(val.name)}
                         </div>
-                        <div className="flex flex-col pt-1">
-                          <h3 className="text-[18px] font-[800] text-[#0F172A] leading-tight truncate">
+                        <div className="flex flex-col pt-1 min-w-0">
+                          <h3 className="text-[18px] font-[800] text-[#0F172A] leading-tight truncate" title={val.name}>
                             {val.name}
                           </h3>
                           {parentName && (
-                            <span className="text-[12px] font-[600] text-[#64748B] mt-1">
+                            <span className="text-[12px] font-[600] text-[#64748B] mt-1 truncate" title={`Parent: ${parentName}`}>
                               Parent: {parentName}
                             </span>
                           )}
@@ -353,18 +354,18 @@ export default function AttributesManager({ lockedDepartment = null }) {
                           )}
                         </div>
                       </div>
-                      <button className="w-8 h-8 flex items-center justify-center text-[#94A3B8] transition-colors hover:text-[#0F172A]">
+                      <button className="w-8 h-8 shrink-0 flex items-center justify-center text-[#94A3B8] transition-colors hover:text-[#0F172A]">
                         <MoreHorizontal size={20} />
                       </button>
                     </div>
 
                     {/* Bottom Row */}
-                    <div className="flex items-end justify-between mt-auto pt-4">
-                      <span className="text-[12px] font-[500] text-[#64748B]">
+                    <div className="flex items-center justify-between gap-2 mt-auto pt-4">
+                      <span className="text-[12px] font-[500] text-[#64748B] truncate min-w-0">
                         {getRelativeTime(val.createdAt)}
                       </span>
-                      
-                      <div className="flex gap-2">
+
+                      <div className="flex gap-2 shrink-0">
                         <button 
                           onClick={() => setEditingAttr({ id: val.id, name: val.name })}
                           className="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] bg-white text-[#3B82F6] shadow-sm transition-colors border border-[#EEF2F7] hover:border-[#3B82F6] hover:bg-blue-50"
