@@ -120,6 +120,20 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
                     <div className="bg-red-50 text-red-800 p-4 rounded-xl font-medium border border-red-100">
                       "{report.reason}"
                     </div>
+                    {report.source === 'solution-review' && (
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+                        <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">Reported from the solutions</span>
+                        <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                          Student answered: {Array.isArray(report.studentAnswer) ? (report.studentAnswer.join(', ') || '(blank)') : (report.studentAnswer || '(blank)')}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-100">Answer key: {report.keyAnswer || '-'}</span>
+                      </div>
+                    )}
+                    {report.reportType === 'The correct answer is wrong' && report.status !== 'resolved' && (
+                      <p className="mt-2 text-xs font-semibold text-slate-500">
+                        If the student is right, correct the answer in the Question Bank - every attempt of the tests using this question is re-marked automatically and this report is resolved.
+                      </p>
+                    )}
                   </div>
                   <div>
                     <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Question Context</div>
@@ -149,6 +163,7 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
                       <div className="text-xs font-bold text-green-600 uppercase tracking-wider mb-2">Resolution Details</div>
                       <div className="flex flex-col gap-1">
                         <div className="text-sm text-slate-600 font-medium">Resolved by: <span className="font-bold text-slate-900">{report.resolvedBy || 'Admin'}</span></div>
+                        {report.resolution && <div className="text-xs text-green-700 font-bold">{report.resolution}</div>}
                         {report.resolvedAt && (
                           <div className="text-xs text-slate-500 font-medium">
                             On: {report.resolvedAt.toDate ? report.resolvedAt.toDate().toLocaleString() : new Date(report.resolvedAt).toLocaleString()}

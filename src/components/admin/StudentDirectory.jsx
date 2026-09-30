@@ -48,9 +48,6 @@ const DEPARTMENT_OPTIONS = [
 
 const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduated'];
 
-// Group filter value for "students not in any group"
-const NO_GROUP = '__no_group__';
-
 // Each group name always gets the same colour, so a group is easy to spot in the list
 const GROUP_COLORS = [
   'bg-blue-50 text-blue-700 border-blue-200',
@@ -89,7 +86,7 @@ const StudentDirectory = ({
   const studentsPerPage = 10;
 
   // --- Student groups: one named group per student, stored as `groupName` on joined_students
-  const [filterGroup, setFilterGroup] = useState(''); // '' = all, NO_GROUP = students without one
+  const [filterGroup, setFilterGroup] = useState(''); // '' = all groups
   const [selectedIds, setSelectedIds] = useState([]);
   const [groupDialog, setGroupDialog] = useState(null); // { mode: 'assign' | 'rename', from? }
   const [groupInput, setGroupInput] = useState('');
@@ -103,7 +100,6 @@ const StudentDirectory = ({
     });
     return Object.keys(counts).sort((a, b) => a.localeCompare(b)).map(name => ({ name, count: counts[name] }));
   }, [joinedStudents]);
-  const ungroupedCount = joinedStudents.filter(s => !(s.groupName || '').trim()).length;
 
   // Writes groupName for many students at once (Firestore batches cap at 500 writes)
   const saveGroupFor = async (ids, groupName) => {
@@ -278,7 +274,7 @@ const StudentDirectory = ({
     const matchesStatus = filterStatus ? statusLow === filterStatusLow || statusLow.includes(filterStatusLow) : true;
 
     const studentGroup = (student.groupName || '').trim();
-    const matchesGroup = !filterGroup || (filterGroup === NO_GROUP ? !studentGroup : studentGroup === filterGroup);
+    const matchesGroup = !filterGroup || studentGroup === filterGroup;
 
     return matchesSearch && matchesDept && matchesYear && matchesStatus && matchesGroup;
   }).sort((a, b) => {
@@ -514,16 +510,10 @@ const StudentDirectory = ({
                   {g.name} ({g.count})
                 </button>
               ))}
-              <button
-                onClick={() => { setFilterGroup(filterGroup === NO_GROUP ? '' : NO_GROUP); setCurrentPage(1); }}
-                className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border border-dashed transition-colors ${filterGroup === NO_GROUP ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-[#64748B] border-[#CBD5E1] hover:text-[#0F172A]'}`}
-              >
-                No group ({ungroupedCount})
-              </button>
               {groups.length === 0 && (
                 <span className="text-[12.5px] text-[#94A3B8] font-medium">Tick students in the list below and use "Add to group" to create one.</span>
               )}
-              {filterGroup && filterGroup !== NO_GROUP && (
+              {filterGroup && (
                 <div className="flex items-center gap-2 ml-auto">
                   <button
                     onClick={() => { setGroupInput(filterGroup); setGroupDialog({ mode: 'rename', from: filterGroup }); }}
@@ -596,14 +586,13 @@ const StudentDirectory = ({
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">College</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Email</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Status</th>
-                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Joined Date</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220] text-center w-[160px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF2F7]/60">
                   {paginatedStudents.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="py-16 text-center">
+                      <td colSpan="7" className="py-16 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                             <Search className="text-slate-300" size={32} />
@@ -664,9 +653,6 @@ const StudentDirectory = ({
                             {student.status === 'Active' && <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] mr-1.5 animate-pulse"></span>}
                             {student.status}
                           </span>
-                        </td>
-                        <td className="px-4">
-                          <span className="text-[14px] text-[#475569] font-medium">{student.joinedDate}</span>
                         </td>
                         <td className="px-4 text-center relative">
                           <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">

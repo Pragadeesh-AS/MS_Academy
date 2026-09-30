@@ -12,6 +12,8 @@ import RoleSwitcher from './shared/RoleSwitcher';
 import { groupBySubject, NO_SUBJECT } from '../utils/subjects';
 import StudentTests from './StudentTests';
 import TestAlerts from './student/TestAlerts';
+import { canAccessTest } from '../utils/testAccess';
+import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, formatTestTime, formatCountdown } from '../utils/testSchedule';
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
 import { buyBundle, buySubject, buyNoteBundle, verifyOrder } from '../cashfree';
@@ -302,6 +304,48 @@ export default function Dashboard() {
       unsubCommon();
     };
   }, [studentDepartment, studentName]);
+
+  // Scheduled tests for the Schedule tab (live, so a test the teacher schedules shows up at once)
+  const [deptTests, setDeptTests] = useState([]);
+  const [attemptedTestIds, setAttemptedTestIds] = useState(() => new Set());
+  const [scheduleNow, setScheduleNow] = useState(Date.now());
+  useEffect(() => {
+    if (!studentDepartment) return undefined;
+    const unsub = onSnapshot(
+      query(collection(db, 'tests'), where('department', '==', studentDepartment)),
+      snap => setDeptTests(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      err => console.error('Failed to load scheduled tests', err)
+    );
+    const email = sessionStorage.getItem('auth_email');
+    if (email) {
+      getDocs(query(collection(db, 'test_attempts'), where('studentEmail', '==', email)))
+        .then(snap => setAttemptedTestIds(new Set(snap.docs.map(d => d.data().testId))))
+        .catch(err => console.error('Failed to load test attempts', err));
+    }
+    return () => unsub();
+  }, [studentDepartment]);
+  useEffect(() => {
+    if (activeTab !== 'schedule') return undefined;
+    const t = setInterval(() => setScheduleNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, [activeTab]);
+
+  // Tests this student can take that haven't closed and they haven't attempted, soonest first
+  const scheduledTests = deptTests.filter(t =>
+    testStartMillis(t) !== null
+    && !attemptedTestIds.has(t.id)
+    && testAvailability(t, scheduleNow) !== AVAILABILITY.CLOSED
+    && canAccessTest(t, { isPro, purchasedBundles, bundles: availableBundles })
+  );
+  // Classes and tests on one timeline
+  const classTime = (cls) => {
+    const ms = cls.time?.includes?.('T') ? new Date(cls.time).getTime() : NaN;
+    return Number.isNaN(ms) ? Infinity : ms;
+  };
+  const scheduleItems = [
+    ...scheduledClasses.map(cls => ({ kind: 'class', id: `c-${cls.id}`, at: classTime(cls), cls })),
+    ...scheduledTests.map(test => ({ kind: 'test', id: `t-${test.id}`, at: testStartMillis(test), test })),
+  ].sort((a, b) => a.at - b.at);
 
   useEffect(() => {
     if (!studentDepartment) return;
@@ -878,7 +922,7 @@ export default function Dashboard() {
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
 
-        <Link to="/" className={`p-6 flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3'} hover:bg-slate-50 transition-colors w-full`}>
+        <Link to="/" className={`p-5 flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3'} hover:bg-slate-50 transition-colors w-full`}>
           <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center p-1 border border-blue-100 flex-shrink-0 mx-auto md:mx-0">
             <img src={logoImg} alt="Logo" className="w-full h-full object-contain" />
           </div>
@@ -890,12 +934,12 @@ export default function Dashboard() {
           )}
         </Link>
 
-        <nav className="flex-1 min-h-0 px-4 py-4 space-y-2 overflow-y-auto">
+        <nav className="flex-1 min-h-0 px-4 py-3 space-y-1.5 overflow-y-auto">
           {sidebarNavItems.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === key ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-2.5 rounded-xl font-bold transition-all ${activeTab === key ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
             >
               <Icon size={18} />
               {!isCollapsed && <span>{label}</span>}
@@ -921,10 +965,10 @@ export default function Dashboard() {
           
           {/* Original button fallback for collapsed state or Pro users */}
           {(isCollapsed || isPro) && (
-            <div className="pt-4 mt-4 border-t border-slate-200">
+            <div className="pt-3 mt-3 border-t border-slate-200">
               <button 
                 onClick={() => setActiveTab('upgrade')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === 'upgrade' ? 'pro-badge border border-[#F2C94C] text-[#B8860B] shadow-sm' : isPro ? 'text-[#B8860B] hover:bg-[#FFF9E6]' : 'pro-badge border border-[#F2C94C] text-[#B8860B] shadow-md hover:shadow-lg hover:-translate-y-0.5'}`}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-2.5 rounded-xl font-bold transition-all ${activeTab === 'upgrade' ? 'pro-badge border border-[#F2C94C] text-[#B8860B] shadow-sm' : isPro ? 'text-[#B8860B] hover:bg-[#FFF9E6]' : 'pro-badge border border-[#F2C94C] text-[#B8860B] shadow-md hover:shadow-lg hover:-translate-y-0.5'}`}
               >
                 <Crown size={18} className={isPro && activeTab !== 'upgrade' ? 'text-[#B8860B]' : 'text-[#B8860B]'} />
                 {!isCollapsed && <span>{isPro ? 'Elite Benefits' : 'Upgrade to Elite'}</span>}
@@ -933,7 +977,7 @@ export default function Dashboard() {
           )}
         </nav>
 
-        <div className={`p-4 border-t border-slate-100 space-y-3 ${isCollapsed ? 'px-2' : ''}`}>
+        <div className={`p-3 border-t border-slate-100 space-y-2 ${isCollapsed ? 'px-2' : ''}`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
             <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-black text-[14px] flex items-center justify-center flex-shrink-0">
               {(studentName || 'S').trim().charAt(0).toUpperCase()}
@@ -949,7 +993,7 @@ export default function Dashboard() {
           <button
             onClick={handleLogout}
             title="Log Out"
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold text-red-500 hover:bg-red-50 transition-all`}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-2.5 rounded-xl font-bold text-red-500 hover:bg-red-50 transition-all`}
           >
             <LogOut size={18} />
             {!isCollapsed && <span>Log Out</span>}
@@ -1369,10 +1413,47 @@ export default function Dashboard() {
               <Calendar className="text-blue-500" size={24} /> My Schedule
             </h2>
 
-            {scheduledClasses.length > 0 ? (
+            {scheduleItems.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {scheduledClasses.map(cls => (
-                  <div key={cls.id} className="p-6 border border-slate-200 rounded-3xl hover:border-blue-300 hover:shadow-lg transition-all group bg-white flex flex-col justify-between gap-4">
+                {scheduleItems.map(item => item.kind === 'test' ? (() => {
+                  const test = item.test;
+                  const start = testStartMillis(test);
+                  const close = testCloseMillis(test);
+                  const isOpen = testAvailability(test, scheduleNow) === AVAILABILITY.OPEN;
+                  const soon = !isOpen && start - scheduleNow <= 30 * 60 * 1000;
+                  return (
+                    <div key={item.id} className="p-6 border border-indigo-200 rounded-3xl hover:border-indigo-400 hover:shadow-lg transition-all bg-white flex flex-col justify-between gap-4">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-full uppercase tracking-wide">
+                            <FileText size={12} /> Test
+                          </span>
+                          {isOpen ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full uppercase tracking-wide">Open now</span>
+                          ) : soon ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full uppercase tracking-wide animate-pulse"><Clock size={12} /> Starts in {formatCountdown(start - scheduleNow)}</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full uppercase tracking-wide"><Calendar size={12} /> Opens in {formatCountdown(start - scheduleNow)}</span>
+                          )}
+                        </div>
+                        <h4 className="text-[18px] leading-tight font-[900] text-slate-900 mb-2">{test.title}</h4>
+                        <div className="text-sm font-bold text-slate-700">{formatTestTime(start)}</div>
+                        {close !== null && <div className="text-xs font-semibold text-slate-500 mt-1">Closes {formatTestTime(close)}</div>}
+                        {test.subject && <p className="text-sm text-slate-500 font-medium mt-2 truncate">{test.subject}</p>}
+                      </div>
+                      <div className="flex items-center justify-between gap-3 mt-2 text-[13px] font-semibold text-slate-400 border-t border-slate-100 pt-4">
+                        <span className="flex items-center gap-3">
+                          <span className="flex items-center gap-1.5"><Clock size={14} /> {test.duration || 0} min</span>
+                          <span>{test.questions?.length || 0} Qs</span>
+                        </span>
+                        <button onClick={() => setActiveTab('tests')} className="text-indigo-600 hover:text-indigo-800 font-bold">
+                          {isOpen ? 'Start Test' : 'View'} →
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })() : (() => { const cls = item.cls; return (
+                  <div key={item.id} className="p-6 border border-slate-200 rounded-3xl hover:border-blue-300 hover:shadow-lg transition-all group bg-white flex flex-col justify-between gap-4">
                     <div>
                       {isStartingSoon(cls.time) ? (
                         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded-full mb-3 animate-pulse uppercase tracking-wide">
@@ -1397,7 +1478,7 @@ export default function Dashboard() {
                       <span className="flex items-center gap-1.5"><Clock size={14} /> {cls.duration}</span>
                     </div>
                   </div>
-                ))}
+                ); })())}
               </div>
             ) : (
               <div className="bg-white rounded-3xl p-12 border border-slate-200 shadow-sm text-center">
@@ -1406,7 +1487,7 @@ export default function Dashboard() {
                 </div>
                 <h2 className="text-2xl font-[900] text-slate-900 mb-2">Your Calendar is Clear</h2>
                 <p className="text-slate-500 max-w-md mx-auto">
-                  No upcoming tests or classes are scheduled in the next 7 days.
+                  No upcoming tests or classes are scheduled right now.
                 </p>
               </div>
             )}

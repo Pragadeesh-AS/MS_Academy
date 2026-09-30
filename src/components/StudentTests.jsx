@@ -2,18 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { db, auth } from '../firebase';
 import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle, CalendarClock } from 'lucide-react';
+import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle, CalendarClock, Flag } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
 import logoImg from '../assets/msgate_logo.png';
 import { RELEASE_MODES, releaseMode, releaseAtMillis, areSolutionsVisible, formatReleaseTime } from '../utils/solutionRelease';
-import { positiveMarkFor, negativeMarkFor } from '../utils/marking';
+import { gradeAnswer, normalizeQuestion, correctAnswerText } from '../utils/testGrading';
 import { canAccessTest as canAccessTestFor } from '../utils/testAccess';
 import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, minutesAvailable, formatTestTime, formatCountdown } from '../utils/testSchedule';
-
-// Older AI imports stored NAT questions as 'Fill in the Blanks'; the test screens expect 'Fill in Blanks'
-const normalizeQuestion = (q) => (
-  q.questionType === 'Fill in the Blanks' ? { ...q, questionType: 'Fill in Blanks' } : q
-);
 
 export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [] }) {
   const [tests, setTests] = useState([]);
@@ -47,6 +42,57 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
+
+  // --- Reporting a question from the solution review
+  const REPORT_TYPES = ['The correct answer is wrong', 'The question has an error', 'An option is wrong or missing', 'Other'];
+  const [reportingQuestion, setReportingQuestion] = useState(null);
+  const [reportType, setReportType] = useState(REPORT_TYPES[0]);
+  const [reportText, setReportText] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportedIds, setReportedIds] = useState(() => new Set()); // questions this student already reported in this test
+
+  useEffect(() => {
+    const email = sessionStorage.getItem('auth_email');
+    if (testMode !== 'result' || !activeTest?.id || !email) return;
+    getDocs(query(collection(db, 'reported_questions'), where('studentEmail', '==', email), where('testId', '==', activeTest.id)))
+      .then(snap => setReportedIds(new Set(snap.docs.map(d => d.data().questionId))))
+      .catch(err => console.error('Failed to load your reports', err));
+  }, [testMode, activeTest?.id]);
+
+  const submitSolutionReport = async () => {
+    const q = reportingQuestion;
+    if (!q || reportSubmitting) return;
+    if (reportType === 'Other' && !reportText.trim()) return;
+    setReportSubmitting(true);
+    try {
+      const resp = activeAttempt?.responses?.find(r => r.questionId === q.id);
+      await addDoc(collection(db, 'reported_questions'), {
+        questionId: q.id,
+        testId: activeTest.id || 'unknown',
+        testTitle: activeTest.title || 'Untitled Test',
+        department: activeTest.department || department || 'General',
+        studentEmail: sessionStorage.getItem('auth_email') || 'unknown',
+        studentName: sessionStorage.getItem('auth_name') || 'Student',
+        reason: reportText.trim() ? `${reportType}: ${reportText.trim()}` : reportType,
+        reportType,
+        source: 'solution-review',
+        studentAnswer: resp?.selectedAnswer ?? '',
+        keyAnswer: correctAnswerText(q),
+        questionText: q.questionText || '',
+        teacher: q.teacher || q.typedBy || 'Unknown',
+        status: 'pending',
+        timestamp: serverTimestamp()
+      });
+      setReportedIds(prev => new Set([...prev, q.id]));
+      setReportingQuestion(null);
+      setReportText('');
+      setReportType(REPORT_TYPES[0]);
+    } catch (err) {
+      console.error('Failed to report question', err);
+      alert('Could not send the report. Please try again.');
+    }
+    setReportSubmitting(false);
+  };
 
   // Ticks every second on the test list so "Opens in ..." counts down and a test unlocks the
   // moment its scheduled time arrives, without a reload
@@ -168,11 +214,6 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     handleSubmitTest(testQuestions, activeTest, selectedAnswers);
   };
 
-  // Marks come from the shared GATE scheme (utils/marking), not the label text - a label can be a
-  // bare "2" from the Mark attribute, and MSQ/NAT never lose marks whatever the label says.
-  const positiveMarks = positiveMarkFor;
-  const negativeMarks = negativeMarkFor;
-
   const handleSubmitTest = async (questionsList, test, answers) => {
     setLoading(true);
     let correctCount = 0;
@@ -182,61 +223,22 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     const timeTakenSeconds = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
     const avgTimePerQuestion = questionsList.length > 0 ? timeTakenSeconds / questionsList.length : 0;
 
-    // Evaluate answers
+    // Evaluate answers - the same marking the answer-key re-grade uses (utils/testGrading).
+    // Skipped questions never lose marks - only an attempted-but-wrong answer does.
       const evaluation = questionsList.map(q => {
-        const rawAns = answers[q.id];
-        const studentAns = q.questionType === 'Multiple Choice'
-          ? (Array.isArray(rawAns) ? rawAns : [])
-          : (rawAns || '');
-        const isAnswered = q.questionType === 'Multiple Choice'
-          ? studentAns.length > 0
-          : String(studentAns).trim() !== '';
+        const graded = gradeAnswer(q, answers[q.id]);
 
-        let isCorrect = false;
-        let correctAnswerDisplay = q.correctAnswer;
-
-        if (q.questionType === 'Fill in Blanks') {
-          const cleanStudent = studentAns.trim();
-          if (q.fillBlankMode === 'Numeric Range') {
-             const studentNum = parseFloat(cleanStudent);
-             const min = parseFloat(q.fillBlankRangeStart);
-             const max = parseFloat(q.fillBlankRangeEnd);
-             if (!isNaN(studentNum) && !isNaN(min) && !isNaN(max)) {
-                isCorrect = studentNum >= min && studentNum <= max;
-             }
-             correctAnswerDisplay = q.fillBlankRangeStart + ' to ' + q.fillBlankRangeEnd;
-          } else {
-             const cleanCorrect = (q.fillBlankAnswer || '').trim().toLowerCase();
-             isCorrect = cleanStudent.toLowerCase() === cleanCorrect;
-             correctAnswerDisplay = q.fillBlankAnswer;
-          }
-        } else if (q.questionType === 'Multiple Choice') {
-          const correctSet = (q.correctAnswers || []).slice().sort();
-          const studentSet = studentAns.slice().sort();
-          isCorrect = correctSet.length > 0 &&
-            correctSet.length === studentSet.length &&
-            correctSet.every((opt, i) => opt === studentSet[i]);
-          correctAnswerDisplay = (q.correctAnswers || []).join(', ');
-        } else {
-          isCorrect = studentAns === q.correctAnswer;
-        }
-
-        // Skipped questions never lose marks - only an attempted-but-wrong answer does.
-        const posMark = positiveMarks(q);
-        const negMark = negativeMarks(q);
-        const marksAwarded = !isAnswered ? 0 : (isCorrect ? posMark : -negMark);
-
-        totalMarks += posMark;
-        totalScore += marksAwarded;
-        if (isCorrect) correctCount++;
+        totalMarks += graded.maxMarks;
+        totalScore += graded.marksAwarded;
+        if (graded.isCorrect) correctCount++;
 
         return {
           questionId: q.id,
-          selectedAnswer: studentAns,
-          isAnswered,
-          isCorrect,
-          marksAwarded,
-          correctAnswer: correctAnswerDisplay,
+          selectedAnswer: graded.selectedAnswer,
+          isAnswered: graded.isAnswered,
+          isCorrect: graded.isCorrect,
+          marksAwarded: graded.marksAwarded,
+          correctAnswer: graded.correctAnswer,
           timeSpent: avgTimePerQuestion
         };
       });
@@ -375,16 +377,42 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                           </span>
                         )}
                       </span>
-                      <span className={`px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 ${badgeStyle}`}>
-                        {unattempted ? (
-                          <><MinusCircle size={14} /> Unattempted</>
-                        ) : isCorrect ? (
-                          <><CheckCircle size={14} /> Correct</>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 ${badgeStyle}`}>
+                          {unattempted ? (
+                            <><MinusCircle size={14} /> Unattempted</>
+                          ) : isCorrect ? (
+                            <><CheckCircle size={14} /> Correct</>
+                          ) : (
+                            <><XCircle size={14} /> Incorrect</>
+                          )}
+                        </span>
+                        {reportedIds.has(q.id) ? (
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 bg-amber-50 text-amber-600 border border-amber-100">
+                            <Flag size={13} /> Reported
+                          </span>
                         ) : (
-                          <><XCircle size={14} /> Incorrect</>
+                          <button
+                            onClick={() => { setReportingQuestion(q); setReportType(REPORT_TYPES[0]); setReportText(''); }}
+                            className="px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 text-red-600 bg-red-50 hover:bg-red-100 border border-red-100 transition-colors"
+                            title="Report a problem with this question or its answer"
+                          >
+                            <Flag size={13} /> Report
+                          </button>
                         )}
-                      </span>
+                      </div>
                     </div>
+
+                    {/* Answer key was corrected after this attempt - it has been re-marked */}
+                    {studentResp.regradedAt && (
+                      <div className="mb-4 flex items-start gap-2 px-3.5 py-2.5 rounded-xl bg-indigo-50 border border-indigo-100 text-[12.5px] font-semibold text-indigo-800">
+                        <RefreshCw size={14} className="mt-0.5 shrink-0" />
+                        <span>
+                          The answer key for this question was corrected and your answer was re-marked
+                          {typeof studentResp.previousMarks === 'number' ? ` (${studentResp.previousMarks > 0 ? '+' : ''}${studentResp.previousMarks} → ${studentResp.marksAwarded > 0 ? '+' : ''}${studentResp.marksAwarded})` : ''}.
+                        </span>
+                      </div>
+                    )}
 
                     {/* Question Text */}
                     <p className="font-bold text-slate-800 leading-relaxed mb-4" dangerouslySetInnerHTML={{ __html: q.questionText || '' }} />
@@ -430,7 +458,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                         {!isCorrect && (
                           <div className="flex items-center justify-between text-sm bg-green-50/50 px-4 py-3 rounded-xl border border-green-100">
                             <span className="font-semibold text-green-700">Correct Answer:</span>
-                            <span className="font-bold font-mono text-green-600">{q.fillBlankAnswer}</span>
+                            <span className="font-bold font-mono text-green-600">{correctAnswerText(q)}</span>
                           </div>
                         )}
                       </div>
@@ -514,6 +542,51 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                 ? <>Your score has been successfully recorded. Detailed solutions and explanations will be released on <strong className="text-slate-700">{formatReleaseTime(releaseAtMillis(activeTest))}</strong>, and you'll get an email when they're available.</>
                 : 'Your score has been successfully recorded. Detailed solutions and explanations will be unlocked once your teacher reviews and releases them for this test.'}
             </p>
+          </div>
+        )}
+
+        {/* Report a question from the solutions */}
+        {reportingQuestion && (
+          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" onClick={() => !reportSubmitting && setReportingQuestion(null)}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="bg-red-600 text-white px-5 py-3.5 font-bold text-lg flex items-center gap-2">
+                <Flag size={18} /> Report Question {testQuestions.findIndex(x => x.id === reportingQuestion.id) + 1}
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-bold text-slate-700">What's wrong?</p>
+                  {REPORT_TYPES.map(t => (
+                    <label key={t} className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border cursor-pointer text-sm font-semibold transition-colors ${reportType === t ? 'border-red-300 bg-red-50 text-red-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
+                      <input type="radio" name="reportType" checked={reportType === t} onChange={() => setReportType(t)} className="accent-red-600" />
+                      {t}
+                    </label>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-sm font-bold text-slate-700">Details {reportType === 'Other' ? '' : <span className="text-slate-400 font-semibold">(optional)</span>}</p>
+                  <textarea
+                    value={reportText}
+                    onChange={e => setReportText(e.target.value)}
+                    placeholder={reportType === 'The correct answer is wrong' ? 'e.g. The answer should be option C because...' : 'Describe the problem...'}
+                    className="w-full border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 min-h-[100px]"
+                    disabled={reportSubmitting}
+                  />
+                </div>
+                <p className="text-xs text-slate-500 font-medium">
+                  Your teacher will review it. If the answer key is corrected, every attempt of this test is re-marked automatically.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button onClick={() => setReportingQuestion(null)} disabled={reportSubmitting} className="px-4 py-2 border border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-100 transition">Cancel</button>
+                  <button
+                    onClick={submitSolutionReport}
+                    disabled={reportSubmitting || (reportType === 'Other' && !reportText.trim())}
+                    className="px-4 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition disabled:opacity-50"
+                  >
+                    {reportSubmitting ? 'Sending...' : 'Send Report'}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

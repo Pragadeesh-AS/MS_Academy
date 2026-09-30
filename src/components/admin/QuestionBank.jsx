@@ -7,6 +7,9 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, w
 import { questionFingerprint, isEmptyQuestion } from '../../utils/questionDuplicates';
 import { QUESTION_CATEGORIES, getQuestionCategory, inferQuestionCategory } from '../../utils/questionCategory';
 import { markNumberOf, markLabelFor, negativeMarkFor } from '../../utils/marking';
+import { sameDepartment } from '../../utils/subjects';
+import { answerKeyChanged } from '../../utils/testGrading';
+import { regradeAttemptsForQuestion } from '../../utils/regradeAttempts';
 
 // Engineering Mathematics and Aptitude banks are shared by every department.
 const isCommonDeptName = (name) => {
@@ -208,7 +211,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
   
-  const [selectedFolder, setSelectedFolder] = useState(lockedDepartment || null);
+  // Admin: a department folder. Teacher (lockedDepartment): their own department's folder or one of
+  // the shared Engineering Mathematics / Aptitude folders - null shows the folder picker.
+  const [selectedFolder, setSelectedFolder] = useState(null);
   const [search, setSearch] = useState('');
   const [filterDept, setFilterDept] = useState(lockedDepartment || 'All');
   const [filterSubject, setFilterSubject] = useState('All');
@@ -355,11 +360,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     fetchQuestions();
   }, [lockedDepartment]);
 
-  // If lockedDepartment resolves after mount (async fetch upstream), keep the
-  // folder locked to it rather than leaving an admin-style department picker open.
-  useEffect(() => {
-    if (lockedDepartment) setSelectedFolder(lockedDepartment);
-  }, [lockedDepartment]);
 
   useEffect(() => {
     if (initialEditQuestionId && questions.length > 0 && !hasOpenedInitial) {
@@ -373,8 +373,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   }, [initialEditQuestionId, questions, hasOpenedInitial]);
 
   // Cascading logic to get parent IDs
-  const selectedDeptObj = filterDept !== 'All' 
-    ? attributes.find(a => a.type === 'department' && a.name === filterDept) 
+  // "Mechanical (ME)" on a teacher/question matches a "Mechanical" department attribute too
+  const selectedDeptObj = filterDept !== 'All'
+    ? attributes.find(a => a.type === 'department' && sameDepartment(a.name, filterDept))
     : null;
     
   const selectedSubjectObj = filterSubject !== 'All' 
@@ -555,6 +556,19 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     return payload;
   };
 
+  // A corrected answer key (or marks) re-marks every saved attempt of the tests using this question
+  const regradeIfKeyChanged = (before, after) => {
+    if (!before || !answerKeyChanged(before, after)) return Promise.resolve();
+    return regradeAttemptsForQuestion(before, after).then(({ attempts, gained, lost }) => {
+      if (attempts > 0) {
+        showToast(`Answer key updated - re-graded ${attempts} test attempt${attempts === 1 ? '' : 's'} (${gained} gained, ${lost} lost marks)`, "success");
+      }
+    }).catch(err => {
+      console.error("Failed to re-grade test attempts", err);
+      showToast("Saved, but re-grading the test attempts failed. Save the question again to retry.", "error");
+    });
+  };
+
   const handleSubmit = async (e, forcedStatus = null, skipReview = false) => {
     e.preventDefault();
     const form = e.target.closest('form');
@@ -594,9 +608,11 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setIsCreatorOpen(false);
     
     if (isEditing) {
+      const before = questions.find(q => q.id === currentId);
       setQuestions(prev => prev.map(q => q.id === currentId ? { id: currentId, ...payload } : q));
       updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
         showToast("Question saved successfully", "success");
+        return regradeIfKeyChanged(before, { id: currentId, ...payload });
       }).catch(e => {
         console.error("Failed to update question", e);
         showToast("Failed to save. Changes reverted.", "error");
@@ -655,9 +671,11 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     openAddCreator();
     
     if (isEditing) {
+      const before = questions.find(q => q.id === currentId);
       setQuestions(prev => prev.map(q => q.id === currentId ? { id: currentId, ...payload } : q));
       updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
         showToast("Question saved successfully. Add next.", "success");
+        return regradeIfKeyChanged(before, { id: currentId, ...payload });
       }).catch(e => {
         console.error("Failed to update question", e);
         showToast("Failed to save. Changes reverted.", "error");
@@ -743,6 +761,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     try {
       await updateDoc(doc(db, 'question_bank', q.id), update);
       showToast(`Set to ${n} mark${n > 1 ? 's' : ''}${update.negativeMark ? ` (-${update.negativeMark} for a wrong answer)` : ' (no negative marking)'}`, "success");
+      regradeIfKeyChanged(q, { ...q, ...update });
     } catch (e) {
       console.error("Failed to update marks", e);
       showToast("Failed to update marks. Changes reverted.", "error");
@@ -805,6 +824,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         }));
         setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, mark, updatedAt, negativeMark: negativeMarkFor({ ...q, mark }) } : q));
         showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} set to ${n} mark${n > 1 ? 's' : ''}`, "success");
+        // Scores of attempts that include these questions follow the new marks (one question at a time)
+        (async () => {
+          for (const id of ids) {
+            const before = byId.get(id);
+            if (before) await regradeIfKeyChanged(before, { ...before, mark });
+          }
+        })();
       }
       setSelectedIds([]);
     } catch (e) {
@@ -852,10 +878,36 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setIsCreatorOpen(true);
   };
 
+  // Teacher folders: their own department, and each shared (Maths / Aptitude) bank separately
+  const isOwnDeptQuestion = (q) => deptNameVariants(lockedDepartment).includes(q.department);
+  const sameFolderName = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+
+  const openFolder = (name) => {
+    setSelectedFolder(name);
+    if (lockedDepartment) {
+      // Subject / topic filters follow the folder's department
+      setFilterDept(name);
+      setFilterSubject('All');
+      setFilterTopic('All');
+    }
+  };
+  const closeFolder = () => {
+    setSelectedFolder(null);
+    if (lockedDepartment) {
+      setFilterDept(lockedDepartment);
+      setFilterSubject('All');
+      setFilterTopic('All');
+    }
+  };
+
   const filteredQuestions = questions.filter(q => {
     const matchesSearch = q.questionText?.toLowerCase().includes(search.toLowerCase());
     const matchesDept = lockedDepartment
-      ? (deptNameVariants(lockedDepartment).includes(q.department) || isCommonDeptName(q.department))
+      ? (!selectedFolder
+        ? (isOwnDeptQuestion(q) || isCommonDeptName(q.department))
+        : selectedFolder === lockedDepartment
+          ? isOwnDeptQuestion(q)
+          : sameFolderName(q.department, selectedFolder))
       : selectedFolder
         ? (selectedFolder === 'Uncategorized' ? (!q.department || q.department.trim() === '') : q.department === selectedFolder)
         : (filterDept === 'All' || q.department === filterDept);
@@ -941,15 +993,15 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           
           {/* Main Header */}
           <div className="flex flex-col gap-4">
-            {selectedFolder && !lockedDepartment && (
+            {selectedFolder && (
               <button
-                onClick={() => setSelectedFolder(null)}
+                onClick={closeFolder}
                 className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-all w-fit font-semibold text-sm group"
               >
                 <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm group-hover:border-slate-300 group-hover:shadow group-hover:-translate-x-1 transition-all">
                   <ArrowLeft size={16} strokeWidth={2.5} />
                 </div>
-                Back to Departments
+                {lockedDepartment ? 'Back to Folders' : 'Back to Departments'}
               </button>
             )}
             
@@ -960,10 +1012,16 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 </div>
                 <div className="flex flex-col gap-1">
                   <h1 className="text-[24px] sm:text-[30px] lg:text-[36px] font-[800] text-[#0F172A] leading-none tracking-tight font-sans">
-                    {selectedFolder ? `${selectedFolder} Questions` : 'Question Bank'}
+                    {selectedFolder ? `${lockedDepartment && isCommonDeptName(selectedFolder) ? toTitleCase(selectedFolder) : selectedFolder} Questions` : 'Question Bank'}
                   </h1>
                   <p className="text-[15px] font-[500] text-[#64748B] mt-1">
-                    {selectedFolder ? `Manage practice questions for ${selectedFolder}.` : 'Select a department folder to manage practice questions.'}
+                    {selectedFolder
+                      ? (lockedDepartment && isCommonDeptName(selectedFolder)
+                        ? 'Shared question bank - available to every department.'
+                        : `Manage practice questions for ${selectedFolder}.`)
+                      : lockedDepartment
+                        ? 'Your department and the shared Maths / Aptitude banks are kept in separate folders.'
+                        : 'Select a department folder to manage practice questions.'}
                   </p>
                 </div>
               </div>
@@ -980,7 +1038,54 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           </div>
         </div>
 
-          {!selectedFolder ? (
+          {!selectedFolder && lockedDepartment ? (
+            <div className="mt-4">
+              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200">
+                <span className="text-[13px] font-[700] text-slate-400 uppercase tracking-widest">Folders</span>
+                <div className="flex-1 h-px bg-slate-200"></div>
+              </div>
+              {loading ? (
+                <div className="py-12 flex justify-center"><Loader /></div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {(() => {
+                    // Shared banks, one folder each, named as stored on the questions (first spelling seen)
+                    const commonNames = [];
+                    filteredQuestions.forEach(q => {
+                      if (isCommonDeptName(q.department) && !commonNames.some(n => sameFolderName(n, q.department))) {
+                        commonNames.push(q.department.trim());
+                      }
+                    });
+                    const folders = [
+                      { name: lockedDepartment, label: lockedDepartment, tag: 'Your department', common: false, count: filteredQuestions.filter(isOwnDeptQuestion).length },
+                      ...commonNames.sort((a, b) => a.localeCompare(b)).map(name => ({
+                        name, label: toTitleCase(name), tag: 'Shared with all departments', common: true,
+                        count: filteredQuestions.filter(q => sameFolderName(q.department, name)).length
+                      }))
+                    ];
+                    return folders.map(f => (
+                      <div key={f.name} onClick={() => openFolder(f.name)} className={`bg-white rounded-2xl border p-5 cursor-pointer hover:shadow-lg transition-all duration-200 group flex items-center gap-4 ${f.common ? 'border-violet-200 hover:border-violet-400' : 'border-slate-200 hover:border-blue-300'}`}>
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors border ${f.common ? 'bg-violet-50 text-violet-600 border-violet-100 group-hover:bg-violet-600 group-hover:text-white group-hover:border-violet-600' : 'bg-blue-50 text-blue-600 border-blue-100 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600'}`}>
+                          <FolderOpen size={22} strokeWidth={2} />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <h3 className="font-[700] text-[15px] text-slate-800 truncate" title={f.label}>{f.label}</h3>
+                          <span className={`text-[10.5px] font-[800] uppercase tracking-wide mt-0.5 ${f.common ? 'text-violet-500' : 'text-blue-500'}`}>{f.tag}</span>
+                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[13px] mt-0.5">
+                            <FileText size={12} />
+                            {f.count} Questions
+                          </div>
+                        </div>
+                        <div className={`ml-auto text-slate-300 transition-colors ${f.common ? 'group-hover:text-violet-400' : 'group-hover:text-blue-400'}`}>
+                          <ArrowLeft size={16} className="rotate-180" />
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              )}
+            </div>
+          ) : !selectedFolder ? (
             <div className="mt-4">
               {/* Folder grid header */}
               <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200">
@@ -992,7 +1097,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 ...departments.filter(d => d !== 'All Departments').map(dept => ({ name: dept, count: filteredQuestions.filter(q => q.department === dept).length })),
                 { name: 'Uncategorized', count: filteredQuestions.filter(q => !q.department || q.department.trim() === '').length }
               ].filter(dept => dept.count > 0).map((dept, i) => (
-                  <div key={i} onClick={() => setSelectedFolder(dept.name)} className="bg-white rounded-2xl border border-slate-200 p-5 cursor-pointer hover:border-blue-300 hover:shadow-lg transition-all duration-200 group flex items-center gap-4">
+                  <div key={i} onClick={() => openFolder(dept.name)} className="bg-white rounded-2xl border border-slate-200 p-5 cursor-pointer hover:border-blue-300 hover:shadow-lg transition-all duration-200 group flex items-center gap-4">
                     <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors border border-blue-100 group-hover:border-blue-600">
                       <FolderOpen size={22} strokeWidth={2} />
                     </div>
