@@ -264,8 +264,9 @@ const LITERAL_DOLLAR = '';
 const LATEX_TRIGGER = /\\[a-zA-Z]{2,}|[\^_]\{/;
 const MATH_CHAR = /[0-9\s=+\-*/().,<>|!'^_[\]]/;
 
-// An ordinary word - a formula doesn't contain these outside braces (differentials like dx are fine)
-const isProseWord = (w) => w.length >= 2 && !LATEX_FUNCTIONS.has(w) && !/^d[a-zA-Z]$/.test(w);
+// An ordinary word - a formula doesn't contain these outside braces (differentials like dx are fine).
+// Short all-caps names (GM, KE, BMD, SFD) are variables in engineering maths, not English words.
+const isProseWord = (w) => w.length >= 2 && !LATEX_FUNCTIONS.has(w) && !/^d[a-zA-Z]$/.test(w) && !/^[A-Z]{2,3}$/.test(w);
 
 const countProseWords = (s) => {
   let depth = 0;
@@ -384,8 +385,9 @@ const repairLine = (line) => {
 
   return fixed.split('$').map((part, k) => {
     if (k % 2 === 0) return LATEX_TRIGGER.test(part) ? wrapBareLatexRuns(part) : part;
-    // "$5 and $10": the pair holds words and no LaTeX, so these are plain dollar signs
-    if (!/[\\^_]/.test(part) && countProseWords(part) > 0) return `${LITERAL_DOLLAR}${part}${LITERAL_DOLLAR}`;
+    // "$5 and $10": money - the pair starts with an amount, then words, and holds no LaTeX.
+    // Anything else is maths, even with letter runs in it: "$GM$", "$GM > 0$", "$v = u + at$".
+    if (!/[\\^_]/.test(part) && /^\s*\d/.test(part) && countProseWords(part) > 0) return `${LITERAL_DOLLAR}${part}${LITERAL_DOLLAR}`;
     return `$${part}$`;
   }).join('');
 };
@@ -825,9 +827,18 @@ export default function AIGenerator({ pairMode = false }) {
       if (i < parts.length - 1) prose = prose.replace(/\n\s*$/, '');
       return prose.split(/(`[^`\n]+`)/g).map((seg, j) => {
         if (j % 2 === 1) return `<code style="${INLINE_CODE_STYLE}">${escapeHTML(seg.slice(1, -1))}</code>`;
-        return repairMathDelimiters(seg).split(/(\$\$[^$]+\$\$|\$[^$]+\$)/g)
+        const pieces = repairMathDelimiters(seg).split(/(\$\$[^$]+\$\$|\$[^$]+\$)/g);
+        return pieces
           .map((s, k) => {
-            if (k % 2 === 1) return s.startsWith('$$') ? renderMath(s.slice(2, -2), true) : renderMath(s.slice(1, -1));
+            if (k % 2 === 1) {
+              const math = s.startsWith('$$') ? renderMath(s.slice(2, -2), true) : renderMath(s.slice(1, -1));
+              if (s.startsWith('$$')) return math;
+              // The AI sometimes glues a formula to the next or previous word ("$GM$indicates") -
+              // keep a space there. Short endings like "$n$th" stay attached.
+              const before = /[A-Za-z]{3}$/.test(pieces[k - 1] || '') ? ' ' : '';
+              const after = /^[A-Za-z]{3}/.test(pieces[k + 1] || '') ? ' ' : '';
+              return `${before}${math}${after}`;
+            }
             // A lone "$" (e.g. "$5") is just text
             return renderLatexToHTML(cleanBareLatex(escapeHTML(s)))
               .replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>') // "**Concept:**" labels
@@ -1380,7 +1391,12 @@ IMPORTANT:
       const reviewer = reviewerEmail.trim().toLowerCase();
       if (!direct && !pairMode) await setDoc(doc(db, 'site_settings', 'ai_review'), { reviewerEmail: reviewer }, { merge: true });
       const pairFields = pairMode
-        ? { pairId: localStorage.getItem('pair_id'), typedBy: sessionStorage.getItem('auth_name') || 'Typist' }
+        ? {
+          pairId: localStorage.getItem('pair_id'),
+          typedBy: sessionStorage.getItem('auth_name') || 'Typist',
+          // Lets the typist find every question they extracted in their own Question Bank
+          typedByEmail: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
+        }
         : {};
       const reviewFields = direct
         ? { status: 'Approved', reviewed: false, reviewedBy: '' }

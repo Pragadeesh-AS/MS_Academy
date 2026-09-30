@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { db } from '../../firebase';
 import { doc, setDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { motion, useReducedMotion } from 'motion/react';
+import AnswerReview, { fetchQuestionBankCopies } from './AnswerReview';
+import { normalizeQuestion } from '../../utils/testGrading';
 import { Timer, Trophy, CheckCircle2, XCircle, Clock, ChevronRight, Lock, X, Check, Flame, Zap, Eraser, MinusCircle } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -392,6 +394,16 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
   // When this screen first saw the current question - the fallback clock (see elapsedAt)
   const seenRef = useRef({ key: null, at: 0 });
   const reduceMotion = useReducedMotion();
+
+  // Once the test is over, each student gets a full answer review - with the answer key and
+  // explanations as they are in the Question Bank (the session only holds a slimmed copy)
+  const [reviewQuestions, setReviewQuestions] = useState(null);
+  useEffect(() => {
+    if (isTeacher || liveTest.phase !== 'finished') return undefined;
+    let cancelled = false;
+    fetchQuestionBankCopies(liveTest.questions).then(qs => { if (!cancelled) setReviewQuestions(qs); });
+    return () => { cancelled = true; };
+  }, [isTeacher, liveTest.phase, liveTest.testId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [draft, setDraft] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -518,9 +530,23 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
   if (phase === 'finished' && !isTeacher) {
     const total = liveTest.questions.length;
     const accuracy = mine && total ? Math.round((mine.correct / total) * 100) : 0;
+    // Answer review: the key as it is in the Question Bank now, the student's own answers
+    const reviewItems = liveTest.questions.map((sessionQ, i) => {
+      const q = reviewQuestions?.[i] || normalizeQuestion(sessionQ);
+      const a = me?.liveAnswers?.[answerKey(liveTest, i)];
+      const answered = !!a && a.answer !== '' && !(Array.isArray(a.answer) && a.answer.length === 0);
+      const delta = mine?.deltas?.[i];
+      return {
+        question: q,
+        answer: a?.answer,
+        isAnswered: answered,
+        isCorrect: answered && isOnTime(liveTest, a) && checkAnswer(q, a.answer),
+        badge: typeof delta === 'number' ? `${delta > 0 ? '+' : ''}${delta} pts` : null,
+      };
+    });
     return (
       <div className="fixed inset-0 z-[500] flex flex-col overflow-y-auto bg-[#1C0B2B] text-white">
-        <div className="w-full max-w-xl m-auto px-4 py-8 md:py-12">
+        <div className="w-full max-w-3xl m-auto px-4 py-8 md:py-12">
           <div className="text-center mb-6">
             <Trophy size={48} className="mx-auto text-yellow-400 mb-3" />
             <h3 className="text-2xl md:text-3xl font-black">Quiz complete!</h3>
@@ -541,6 +567,12 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
           )}
           <h4 className="text-xs font-black uppercase tracking-wider text-white/50 mb-3">Leaderboard</h4>
           <GameLeaderboard rows={leaderboard} myId={String(myUid)} limit={10} />
+
+          <h4 className="mt-8 text-xs font-black uppercase tracking-wider text-white/50 mb-3">
+            Your answers {reviewQuestions ? '' : '(loading the answer key...)'}
+          </h4>
+          <AnswerReview items={reviewItems} dark />
+
           <p className="mt-6 text-xs text-center font-semibold text-white/40">Waiting for your teacher to continue the class...</p>
         </div>
       </div>

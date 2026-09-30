@@ -39,6 +39,9 @@ import AgoraRTC, {
 import LiveTestOverlay from './liveTest/LiveTestOverlay';
 import { PollCard } from './liveTest/PollCard';
 import ParticipantsPanel, { buildPeople } from './liveTest/ParticipantsPanel';
+import AnswerReview, { fetchQuestionBankCopies } from './liveTest/AnswerReview';
+import { gradeAnswer, normalizeQuestion } from '../utils/testGrading';
+import { positiveMarkFor } from '../utils/marking';
 
 const sendEmailViaGAS = async (to, subject, htmlMessage) => {
   const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
@@ -695,6 +698,8 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
   const [quizResults, setQuizResults] = useState([]);
   const [totalParticipants, setTotalParticipants] = useState(0);
   const [emailSent, setEmailSent] = useState(false);
+  const [quizReview, setQuizReview] = useState(null); // answer review shown once the quiz is submitted
+  const [quizSubmitting, setQuizSubmitting] = useState(false);
   
   // Chat State
   const [chatMessages, setChatMessages] = useState([]);
@@ -808,6 +813,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
             setQuizAnswers({});
             setQuizSubmitted(false);
             setQuizScore(0);
+            setQuizReview(null);
           }
           handleLeaveMeet(true); // pass true to indicate it's forced by teacher
         }
@@ -1036,26 +1042,26 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
 
   if (postClassQuiz) {
     const handleQuizSubmit = async () => {
+      if (quizSubmitting) return;
+      setQuizSubmitting(true);
+      // Marked against the answer key as it is in the Question Bank now (the quiz holds a copy
+      // from when the class ended), with the same rules as tests - NAT ranges, MSQ, marks. A
+      // post-class quiz only adds marks for correct answers; wrong ones don't lose any.
+      const questions = await fetchQuestionBankCopies(postClassQuiz.questions);
       let score = 0;
-      postClassQuiz.questions.forEach((q, idx) => {
-        if (q.questionType === 'Multiple Choice') {
-          const studentAns = quizAnswers[idx] || [];
-          const correctAns = q.correctAnswers || [];
-          if (studentAns.length === correctAns.length && studentAns.every(v => correctAns.includes(v))) {
-            score += parseInt(q.marks) || 1;
-          }
-        } else if (q.questionType === 'Fill in the Blanks') {
-          if ((quizAnswers[idx] || '').toString().trim().toLowerCase() === (q.correctAnswer || '').toString().trim().toLowerCase()) {
-            score += parseInt(q.marks) || 1;
-          }
-        } else {
-          // Single Choice / Match
-          if (quizAnswers[idx] === q.correctAnswer) {
-            score += parseInt(q.marks) || 1;
-          }
-        }
+      const review = questions.map((q, idx) => {
+        const graded = gradeAnswer(q, quizAnswers[idx]);
+        if (graded.isCorrect) score += graded.maxMarks;
+        return {
+          question: q,
+          answer: graded.selectedAnswer,
+          isAnswered: graded.isAnswered,
+          isCorrect: graded.isCorrect,
+          badge: graded.isCorrect ? `+${graded.maxMarks} mark${graded.maxMarks === 1 ? '' : 's'}` : '0 marks',
+        };
       });
-      
+      score = Math.round(score * 100) / 100;
+
       let userEmail = sessionStorage.getItem('auth_email');
       if (!userEmail) {
         userEmail = `student${Math.floor(Math.random() * 10000)}@test.com`;
@@ -1073,6 +1079,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
             name: userName,
             email: userEmail,
             score: score,
+            answers: review.map(r => ({ questionId: r.question.id || null, answer: r.answer ?? '', isCorrect: r.isCorrect })),
             submittedAt: serverTimestamp()
           });
         } catch (e) {
@@ -1080,8 +1087,10 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
         }
       }
 
+      setQuizReview(review);
       setQuizScore(score);
       setQuizSubmitted(true);
+      setQuizSubmitting(false);
     };
 
     const handleQuizClose = () => {
@@ -1146,22 +1155,35 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                     )}
                   </div>
                 </div>
+
+                {quizReview && (
+                  <div>
+                    <h4 className="font-bold text-slate-800 mb-3">
+                      Your answers - {quizReview.filter(r => r.isCorrect).length} / {quizReview.length} correct
+                    </h4>
+                    <AnswerReview items={quizReview} />
+                  </div>
+                )}
               </div>
             ) : (
               postClassQuiz.questions.map((q, idx) => {
-                const qType = q.questionType || 'Single Choice';
-                const cleanText = q.questionText ? q.questionText.replace(/<[^>]+>/g, '') : '';
+                const qType = normalizeQuestion(q).questionType || 'Single Choice';
                 const optionsList = ['A', 'B', 'C', 'D'];
+                const marks = positiveMarkFor(q);
 
                 return (
                   <div key={idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                     <div className="flex justify-between items-start mb-4">
-                      <h3 className="text-lg font-bold text-slate-800 flex-1"><span className="text-blue-600 mr-2">Q{idx + 1}.</span> {cleanText}</h3>
-                      <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-1 rounded-lg ml-4 flex-shrink-0">{q.marks || 1} Marks</span>
+                      <h3 className="text-lg font-bold text-slate-800 flex-1 flex gap-2">
+                        <span className="text-blue-600 shrink-0">Q{idx + 1}.</span>
+                        <span className="min-w-0 break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '' }} />
+                      </h3>
+                      <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-1 rounded-lg ml-4 flex-shrink-0">{marks} Mark{marks === 1 ? '' : 's'}</span>
                     </div>
-                    
+                    {q.questionImageUrl && <img src={q.questionImageUrl} alt="Question" className="max-h-52 object-contain rounded-xl border border-slate-100 mb-4" />}
+
                     <div className="space-y-3">
-                      {qType === 'Fill in the Blanks' ? (
+                      {qType === 'Fill in Blanks' ? (
                         <input 
                           type="text" 
                           placeholder="Type your answer here..."
@@ -1199,9 +1221,9 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                                 checked={isChecked}
                                 onChange={handleChange}
                               />
-                              <div className="text-slate-700 font-medium flex items-center gap-2">
-                                <span className="text-xs font-bold px-2 py-1 bg-slate-100 rounded-md text-slate-500">{opt}</span>
-                                {q[`option${opt}`]}
+                              <div className="text-slate-700 font-medium flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-bold px-2 py-1 bg-slate-100 rounded-md text-slate-500 shrink-0">{opt}</span>
+                                <span className="min-w-0 break-words" dangerouslySetInnerHTML={{ __html: q[`option${opt}`] }} />
                               </div>
                             </label>
                           );
@@ -1218,10 +1240,10 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
             <div className="p-6 border-t border-slate-100 bg-white rounded-b-3xl flex justify-end">
               <button
                 onClick={handleQuizSubmit}
-                disabled={Object.keys(quizAnswers).length < postClassQuiz.questions.length}
-                className={`px-8 py-3 rounded-xl font-bold transition-all shadow-md ${Object.keys(quizAnswers).length < postClassQuiz.questions.length ? 'bg-blue-300 text-white cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                disabled={quizSubmitting || Object.keys(quizAnswers).length < postClassQuiz.questions.length}
+                className={`px-8 py-3 rounded-xl font-bold transition-all shadow-md ${quizSubmitting || Object.keys(quizAnswers).length < postClassQuiz.questions.length ? 'bg-blue-300 text-white cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
               >
-                Submit Quiz
+                {quizSubmitting ? 'Checking answers...' : 'Submit Quiz'}
               </button>
             </div>
           )}
