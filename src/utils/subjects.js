@@ -10,6 +10,10 @@ export const isCommonDeptName = (name) => {
 
 const shortCode = (name) => ((name || '').match(/\(([^)]+)\)/) || [])[1]?.trim().toLowerCase() || '';
 
+// The name without its "(CODE)" and a trailing "Engineering": "Mechanical Engineering (ME)" -> "mechanical"
+const baseName = (name) => (name || '').replace(/\([^)]*\)/g, '').trim().toLowerCase().replace(/\s+engineering$/, '').trim();
+
+// "Mechanical (ME)", "ME", "Mechanical" and "Mechanical Engineering" are all the same department
 export const sameDepartment = (a, b) => {
   const x = (a || '').trim().toLowerCase();
   const y = (b || '').trim().toLowerCase();
@@ -17,7 +21,9 @@ export const sameDepartment = (a, b) => {
   if (x === y) return true;
   const cx = shortCode(a);
   const cy = shortCode(b);
-  return (!!cx && (cx === y || cx === cy)) || (!!cy && cy === x);
+  if ((!!cx && (cx === y || cx === cy)) || (!!cy && cy === x)) return true;
+  const bx = baseName(a);
+  return !!bx && bx === baseName(b);
 };
 
 const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
