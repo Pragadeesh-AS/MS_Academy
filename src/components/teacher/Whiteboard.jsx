@@ -1230,11 +1230,14 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       {/* Floating Bold / Italic / Underline bar for the selected text box (not part of the canvas) */}
       {textBar && (
         <div
-          className="absolute z-30 flex items-center gap-1 p-1 rounded-xl bg-slate-800/95 border border-slate-600 shadow-xl"
+          // pointer-events-auto: over a question slide the whiteboard sits in a click-through
+          // layer (like the side toolbar, the bar has to opt back in or clicks pass straight through)
+          className="absolute z-[60] pointer-events-auto flex items-center gap-1 p-1 rounded-xl bg-slate-800/95 border border-slate-600 shadow-xl"
           style={{ left: textBar.x, top: textBar.y }}
           // Keep the text box focused / in editing mode while clicking the buttons
-          onMouseDown={(e) => e.preventDefault()}
-          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onTouchStart={(e) => e.stopPropagation()}
         >
           <button
             type="button"
