@@ -15,7 +15,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     // Categorize
     rawTestQuestions.forEach(q => {
       const dept = (q.department || '').trim().toLowerCase();
-      if (dept.includes('aptitude') || dept === 'general aptitude') {
+      if (/ap+titude/.test(dept)) { // "Aptitude", "General Aptitude", or the "Apptitude" spelling
         aptitudeQs.push(q);
       } else if (dept.includes('mathematics') || dept.includes('maths') || dept === 'engineering mathematics') {
         mathsQs.push(q);

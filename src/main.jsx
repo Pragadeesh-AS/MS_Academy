@@ -1,6 +1,8 @@
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
+// Extracted questions store maths as KaTeX HTML - every page that shows them needs its styles
+import 'katex/dist/katex.min.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 

@@ -44,9 +44,18 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
   const [pagesData, setPagesData] = useState([{ id: Date.now(), data: null }]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
+  // Highlighter strokes are temporary (they fade out 10s after being drawn), so they are never
+  // saved into a page or an undo step - otherwise switching pages or Undo would bring them back.
+  const HIGHLIGHT_LIFETIME_MS = 10 * 1000;
+  const boardJSON = (fCanvas = fabricRef.current) => {
+    const json = fCanvas.toJSON(['isHighlight']);
+    json.objects = (json.objects || []).filter(o => !o.isHighlight);
+    return json;
+  };
+
   const saveCurrentPage = () => {
     if (fabricRef.current) {
-      const data = fabricRef.current.toJSON();
+      const data = boardJSON();
       setPagesData(prev => {
         const newPages = [...prev];
         newPages[currentPageIndex].data = data;
@@ -71,7 +80,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     fabricRef.current.isDrawingMode = (activeTool === 'pen' || activeTool === 'highlighter' || activeTool === 'eraser');
     
     // Reset History for new page
-    historyRef.current = [fabricRef.current.toJSON()];
+    historyRef.current = [boardJSON()];
     historyStepRef.current = 0;
     setCanUndo(false);
     setCanRedo(false);
@@ -113,7 +122,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
     historyTimeoutRef.current = setTimeout(() => {
       if (!fabricRef.current || isHistoryProcessingRef.current) return;
-      const json = fabricRef.current.toJSON();
+      const json = boardJSON();
       
       const currentHistory = historyRef.current;
       const currentStep = historyStepRef.current;
@@ -279,12 +288,12 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
 
           mixCtx.drawImage(activeCanvasEl, 0, 0);
 
-          // Small academy logo pinned to the top of every whiteboard page/stream
+          // Academy logo pinned to the top-right corner of every whiteboard page/stream
           if (watermarkImg.complete && watermarkImg.naturalWidth > 0) {
-            const logoH = 36;
+            const logoH = 48;
             const logoW = (logoH / watermarkImg.naturalHeight) * watermarkImg.naturalWidth;
             mixCtx.globalAlpha = 0.9;
-            mixCtx.drawImage(watermarkImg, (mixCanvas.width - logoW) / 2, 10, logoW, logoH);
+            mixCtx.drawImage(watermarkImg, mixCanvas.width - logoW - 16, 12, logoW, logoH);
             mixCtx.globalAlpha = 1.0;
           }
         };
@@ -458,15 +467,60 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       setShowBoardColors(false);
       setShowQuickColors(false);
     };
-    
+
+    // Tag highlighter strokes before anything else sees them (history, selectability)
+    const onBeforePathCreated = (e) => {
+      const path = e.path || e.object;
+      if (path && activeTool === 'highlighter') {
+        path.isHighlight = true;
+        scheduleHighlightFade(path);
+      }
+    };
+
+    fCanvas.on('before:path:created', onBeforePathCreated);
     fCanvas.on('path:created', onPathCreated);
     fCanvas.on('mouse:down', onMouseDown);
-    
+
     return () => {
+      fCanvas.off('before:path:created', onBeforePathCreated);
       fCanvas.off('path:created', onPathCreated);
       fCanvas.off('mouse:down', onMouseDown);
     };
   }, [activeTool]);
+
+  // Each highlighter stroke fades out and is removed HIGHLIGHT_LIFETIME_MS after it was drawn -
+  // only that stroke; pen, shapes and text stay. The whiteboard stream copies the canvas, so it
+  // disappears for students (and in recordings) too.
+  const highlightTimersRef = useRef(new Set());
+  const scheduleHighlightFade = (path) => {
+    const FADE_MS = 600;
+    const timer = setTimeout(() => {
+      highlightTimersRef.current.delete(timer);
+      const fCanvas = fabricRef.current;
+      const remove = () => {
+        if (!fCanvas || !fCanvas.getObjects().includes(path)) return; // already gone (undo, page change, clear)
+        isHistoryProcessingRef.current = true; // not an undo step
+        fCanvas.remove(path);
+        isHistoryProcessingRef.current = false;
+        fCanvas.requestRenderAll();
+      };
+      if (!fCanvas || !fCanvas.getObjects().includes(path)) return;
+      try {
+        path.animate({ opacity: 0 }, {
+          duration: FADE_MS,
+          onChange: () => fCanvas.requestRenderAll(),
+          onComplete: remove,
+        });
+      } catch {
+        remove();
+      }
+    }, Math.max(0, HIGHLIGHT_LIFETIME_MS - FADE_MS));
+    highlightTimersRef.current.add(timer);
+  };
+  useEffect(() => () => {
+    highlightTimersRef.current.forEach(clearTimeout);
+    highlightTimersRef.current.clear();
+  }, []);
 
   // Handle History Tracking
   useEffect(() => {
@@ -474,11 +528,13 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     if (!fCanvas) return;
     
     if (historyRef.current.length === 0) {
-      historyRef.current = [fCanvas.toJSON()];
+      historyRef.current = [boardJSON(fCanvas)];
       historyStepRef.current = 0;
     }
-    
-    const onHistoryEvent = () => {
+
+    // Drawing a highlight, or it fading away, is not an undo step
+    const onHistoryEvent = (e) => {
+      if (e?.path?.isHighlight || e?.target?.isHighlight) return;
       saveHistory();
     };
 
@@ -660,6 +716,106 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       fCanvas.off('mouse:wheel', onWheel);
     };
   }, [activeTool]);
+
+  // ---- Bold / underline for text boxes ----
+  // No extra side-panel button: a small B / I / U bar floats above the selected text box, and Ctrl+B /
+  // Ctrl+I / Ctrl+U work while one is selected or being typed in. With letters highlighted it styles just
+  // those, otherwise the whole box. The bar is plain HTML over the canvas, so it never shows up in
+  // the whiteboard stream students see or in recordings.
+  const [textBar, setTextBar] = useState(null); // { x, y, bold, italic, underline } or null
+  const textBarKeyRef = useRef('');
+
+  const activeTextObject = () => {
+    const obj = fabricRef.current?.getActiveObject();
+    return obj && (obj.type === 'i-text' || obj.type === 'textbox') ? obj : null;
+  };
+
+  // Whether the highlighted letters (or, with none highlighted, the whole box) have this style
+  const textHasStyle = (obj, prop, onValue) => {
+    const hasSelection = obj.isEditing && obj.selectionStart !== obj.selectionEnd;
+    if (hasSelection) {
+      const styles = obj.getSelectionStyles(obj.selectionStart, obj.selectionEnd);
+      return styles.length > 0 && styles.every(s => (s[prop] ?? obj[prop]) === onValue);
+    }
+    return obj[prop] === onValue;
+  };
+
+  // The value each style has when on / off
+  const TEXT_STYLES = {
+    fontWeight: ['bold', 'normal'],
+    fontStyle: ['italic', 'normal'],
+    underline: [true, false],
+  };
+
+  const toggleTextStyle = (prop) => {
+    const fCanvas = fabricRef.current;
+    const obj = activeTextObject();
+    if (!fCanvas || !obj) return;
+    const [onValue, offValue] = TEXT_STYLES[prop];
+    const next = textHasStyle(obj, prop, onValue) ? offValue : onValue;
+    if (obj.isEditing && obj.selectionStart !== obj.selectionEnd) {
+      obj.setSelectionStyles({ [prop]: next }, obj.selectionStart, obj.selectionEnd);
+    } else {
+      // Whole box: drop any per-letter overrides of this style so it applies everywhere
+      if (typeof obj.removeStyle === 'function') obj.removeStyle(prop);
+      obj.set(prop, next);
+    }
+    obj.dirty = true;
+    obj.initDimensions?.();
+    obj.setCoords();
+    fCanvas.requestRenderAll();
+    saveHistory();
+  };
+
+  // Keep the bar pinned just above the active text box (follows moving, zoom and pan)
+  useEffect(() => {
+    const fCanvas = fabricRef.current;
+    if (!fCanvas) return undefined;
+    const update = () => {
+      const obj = activeTextObject();
+      if (!obj || !obj.oCoords) {
+        if (textBarKeyRef.current !== '') { textBarKeyRef.current = ''; setTextBar(null); }
+        return;
+      }
+      const corners = ['tl', 'tr', 'bl', 'br'].map(k => obj.oCoords[k]).filter(Boolean);
+      const x = Math.min(...corners.map(p => p.x));
+      const y = Math.min(...corners.map(p => p.y));
+      const offsetX = containerRef.current?.offsetLeft || 0;
+      const offsetY = containerRef.current?.offsetTop || 0;
+      const state = {
+        x: Math.round(x + offsetX),
+        y: Math.round(Math.max(4, y + offsetY - 46)),
+        bold: textHasStyle(obj, 'fontWeight', 'bold'),
+        italic: textHasStyle(obj, 'fontStyle', 'italic'),
+        underline: textHasStyle(obj, 'underline', true),
+      };
+      const key = JSON.stringify(state);
+      if (key !== textBarKeyRef.current) { textBarKeyRef.current = key; setTextBar(state); }
+    };
+    fCanvas.on('after:render', update);
+    fCanvas.on('selection:cleared', update);
+    fCanvas.on('text:selection:changed', update);
+    return () => {
+      fCanvas.off('after:render', update);
+      fCanvas.off('selection:cleared', update);
+      fCanvas.off('text:selection:changed', update);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ctrl+B / Ctrl+I / Ctrl+U - capture phase, so it works while Fabric's hidden text field has focus
+  useEffect(() => {
+    const SHORTCUTS = { b: 'fontWeight', i: 'fontStyle', u: 'underline' };
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      const prop = SHORTCUTS[e.key.toLowerCase()];
+      if (!prop || !activeTextObject()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleTextStyle(prop);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle Text Tool Logic
   useEffect(() => {
@@ -1062,13 +1218,53 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
         </div>
       )}
 
-      {/* Small academy logo pinned to the top of every whiteboard page */}
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-        <img src={logoImg} alt="Academy Logo" className="opacity-90 drop-shadow object-contain" style={{ width: '120px', height: 'auto', maxHeight: '40px' }} />
+      {/* Academy logo pinned to the top-right corner of every whiteboard page - left of the
+          class's pin / unpin button that sits in the very corner */}
+      <div className="absolute top-3 right-20 z-20 pointer-events-none">
+        <img src={logoImg} alt="Academy Logo" className="opacity-90 drop-shadow object-contain" style={{ width: '150px', height: 'auto', maxHeight: '52px' }} />
       </div>
 
       {/* Dynamic Canvas Container */}
       <div className="w-full h-full touch-none pointer-events-auto z-10" ref={containerRef}></div>
+
+      {/* Floating Bold / Italic / Underline bar for the selected text box (not part of the canvas) */}
+      {textBar && (
+        <div
+          // pointer-events-auto: over a question slide the whiteboard sits in a click-through
+          // layer (like the side toolbar, the bar has to opt back in or clicks pass straight through)
+          className="absolute z-[60] pointer-events-auto flex items-center gap-1 p-1 rounded-xl bg-slate-800/95 border border-slate-600 shadow-xl"
+          style={{ left: textBar.x, top: textBar.y }}
+          // Keep the text box focused / in editing mode while clicking the buttons
+          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => toggleTextStyle('fontWeight')}
+            title="Bold (Ctrl+B)"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-[15px] font-black transition-colors ${textBar.bold ? 'bg-blue-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}
+          >
+            B
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleTextStyle('fontStyle')}
+            title="Italic (Ctrl+I)"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-[16px] font-bold italic font-serif transition-colors ${textBar.italic ? 'bg-blue-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}
+          >
+            I
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleTextStyle('underline')}
+            title="Underline (Ctrl+U)"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-[15px] font-bold underline underline-offset-2 transition-colors ${textBar.underline ? 'bg-blue-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}
+          >
+            U
+          </button>
+        </div>
+      )}
       
       
       

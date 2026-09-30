@@ -5,7 +5,7 @@
 // Engineering Mathematics and Aptitude banks are shared by every department.
 export const isCommonDeptName = (name) => {
   const n = (name || '').trim().toLowerCase();
-  return n === 'engineering mathematics' || n.includes('aptitude');
+  return n === 'engineering mathematics' || /ap+titude/.test(n);
 };
 
 const shortCode = (name) => ((name || '').match(/\(([^)]+)\)/) || [])[1]?.trim().toLowerCase() || '';

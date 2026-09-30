@@ -8,6 +8,7 @@ admin.initializeApp();
 Object.assign(exports, require('./cashfree'));
 Object.assign(exports, require('./solutionRelease'));
 Object.assign(exports, require('./testNotifications'));
+Object.assign(exports, require('./postClassQuizCleanup'));
 
 exports.generateAgoraToken = onRequest({ cors: true }, (request, response) => {
     // using built-in v2 cors or the manual cors middleware

@@ -39,6 +39,9 @@ import AgoraRTC, {
 import Whiteboard from './Whiteboard';
 import { useLiveRecording } from './hooks/useLiveRecording';
 import { subjectOptionsFor, groupBySubject } from '../../utils/subjects';
+import MatchColumns from '../shared/MatchColumns';
+import QuestionExplainPanel from '../liveTest/QuestionExplainPanel';
+import { QUIZ_KEEP_DAYS, isQuizExpired, quizTimeLeft, deletePostClassQuiz } from '../../utils/postClassQuiz';
 // Extracted component to handle whiteboard sharing as an independent client
 const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) => {
   const [wbClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
@@ -645,9 +648,10 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                 </div>
                 <div id="qb-qtext" className="flex-1" dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
               </div>
+              <MatchColumns question={activeQuestionState.questions[activeQuestionState.currentIndex]} className={`${isPinned ? 'pl-20' : 'pl-12'} mb-6`} />
 
-              {/* Bottom: Options (Left 40%) */}
-              <div className="flex flex-col md:flex-row w-full gap-8">
+              {/* Bottom: Options (left 45%) | answer, explanation and writing space (right 55%) */}
+              <div className="flex flex-col md:flex-row w-full gap-8 flex-1 min-h-0">
                 <div id="qb-options-area" className="w-full md:w-[45%] min-w-0 flex flex-col">
                   {activeQuestionState.questions[activeQuestionState.currentIndex].questionImageUrl && (
                     <div className="mb-6">
@@ -675,14 +679,17 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                       );
                     })}
                   </div>
+                  {activeQuestionState.isAnswerRevealed && (
+                    <div className={`mt-6 ${isPinned ? 'ml-20' : 'ml-10'}`}>
+                      <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} participantEmails={participantEmails} />
+                    </div>
+                  )}
                 </div>
-                {activeQuestionState.isAnswerRevealed ? (
-                  <div className="w-full md:w-[50%] flex flex-col pt-4 md:pt-0">
-                    <LeaderboardView participantNames={participantNames} participantScores={participantScores} participantRoles={participantRoles} participantEmails={participantEmails} />
-                  </div>
-                ) : (
-                  <div className="hidden md:flex md:w-[55%]"></div>
-                )}
+                <QuestionExplainPanel
+                  question={activeQuestionState.questions[activeQuestionState.currentIndex]}
+                  revealed={activeQuestionState.isAnswerRevealed}
+                  isPinned={isPinned}
+                />
               </div>
             </div>
           </div>
@@ -1462,7 +1469,7 @@ export default function LiveClasses({ department }) {
         const shortCode = ((teacherFullDept.match(/\(([^)]+)\)/) || [])[1] || '').trim();
         const isCommonBank = (name) => {
           const n = (name || '').trim().toLowerCase();
-          return n === 'engineering mathematics' || n.includes('aptitude');
+          return n === 'engineering mathematics' || /ap+titude/.test(n);
         };
 
         const filtered = qData.filter(q => {
@@ -1600,6 +1607,7 @@ export default function LiveClasses({ department }) {
   const [viewingQuizSession, setViewingQuizSession] = useState(null);
   const [quizResults, setQuizResults] = useState([]);
   const [quizResultsLoading, setQuizResultsLoading] = useState(false);
+  const expiredQuizCleanupRef = useRef(new Set()); // expired quizzes already being deleted
 
   useEffect(() => {
     const teacherEmail = sessionStorage.getItem('auth_email');
@@ -1612,9 +1620,16 @@ export default function LiveClasses({ department }) {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const sessions = snapshot.docs
+      const withQuiz = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(s => s.postClassQuiz?.questions?.length > 0);
+      // Quizzes are kept for QUIZ_KEEP_DAYS after the class - older ones are hidden and deleted now
+      withQuiz.filter(s => isQuizExpired(s)).forEach(s => {
+        if (expiredQuizCleanupRef.current.has(s.id)) return;
+        expiredQuizCleanupRef.current.add(s.id);
+        deletePostClassQuiz(s.id).catch(err => console.error('Failed to delete expired post-class quiz', s.id, err));
+      });
+      const sessions = withQuiz.filter(s => !isQuizExpired(s));
       sessions.sort((a, b) => (b.endedAt?.toMillis() || 0) - (a.endedAt?.toMillis() || 0));
       setPastQuizzes(sessions);
     });
@@ -2244,10 +2259,11 @@ export default function LiveClasses({ department }) {
                 </span>
               )}
             </h3>
+            <p className="-mt-4 text-xs font-semibold text-slate-400">Each quiz and its results are deleted automatically {QUIZ_KEEP_DAYS} days after the class.</p>
 
             {pastQuizzes.length === 0 ? (
               <div className="text-center p-10 border border-dashed border-slate-300 rounded-2xl bg-slate-50">
-                <p className="text-slate-500 font-medium">No post-class quizzes yet.</p>
+                <p className="text-slate-500 font-medium">No post-class quizzes in the last {QUIZ_KEEP_DAYS} days.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto custom-scrollbar pr-1">
@@ -2262,6 +2278,7 @@ export default function LiveClasses({ department }) {
                       <p className="text-[11px] text-slate-500 font-bold">
                         {session.endedAt?.toMillis ? new Date(session.endedAt.toMillis()).toLocaleDateString() : ''} - {session.postClassQuiz.questions.length} question{session.postClassQuiz.questions.length !== 1 ? 's' : ''}
                       </p>
+                      <p className="text-[10.5px] text-slate-400 font-semibold">Deletes in {quizTimeLeft(session)}</p>
                     </div>
                     <span className="shrink-0 text-amber-600 text-xs font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
                       View <ChevronRight size={14} />

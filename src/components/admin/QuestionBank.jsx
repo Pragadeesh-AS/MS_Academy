@@ -10,11 +10,12 @@ import { markNumberOf, markLabelFor, negativeMarkFor } from '../../utils/marking
 import { sameDepartment } from '../../utils/subjects';
 import { answerKeyChanged } from '../../utils/testGrading';
 import { regradeAttemptsForQuestion } from '../../utils/regradeAttempts';
+import MatchColumns from '../shared/MatchColumns';
 
 // Engineering Mathematics and Aptitude banks are shared by every department.
 const isCommonDeptName = (name) => {
   const n = (name || '').trim().toLowerCase();
-  return n === 'engineering mathematics' || n.includes('aptitude');
+  return n === 'engineering mathematics' || /ap+titude/.test(n);
 };
 const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
@@ -275,6 +276,21 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   });
 
   const [attributes, setAttributes] = useState([]);
+
+  // Typist / reviewer: every pair this email has been part of (current and earlier ones), so the
+  // questions they typed or reviewed stay visible even after a pairing is re-created
+  const [myPairIds, setMyPairIds] = useState(() => new Set(pairId ? [pairId] : []));
+  useEffect(() => {
+    if (userRole !== 'typist') return;
+    const email = sessionStorage.getItem('auth_email') || '';
+    if (!email) return;
+    Promise.all([
+      getDocs(query(collection(db, 'invited_typists'), where('typistEmail', '==', email))),
+      getDocs(query(collection(db, 'invited_typists'), where('reviewerEmail', '==', email))),
+    ]).then(([asTypist, asReviewer]) => {
+      setMyPairIds(new Set([...(pairId ? [pairId] : []), ...asTypist.docs.map(d => d.id), ...asReviewer.docs.map(d => d.id)]));
+    }).catch(err => console.error('Failed to load your pairs', err));
+  }, [userRole, pairId]);
 
   const fetchQuestions = async () => {
     setLoading(true);
@@ -605,16 +621,23 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     else if (!isEditing) payload.createdAt = nowIso;
     else delete payload.createdAt;
 
-    if (!isEditing) payload.typedBy = authName;
+    // Who typed it is stamped once, on creation - by name for display and by email so the typist can
+    // always find it again. An edit (e.g. a reviewer approving it) never changes the owner or the
+    // pair it belongs to - a reviewer's own pair id would otherwise hide it from its typist.
+    if (!isEditing) {
+      payload.typedBy = authName;
+      payload.typedByEmail = (sessionStorage.getItem('auth_email') || '').toLowerCase();
+      if (pairId) payload.pairId = pairId;
+    }
     payload = applyReviewFields(payload, finalStatus, skipReview, authName, formData.reviewedBy, formData.status);
-    if (pairId) payload.pairId = pairId;
 
     // Optimistic UI Update & close instantly
     setIsCreatorOpen(false);
     
     if (isEditing) {
       const before = questions.find(q => q.id === currentId);
-      setQuestions(prev => prev.map(q => q.id === currentId ? { id: currentId, ...payload } : q));
+      // Merge - fields the form doesn't carry (pairId, typedByEmail...) stay on the question
+      setQuestions(prev => prev.map(q => q.id === currentId ? { ...q, ...payload, id: currentId } : q));
       updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
         showToast("Question saved successfully", "success");
         return regradeIfKeyChanged(before, { id: currentId, ...payload });
@@ -668,16 +691,23 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     else if (!isEditing) payload.createdAt = nowIso;
     else delete payload.createdAt;
     
-    if (!isEditing) payload.typedBy = authName;
+    // Who typed it is stamped once, on creation - by name for display and by email so the typist can
+    // always find it again. An edit (e.g. a reviewer approving it) never changes the owner or the
+    // pair it belongs to - a reviewer's own pair id would otherwise hide it from its typist.
+    if (!isEditing) {
+      payload.typedBy = authName;
+      payload.typedByEmail = (sessionStorage.getItem('auth_email') || '').toLowerCase();
+      if (pairId) payload.pairId = pairId;
+    }
     payload = applyReviewFields(payload, finalStatus, skipReview, authName, formData.reviewedBy, formData.status);
-    if (pairId) payload.pairId = pairId;
 
     // Reset form instantly
     openAddCreator();
     
     if (isEditing) {
       const before = questions.find(q => q.id === currentId);
-      setQuestions(prev => prev.map(q => q.id === currentId ? { id: currentId, ...payload } : q));
+      // Merge - fields the form doesn't carry (pairId, typedByEmail...) stay on the question
+      setQuestions(prev => prev.map(q => q.id === currentId ? { ...q, ...payload, id: currentId } : q));
       updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
         showToast("Question saved successfully. Add next.", "success");
         return regradeIfKeyChanged(before, { id: currentId, ...payload });
@@ -883,6 +913,17 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setIsCreatorOpen(true);
   };
 
+  // A typist's / reviewer's own question: typed by them (email, or name on older questions saved
+  // before emails were stored), made in any of their pairs, or sent to them to review
+  const myEmail = (sessionStorage.getItem('auth_email') || '').toLowerCase();
+  const myName = (sessionStorage.getItem('auth_name') || '').trim().toLowerCase();
+  const isMyQuestion = (q) => (
+    (!!q.typedByEmail && q.typedByEmail.toLowerCase() === myEmail)
+    || (!q.typedByEmail && !!myName && (q.typedBy || '').trim().toLowerCase() === myName)
+    || (!!q.pairId && myPairIds.has(q.pairId))
+    || (!!q.reviewerEmail && q.reviewerEmail.toLowerCase() === myEmail)
+  );
+
   // Teacher folders: their own department, and each shared (Maths / Aptitude) bank separately
   const isOwnDeptQuestion = (q) => deptNameVariants(lockedDepartment).includes(q.department);
   const sameFolderName = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
@@ -935,8 +976,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     // Default Role Filtering Logic
     let roleMatches = true;
     if (userRole === 'typist') {
-      const myEmail = (sessionStorage.getItem('auth_email') || '').toLowerCase();
-      roleMatches = q.pairId === pairId || (!!q.reviewerEmail && q.reviewerEmail.toLowerCase() === myEmail)
+      roleMatches = isMyQuestion(q)
         // Shared banks are visible in the approved Question Bank tab only - Drafts / Pending Review stay pair-only
         || (externalFilter === 'Approved' && isCommonDeptName(q.department));
     }
@@ -1415,6 +1455,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                                   <img src={q.questionImageUrl} alt="Question" className="max-h-40 rounded-xl border border-slate-200 shadow-sm" />
                                 </div>
                               )}
+                              <MatchColumns question={q} className="mb-4" />
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                                 {['A', 'B', 'C', 'D'].map(opt => {
                                   const text = q[`option${opt}`];
@@ -1706,10 +1747,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                               <div className="w-8 h-8 shrink-0 rounded-full bg-blue-50 text-indigo-600 flex items-center justify-center font-[900] text-[13px] mt-2">
                                 {String.fromCharCode(97 + idx)}
                               </div>
-                              <textarea 
+                              {/* Rich editor, like the question text: items are HTML (maths is KaTeX), so a
+                                  plain textarea would show "<span class=katex..." and "&gt;" instead */}
+                              <RichTextEditor
                                 value={item}
                                 onChange={(e) => handleMatchColumn1Change(idx, e.target.value)}
-                                className={`flex-1 w-full bg-white border-[1.5px] ${idx === 0 ? 'border-indigo-400' : 'border-slate-200'} rounded-[16px] p-4 text-[15px] font-[600] text-[#111827] outline-none focus:border-indigo-400 transition-colors shadow-sm min-h-[100px] resize-none`}
+                                placeholder={`Column 1 item ${String.fromCharCode(97 + idx)}`}
+                                className={`flex-1 w-full bg-white border-[1.5px] ${idx === 0 ? 'border-indigo-400' : 'border-slate-200'} rounded-[16px] p-4 text-[15px] font-[600] text-[#111827] outline-none focus:border-indigo-400 transition-colors shadow-sm min-h-[100px] max-h-[220px] break-words`}
                               />
                               <button type="button" onClick={() => removeMatchColumn1Item(idx)} className="text-slate-300 hover:text-red-500 transition-colors mt-4 shrink-0">
                                 <Trash2 size={18} />
@@ -1731,10 +1775,11 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                               <div className="w-8 h-8 shrink-0 rounded-full bg-blue-50 text-indigo-600 flex items-center justify-center font-[900] text-[13px] mt-2">
                                 {idx + 1}
                               </div>
-                              <textarea 
+                              <RichTextEditor
                                 value={item}
                                 onChange={(e) => handleMatchColumn2Change(idx, e.target.value)}
-                                className="flex-1 w-full bg-white border-[1.5px] border-slate-200 rounded-[16px] p-4 text-[15px] font-[600] text-[#111827] outline-none focus:border-indigo-400 transition-colors shadow-sm min-h-[100px] resize-none"
+                                placeholder={`Column 2 item ${idx + 1}`}
+                                className="flex-1 w-full bg-white border-[1.5px] border-slate-200 rounded-[16px] p-4 text-[15px] font-[600] text-[#111827] outline-none focus:border-indigo-400 transition-colors shadow-sm min-h-[100px] max-h-[220px] break-words"
                               />
                               <button type="button" onClick={() => removeMatchColumn2Item(idx)} className="text-slate-300 hover:text-red-500 transition-colors mt-4 shrink-0">
                                 <Trash2 size={18} />
@@ -1845,13 +1890,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                               </div>
                               
                               <div className="flex-1">
-                                <input 
-                                  type="text"
+                                {/* Rich editor: options are HTML (maths is KaTeX) - a plain input showed
+                                    "<span class="katex">..." for every extracted formula */}
+                                <RichTextEditor
                                   name={`option${opt}`}
                                   value={formData[`option${opt}`]}
                                   onChange={handleInputChange}
                                   placeholder={`Option ${opt}`}
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-[15px] font-[700] text-slate-800 placeholder-slate-400 outline-none focus:border-slate-300 transition-colors"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 min-h-[40px] max-h-[160px] text-[15px] font-[700] text-slate-800 outline-none focus:border-slate-300 transition-colors break-words"
                                 />
                               </div>
 
@@ -1997,7 +2043,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 <h3 className="text-[13px] font-[900] text-[#111827] uppercase tracking-wider">Question Attributes</h3>
               </div>
               
-              <div className="shrink-0 px-5 py-3 space-y-3">
+              <div className="shrink-0 px-5 py-2.5 space-y-2.5">
                 
                 <div className="space-y-1">
                   <label className="text-[12px] font-[800] text-[#111827]">Department <span className="text-red-500">*</span></label>
@@ -2032,26 +2078,29 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[12px] font-[800] text-[#111827]">Year <span className="font-[600] text-slate-400">(Optional)</span></label>
+                {/* Year and Mark side by side - keeps the action buttons in view without scrolling */}
+                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1 min-w-0">
+                  <label className="text-[12px] font-[800] text-[#111827]">Year <span className="font-[600] text-slate-400">(Opt.)</span></label>
                   <div className="relative">
-                    <select name="year" value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
-                      <option value="">-- No Year --</option>
+                    <select name="year" value={formData.year} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-3 pr-8 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                      <option value="">No Year</option>
                       {years.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
-                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                   <label className="text-[12px] font-[800] text-[#111827]">Mark <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="mark" required value={markOptionFor(formData.mark)} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
-                      <option value="">-- Select Mark --</option>
+                    <select name="mark" required value={markOptionFor(formData.mark)} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-3 pr-8 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
+                      <option value="">Select</option>
                       {marks.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
-                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
+                </div>
                 </div>
 
                 <div className="space-y-1">
@@ -2067,60 +2116,96 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               </div>
 
               {/* Action Buttons */}
-              <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 bg-[#f8fafc] space-y-3 border-t border-slate-200">
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 bg-[#f8fafc] space-y-2 border-t border-slate-200">
                 {userRole === 'typist' ? (
                   pairRole === 'reviewer' ? (
                     <>
-                      <button 
-                        type="button"
-                        onClick={(e) => handleSubmit(e, 'Approved')}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-[#10B981] hover:bg-[#059669] text-white font-[800] text-[13px] transition-colors shadow-md shadow-emerald-500/20"
-                      >
-                        <CheckCircle2 size={16} /> Approve Question
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={(e) => handleSubmit(e, 'Draft')}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-red-500 hover:bg-red-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-red-500/20"
-                      >
-                        <X size={16} /> Reject (Send to Draft)
-                      </button>
+                      {/* Same compact layout as the typist's: one row, fits without scrolling */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => handleSubmit(e, 'Approved')}
+                          title="Approve - the question goes into the Question Bank"
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-[#10B981] hover:bg-[#059669] text-white font-[800] text-[13px] transition-colors shadow-md shadow-emerald-500/20"
+                        >
+                          <CheckCircle2 size={15} /> Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleSubmit(e, 'Draft')}
+                          title="Reject - sends the question back to the typist's Drafts"
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-red-500 hover:bg-red-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-red-500/20"
+                        >
+                          <X size={15} /> Reject
+                        </button>
+                      </div>
+                      <p className="text-[10.5px] font-[700] text-slate-500 leading-tight">
+                        Reject sends it back to the typist's Drafts.
+                      </p>
                     </>
-                  ) : (
+                  ) : isEditing && formData.status === 'Approved' ? (
+                    // Typist editing a question that is already in the Question Bank: it stays there
+                    // (and in any test using it), flagged Not Reviewed until the reviewer / admin approves
                     <>
-                      <button 
+                      {/* Compact, and the skip-review import looks the same as on a new question */}
+                      <button
                         type="button"
-                        onClick={(e) => handleSaveAndNext(e, 'In Review')}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-white border border-slate-200 text-[#111827] font-[800] text-[13px] hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
+                        onClick={(e) => handleSubmit(e, 'Approved', true)}
+                        title="Skips your reviewer - the changes go straight into the Question Bank (and tests), flagged as Not Reviewed"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-amber-500/20"
                       >
-                        <ChevronRight size={16} /> Save & Next
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={(e) => handleSubmit(e, 'In Review')}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-[#3b82f6] hover:bg-blue-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-blue-500/20"
-                      >
-                        <Check size={16} /> Save & Close (Send to Review)
+                        <Upload size={15} /> Save to Question Bank (Skip Review)
                       </button>
                       <button
                         type="button"
-                        onClick={(e) => handleSaveAndNext(e, 'Draft')}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-[800] text-[13px] transition-colors shadow-sm"
+                        onClick={(e) => handleSubmit(e, 'In Review')}
+                        title="Takes it out of the Question Bank (and tests) until the reviewer approves it again"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full bg-white border border-slate-200 text-[#111827] font-[800] text-[13px] hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
                       >
-                        <Save size={16} /> Save to Draft
+                        <ChevronRight size={15} /> Send to Reviewer
                       </button>
-                      <div className="pt-2 mt-2 border-t border-slate-200 space-y-2">
-                        <p className="text-[11px] font-[700] text-amber-600 flex items-center gap-1.5">
-                          <AlertTriangle size={13} /> Skips your reviewer - the question goes straight into the Question Bank, flagged as Not Reviewed.
-                        </p>
+                      <p className="text-[10.5px] font-[700] text-amber-600 flex items-center gap-1 leading-tight">
+                        <AlertTriangle size={12} className="shrink-0" /> Skip Review keeps it live as Not Reviewed.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      {/* Compact so every action fits in view without scrolling */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleSubmit(e, 'In Review')}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full bg-[#3b82f6] hover:bg-blue-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-blue-500/20"
+                      >
+                        <Check size={16} /> Save & Send to Review
+                      </button>
+                      <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={(e) => handleSubmit(e, 'Approved', true)}
-                          className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-amber-500/20"
+                          onClick={(e) => handleSaveAndNext(e, 'In Review')}
+                          title="Send this question to review and start the next one"
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-white border border-slate-200 text-[#111827] font-[800] text-[12.5px] hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
                         >
-                          <Upload size={16} /> Import to Question Bank (Skip Review)
+                          <ChevronRight size={15} /> Save & Next
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleSaveAndNext(e, 'Draft')}
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-[800] text-[12.5px] transition-colors shadow-sm"
+                        >
+                          <Save size={15} /> Draft
                         </button>
                       </div>
+                      <button
+                        type="button"
+                        onClick={(e) => handleSubmit(e, 'Approved', true)}
+                        title="Skips your reviewer - the question goes straight into the Question Bank, flagged as Not Reviewed"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-amber-500/20"
+                      >
+                        <Upload size={15} /> Import (Skip Review)
+                      </button>
+                      <p className="text-[10.5px] font-[700] text-amber-600 flex items-center gap-1 leading-tight">
+                        <AlertTriangle size={12} className="shrink-0" /> Import skips your reviewer - saved as Not Reviewed.
+                      </p>
                     </>
                   )
                 ) : (

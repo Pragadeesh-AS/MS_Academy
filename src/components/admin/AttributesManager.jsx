@@ -3,7 +3,7 @@ import { sameDepartment } from '../../utils/subjects';
 import Loader from '../Loader';
 import { Plus, Edit2, Trash2, ChevronDown, Search, MoreHorizontal, CheckCircle2, Bookmark, LayoutList, Trophy, Star, Clock, Landmark, FileText } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 
 const attributeTypes = [
   { id: 'department', name: 'Department', childOf: null, icon: Landmark, iconBg: 'bg-blue-100', iconColor: 'text-blue-600' },
@@ -85,16 +85,59 @@ export default function AttributesManager({ lockedDepartment = null }) {
     setDeletingId(null);
   };
 
+  // Questions and tests store their department / subject / topic / difficulty as text, not as a link
+  // to the attribute - so a rename is carried over to them, or they'd be left under the old name
+  const RENAME_TARGETS = {
+    department: [['question_bank', 'department', 'question'], ['tests', 'department', 'test']],
+    subject: [['question_bank', 'subject', 'question']],
+    topic: [['question_bank', 'topic', 'question']],
+    difficulty: [['question_bank', 'difficultyLevel', 'question']],
+  };
+  const [renaming, setRenaming] = useState(false);
+  const [notice, setNotice] = useState('');
+
   const confirmEdit = async (e) => {
     e.preventDefault();
-    if (!editingAttr || !editingAttr.name.trim()) return;
+    if (!editingAttr || !editingAttr.name.trim() || renaming) return;
+    const original = allAttributes.find(a => a.id === editingAttr.id);
+    const oldName = (original?.name || '').trim();
+    const newName = editingAttr.name.trim();
+    setRenaming(true);
     try {
-      await updateDoc(doc(db, 'question_attributes', editingAttr.id), {
-        name: editingAttr.name.trim()
-      });
+      await updateDoc(doc(db, 'question_attributes', editingAttr.id), { name: newName });
+
+      // The same subject / topic name can exist under two departments / subjects - only rename the
+      // questions that belong to this one
+      const parentName = allAttributes.find(a => a.id === original?.parentId)?.name || '';
+      const belongsHere = (data) => {
+        if (original?.type === 'subject' && parentName) return sameDepartment(data.department, parentName);
+        if (original?.type === 'topic' && parentName) return (data.subject || '').trim() === parentName.trim();
+        return true;
+      };
+
+      const counts = {};
+      if (oldName && oldName !== newName) {
+        for (const [coll, field, label] of RENAME_TARGETS[original.type] || []) {
+          const snap = await getDocs(query(collection(db, coll), where(field, '==', oldName)));
+          const docs = snap.docs.filter(d => belongsHere(d.data()));
+          for (let i = 0; i < docs.length; i += 450) {
+            const batch = writeBatch(db);
+            docs.slice(i, i + 450).forEach(d => batch.update(d.ref, { [field]: newName }));
+            await batch.commit();
+          }
+          counts[label] = (counts[label] || 0) + docs.length;
+        }
+      }
+      const moved = Object.entries(counts).filter(([, n]) => n > 0).map(([label, n]) => `${n} ${label}${n === 1 ? '' : 's'}`);
+      setNotice(oldName !== newName
+        ? `Renamed "${oldName}" to "${newName}"${moved.length ? ` and updated ${moved.join(' and ')}` : ''}.`
+        : 'Saved.');
+      setTimeout(() => setNotice(''), 6000);
     } catch (error) {
       console.error("Error updating attribute:", error);
+      setNotice('Renaming failed part-way - please try again (it is safe to repeat).');
     }
+    setRenaming(false);
     setEditingAttr(null);
   };
 
@@ -309,6 +352,9 @@ export default function AttributesManager({ lockedDepartment = null }) {
 
         {/* Content Grid */}
         <div className="px-8 pb-8 flex-1 overflow-y-auto">
+          {notice && (
+            <div className="mb-4 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[13px] font-[700] text-emerald-800">{notice}</div>
+          )}
           <h3 className="text-[18px] font-[800] text-[#0F172A] mb-4 tracking-tight">Current Values</h3>
           
           {loading ? (
@@ -332,17 +378,18 @@ export default function AttributesManager({ lockedDepartment = null }) {
                     className="relative flex flex-col p-5 bg-[#FFFFFF] border border-[#EEF2F7] rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] transition-all duration-300 group hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:border-[#2563EB]/40 min-h-[160px]"
                   >
                     {/* Top Row: Icon + Menu */}
-                    <div className="flex justify-between items-start w-full">
-                      <div className="flex gap-4">
-                        <div className={`w-[54px] h-[54px] rounded-full ${styles.bg} ${styles.text} ${styles.shadow} flex items-center justify-center font-[800] text-[18px] tracking-wide`}>
+                    <div className="flex justify-between items-start gap-2 w-full">
+                      {/* min-w-0 lets a long name shrink and truncate instead of running over the menu */}
+                      <div className="flex gap-4 min-w-0 flex-1">
+                        <div className={`w-[54px] h-[54px] shrink-0 rounded-full ${styles.bg} ${styles.text} ${styles.shadow} flex items-center justify-center font-[800] text-[18px] tracking-wide`}>
                           {getInitials(val.name)}
                         </div>
-                        <div className="flex flex-col pt-1">
-                          <h3 className="text-[18px] font-[800] text-[#0F172A] leading-tight truncate">
+                        <div className="flex flex-col pt-1 min-w-0">
+                          <h3 className="text-[18px] font-[800] text-[#0F172A] leading-tight truncate" title={val.name}>
                             {val.name}
                           </h3>
                           {parentName && (
-                            <span className="text-[12px] font-[600] text-[#64748B] mt-1">
+                            <span className="text-[12px] font-[600] text-[#64748B] mt-1 truncate" title={`Parent: ${parentName}`}>
                               Parent: {parentName}
                             </span>
                           )}
@@ -353,18 +400,18 @@ export default function AttributesManager({ lockedDepartment = null }) {
                           )}
                         </div>
                       </div>
-                      <button className="w-8 h-8 flex items-center justify-center text-[#94A3B8] transition-colors hover:text-[#0F172A]">
+                      <button className="w-8 h-8 shrink-0 flex items-center justify-center text-[#94A3B8] transition-colors hover:text-[#0F172A]">
                         <MoreHorizontal size={20} />
                       </button>
                     </div>
 
                     {/* Bottom Row */}
-                    <div className="flex items-end justify-between mt-auto pt-4">
-                      <span className="text-[12px] font-[500] text-[#64748B]">
+                    <div className="flex items-center justify-between gap-2 mt-auto pt-4">
+                      <span className="text-[12px] font-[500] text-[#64748B] truncate min-w-0">
                         {getRelativeTime(val.createdAt)}
                       </span>
-                      
-                      <div className="flex gap-2">
+
+                      <div className="flex gap-2 shrink-0">
                         <button 
                           onClick={() => setEditingAttr({ id: val.id, name: val.name })}
                           className="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] bg-white text-[#3B82F6] shadow-sm transition-colors border border-[#EEF2F7] hover:border-[#3B82F6] hover:bg-blue-50"
@@ -498,10 +545,10 @@ export default function AttributesManager({ lockedDepartment = null }) {
                 </button>
                 <button 
                   type="submit"
-                  disabled={!editingAttr.name.trim() || (editingAttr.id === 'NEW' && activeAttribute.childOf && !parentValue)}
+                  disabled={renaming || !editingAttr.name.trim() || (editingAttr.id === 'NEW' && activeAttribute.childOf && !parentValue)}
                   className="px-7 py-2.5 rounded-full font-[600] text-white bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-slate-300 transition-all text-[14px]"
                 >
-                  {editingAttr.id === 'NEW' ? 'Create' : 'Save Changes'}
+                  {editingAttr.id === 'NEW' ? 'Create' : renaming ? 'Renaming...' : 'Save Changes'}
                 </button>
               </div>
             </form>
