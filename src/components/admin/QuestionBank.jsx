@@ -397,6 +397,11 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: currentYear - 1990 + 1}, (_, i) => (currentYear - i).toString()); // 1990 to current year, descending
   const marks = attributes.filter(a => a.type === 'mark').map(a => a.name);
+  // One Marks-filter option per mark value (1, 2, ...), whatever text each question stores it as
+  const markFilterOptions = [...new Set([
+    ...marks.map(markNumberOf),
+    ...questions.map(q => markNumberOf(q.mark) || 1),
+  ].filter(n => n !== null))].sort((a, b) => a - b).map(n => markLabelFor(n, marks));
 
   // The Marks pills ("1 Mark (-0.33)") and the Mark attribute dropdown ("1", "2") store
   // different strings, so link them by the mark number and save the attribute's value.
@@ -914,7 +919,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     const matchesSubject = filterSubject === 'All' || q.subject === filterSubject;
     const matchesTopic = filterTopic === 'All' || q.topic === filterTopic;
     const matchesYear = filterYear === 'All' || q.year === filterYear;
-    const matchesMark = filterMark === 'All' || q.mark === filterMark;
+    // Compare the mark number, not the stored text - the same 1-mark question may be saved as
+    // "1 Mark (-0.33)", "1" or "1 Mark", and one with no mark shows (and scores) as 1 mark
+    const matchesMark = filterMark === 'All' || (markNumberOf(q.mark) || 1) === markNumberOf(filterMark);
     const matchesDifficulty = filterDifficulty === 'All' || q.difficultyLevel === filterDifficulty;
     const matchesStatus = filterStatus === 'All'
       || (filterStatus === 'Not Reviewed' ? (q.status === 'Approved' && q.reviewed === false) : q.status === filterStatus);
@@ -1162,7 +1169,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   { label: 'Subject', plural: 'Subjects', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
                   { label: 'Topic', plural: 'Topics', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
                   { label: 'Year', plural: 'Years', val: filterYear, setter: setFilterYear, icon: Clock, opts: years },
-                  { label: 'Marks', plural: 'Marks', val: filterMark, setter: setFilterMark, icon: Trophy, opts: marks },
+                  { label: 'Marks', plural: 'Marks', val: filterMark, setter: setFilterMark, icon: Trophy, opts: markFilterOptions },
                   { label: 'Difficulty', plural: 'Difficulties', val: filterDifficulty, setter: setFilterDifficulty, icon: Star, opts: difficulties }
                 ].map((f, i) => (
                   <div key={i} className="relative group shrink-0">

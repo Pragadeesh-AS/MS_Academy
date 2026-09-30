@@ -4,6 +4,7 @@ import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp
 import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2, FolderOpen, ArrowLeft } from 'lucide-react';
 
 import { isNumericalQuestion, getQuestionCategory } from '../utils/questionCategory';
+import { markNumberOf } from '../utils/marking';
 import {
   RELEASE_MODES, releaseMode, releaseAtMillis, testEndMillis, areSolutionsVisible,
   formatReleaseTime, releaseStatusLabel, solutionsEmail
@@ -15,9 +16,10 @@ import { formatTestTime, testStartMillis } from '../utils/testSchedule';
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
 
-// Leading number of the mark label ("1 Mark (-0.33)" -> 1). A plain substring match would
-// also treat "10 Marks" / "15 Marks" / "12" as 1-mark questions.
-const markValue = (q) => parseFloat(q.mark) || 0;
+// Marks of a question as a number, whatever text it's stored as ("1 Mark (-0.33)", "1", "1 Mark").
+// A question with no mark counts as 1 - that's how the Question Bank shows it and how tests score it.
+const markValue = (q) => markNumberOf(q.mark) || 1;
+const markText = (n) => `${n} Mark${n === 1 ? '' : 's'}`;
 
 const TYPE_META = {
   MCQ: { label: 'MCQ', chip: 'bg-blue-50/70 border-blue-100 text-blue-700', dot: 'bg-blue-500', bar: 'bg-blue-500' },
@@ -1372,7 +1374,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   if (manualFilters.topic !== 'All' && q.topic !== manualFilters.topic) return false;
                   if (manualFilters.type !== 'All' && q.questionType !== manualFilters.type) return false;
                   if (manualFilters.difficulty !== 'All' && q.difficultyLevel !== manualFilters.difficulty) return false;
-                  if (manualFilters.mark !== 'All' && q.mark !== manualFilters.mark) return false;
+                  if (manualFilters.mark !== 'All' && markValue(q) !== Number(manualFilters.mark)) return false;
                   if ((manualFilters.category || 'All') !== 'All' && getQuestionCategory(q) !== manualFilters.category) return false;
                   return true;
                 });
@@ -1391,10 +1393,10 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                     </span>
                   );
                 };
-                const currentManualMarks = manuallySelectedQuestions.reduce((sum, q) => sum + (parseInt(q.mark) || 1), 0);
-                
+                const currentManualMarks = manuallySelectedQuestions.reduce((sum, q) => sum + markValue(q), 0);
+
                 const marksCap = parseInt(targetMarks) || 0;
-                const questionMarks = (q) => parseInt(q.mark) || 1;
+                const questionMarks = markValue;
                 // Adding is blocked once it would push the total past the test's target marks;
                 // removing and editing stay available regardless.
                 const wouldExceedCap = (q) => marksCap > 0 && currentManualMarks + questionMarks(q) > marksCap;
@@ -1414,7 +1416,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                 
                 const uniqueTypes = [...new Set(topicPool.map(q => q.questionType).filter(Boolean))];
                 const uniqueDifficulties = [...new Set(topicPool.map(q => q.difficultyLevel).filter(Boolean))];
-                const uniqueMarks = [...new Set(topicPool.map(q => q.mark).filter(Boolean))];
+                // One option per mark value, not per stored label ("1" and "1 Mark (-0.33)" are the same)
+                const uniqueMarks = [...new Set(topicPool.map(markValue))].sort((a, b) => a - b);
 
                 return (
                 <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300 flex flex-col">
@@ -1566,7 +1569,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{q.topic}</span>
                                     <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">{q.questionType}</span>
                                     {categoryBadge(q, 'text-[9px] px-1.5 py-0.5')}
-                                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{q.mark} Mark</span>
+                                    <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{markText(markValue(q))}</span>
                                   </div>
                                   <div className="text-[12.5px] text-slate-700 font-medium break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
                                 </div>
@@ -1612,7 +1615,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                         </select>
                         <select className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none text-slate-700" value={manualFilters.mark} onChange={e => setManualFilters({...manualFilters, mark: e.target.value})}>
                           <option value="All">All Marks</option>
-                          {uniqueMarks.map(t => <option key={t} value={t}>{t}</option>)}
+                          {uniqueMarks.map(n => <option key={n} value={String(n)}>{markText(n)}</option>)}
                         </select>
                         <select className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none text-slate-700" value={manualFilters.category || 'All'} onChange={e => setManualFilters({...manualFilters, category: e.target.value})}>
                           <option value="All">Numerical & Theory</option>
@@ -1652,7 +1655,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">{q.questionType}</span>
                                     {categoryBadge(q, 'text-[10px] px-2 py-0.5')}
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">{q.difficultyLevel || 'Easy'}</span>
-                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{q.mark}</span>
+                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{markText(markValue(q))}</span>
                                   </div>
                                   <div className="text-[13px] text-slate-700 font-medium line-clamp-3 break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '<i>No text provided</i>' }} />
                                 </div>
