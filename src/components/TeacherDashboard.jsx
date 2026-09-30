@@ -146,7 +146,7 @@ export default function TeacherDashboard() {
         const attrSnap = await getDocs(collection(db, 'question_attributes'));
         const commonDeptNames = attrSnap.docs
           .map(d => d.data())
-          .filter(a => a.type === 'department' && (((a.name || '').trim().toLowerCase() === 'engineering mathematics') || (a.name || '').toLowerCase().includes('aptitude')))
+          .filter(a => a.type === 'department' && (((a.name || '').trim().toLowerCase() === 'engineering mathematics') || /ap+titude/.test((a.name || '').toLowerCase())))
           .map(a => a.name);
         const shortCode = ((teacherDepartment.match(/\(([^)]+)\)/) || [])[1] || '').trim();
         const allowedDepts = [...new Set([teacherDepartment, shortCode, ...commonDeptNames].filter(Boolean))].slice(0, 30);

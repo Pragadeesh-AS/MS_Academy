@@ -182,7 +182,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   // offered alongside the selected department's own subjects.
   const isCommonDeptName = (name) => {
     const n = (name || '').trim().toLowerCase();
-    return n === 'engineering mathematics' || n.includes('aptitude');
+    return n === 'engineering mathematics' || /ap+titude/.test(n);
   };
   const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   const commonDeptObjs = attributes.filter(a => a.type === 'department' && isCommonDeptName(a.name) && a.id !== selectedDeptObj?.id);

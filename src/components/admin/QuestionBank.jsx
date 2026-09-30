@@ -15,7 +15,7 @@ import MatchColumns from '../shared/MatchColumns';
 // Engineering Mathematics and Aptitude banks are shared by every department.
 const isCommonDeptName = (name) => {
   const n = (name || '').trim().toLowerCase();
-  return n === 'engineering mathematics' || n.includes('aptitude');
+  return n === 'engineering mathematics' || /ap+titude/.test(n);
 };
 const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 

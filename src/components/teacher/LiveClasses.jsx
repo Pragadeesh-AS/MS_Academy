@@ -1464,7 +1464,7 @@ export default function LiveClasses({ department }) {
         const shortCode = ((teacherFullDept.match(/\(([^)]+)\)/) || [])[1] || '').trim();
         const isCommonBank = (name) => {
           const n = (name || '').trim().toLowerCase();
-          return n === 'engineering mathematics' || n.includes('aptitude');
+          return n === 'engineering mathematics' || /ap+titude/.test(n);
         };
 
         const filtered = qData.filter(q => {
