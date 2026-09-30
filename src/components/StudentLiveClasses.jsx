@@ -1022,6 +1022,77 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     setIsInCall(false);
   };
 
+  // ── Idle safeguard: every connected student uses Agora minutes, so one who has left the class
+  // in a background tab, or walked away, is disconnected (they can rejoin in one click).
+  //   - class tab in the background for BACKGROUND_LIMIT_MS
+  //   - no mouse / keyboard / touch for INACTIVE_PROMPT_MS -> "Are you still there?" with a
+  //     STILL_THERE_SECONDS countdown; no answer -> disconnected
+  const BACKGROUND_LIMIT_MS = 10 * 60 * 1000;
+  const INACTIVE_PROMPT_MS = 45 * 60 * 1000;
+  const STILL_THERE_SECONDS = 60;
+  const [idleNotice, setIdleNotice] = useState(null);
+  const [stillThere, setStillThere] = useState(null); // seconds left to answer, or null
+  const lastActivityRef = useRef(Date.now());
+
+  const autoLeaveClass = (message) => {
+    setStillThere(null);
+    setIdleNotice(message);
+    handleLeaveMeet();
+  };
+
+  useEffect(() => {
+    if (!isInCall) return undefined;
+    lastActivityRef.current = Date.now();
+    let hiddenTimer = null;
+
+    const onVisibility = () => {
+      if (hiddenTimer) { clearTimeout(hiddenTimer); hiddenTimer = null; }
+      if (document.hidden) {
+        hiddenTimer = setTimeout(() => autoLeaveClass(
+          'You were disconnected from the live class because it was in a background tab for 10 minutes. You can rejoin any time.'
+        ), BACKGROUND_LIMIT_MS);
+      } else {
+        lastActivityRef.current = Date.now();
+      }
+    };
+    const onActivity = () => { lastActivityRef.current = Date.now(); };
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'wheel'];
+
+    document.addEventListener('visibilitychange', onVisibility);
+    activityEvents.forEach(ev => window.addEventListener(ev, onActivity, { passive: true }));
+    onVisibility(); // already in the background when joining
+
+    const check = setInterval(() => {
+      if (!document.hidden && Date.now() - lastActivityRef.current >= INACTIVE_PROMPT_MS) {
+        setStillThere(prev => (prev === null ? STILL_THERE_SECONDS : prev));
+      }
+    }, 30 * 1000);
+
+    return () => {
+      if (hiddenTimer) clearTimeout(hiddenTimer);
+      clearInterval(check);
+      document.removeEventListener('visibilitychange', onVisibility);
+      activityEvents.forEach(ev => window.removeEventListener(ev, onActivity));
+      setStillThere(null);
+    };
+  }, [isInCall]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Are you still there?" countdown
+  useEffect(() => {
+    if (stillThere === null) return undefined;
+    if (stillThere <= 0) {
+      autoLeaveClass('You were disconnected from the live class after a long time with no activity. You can rejoin any time.');
+      return undefined;
+    }
+    const t = setTimeout(() => setStillThere(s => (s === null ? null : s - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [stillThere]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const confirmStillThere = () => {
+    lastActivityRef.current = Date.now();
+    setStillThere(null);
+  };
+
   const [dynamicToken, setDynamicToken] = useState(null);
   const [tokenError, setTokenError] = useState(null);
 
@@ -1278,7 +1349,28 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
 
     return (
       <div className="fixed inset-0 z-[100] bg-[#111827] w-full h-full flex overflow-hidden" onClick={handleContainerClick}>
-        
+
+        {/* Idle safeguard prompt */}
+        {stillThere !== null && (
+          <div className="fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                <Clock size={28} />
+              </div>
+              <h3 className="text-lg font-black text-slate-900">Are you still there?</h3>
+              <p className="mt-1 text-sm font-medium text-slate-500">
+                You haven't used the class for a while. You'll be disconnected in <span className="font-black text-slate-800 tabular-nums">{stillThere}s</span> unless you continue.
+              </p>
+              <button
+                onClick={(e) => { e.stopPropagation(); confirmStillThere(); }}
+                className="mt-5 w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-colors"
+              >
+                I'm here - continue the class
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Live Class Watermark ── */}
         {(() => {
           const sName = sessionStorage.getItem('auth_name') || 'Student';
@@ -1427,7 +1519,18 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
 
   return (
     <div className="space-y-8 mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      
+
+      {/* Shown after the idle safeguard disconnected the student */}
+      {idleNotice && (
+        <div className="flex items-start gap-3 p-4 rounded-2xl border border-amber-200 bg-amber-50">
+          <Clock size={20} className="text-amber-600 shrink-0 mt-0.5" />
+          <p className="flex-1 text-sm font-semibold text-amber-900">{idleNotice}</p>
+          <button onClick={() => setIdleNotice(null)} className="p-1 text-amber-500 hover:text-amber-800 rounded-lg" title="Dismiss">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Active & Scheduled Classes */}
       <div>
         <h2 className="text-xl font-[900] text-slate-900 mb-5">Today's Live Sessions</h2>

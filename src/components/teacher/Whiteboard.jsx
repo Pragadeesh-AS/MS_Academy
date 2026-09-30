@@ -44,9 +44,18 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
   const [pagesData, setPagesData] = useState([{ id: Date.now(), data: null }]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
+  // Highlighter strokes are temporary (they fade out 10s after being drawn), so they are never
+  // saved into a page or an undo step - otherwise switching pages or Undo would bring them back.
+  const HIGHLIGHT_LIFETIME_MS = 10 * 1000;
+  const boardJSON = (fCanvas = fabricRef.current) => {
+    const json = fCanvas.toJSON(['isHighlight']);
+    json.objects = (json.objects || []).filter(o => !o.isHighlight);
+    return json;
+  };
+
   const saveCurrentPage = () => {
     if (fabricRef.current) {
-      const data = fabricRef.current.toJSON();
+      const data = boardJSON();
       setPagesData(prev => {
         const newPages = [...prev];
         newPages[currentPageIndex].data = data;
@@ -71,7 +80,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     fabricRef.current.isDrawingMode = (activeTool === 'pen' || activeTool === 'highlighter' || activeTool === 'eraser');
     
     // Reset History for new page
-    historyRef.current = [fabricRef.current.toJSON()];
+    historyRef.current = [boardJSON()];
     historyStepRef.current = 0;
     setCanUndo(false);
     setCanRedo(false);
@@ -113,7 +122,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
     historyTimeoutRef.current = setTimeout(() => {
       if (!fabricRef.current || isHistoryProcessingRef.current) return;
-      const json = fabricRef.current.toJSON();
+      const json = boardJSON();
       
       const currentHistory = historyRef.current;
       const currentStep = historyStepRef.current;
@@ -458,15 +467,60 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
       setShowBoardColors(false);
       setShowQuickColors(false);
     };
-    
+
+    // Tag highlighter strokes before anything else sees them (history, selectability)
+    const onBeforePathCreated = (e) => {
+      const path = e.path || e.object;
+      if (path && activeTool === 'highlighter') {
+        path.isHighlight = true;
+        scheduleHighlightFade(path);
+      }
+    };
+
+    fCanvas.on('before:path:created', onBeforePathCreated);
     fCanvas.on('path:created', onPathCreated);
     fCanvas.on('mouse:down', onMouseDown);
-    
+
     return () => {
+      fCanvas.off('before:path:created', onBeforePathCreated);
       fCanvas.off('path:created', onPathCreated);
       fCanvas.off('mouse:down', onMouseDown);
     };
   }, [activeTool]);
+
+  // Each highlighter stroke fades out and is removed HIGHLIGHT_LIFETIME_MS after it was drawn -
+  // only that stroke; pen, shapes and text stay. The whiteboard stream copies the canvas, so it
+  // disappears for students (and in recordings) too.
+  const highlightTimersRef = useRef(new Set());
+  const scheduleHighlightFade = (path) => {
+    const FADE_MS = 600;
+    const timer = setTimeout(() => {
+      highlightTimersRef.current.delete(timer);
+      const fCanvas = fabricRef.current;
+      const remove = () => {
+        if (!fCanvas || !fCanvas.getObjects().includes(path)) return; // already gone (undo, page change, clear)
+        isHistoryProcessingRef.current = true; // not an undo step
+        fCanvas.remove(path);
+        isHistoryProcessingRef.current = false;
+        fCanvas.requestRenderAll();
+      };
+      if (!fCanvas || !fCanvas.getObjects().includes(path)) return;
+      try {
+        path.animate({ opacity: 0 }, {
+          duration: FADE_MS,
+          onChange: () => fCanvas.requestRenderAll(),
+          onComplete: remove,
+        });
+      } catch {
+        remove();
+      }
+    }, Math.max(0, HIGHLIGHT_LIFETIME_MS - FADE_MS));
+    highlightTimersRef.current.add(timer);
+  };
+  useEffect(() => () => {
+    highlightTimersRef.current.forEach(clearTimeout);
+    highlightTimersRef.current.clear();
+  }, []);
 
   // Handle History Tracking
   useEffect(() => {
@@ -474,11 +528,13 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     if (!fCanvas) return;
     
     if (historyRef.current.length === 0) {
-      historyRef.current = [fCanvas.toJSON()];
+      historyRef.current = [boardJSON(fCanvas)];
       historyStepRef.current = 0;
     }
-    
-    const onHistoryEvent = () => {
+
+    // Drawing a highlight, or it fading away, is not an undo step
+    const onHistoryEvent = (e) => {
+      if (e?.path?.isHighlight || e?.target?.isHighlight) return;
       saveHistory();
     };
 
