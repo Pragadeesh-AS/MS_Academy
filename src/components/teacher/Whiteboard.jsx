@@ -661,6 +661,106 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
     };
   }, [activeTool]);
 
+  // ---- Bold / underline for text boxes ----
+  // No extra side-panel button: a small B / I / U bar floats above the selected text box, and Ctrl+B /
+  // Ctrl+I / Ctrl+U work while one is selected or being typed in. With letters highlighted it styles just
+  // those, otherwise the whole box. The bar is plain HTML over the canvas, so it never shows up in
+  // the whiteboard stream students see or in recordings.
+  const [textBar, setTextBar] = useState(null); // { x, y, bold, italic, underline } or null
+  const textBarKeyRef = useRef('');
+
+  const activeTextObject = () => {
+    const obj = fabricRef.current?.getActiveObject();
+    return obj && (obj.type === 'i-text' || obj.type === 'textbox') ? obj : null;
+  };
+
+  // Whether the highlighted letters (or, with none highlighted, the whole box) have this style
+  const textHasStyle = (obj, prop, onValue) => {
+    const hasSelection = obj.isEditing && obj.selectionStart !== obj.selectionEnd;
+    if (hasSelection) {
+      const styles = obj.getSelectionStyles(obj.selectionStart, obj.selectionEnd);
+      return styles.length > 0 && styles.every(s => (s[prop] ?? obj[prop]) === onValue);
+    }
+    return obj[prop] === onValue;
+  };
+
+  // The value each style has when on / off
+  const TEXT_STYLES = {
+    fontWeight: ['bold', 'normal'],
+    fontStyle: ['italic', 'normal'],
+    underline: [true, false],
+  };
+
+  const toggleTextStyle = (prop) => {
+    const fCanvas = fabricRef.current;
+    const obj = activeTextObject();
+    if (!fCanvas || !obj) return;
+    const [onValue, offValue] = TEXT_STYLES[prop];
+    const next = textHasStyle(obj, prop, onValue) ? offValue : onValue;
+    if (obj.isEditing && obj.selectionStart !== obj.selectionEnd) {
+      obj.setSelectionStyles({ [prop]: next }, obj.selectionStart, obj.selectionEnd);
+    } else {
+      // Whole box: drop any per-letter overrides of this style so it applies everywhere
+      if (typeof obj.removeStyle === 'function') obj.removeStyle(prop);
+      obj.set(prop, next);
+    }
+    obj.dirty = true;
+    obj.initDimensions?.();
+    obj.setCoords();
+    fCanvas.requestRenderAll();
+    saveHistory();
+  };
+
+  // Keep the bar pinned just above the active text box (follows moving, zoom and pan)
+  useEffect(() => {
+    const fCanvas = fabricRef.current;
+    if (!fCanvas) return undefined;
+    const update = () => {
+      const obj = activeTextObject();
+      if (!obj || !obj.oCoords) {
+        if (textBarKeyRef.current !== '') { textBarKeyRef.current = ''; setTextBar(null); }
+        return;
+      }
+      const corners = ['tl', 'tr', 'bl', 'br'].map(k => obj.oCoords[k]).filter(Boolean);
+      const x = Math.min(...corners.map(p => p.x));
+      const y = Math.min(...corners.map(p => p.y));
+      const offsetX = containerRef.current?.offsetLeft || 0;
+      const offsetY = containerRef.current?.offsetTop || 0;
+      const state = {
+        x: Math.round(x + offsetX),
+        y: Math.round(Math.max(4, y + offsetY - 46)),
+        bold: textHasStyle(obj, 'fontWeight', 'bold'),
+        italic: textHasStyle(obj, 'fontStyle', 'italic'),
+        underline: textHasStyle(obj, 'underline', true),
+      };
+      const key = JSON.stringify(state);
+      if (key !== textBarKeyRef.current) { textBarKeyRef.current = key; setTextBar(state); }
+    };
+    fCanvas.on('after:render', update);
+    fCanvas.on('selection:cleared', update);
+    fCanvas.on('text:selection:changed', update);
+    return () => {
+      fCanvas.off('after:render', update);
+      fCanvas.off('selection:cleared', update);
+      fCanvas.off('text:selection:changed', update);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ctrl+B / Ctrl+I / Ctrl+U - capture phase, so it works while Fabric's hidden text field has focus
+  useEffect(() => {
+    const SHORTCUTS = { b: 'fontWeight', i: 'fontStyle', u: 'underline' };
+    const onKey = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      const prop = SHORTCUTS[e.key.toLowerCase()];
+      if (!prop || !activeTextObject()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleTextStyle(prop);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Handle Text Tool Logic
   useEffect(() => {
     const fCanvas = fabricRef.current;
@@ -1069,6 +1169,42 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
 
       {/* Dynamic Canvas Container */}
       <div className="w-full h-full touch-none pointer-events-auto z-10" ref={containerRef}></div>
+
+      {/* Floating Bold / Italic / Underline bar for the selected text box (not part of the canvas) */}
+      {textBar && (
+        <div
+          className="absolute z-30 flex items-center gap-1 p-1 rounded-xl bg-slate-800/95 border border-slate-600 shadow-xl"
+          style={{ left: textBar.x, top: textBar.y }}
+          // Keep the text box focused / in editing mode while clicking the buttons
+          onMouseDown={(e) => e.preventDefault()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => toggleTextStyle('fontWeight')}
+            title="Bold (Ctrl+B)"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-[15px] font-black transition-colors ${textBar.bold ? 'bg-blue-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}
+          >
+            B
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleTextStyle('fontStyle')}
+            title="Italic (Ctrl+I)"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-[16px] font-bold italic font-serif transition-colors ${textBar.italic ? 'bg-blue-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}
+          >
+            I
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleTextStyle('underline')}
+            title="Underline (Ctrl+U)"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-[15px] font-bold underline underline-offset-2 transition-colors ${textBar.underline ? 'bg-blue-500 text-white' : 'text-slate-200 hover:bg-slate-700'}`}
+          >
+            U
+          </button>
+        </div>
+      )}
       
       
       
