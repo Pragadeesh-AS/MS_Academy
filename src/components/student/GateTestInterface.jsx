@@ -448,7 +448,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
           <li>
             <strong>Multiple Select Questions (MSQs)</strong>
             <ol className="list-[lower-alpha] pl-5 mt-2 space-y-2">
-              <li>MSQ has one or more correct options. A wrong answer carries negative marks, as shown in the split-up table.</li>
+              <li>MSQ has one or more correct options. There is no negative marking for MSQs.</li>
               <li>MSQs have square-shaped checkbox placed before each option.</li>
               <li>Choose your answer by clicking the checkbox(es) placed before each of the selected choice(s).</li>
               <li>To change a particular selected option, deselect the option that you want to change and click on the checkbox of another option.</li>
@@ -515,9 +515,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                     <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
                       {[...new Set(testQuestions.filter(q => q.questionType === 'Multiple Choice').map(q => parseFloat(q.mark) || 1))].join('/')}
                     </td>
-                    <td className="border border-gray-300 px-4 py-2 text-center text-red-600">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Multiple Choice').map(q => negativeMarkFor(q)))].join('/')}
-                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-center text-red-600">Nil</td>
                   </tr>
                 )}
                 {nat > 0 && (
@@ -527,9 +525,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                     <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
                       {[...new Set(testQuestions.filter(q => q.questionType === 'Fill in Blanks').map(q => parseFloat(q.mark) || 1))].join('/')}
                     </td>
-                    <td className="border border-gray-300 px-4 py-2 text-center text-red-600">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Fill in Blanks').map(q => negativeMarkFor(q)))].join('/')}
-                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-center text-red-600">Nil</td>
                   </tr>
                 )}
                 <tr className="bg-[#EAF2FA] font-bold">

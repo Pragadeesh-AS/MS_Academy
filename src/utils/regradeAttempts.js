@@ -9,6 +9,50 @@ import { gradeAnswer } from './testGrading';
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
+// --- One-time clean-up: attempts submitted while MSQ / NAT were (wrongly) negatively marked.
+// MSQ and NAT never lose marks (utils/marking), so any negative marks saved on those answers are
+// refunded. Only the score and those answers' marks change - questions are never touched.
+const NO_NEGATIVE_TYPES = new Set(['Multiple Choice', 'Fill in Blanks', 'Fill in the Blanks']);
+
+// Preview: [{ id, student, test, answers, oldScore, newScore, responses }]
+export const findMsqNatNegativeFixes = async () => {
+  const [qSnap, aSnap] = await Promise.all([getDocs(collection(db, 'question_bank')), getDocs(collection(db, 'test_attempts'))]);
+  const typeOf = new Map(qSnap.docs.map(d => [d.id, d.data().questionType]));
+  const fixes = [];
+  aSnap.docs.forEach(d => {
+    const attempt = d.data();
+    let refund = 0;
+    let answers = 0;
+    const responses = (Array.isArray(attempt.responses) ? attempt.responses : []).map(r => {
+      // A deleted question's type is unknown - only an MSQ answer (an array) can still be recognised
+      const type = typeOf.get(r.questionId) || (Array.isArray(r.selectedAnswer) ? 'Multiple Choice' : null);
+      if (!NO_NEGATIVE_TYPES.has(type) || !(typeof r.marksAwarded === 'number' && r.marksAwarded < 0)) return r;
+      refund += -r.marksAwarded;
+      answers += 1;
+      return { ...r, marksAwarded: 0 };
+    });
+    if (answers === 0) return;
+    fixes.push({
+      id: d.id,
+      student: attempt.studentName || attempt.studentEmail || 'Student',
+      test: attempt.testTitle || 'Untitled Test',
+      answers,
+      oldScore: attempt.score || 0,
+      newScore: round2((attempt.score || 0) + refund),
+      responses,
+    });
+  });
+  return fixes;
+};
+
+export const applyMsqNatNegativeFixes = async (fixes) => {
+  for (let i = 0; i < fixes.length; i += 450) {
+    const batch = writeBatch(db);
+    fixes.slice(i, i + 450).forEach(f => batch.update(doc(db, 'test_attempts', f.id), { responses: f.responses, score: f.newScore }));
+    await batch.commit();
+  }
+};
+
 /**
  * `before` / `after` are the question as it was and as it is now saved.
  * Resolves { attempts: re-graded attempt count, gained, lost } (students whose marks went up / down).

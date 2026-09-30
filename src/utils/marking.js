@@ -1,12 +1,13 @@
-// Academy marking scheme, in one place for the Question Bank, the AI importer, the test screen and
-// scoring. A question stores its marks as a label ("1 Mark (-0.33)" / "2 Mark (-0.66)") plus a
-// numeric `negativeMark`. Every question type - MCQ, MSQ, NAT and Match - loses 1/3 of its marks
-// for a wrong answer (1 -> 0.33, 2 -> 0.66). Unlike the official GATE paper, MSQ and NAT are
-// negatively marked too. A skipped question never loses marks.
+// GATE marking scheme, in one place for the Question Bank, the AI importer, the test screen,
+// scoring and answer-key re-grading. A question stores its marks as a label ("1 Mark (-0.33)" /
+// "2 Mark (-0.66)") plus a numeric `negativeMark`:
+//   MCQ (Single Choice) and Match: a wrong answer loses 1/3 of the marks  (1 -> 0.33, 2 -> 0.66)
+//   MSQ (Multiple Choice) and NAT (Fill in Blanks): no negative marking
+// A skipped question never loses marks.
 
 export const MARK_LABELS = { 1: '1 Mark (-0.33)', 2: '2 Mark (-0.66)' };
 
-const NEGATIVE_MARKED_TYPES = ['Single Choice', 'Multiple Choice', 'Fill in Blanks', 'Fill in the Blanks', 'Match'];
+const NEGATIVE_MARKED_TYPES = ['Single Choice', 'Match'];
 
 // "1 Mark (-0.33)" -> 1, "2" -> 2
 export const markNumberOf = (mark) => {

@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart2, TrendingUp, Users, Award, Search, Clock, CheckCircle2, XCircle, AlertCircle, ChevronRight, MinusCircle, UserCircle2, Globe2, Filter, ArrowLeft, Target, Folder, FolderOpen, FileText, Download, FileSpreadsheet } from 'lucide-react';
 import { exportTestReportCsv, exportTestReportPdf } from '../../utils/testReportExport';
+import { findMsqNatNegativeFixes, applyMsqNatNegativeFixes } from '../../utils/regradeAttempts';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line
 } from 'recharts';
 
 import { db } from '../../firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
 
 // Helper
 const formatTime = (seconds) => {
@@ -32,6 +33,7 @@ export default function Analytics({ joinedStudents = [], department = null }) {
   const toggleFolder = (folder) => setExpandedFolders(prev => ({ ...prev, [folder]: !prev[folder] }));
   
   const [isLoading, setIsLoading] = React.useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
   const [realTests, setRealTests] = React.useState([]);
   const [computedTestAnalytics, setComputedTestAnalytics] = React.useState({});
   const [computedStudentHistory, setComputedStudentHistory] = React.useState({});
@@ -220,7 +222,50 @@ export default function Analytics({ joinedStudents = [], department = null }) {
       setIsLoading(false);
     };
     fetchData();
-  }, [department, joinedStudents]);
+  }, [department, joinedStudents, reloadKey]);
+
+  // Admin one-time clean-up: refund negative marks saved on MSQ / NAT answers (see utils/regradeAttempts).
+  // Once it has been applied (or there turns out to be nothing to fix) it is recorded in
+  // site_settings/migrations and the button no longer shows for any admin.
+  const [negFix, setNegFix] = useState(null); // null | { loading } | { fixes, applying, done, error }
+  const [negFixDone, setNegFixDone] = useState(true); // hidden until we know it hasn't been run
+  useEffect(() => {
+    if (department) return;
+    getDoc(doc(db, 'site_settings', 'migrations'))
+      .then(snap => setNegFixDone(snap.exists() && snap.data().msqNatNegativeFixDone === true))
+      .catch(err => console.error('Failed to read migrations', err));
+  }, [department]);
+  const markNegFixDone = async () => {
+    setNegFixDone(true);
+    try {
+      await setDoc(doc(db, 'site_settings', 'migrations'), { msqNatNegativeFixDone: true, msqNatNegativeFixAt: new Date().toISOString() }, { merge: true });
+    } catch (err) {
+      console.error('Failed to record the MSQ/NAT fix as done', err);
+    }
+  };
+  const openNegFix = async () => {
+    setNegFix({ loading: true });
+    try {
+      const fixes = await findMsqNatNegativeFixes();
+      setNegFix({ fixes });
+      if (fixes.length === 0) markNegFixDone();
+    } catch (err) {
+      console.error('Failed to check attempts', err);
+      setNegFix({ fixes: [], error: 'Could not read the test attempts. Please try again.' });
+    }
+  };
+  const applyNegFix = async () => {
+    setNegFix(prev => ({ ...prev, applying: true }));
+    try {
+      await applyMsqNatNegativeFixes(negFix.fixes);
+      setNegFix(prev => ({ ...prev, applying: false, done: true }));
+      markNegFixDone();
+      setReloadKey(k => k + 1);
+    } catch (err) {
+      console.error('Failed to fix attempts', err);
+      setNegFix(prev => ({ ...prev, applying: false, error: 'Saving failed - nothing or only part was changed. Please try again.' }));
+    }
+  };
 
   const allStudentNames = Object.keys(computedStudentHistory);
   const filteredStudentNames = allStudentNames.filter(name => name.toLowerCase().includes(studentSearch.toLowerCase()));
@@ -301,6 +346,15 @@ export default function Analytics({ joinedStudents = [], department = null }) {
             <BarChart2 className="text-blue-600" /> Performance Analytics
           </h2>
           <p className="text-slate-500 text-sm mt-1">Deep insights into global test performance and individual student metrics</p>
+          {/* Admin only: one-time refund of negative marks saved on MSQ / NAT answers */}
+          {!department && !negFixDone && (
+            <button
+              onClick={openNegFix}
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors"
+            >
+              <AlertCircle size={14} /> Fix MSQ/NAT negative marks in past attempts
+            </button>
+          )}
         </div>
 
         <div className="flex bg-slate-100/80 p-1.5 rounded-2xl w-full md:w-auto shadow-inner border border-slate-200/60">
@@ -318,6 +372,71 @@ export default function Analytics({ joinedStudents = [], department = null }) {
           </button>
         </div>
       </div>
+
+      {negFix && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !negFix.applying && setNegFix(null)}>
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-[900] text-slate-900">Fix MSQ/NAT negative marks</h3>
+                <p className="text-xs font-semibold text-slate-500 mt-0.5">MSQ and NAT have no negative marking - refund marks deducted on those answers in saved attempts. Questions are not changed.</p>
+              </div>
+              <button onClick={() => !negFix.applying && setNegFix(null)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full shrink-0"><XCircle size={20} /></button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              {negFix.loading ? (
+                <p className="text-sm font-bold text-slate-500 text-center py-6">Checking every test attempt...</p>
+              ) : negFix.done ? (
+                <p className="text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-2">
+                  <CheckCircle2 size={18} /> Updated {negFix.fixes.length} attempt{negFix.fixes.length === 1 ? '' : 's'}. Analytics has been refreshed with the corrected scores.
+                </p>
+              ) : negFix.fixes?.length === 0 ? (
+                <p className="text-sm font-bold text-slate-600 text-center py-6">{negFix.error || 'Nothing to fix - no saved attempt has negative marks on an MSQ or NAT answer.'}</p>
+              ) : (
+                <>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[11px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                        <th className="py-2 pr-3">Test</th>
+                        <th className="py-2 pr-3">Student</th>
+                        <th className="py-2 pr-3 text-center">MSQ/NAT answers</th>
+                        <th className="py-2 text-right">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {negFix.fixes.map(f => (
+                        <tr key={f.id} className="border-b border-slate-50">
+                          <td className="py-2 pr-3 font-semibold text-slate-700">{f.test}</td>
+                          <td className="py-2 pr-3 font-semibold text-slate-700">{f.student}</td>
+                          <td className="py-2 pr-3 text-center font-bold text-slate-600">{f.answers}</td>
+                          <td className="py-2 text-right font-bold whitespace-nowrap">
+                            <span className="text-red-500">{f.oldScore}</span> <span className="text-slate-300">→</span> <span className="text-emerald-600">{f.newScore}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {negFix.error && <p className="mt-4 text-sm font-bold text-red-600">{negFix.error}</p>}
+                </>
+              )}
+            </div>
+            <div className="px-6 pb-6 flex justify-end gap-3">
+              <button onClick={() => setNegFix(null)} disabled={negFix.applying} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50">
+                {negFix.done || negFix.fixes?.length === 0 ? 'Close' : 'Cancel'}
+              </button>
+              {!negFix.done && negFix.fixes?.length > 0 && (
+                <button
+                  onClick={applyNegFix}
+                  disabled={negFix.applying}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold text-sm"
+                >
+                  {negFix.applying ? 'Updating...' : `Apply to ${negFix.fixes.length} attempt${negFix.fixes.length === 1 ? '' : 's'}`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 p-4 sm:p-6 lg:p-8">

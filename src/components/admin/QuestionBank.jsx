@@ -1643,7 +1643,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                     <button type="button" onClick={() => setMarkNumber(1)} className={`whitespace-nowrap px-4 sm:px-5 py-2 text-[13px] font-[800] rounded-full transition-colors ${markNumber(formData.mark) === 1 ? 'border-[1.5px] border-blue-600 text-blue-600 bg-white shadow-sm' : 'text-slate-500'}`}>1 Mark (-0.33)</button>
                     <button type="button" onClick={() => setMarkNumber(2)} className={`whitespace-nowrap px-4 sm:px-5 py-2 text-[13px] font-[800] rounded-full transition-colors ${markNumber(formData.mark) === 2 ? 'border-[1.5px] border-blue-600 text-blue-600 bg-white shadow-sm' : 'text-slate-500'}`}>2 Mark (-0.66)</button>
                     <span className="bg-red-50 border-[1.5px] border-red-200 text-red-600 text-[13px] font-[900] px-3 sm:px-4 py-2 rounded-full flex items-center gap-1.5 sm:gap-2 ml-1 sm:ml-2 shadow-sm whitespace-nowrap">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></div> {negativeMarkFor(formData) ? `Neg: -${negativeMarkFor(formData)}` : 'No negative'}
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0"></div> {negativeMarkFor(formData) ? `Neg: -${negativeMarkFor(formData)}` : 'No negative (MSQ/NAT)'}
                     </span>
                   </div>
                 </div>
@@ -2244,7 +2244,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   : bulkAction === 'approve'
                     ? `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be marked Approved and Reviewed by you.`
                     : bulkAction === 'mark1' || bulkAction === 'mark2'
-                      ? `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be worth ${bulkAction === 'mark2' ? '2 marks' : '1 mark'}. A wrong answer costs ${bulkAction === 'mark2' ? '-0.66' : '-0.33'}.`
+                      ? `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be worth ${bulkAction === 'mark2' ? '2 marks' : '1 mark'}. MCQ and Match questions get ${bulkAction === 'mark2' ? '-0.66' : '-0.33'} for a wrong answer; MSQ and NAT have no negative marking.`
                       : isPremiumView
                         ? `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be removed from the Premium Question Bank and moved to the regular Question Bank.`
                         : `${selectedIds.length} selected question${selectedIds.length === 1 ? '' : 's'} will be moved to the Premium Question Bank.`}
