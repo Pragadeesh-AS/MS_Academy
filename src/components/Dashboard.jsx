@@ -17,6 +17,8 @@ import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, forma
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
 import { buyBundle, buySubject, buyNoteBundle, verifyOrder } from '../cashfree';
+import Analytics from './admin/Analytics';
+import { TrendingUp } from 'lucide-react';
 
 function VideoDuration({ url, storedDuration }) {
   const [duration, setDuration] = useState('Loading...');
@@ -100,6 +102,7 @@ const sidebarNavItems = [
   { key: 'notes', label: 'Study Notes', icon: FileText },
   { key: 'schedule', label: 'Schedule', icon: Calendar },
   { key: 'tests', label: 'Practice Tests', icon: Trophy },
+  { key: 'analytics', label: 'Analytics', icon: TrendingUp },
 ];
 
 const isStartingSoon = (timeStr) => {
@@ -1492,6 +1495,10 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === 'analytics' && (
+          <Analytics studentViewOnlyEmail={sessionStorage.getItem('auth_email')} studentViewOnlyName={studentName} />
         )}
 
         {activeTab === 'tests' && (

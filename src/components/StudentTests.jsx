@@ -10,6 +10,8 @@ import { gradeAnswer, normalizeQuestion, correctAnswerText } from '../utils/test
 import { canAccessTest as canAccessTestFor } from '../utils/testAccess';
 import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, minutesAvailable, formatTestTime, formatCountdown } from '../utils/testSchedule';
 
+import TestLeaderboard from './student/TestLeaderboard';
+
 export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [] }) {
   const [tests, setTests] = useState([]);
   const [attempts, setAttempts] = useState([]);
@@ -25,6 +27,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const [timeRemaining, setTimeRemaining] = useState(0); // in seconds
   const [testMode, setTestMode] = useState('list'); // 'list' | 'taking' | 'result'
   const [activeAttempt, setActiveAttempt] = useState(null);
+  const [globalQuestionStats, setGlobalQuestionStats] = useState(null);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
 
   // Re-checks a scheduled answer release the moment its time arrives, so a student sitting on the
@@ -276,6 +279,40 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const fetchGlobalQuestionStats = (tId) => {
+    getDocs(query(collection(db, 'test_attempts'), where('testId', '==', tId))).then(snap => {
+      const stats = {};
+      snap.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.responses && Array.isArray(data.responses)) {
+          data.responses.forEach(r => {
+            const qId = r.questionId;
+            if (!stats[qId]) stats[qId] = { total: 0, correct: 0, wrong: 0, unattempted: 0 };
+            stats[qId].total++;
+            
+            let isCorrect = false;
+            let hasAnswer = Array.isArray(r.selectedAnswer) ? r.selectedAnswer.length > 0 : !!String(r.selectedAnswer || '').trim();
+            
+            if (r.isCorrect !== undefined) isCorrect = r.isCorrect;
+            else {
+              const sel = Array.isArray(r.selectedAnswer) ? r.selectedAnswer.slice().sort().join(',') : String(r.selectedAnswer || '').trim().toLowerCase();
+              const cor = Array.isArray(r.correctAnswer) ? r.correctAnswer.slice().sort().join(',') : String(r.correctAnswer || '').trim().toLowerCase();
+              isCorrect = (sel === cor) && sel !== '';
+            }
+
+            if (!hasAnswer) stats[qId].unattempted++;
+            else if (isCorrect) stats[qId].correct++;
+            else stats[qId].wrong++;
+          });
+        }
+      });
+      setGlobalQuestionStats(stats);
+    }).catch(err => {
+      console.error("Error fetching global question stats:", err);
+      setGlobalQuestionStats({});
+    });
+  };
+
   const viewAttemptResult = (testId) => {
     const matchedAttempt = attempts.find(a => a.testId === testId);
     if (matchedAttempt) {
@@ -298,6 +335,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         setActiveTest(testObj);
         setActiveAttempt(matchedAttempt);
         setTestMode('result');
+        fetchGlobalQuestionStats(testId);
       }).catch(err => {
         console.error(err);
       }).finally(() => {
@@ -347,6 +385,9 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           </div>
         </div>
 
+        {/* Student Leaderboard */}
+        <TestLeaderboard testId={activeTest.id} currentStudentEmail={sessionStorage.getItem('auth_email')} />
+
         {/* Detailed Question Review List */}
         {areSolutionsVisible(activeTest, releaseClock) ? (
           <div className="space-y-6">
@@ -357,7 +398,14 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
             <div className="space-y-5">
               {testQuestions.map((q, idx) => {
                 const studentResp = activeAttempt.responses?.find(r => r.questionId === q.id) || { selectedAnswer: '', isCorrect: false, isAnswered: false };
-                const isCorrect = studentResp.isCorrect;
+                let isCorrect = false;
+                if (studentResp.isCorrect !== undefined) {
+                  isCorrect = studentResp.isCorrect;
+                } else {
+                  const sel = Array.isArray(studentResp.selectedAnswer) ? studentResp.selectedAnswer.slice().sort().join(',') : String(studentResp.selectedAnswer || '').trim().toLowerCase();
+                  const cor = Array.isArray(studentResp.correctAnswer) ? studentResp.correctAnswer.slice().sort().join(',') : String(studentResp.correctAnswer || '').trim().toLowerCase();
+                  isCorrect = (sel === cor) && sel !== '';
+                }
                 // Older attempts have no isAnswered flag - fall back to whether an answer was recorded
                 const noAnswer = Array.isArray(studentResp.selectedAnswer) ? studentResp.selectedAnswer.length === 0 : !String(studentResp.selectedAnswer ?? '').trim();
                 const unattempted = studentResp.isAnswered === false || (studentResp.isAnswered === undefined && noAnswer);
@@ -369,8 +417,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
                     {/* Header Row */}
                     <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                      <span className="px-2.5 py-1 bg-slate-50 text-slate-500 rounded-lg text-xs font-bold">
-                        Question {idx + 1}
+                      <span className="px-2.5 py-1 bg-slate-50 text-slate-500 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                        <span>Question {idx + 1}</span>
                         {typeof studentResp.marksAwarded === 'number' && (
                           <span className={`ml-2 font-mono ${studentResp.marksAwarded > 0 ? 'text-green-600' : studentResp.marksAwarded < 0 ? 'text-red-500' : 'text-slate-400'}`}>
                             ({studentResp.marksAwarded > 0 ? '+' : ''}{studentResp.marksAwarded})
@@ -378,6 +426,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                         )}
                       </span>
                       <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{q.questionType === 'Multiple Select' ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</span>
                         <span className={`px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 ${badgeStyle}`}>
                           {unattempted ? (
                             <><MinusCircle size={14} /> Unattempted</>
@@ -516,6 +565,33 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                           </div>
                         )}
                       </>
+                    )}
+
+                    {/* Global Question Stats */}
+                    {globalQuestionStats && globalQuestionStats[q.id] && globalQuestionStats[q.id].total > 0 && (
+                      <div className="mt-5 border-t border-slate-100 pt-5">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs mb-3">
+                          <Target size={14} className="text-blue-500" /> Class Performance for this Question
+                        </div>
+                        <div className="grid grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                          <div>
+                            <div className="text-xl font-[900] text-slate-700">{globalQuestionStats[q.id].total}</div>
+                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total Attempts</div>
+                          </div>
+                          <div>
+                            <div className="text-xl font-[900] text-emerald-600">{Math.round((globalQuestionStats[q.id].correct / globalQuestionStats[q.id].total) * 100)}%</div>
+                            <div className="text-[9px] font-bold text-emerald-500/70 uppercase tracking-wider">Correct ({globalQuestionStats[q.id].correct})</div>
+                          </div>
+                          <div>
+                            <div className="text-xl font-[900] text-red-500">{Math.round((globalQuestionStats[q.id].wrong / globalQuestionStats[q.id].total) * 100)}%</div>
+                            <div className="text-[9px] font-bold text-red-400/70 uppercase tracking-wider">Wrong ({globalQuestionStats[q.id].wrong})</div>
+                          </div>
+                          <div>
+                            <div className="text-xl font-[900] text-slate-400">{Math.round((globalQuestionStats[q.id].unattempted / globalQuestionStats[q.id].total) * 100)}%</div>
+                            <div className="text-[9px] font-bold text-slate-400/70 uppercase tracking-wider">Unattempted ({globalQuestionStats[q.id].unattempted})</div>
+                          </div>
+                        </div>
+                      </div>
                     )}
 
                     {/* Explanation Block */}
@@ -829,4 +905,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     </div>
   );
 }
+
+
+
+
 

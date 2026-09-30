@@ -1146,7 +1146,7 @@ export default function Whiteboard({ onStreamReady, isOverlay = false, canvasId 
                       }
                     }
                   }}
-                  className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${isActive ? 'bg-indigo-100 text-indigo-600 shadow-md' : 'text-slate-300 hover:bg-slate-700 hover:text-white'} ${item.disabled ? 'opacity-30 cursor-not-allowed hover:bg-transparent hover:text-slate-300' : ''}`}
+                  className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${isActive ? 'bg-indigo-100 text-indigo-600 shadow-md' : ((item.id === 'pen' || item.id === 'eraser') ? 'bg-slate-600 text-white shadow-sm hover:bg-slate-500' : 'text-slate-300 hover:bg-slate-700 hover:text-white')} ${item.disabled ? 'opacity-30 cursor-not-allowed hover:bg-transparent hover:text-slate-300' : ''}`}
                   title={item.label}
                 >
                   {item.icon}

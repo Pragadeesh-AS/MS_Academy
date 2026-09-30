@@ -18,11 +18,12 @@ const formatTime = (seconds) => {
   return `${m}m ${s}s`;
 };
 
-export default function Analytics({ joinedStudents = [], department = null }) {
+export default function Analytics({ joinedStudents = [], department = null, studentViewOnlyEmail = null, studentViewOnlyName = null }) {
   const [activeInnerTab, setActiveInnerTab] = useState('global'); // 'global' or 'student'
   
   // Drill-down states for Global
   const [detailedGlobalTestId, setDetailedGlobalTestId] = useState(null);
+  const [globalTestTab, setGlobalTestTab] = useState('overview'); // 'overview' | 'questions'
   
   // Drill-down states for Student
   const [studentSearch, setStudentSearch] = useState('');
@@ -32,6 +33,14 @@ export default function Analytics({ joinedStudents = [], department = null }) {
   const [expandedFolders, setExpandedFolders] = useState({});
   const toggleFolder = (folder) => setExpandedFolders(prev => ({ ...prev, [folder]: !prev[folder] }));
   
+  // Enforce student view
+  useEffect(() => {
+    if (studentViewOnlyEmail && studentViewOnlyName) {
+      setActiveInnerTab('student');
+      setSelectedStudentName(studentViewOnlyName);
+    }
+  }, [studentViewOnlyEmail, studentViewOnlyName]);
+
   const [isLoading, setIsLoading] = React.useState(true);
   const [reloadKey, setReloadKey] = useState(0);
   const [realTests, setRealTests] = React.useState([]);
@@ -47,9 +56,14 @@ export default function Analytics({ joinedStudents = [], department = null }) {
           testsQuery = query(collection(db, 'tests'), where('department', '==', department));
         }
         
+        let attemptsQuery = collection(db, 'test_attempts');
+        if (studentViewOnlyEmail) {
+          attemptsQuery = query(collection(db, 'test_attempts'), where('studentEmail', '==', studentViewOnlyEmail));
+        }
+
         const [testsSnap, attemptsSnap, questionsSnap] = await Promise.all([
           getDocs(testsQuery),
-          getDocs(collection(db, 'test_attempts')),
+          getDocs(attemptsQuery),
           getDocs(collection(db, 'question_bank'))
         ]);
 
@@ -141,7 +155,16 @@ export default function Analytics({ joinedStudents = [], department = null }) {
 
               let status = 'Unattempted';
               if (hasAnswer) {
-                 if (r.isCorrect) {
+                 let isCorrectAnswer = false;
+                 if (r.isCorrect !== undefined) {
+                   isCorrectAnswer = r.isCorrect;
+                 } else {
+                   const sel = Array.isArray(r.selectedAnswer) ? r.selectedAnswer.slice().sort().join(',') : String(r.selectedAnswer || '').trim().toLowerCase();
+                   const cor = Array.isArray(r.correctAnswer) ? r.correctAnswer.slice().sort().join(',') : String(r.correctAnswer || '').trim().toLowerCase();
+                   isCorrectAnswer = (sel === cor);
+                 }
+
+                 if (isCorrectAnswer) {
                    status = 'Correct';
                    correct++;
                  } else {
@@ -161,14 +184,49 @@ export default function Analytics({ joinedStudents = [], department = null }) {
               return {
                 qIndex: i + 1,
                 q: qData.questionText || "Question text unavailable",
+                qImage: qData.questionImageUrl || null,
                 selected: formatAnswer(r.selectedAnswer),
                 correct: formatAnswer(r.correctAnswer) || 'Unknown',
                 explanation: qData.explanation || 'No explanation provided.',
                 status,
-                timeSpent: formatTime(r.timeSpent || 0)
+                timeSpent: formatTime(r.timeSpent || 0),
+                isFillBlank,
+                questionType: qData.questionType || 'Multiple Choice',
+                subject: qData.subject || 'General',
+                marks: qData.marks ? Number(qData.marks) : 1,
+                options: isFillBlank ? null : {
+                  A: { text: qData.optionA, image: qData.optionAImage },
+                  B: { text: qData.optionB, image: qData.optionBImage },
+                  C: { text: qData.optionC, image: qData.optionCImage },
+                  D: { text: qData.optionD, image: qData.optionDImage },
+                }
               };
             });
           }
+
+          if (!testSummary.questionStats) testSummary.questionStats = {};
+          allQuestions.forEach((q, idx) => {
+            const qKey = q.qIndex || (idx + 1);
+            if (!testSummary.questionStats[qKey]) {
+              testSummary.questionStats[qKey] = {
+                qIndex: qKey,
+                qText: q.q,
+                qImage: q.qImage,
+                options: q.options,
+                isFillBlank: q.isFillBlank,
+                questionType: q.questionType,
+                marks: q.marks,
+                total: 0,
+                correct: 0,
+                wrong: 0,
+                unattempted: 0
+              };
+            }
+            testSummary.questionStats[qKey].total++;
+            if (q.status === 'Correct') testSummary.questionStats[qKey].correct++;
+            else if (q.status === 'Wrong') testSummary.questionStats[qKey].wrong++;
+            else testSummary.questionStats[qKey].unattempted++;
+          });
 
           // Leaderboard row for this test (also what the Excel / PDF export writes out)
           const totalQ = attempt.totalQuestions || allQuestions.length;
@@ -188,9 +246,13 @@ export default function Analytics({ joinedStudents = [], department = null }) {
 
           sHistory[sName].push({
             id: attempt.id,
+            testId: attempt.testId,
             testName: attempt.testTitle || 'Untitled Test',
+            subject: testSummary.subject || 'General',
+            maxScore: maxScore,
             score: attempt.score || 0,
             timeTaken: formatTime(attemptTimeTaken),
+            timeSeconds: attemptTimeTaken,
             totalQ: attempt.totalQuestions || allQuestions.length,
             attempted: correct + wrong,
             correct,
@@ -222,7 +284,7 @@ export default function Analytics({ joinedStudents = [], department = null }) {
       setIsLoading(false);
     };
     fetchData();
-  }, [department, joinedStudents, reloadKey]);
+  }, [department, joinedStudents?.length, reloadKey, studentViewOnlyEmail]);
 
   // Admin one-time clean-up: refund negative marks saved on MSQ / NAT answers (see utils/regradeAttempts).
   // Once it has been applied (or there turns out to be nothing to fix) it is recorded in
@@ -270,8 +332,25 @@ export default function Analytics({ joinedStudents = [], department = null }) {
   const allStudentNames = Object.keys(computedStudentHistory);
   const filteredStudentNames = allStudentNames.filter(name => name.toLowerCase().includes(studentSearch.toLowerCase()));
   
-  const activeStudentData = selectedStudentName ? computedStudentHistory[selectedStudentName] : [];
+  const activeStudentData = selectedStudentName ? (computedStudentHistory[selectedStudentName] || []) : [];
   const activeDetailedTest = detailedTestId ? activeStudentData.find(t => t.id === detailedTestId) : null;
+
+  let topperAttempt = null;
+  if (activeDetailedTest && activeDetailedTest.testId) {
+    let bestScore = -1;
+    let minTime = Infinity;
+    Object.values(computedStudentHistory).forEach(history => {
+      history.forEach(attempt => {
+        if (attempt.testId === activeDetailedTest.testId) {
+          if (attempt.score > bestScore || (attempt.score === bestScore && attempt.timeSeconds < minTime)) {
+            bestScore = attempt.score;
+            minTime = attempt.timeSeconds;
+            topperAttempt = attempt;
+          }
+        }
+      });
+    });
+  }
 
   // Global Logic
   const activeGlobalTest = detailedGlobalTestId ? computedTestAnalytics[detailedGlobalTestId] : null;
@@ -287,6 +366,7 @@ export default function Analytics({ joinedStudents = [], department = null }) {
 
   const openGlobalTestDetail = (id) => {
     setDetailedGlobalTestId(id);
+    setGlobalTestTab('overview');
   };
 
   const closeGlobalTestDetail = () => {
@@ -357,20 +437,22 @@ export default function Analytics({ joinedStudents = [], department = null }) {
           )}
         </div>
 
-        <div className="flex bg-slate-100/80 p-1.5 rounded-2xl w-full md:w-auto shadow-inner border border-slate-200/60">
-          <button
-            onClick={() => handleTabChange('global')}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${activeInnerTab === 'global' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
-          >
-            <Globe2 size={16} /> Global Tests
-          </button>
-          <button
-            onClick={() => handleTabChange('student')}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${activeInnerTab === 'student' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
-          >
-            <UserCircle2 size={16} /> Individual Student
-          </button>
-        </div>
+        {!studentViewOnlyEmail && (
+          <div className="flex bg-slate-100/80 p-1.5 rounded-2xl w-full md:w-auto shadow-inner border border-slate-200/60">
+            <button
+              onClick={() => handleTabChange('global')}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${activeInnerTab === 'global' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+            >
+              <Globe2 size={16} /> Global Tests
+            </button>
+            <button
+              onClick={() => handleTabChange('student')}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${activeInnerTab === 'student' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+            >
+              <UserCircle2 size={16} /> Individual Student
+            </button>
+          </div>
+        )}
       </div>
 
       {negFix && (
@@ -591,6 +673,22 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                     </div>
                   </div>
 
+                  {/* View Toggle */}
+                  <div className="flex bg-slate-100 p-1 rounded-xl w-fit mt-4 sm:mt-0">
+                    <button 
+                      onClick={() => setGlobalTestTab('overview')}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${globalTestTab === 'overview' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Overview
+                    </button>
+                    <button 
+                      onClick={() => setGlobalTestTab('questions')}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${globalTestTab === 'questions' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Questions
+                    </button>
+                  </div>
+
                   {/* Export this test's report */}
                   <div className="flex items-center gap-2 mt-4 sm:mt-0 shrink-0">
                     <button
@@ -611,8 +709,10 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                   </div>
                 </div>
 
-                {/* Key Metrics Blocks */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                {globalTestTab === 'overview' && (
+                  <>
+                    {/* Key Metrics Blocks */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                   <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
                     <Users size={24} className="text-purple-500 mb-2" />
                     <span className="text-4xl font-[900] text-slate-800 tracking-tight">{activeGlobalTest.participants}</span>
@@ -725,6 +825,68 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                     </div>
                   </div>
                 </div>
+                </>
+                )}
+
+                {globalTestTab === 'questions' && (
+                  <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                      <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <Target size={20} className="text-blue-500" /> Question-wise Analytics
+                      </h3>
+                      {(!activeGlobalTest.questionStats || Object.keys(activeGlobalTest.questionStats).length === 0) ? (
+                        <div className="text-center p-8 text-slate-500 font-bold bg-slate-50 rounded-xl border border-slate-100">
+                          No question data available for this test yet.
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          {Object.values(activeGlobalTest.questionStats)
+                            .sort((a, b) => {
+                              const numA = parseInt(a.qIndex);
+                              const numB = parseInt(b.qIndex);
+                              return (isNaN(numA) || isNaN(numB)) ? String(a.qIndex).localeCompare(String(b.qIndex)) : numA - numB;
+                            })
+                            .map((q) => {
+                            const correctPct = q.total > 0 ? Math.round((q.correct / q.total) * 100) : 0;
+                            const wrongPct = q.total > 0 ? Math.round((q.wrong / q.total) * 100) : 0;
+                            const unattemptedPct = q.total > 0 ? Math.round((q.unattempted / q.total) * 100) : 0;
+                            
+                            return (
+                              <div key={q.qIndex} className="p-5 border border-slate-100 bg-slate-50 rounded-2xl">
+                                <div className="flex justify-between items-start gap-4 mb-4">
+                                  <div>
+                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1">Question {q.qIndex}</span>
+                                    <p className="text-sm font-semibold text-slate-700" dangerouslySetInnerHTML={{ __html: q.qText }} />
+                                    {q.qImage && <img src={q.qImage} alt="Question" className="mt-3 max-h-40 rounded-lg shadow-sm" />}
+                                  </div><div className="shrink-0 text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{q.questionType === 'Multiple Select' ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
+                                </div>
+                                
+                                <div className="grid grid-cols-4 gap-4 mt-6 pt-4 border-t border-slate-200">
+                                  <div>
+                                    <div className="text-2xl font-[900] text-slate-700">{q.total}</div>
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Attempts</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-2xl font-[900] text-emerald-600">{correctPct}%</div>
+                                    <div className="text-[10px] font-bold text-emerald-500/70 uppercase tracking-wider">Correct ({q.correct})</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-2xl font-[900] text-red-500">{wrongPct}%</div>
+                                    <div className="text-[10px] font-bold text-red-400/70 uppercase tracking-wider">Wrong ({q.wrong})</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-2xl font-[900] text-slate-400">{unattemptedPct}%</div>
+                                    <div className="text-[10px] font-bold text-slate-400/70 uppercase tracking-wider">Unattempted ({q.unattempted})</div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
               </div>
             )}
@@ -805,14 +967,16 @@ export default function Analytics({ joinedStudents = [], department = null }) {
             ) : !detailedTestId ? (
               // 2. STUDENT OVERVIEW (Graph + List of Tests)
               <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm flex flex-col">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4 border-b border-slate-100 pb-6">
-                  <button 
-                    onClick={backToStudentList}
-                    className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors bg-slate-50 hover:bg-indigo-50 px-4 py-2 rounded-xl"
-                  >
-                    <ArrowLeft size={16} /> Back to Directory
-                  </button>
-                </div>
+                {!studentViewOnlyEmail && (
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4 border-b border-slate-100 pb-6">
+                    <button 
+                      onClick={backToStudentList}
+                      className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors bg-slate-50 hover:bg-indigo-50 px-4 py-2 rounded-xl"
+                    >
+                      <ArrowLeft size={16} /> Back to Directory
+                    </button>
+                  </div>
+                )}
 
                 {activeStudentData.length > 0 ? (
                   <>
@@ -837,6 +1001,94 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
+
+                    {/* Topic Strengths Section */}
+                    {(() => {
+                      const topicStats = {};
+                      activeStudentData.forEach(test => {
+                        if (test.allQuestions && test.allQuestions.length > 0) {
+                          let topicsInTest = new Set();
+                          test.allQuestions.forEach(q => {
+                            const subj = q.subject || 'General';
+                            if (!topicStats[subj]) {
+                              topicStats[subj] = { totalScore: 0, totalMax: 0, testCount: 0 };
+                            }
+                            topicStats[subj].totalMax += (q.marks || 1);
+                            if (q.status === 'Correct') {
+                              topicStats[subj].totalScore += (q.marks || 1);
+                            }
+                            topicsInTest.add(subj);
+                          });
+                          topicsInTest.forEach(subj => {
+                            topicStats[subj].testCount += 1;
+                          });
+                        } else {
+                          const subj = test.subject || 'General';
+                          if (!topicStats[subj]) {
+                            topicStats[subj] = { totalScore: 0, totalMax: 0, testCount: 0 };
+                          }
+                          topicStats[subj].totalScore += (test.score || 0);
+                          topicStats[subj].totalMax += (test.maxScore || 100);
+                          topicStats[subj].testCount += 1;
+                        }
+                      });
+
+                      const topicStrengths = Object.keys(topicStats).map(subject => {
+                        const stats = topicStats[subject];
+                        const percentage = stats.totalMax > 0 ? Math.round((stats.totalScore / stats.totalMax) * 100) : 0;
+                        return { subject, percentage, testCount: stats.testCount };
+                      }).sort((a, b) => b.percentage - a.percentage);
+
+                      const strongTopics = topicStrengths.filter(t => t.percentage >= 60);
+                      const weakTopics = topicStrengths.filter(t => t.percentage < 60);
+
+                      if (topicStrengths.length === 0) return null;
+
+                      return (
+                        <div className="mb-12">
+                          <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 text-center">Topic Analysis</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Strong Topics */}
+                            <div className="bg-emerald-50/50 border border-emerald-100 rounded-3xl p-6">
+                              <h5 className="text-emerald-700 font-black flex items-center gap-2 mb-4">
+                                <TrendingUp size={20} /> Strong Topics
+                              </h5>
+                              {strongTopics.length > 0 ? (
+                                <div className="flex flex-col gap-3">
+                                  {strongTopics.map(topic => (
+                                    <div key={topic.subject} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-emerald-50">
+                                      <span className="font-bold text-slate-700 text-sm">{topic.subject}</span>
+                                      <span className="font-black text-emerald-600">{topic.percentage}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm font-semibold text-emerald-600/60 italic">No strong topics yet.</p>
+                              )}
+                            </div>
+
+                            {/* Weak Topics */}
+                            <div className="bg-rose-50/50 border border-rose-100 rounded-3xl p-6">
+                              <h5 className="text-rose-700 font-black flex items-center gap-2 mb-4">
+                                <TrendingUp size={20} className="rotate-180" /> Topics to Improve
+                              </h5>
+                              {weakTopics.length > 0 ? (
+                                <div className="flex flex-col gap-3">
+                                  {weakTopics.map(topic => (
+                                    <div key={topic.subject} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-rose-50">
+                                      <span className="font-bold text-slate-700 text-sm">{topic.subject}</span>
+                                      <span className="font-black text-rose-600">{topic.percentage}%</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm font-semibold text-rose-600/60 italic">No weak topics!</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Clean List of Test Cards */}
                     <div>
@@ -952,40 +1204,115 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                               {q.status === 'Wrong' && <span className="flex items-center gap-1.5 text-xs font-bold text-red-700"><XCircle size={16} className="text-red-500"/> Wrong</span>}
                               {q.status === 'Unattempted' && <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600"><MinusCircle size={16} className="text-slate-400"/> Unattempted</span>}
                             </div>
-                            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm">
-                              <Clock size={14} className="text-blue-500" />
-                              {q.timeSpent}
+                            <div className="flex items-center gap-2">
+                                <div className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{q.questionType === 'Multiple Select' ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
+                              {(() => {
+                                const topperQ = topperAttempt ? topperAttempt.allQuestions.find(tq => tq.q === q.q) : null;
+                                return topperQ ? (
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl shadow-sm" title="Topper's Time">
+                                    👑 <Clock size={14} className="text-amber-500" />
+                                    {topperQ.timeSpent}
+                                  </div>
+                                ) : null;
+                              })()}
+                              <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm" title="Student's Time">
+                                <Clock size={14} className="text-blue-500" />
+                                {q.timeSpent}
+                              </div>
                             </div>
                           </div>
 
                           <div className="p-6">
                             <p className="font-[800] text-slate-800 mb-6 text-base leading-relaxed tracking-tight" dangerouslySetInnerHTML={{ __html: q.q }} />
+                            {q.qImage && <img src={q.qImage} alt="Question" className="max-w-full h-auto mb-6 rounded-lg border border-slate-200 shadow-sm" />}
                             
-                            <div className="flex flex-col gap-4 mb-6">
-                              {/* Student Selected */}
-                              <div className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                                <div className="mt-0.5 shrink-0 bg-white p-1.5 rounded-full shadow-sm border border-slate-200">
-                                  {q.status === 'Correct' ? <CheckCircle2 className="text-emerald-500" size={18} /> : q.status === 'Wrong' ? <XCircle className="text-red-500" size={18} /> : <MinusCircle className="text-slate-400" size={18} />}
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Student Selected</span>
-                                  <span className={`font-[700] text-[15px] ${q.status === 'Correct' ? 'text-emerald-700' : q.status === 'Wrong' ? 'text-red-700' : 'text-slate-600'}`}>{q.selected || "Left Blank"}</span>
-                                </div>
+                            {q.options ? (
+                              <div className="flex flex-col gap-3 mb-6">
+                                {['A', 'B', 'C', 'D'].map(optKey => {
+                                  const opt = q.options[optKey];
+                                  if (!opt || (!opt.text && !opt.image)) return null;
+                                  
+                                  const isSelected = q.selected && q.selected.includes(`Option ${optKey}`);
+                                  const isCorrect = q.correct && q.correct.includes(`Option ${optKey}`);
+                                  
+                                  let ringClass = "border-slate-200";
+                                  let bgClass = "bg-white";
+                                  let badges = null;
+                                  
+                                  if (isSelected && isCorrect) {
+                                    ringClass = "border-emerald-500";
+                                    bgClass = "bg-emerald-50";
+                                    badges = (
+                                      <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
+                                        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-200/50 px-2 py-1 rounded border border-emerald-200/50">
+                                          <CheckCircle2 size={12} /> Correct & Selected
+                                        </span>
+                                      </div>
+                                    );
+                                  } else if (isSelected && !isCorrect) {
+                                    ringClass = "border-red-400";
+                                    bgClass = "bg-red-50";
+                                    badges = (
+                                      <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
+                                        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-700 bg-red-200/50 px-2 py-1 rounded border border-red-200/50">
+                                          <XCircle size={12} /> Student Selected
+                                        </span>
+                                      </div>
+                                    );
+                                  } else if (!isSelected && isCorrect) {
+                                    ringClass = "border-emerald-500";
+                                    bgClass = "bg-white";
+                                    badges = (
+                                      <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
+                                        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-200/50 px-2 py-1 rounded border border-emerald-200/50">
+                                          <CheckCircle2 size={12} /> Correct Answer
+                                        </span>
+                                      </div>
+                                    );
+                                  }
+                                  
+                                  return (
+                                    <div key={optKey} className={`flex items-start gap-3 p-3 rounded-xl border-2 transition-colors ${ringClass} ${bgClass}`}>
+                                      <div className="flex items-center justify-center w-6 h-6 rounded bg-slate-100 text-slate-500 font-bold text-sm shrink-0 border border-slate-200">
+                                        {optKey}
+                                      </div>
+                                      <div className="flex-1 flex flex-col gap-2 overflow-hidden mt-0.5">
+                                        {opt.text && <div className="text-sm font-semibold text-slate-700 break-words" dangerouslySetInnerHTML={{ __html: opt.text }} />}
+                                        {opt.image && <img src={opt.image} alt={`Option ${optKey}`} className="max-w-full h-auto rounded border border-slate-200 shadow-sm" />}
+                                      </div>
+                                      {badges}
+                                    </div>
+                                  );
+                                })}
+                                {!q.selected && <div className="text-sm font-bold text-slate-500 mt-2 flex items-center gap-2"><MinusCircle size={16}/> Left Blank</div>}
                               </div>
-                              
-                              {/* Correct Answer */}
-                              {q.status !== 'Correct' && (
-                                <div className="flex items-start gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
-                                  <div className="mt-0.5 shrink-0 bg-white p-1.5 rounded-full shadow-sm border border-emerald-200">
-                                    <CheckCircle2 className="text-emerald-500" size={18} />
+                            ) : (
+                              <div className="flex flex-col gap-4 mb-6">
+                                {/* Student Selected */}
+                                <div className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                                  <div className="mt-0.5 shrink-0 bg-white p-1.5 rounded-full shadow-sm border border-slate-200">
+                                    {q.status === 'Correct' ? <CheckCircle2 className="text-emerald-500" size={18} /> : q.status === 'Wrong' ? <XCircle className="text-red-500" size={18} /> : <MinusCircle className="text-slate-400" size={18} />}
                                   </div>
                                   <div className="flex flex-col">
-                                    <span className="text-[11px] font-bold text-emerald-600/70 uppercase tracking-widest mb-1.5">Correct Answer</span>
-                                    <span className="font-[700] text-[15px] text-emerald-800">{q.correct}</span>
+                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Student Selected</span>
+                                    <span className={`font-[700] text-[15px] ${q.status === 'Correct' ? 'text-emerald-700' : q.status === 'Wrong' ? 'text-red-700' : 'text-slate-600'}`}>{q.selected || "Left Blank"}</span>
                                   </div>
                                 </div>
-                              )}
-                            </div>
+                                
+                                {/* Correct Answer */}
+                                {q.status !== 'Correct' && (
+                                  <div className="flex items-start gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
+                                    <div className="mt-0.5 shrink-0 bg-white p-1.5 rounded-full shadow-sm border border-emerald-200">
+                                      <CheckCircle2 className="text-emerald-500" size={18} />
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-[11px] font-bold text-emerald-600/70 uppercase tracking-widest mb-1.5">Correct Answer</span>
+                                      <span className="font-[700] text-[15px] text-emerald-800">{q.correct}</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                             
                             <div className="pt-5 border-t border-slate-100">
                               <div className="flex items-center gap-3 text-[15px] text-slate-600 bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50">
@@ -1016,3 +1343,7 @@ export default function Analytics({ joinedStudents = [], department = null }) {
     </div>
   );
 }
+
+
+
+
