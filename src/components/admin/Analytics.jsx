@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { BarChart2, TrendingUp, Users, Award, Search, Clock, CheckCircle2, XCircle, AlertCircle, ChevronRight, MinusCircle, UserCircle2, Globe2, Filter, ArrowLeft, Target, Folder, FolderOpen, FileText } from 'lucide-react';
+import { BarChart2, TrendingUp, Users, Award, Search, Clock, CheckCircle2, XCircle, AlertCircle, ChevronRight, MinusCircle, UserCircle2, Globe2, Filter, ArrowLeft, Target, Folder, FolderOpen, FileText, Download, FileSpreadsheet } from 'lucide-react';
+import { exportTestReportCsv, exportTestReportPdf } from '../../utils/testReportExport';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line
@@ -118,14 +119,6 @@ export default function Analytics({ joinedStudents = [], department = null }) {
           else if (pct <= 80) testSummary.distribution[3].count++;
           else testSummary.distribution[4].count++;
           
-          testSummary.students.push({
-            id: attempt.id,
-            name: attempt.studentName || attempt.studentEmail || 'Unknown',
-            score: attempt.score || 0,
-            maxScore: maxScore,
-            timeTaken: formatTime(attemptTimeTaken)
-          });
-
           const sName = attempt.studentName || attempt.studentEmail || 'Unknown';
           if (!sHistory[sName]) {
             sHistory[sName] = [];
@@ -174,6 +167,22 @@ export default function Analytics({ joinedStudents = [], department = null }) {
               };
             });
           }
+
+          // Leaderboard row for this test (also what the Excel / PDF export writes out)
+          const totalQ = attempt.totalQuestions || allQuestions.length;
+          testSummary.students.push({
+            id: attempt.id,
+            name: attempt.studentName || attempt.studentEmail || 'Unknown',
+            email: attempt.studentEmail || '',
+            score: attempt.score || 0,
+            maxScore: maxScore,
+            timeTaken: formatTime(attemptTimeTaken),
+            timeSeconds: attemptTimeTaken,
+            correct,
+            wrong,
+            unattempted: allQuestions.length ? unattempted : Math.max(0, totalQ - correct - wrong),
+            submittedAt: attempt.submittedAt?.toDate ? attempt.submittedAt.toDate().toLocaleString('en-IN') : ''
+          });
 
           sHistory[sName].push({
             id: attempt.id,
@@ -237,6 +246,19 @@ export default function Analytics({ joinedStudents = [], department = null }) {
 
   const closeGlobalTestDetail = () => {
     setDetailedGlobalTestId(null);
+  };
+
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const handleExportPdf = async () => {
+    if (!activeGlobalTest || isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await exportTestReportPdf(activeGlobalTest);
+    } catch (err) {
+      console.error('Failed to export test report PDF', err);
+      alert('Could not create the PDF. Please try again.');
+    }
+    setIsExportingPdf(false);
   };
 
   const selectStudent = (name) => {
@@ -448,6 +470,25 @@ export default function Analytics({ joinedStudents = [], department = null }) {
                       <h4 className="text-[26px] font-[900] tracking-tight text-slate-800">{activeGlobalTest.title}</h4>
                       <p className="text-sm font-bold text-slate-500 mt-1">Aggregated class performance metrics</p>
                     </div>
+                  </div>
+
+                  {/* Export this test's report */}
+                  <div className="flex items-center gap-2 mt-4 sm:mt-0 shrink-0">
+                    <button
+                      onClick={() => exportTestReportCsv(activeGlobalTest)}
+                      title="Download as a spreadsheet (opens in Excel)"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                    >
+                      <FileSpreadsheet size={16} /> Excel
+                    </button>
+                    <button
+                      onClick={handleExportPdf}
+                      disabled={isExportingPdf}
+                      title="Download as a PDF report"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-colors shadow-sm"
+                    >
+                      <Download size={16} /> {isExportingPdf ? 'Preparing...' : 'PDF'}
+                    </button>
                   </div>
                 </div>
 

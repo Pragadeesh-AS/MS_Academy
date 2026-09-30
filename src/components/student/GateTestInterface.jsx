@@ -65,6 +65,10 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
   // Taking State
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState({});
+  // Latest answers for the timer / full-screen auto-submit, whose callbacks are created once when
+  // the test starts and would otherwise only ever see the empty starting answers.
+  const answersRef = useRef(selectedAnswers);
+  answersRef.current = selectedAnswers;
   const [flagged, setFlagged] = useState([]);
   const [visited, setVisited] = useState([]);
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -100,7 +104,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
             // Auto submit after 3 violations
             setTimeout(() => {
               clearInterval(timerRef.current);
-              onSubmit(selectedAnswers);
+              onSubmit(answersRef.current);
             }, 2000);
           }
         }
@@ -114,7 +118,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
         setTimeRemaining(prev => {
           if (prev <= 1) {
             clearInterval(timerRef.current);
-            onSubmit(selectedAnswers);
+            onSubmit(answersRef.current);
             return 0;
           }
           return prev - 1;
@@ -150,7 +154,6 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
   };
 
   const isAnswered = (answer) => Array.isArray(answer) ? answer.length > 0 : !!answer;
-  const answeredCount = Object.values(selectedAnswers).filter(isAnswered).length;
 
   const handleClearResponse = () => {
     const qId = testQuestions[currentIdx].id;
@@ -575,6 +578,19 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
       }
     });
 
+    // Submit summary: the same palette statuses, per section and in total
+    const countStatuses = (qs, name, isTotal = false) => {
+      const row = { name, isTotal, count: qs.length, answered: 0, not_answered: 0, marked: 0, answered_marked: 0, not_visited: 0 };
+      qs.forEach(q => { row[getQuestionStatus(q.id)]++; });
+      row.attempted = row.answered + row.answered_marked;
+      row.unattempted = row.count - row.attempted;
+      return row;
+    };
+    const submitSummary = {
+      sections: sections.map(sec => countStatuses(testQuestions.slice(sec.startIndex, sec.startIndex + sec.count), sec.name)),
+      total: countStatuses(testQuestions, 'Total', true),
+    };
+
     const isEmptyHtml = (html) => {
       if (!html) return true;
       const stripped = html.replace(/<[^>]*>?/gm, '').trim();
@@ -755,6 +771,11 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
               <div className="flex items-center gap-2"><div className="w-6 h-6 flex justify-center items-center bg-gray-200 border border-gray-400 rounded-sm">{stats.not_visited}</div> Not Visited</div>
               <div className="flex items-center gap-2"><div className="w-6 h-6 flex justify-center items-center bg-purple-600 text-white rounded-full">{stats.marked}</div> Marked for Review</div>
               <div className="flex items-center gap-2 col-span-2"><div className="w-6 h-6 flex justify-center items-center bg-purple-600 text-white rounded-full relative">{stats.answered_marked} <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 rounded-full border border-white"></div></div> Answered & Marked for Review (will also be evaluated)</div>
+              <div className="col-span-2 flex items-center justify-between gap-2 pt-2 mt-1 border-t border-gray-200 text-[11px]">
+                <span className="text-green-700">Attempted: {submitSummary.total.attempted}</span>
+                <span className="text-red-600">Unattempted: {submitSummary.total.unattempted}</span>
+                <span className="text-gray-600">Total: {testQuestions.length}</span>
+              </div>
             </div>
 
             <div className="bg-[#1589C9] text-white px-3 py-1.5 font-bold text-sm">{activeSection.name}</div>
@@ -807,19 +828,65 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
         {/* Custom Confirmation Modal */}
         {showConfirmModal && (
           <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black p-4">
-            <div className="bg-white rounded-md shadow-xl w-full max-w-md overflow-hidden">
-              <div className="bg-blue-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Submission</div>
-              <div className="p-6">
-                <p className="text-gray-800 text-base mb-2">
-                  You have answered <strong>{answeredCount}</strong> of <strong>{testQuestions.length}</strong> questions.
-                </p>
-                {flagged.length > 0 && (
+            <div className="bg-white rounded-md shadow-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
+              <div className="bg-blue-600 text-white px-4 py-3 font-bold text-lg border-b">Exam Summary - Confirm Submission</div>
+              <div className="p-4 sm:p-6">
+                {/* Headline counts */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                  {[
+                    { label: 'Total Questions', value: testQuestions.length, cls: 'bg-slate-50 border-slate-200 text-slate-800' },
+                    { label: 'Attempted', value: submitSummary.total.attempted, cls: 'bg-green-50 border-green-200 text-green-700' },
+                    { label: 'Unattempted', value: submitSummary.total.unattempted, cls: 'bg-red-50 border-red-200 text-red-600' },
+                    { label: 'Marked for Review', value: submitSummary.total.marked + submitSummary.total.answered_marked, cls: 'bg-purple-50 border-purple-200 text-purple-700' },
+                  ].map(c => (
+                    <div key={c.label} className={`border rounded p-3 text-center ${c.cls}`}>
+                      <div className="text-2xl font-black tabular-nums">{c.value}</div>
+                      <div className="text-[11px] font-bold uppercase tracking-wide mt-0.5">{c.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Section-wise breakdown, as in the GATE exam's submit screen */}
+                <div className="overflow-x-auto border border-gray-300 rounded mb-4">
+                  <table className="w-full text-sm border-collapse min-w-[620px]">
+                    <thead>
+                      <tr className="bg-[#EAF2FA] text-[#1a3a6b]">
+                        <th className="border border-gray-300 px-3 py-2 text-left">Section</th>
+                        <th className="border border-gray-300 px-2 py-2">No. of Questions</th>
+                        <th className="border border-gray-300 px-2 py-2">Answered</th>
+                        <th className="border border-gray-300 px-2 py-2">Not Answered</th>
+                        <th className="border border-gray-300 px-2 py-2">Marked for Review</th>
+                        <th className="border border-gray-300 px-2 py-2">Answered &amp; Marked for Review</th>
+                        <th className="border border-gray-300 px-2 py-2">Not Visited</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...submitSummary.sections, ...(submitSummary.sections.length > 1 ? [submitSummary.total] : [])].map(row => (
+                        <tr key={row.name} className={row.isTotal ? 'bg-slate-50 font-bold' : ''}>
+                          <td className="border border-gray-300 px-3 py-2">{row.name}</td>
+                          <td className="border border-gray-300 px-2 py-2 text-center">{row.count}</td>
+                          <td className="border border-gray-300 px-2 py-2 text-center text-green-700 font-bold">{row.answered}</td>
+                          <td className="border border-gray-300 px-2 py-2 text-center text-red-600 font-bold">{row.not_answered}</td>
+                          <td className="border border-gray-300 px-2 py-2 text-center text-purple-700 font-bold">{row.marked}</td>
+                          <td className="border border-gray-300 px-2 py-2 text-center text-purple-700 font-bold">{row.answered_marked}</td>
+                          <td className="border border-gray-300 px-2 py-2 text-center">{row.not_visited}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <ul className="text-xs text-gray-600 space-y-1 mb-4 list-disc pl-5">
+                  <li><strong>Attempted</strong> = Answered + Answered &amp; Marked for Review - these are the questions that will be evaluated.</li>
+                  <li><strong>Unattempted</strong> = Not Answered + Marked for Review (no answer) + Not Visited.</li>
+                </ul>
+
+                {submitSummary.total.marked > 0 && (
                   <div className="bg-orange-50 border border-orange-200 text-orange-800 p-3 rounded mb-4 text-sm font-semibold">
-                    <span className="block mb-1">⚠️ Warning</span>
-                    You have <strong>{flagged.length}</strong> question(s) currently marked for review. 
+                    ⚠️ <strong>{submitSummary.total.marked}</strong> question(s) are marked for review without an answer - they will not be evaluated.
                   </div>
                 )}
-                <p className="font-bold text-gray-900 mb-6">Are you sure you want to submit the exam?</p>
+                <p className="font-bold text-gray-900 mb-5">Are you sure you want to submit the exam?</p>
                 
                 <div className="flex justify-end gap-3">
                   <button onClick={() => setShowConfirmModal(false)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>

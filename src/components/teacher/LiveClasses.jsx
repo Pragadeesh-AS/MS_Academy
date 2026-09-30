@@ -2233,6 +2233,44 @@ export default function LiveClasses({ department }) {
               )}
             </div>
           </div>
+
+          {/* Post-Class Quiz Results - in the wide column, two per row, so the page stays balanced */}
+          <div className="space-y-6">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2"><Award className="text-amber-500" size={20} /> Post-Class Quiz Results</span>
+              {pastQuizzes.length > 0 && (
+                <span className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-1 rounded-full">
+                  {pastQuizzes.length} quiz{pastQuizzes.length !== 1 ? 'zes' : ''}
+                </span>
+              )}
+            </h3>
+
+            {pastQuizzes.length === 0 ? (
+              <div className="text-center p-10 border border-dashed border-slate-300 rounded-2xl bg-slate-50">
+                <p className="text-slate-500 font-medium">No post-class quizzes yet.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto custom-scrollbar pr-1">
+                {pastQuizzes.map(session => (
+                  <button
+                    key={session.id}
+                    onClick={() => setViewingQuizSession(session)}
+                    className="w-full text-left flex items-center justify-between gap-2 p-4 bg-white rounded-xl shadow-sm border border-slate-200 hover:border-amber-300 hover:shadow-md transition-all group"
+                  >
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-bold text-slate-800 line-clamp-1">{session.topic}</h4>
+                      <p className="text-[11px] text-slate-500 font-bold">
+                        {session.endedAt?.toMillis ? new Date(session.endedAt.toMillis()).toLocaleDateString() : ''} - {session.postClassQuiz.questions.length} question{session.postClassQuiz.questions.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-amber-600 text-xs font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                      View <ChevronRight size={14} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Sidebar Section: Recent Recordings */}
@@ -2273,35 +2311,6 @@ export default function LiveClasses({ department }) {
           >
             View All Recordings
           </button>
-
-          {/* Post-Class Quiz Results */}
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 pt-2">
-            <Award className="text-amber-500" size={20} /> Post-Class Quiz Results
-          </h3>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
-            {pastQuizzes.length === 0 ? (
-              <p className="text-slate-400 text-sm font-medium text-center py-4">No post-class quizzes yet.</p>
-            ) : (
-              pastQuizzes.map(session => (
-                <button
-                  key={session.id}
-                  onClick={() => setViewingQuizSession(session)}
-                  className="w-full text-left flex items-center justify-between gap-2 p-3 bg-white rounded-xl shadow-sm border border-slate-100 hover:border-amber-200 transition-colors group"
-                >
-                  <div className="min-w-0">
-                    <h4 className="text-sm font-bold text-slate-800 line-clamp-1">{session.topic}</h4>
-                    <p className="text-[11px] text-slate-500 font-bold">
-                      {session.endedAt?.toMillis ? new Date(session.endedAt.toMillis()).toLocaleDateString() : ''} - {session.postClassQuiz.questions.length} question{session.postClassQuiz.questions.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-amber-600 text-xs font-bold flex items-center gap-1">
-                    View <ChevronRight size={14} />
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
         </div>
 
       </div>

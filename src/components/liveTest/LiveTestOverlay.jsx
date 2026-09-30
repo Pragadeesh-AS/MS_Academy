@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { db } from '../../firebase';
 import { doc, setDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { motion, useReducedMotion } from 'motion/react';
-import { Timer, Trophy, CheckCircle2, XCircle, Clock, ChevronRight, Lock, X, Check, Flame, Zap, Eraser } from 'lucide-react';
+import { Timer, Trophy, CheckCircle2, XCircle, Clock, ChevronRight, Lock, X, Check, Flame, Zap, Eraser, MinusCircle } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Scoring helpers - answers are always checked against the question-bank record
@@ -777,7 +777,7 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
             className={`rounded-2xl px-5 py-4 text-center shadow-[0_6px_0_rgba(0,0,0,0.25)] ${!locked ? 'bg-white/15' : wasCorrect ? 'bg-emerald-500' : 'bg-red-500'}`}
           >
             <div className="text-2xl md:text-3xl font-black flex items-center justify-center gap-2">
-              {!locked ? <><Clock size={26} /> Time&apos;s up</> : wasCorrect ? <><CheckCircle2 size={28} /> Correct!</> : <><XCircle size={28} /> Incorrect</>}
+              {!locked ? <><MinusCircle size={26} /> Unattempted</> : wasCorrect ? <><CheckCircle2 size={28} /> Correct!</> : <><XCircle size={28} /> Incorrect</>}
             </div>
             {wasCorrect ? (
               <>
@@ -788,7 +788,7 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
               </>
             ) : (
               <p className="mt-1 text-sm md:text-base font-bold text-white/90">
-                {!locked ? "You didn't answer this question" : `Correct answer: ${correctAnswerText(question)}`}
+                {`Correct answer: ${correctAnswerText(question)}`}
                 {myPoints.jeopardyLoss > 0 && (
                   <span className="block mt-1 text-lg font-black">
                     {mine?.deltas?.[index] < 0 ? `Double Jeopardy: ${mine.deltas[index]} pts` : 'Double Jeopardy - no points to lose yet'}

@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { db, auth } from '../firebase';
 import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle } from 'lucide-react';
+import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle, CalendarClock } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
 import logoImg from '../assets/msgate_logo.png';
 import { RELEASE_MODES, releaseMode, releaseAtMillis, areSolutionsVisible, formatReleaseTime } from '../utils/solutionRelease';
 import { positiveMarkFor, negativeMarkFor } from '../utils/marking';
+import { canAccessTest as canAccessTestFor } from '../utils/testAccess';
+import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, minutesAvailable, formatTestTime, formatCountdown } from '../utils/testSchedule';
 
 // Older AI imports stored NAT questions as 'Fill in the Blanks'; the test screens expect 'Fill in Blanks'
 const normalizeQuestion = (q) => (
@@ -45,6 +47,15 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
+
+  // Ticks every second on the test list so "Opens in ..." counts down and a test unlocks the
+  // moment its scheduled time arrives, without a reload
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    if (testMode !== 'list') return undefined;
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [testMode]);
 
   useEffect(() => {
     fetchTestsAndAttempts();
@@ -86,6 +97,19 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   };
 
   const startTest = async (test) => {
+    // Re-checked at the click - the list may have been open since before the test opened/closed
+    const availability = testAvailability(test);
+    if (availability === AVAILABILITY.UPCOMING) {
+      alert(`This test opens on ${formatTestTime(testStartMillis(test))}.`);
+      return;
+    }
+    const minutesLeft = minutesAvailable(test);
+    if (availability === AVAILABILITY.CLOSED || minutesLeft <= 0) {
+      alert('This test has closed and can no longer be started.');
+      return;
+    }
+    // Starting close to the closing time: the timer only runs until the test closes
+    const timedTest = minutesLeft < (parseInt(test.duration) || 0) ? { ...test, duration: minutesLeft } : test;
     try {
       setLoading(true);
       // Fetch full question details for the list of IDs in this test
@@ -104,7 +128,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
       startTimeRef.current = Date.now();
       setTestQuestions(matchedQuestions);
-      setActiveTest(test);
+      setActiveTest(timedTest);
       setTestMode('taking');
     } catch (err) {
       console.error("Error loading test questions:", err);
@@ -332,9 +356,11 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
               {testQuestions.map((q, idx) => {
                 const studentResp = activeAttempt.responses?.find(r => r.questionId === q.id) || { selectedAnswer: '', isCorrect: false, isAnswered: false };
                 const isCorrect = studentResp.isCorrect;
-                const skipped = studentResp.isAnswered === false;
-                const cardBorder = skipped ? 'border-slate-200 hover:border-slate-300' : isCorrect ? 'border-green-100 hover:border-green-200' : 'border-red-100 hover:border-red-200';
-                const badgeStyle = skipped ? 'bg-slate-100 text-slate-500' : isCorrect ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600';
+                // Older attempts have no isAnswered flag - fall back to whether an answer was recorded
+                const noAnswer = Array.isArray(studentResp.selectedAnswer) ? studentResp.selectedAnswer.length === 0 : !String(studentResp.selectedAnswer ?? '').trim();
+                const unattempted = studentResp.isAnswered === false || (studentResp.isAnswered === undefined && noAnswer);
+                const cardBorder = unattempted ? 'border-slate-200 hover:border-slate-300' : isCorrect ? 'border-green-100 hover:border-green-200' : 'border-red-100 hover:border-red-200';
+                const badgeStyle = unattempted ? 'bg-slate-100 text-slate-500' : isCorrect ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600';
 
                 return (
                   <div key={q.id} className={`p-6 border rounded-3xl bg-white shadow-sm transition-all ${cardBorder}`}>
@@ -350,8 +376,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                         )}
                       </span>
                       <span className={`px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 ${badgeStyle}`}>
-                        {skipped ? (
-                          <><MinusCircle size={14} /> Skipped - No Penalty</>
+                        {unattempted ? (
+                          <><MinusCircle size={14} /> Unattempted</>
                         ) : isCorrect ? (
                           <><CheckCircle size={14} /> Correct</>
                         ) : (
@@ -506,35 +532,14 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   }
 
 
-  const canAccessTest = (test) => {
-    // 1. Explicitly Free
-    if (test.bundleId === 'free') return true;
-    
-    // Legacy support: Old tests created by Admin without a bundleId were considered free
-    if (test.bundleId === undefined && (test.createdBy === 'Admin' || test.createdBy === 'MS Academy Admin')) {
-      return true;
-    }
-
-    // 2. EXCLUSIVE BUNDLE: If assigned to a specific paid bundle
-    if (test.bundleId && test.bundleId !== 'free') {
-      return purchasedBundles.includes(test.bundleId);
-    }
-
-    // 3. Pro User Fallback
-    if (isPro) return true;
-    
-    // 4. GENERAL TESTS: Check if student purchased ANY bundle for this department with 'tests' permission
-    const studentPurchasedDeptBundles = (bundles || []).filter(b => 
-      purchasedBundles.includes(b.id) && 
-      b.department === test.department &&
-      (!b.permissions || b.permissions.includes('tests'))
-    );
-    
-    return studentPurchasedDeptBundles.length > 0;
-  };
+  const canAccessTest = (test) => canAccessTestFor(test, { isPro, purchasedBundles, bundles });
 
   const isTestCompleted = (test) => attempts.some(a => a.testId === test.id);
-  const pendingTests = tests.filter(t => !isTestCompleted(t));
+  // Open tests first, then upcoming ones soonest-first, then closed ones
+  const availabilityRank = { [AVAILABILITY.OPEN]: 0, [AVAILABILITY.UPCOMING]: 1, [AVAILABILITY.CLOSED]: 2 };
+  const pendingTests = tests.filter(t => !isTestCompleted(t)).sort((a, b) =>
+    availabilityRank[testAvailability(a, nowTick)] - availabilityRank[testAvailability(b, nowTick)]
+    || (testStartMillis(a) ?? 0) - (testStartMillis(b) ?? 0));
   const completedTests = tests.filter(isTestCompleted);
   const visibleTests = testsTab === 'completed' ? completedTests : pendingTests;
 
@@ -601,6 +606,9 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           {visibleTests.map((test) => {
             const userAttempt = attempts.find(a => a.testId === test.id);
             const isCompleted = !!userAttempt;
+            const availability = testAvailability(test, nowTick);
+            const startMs = testStartMillis(test);
+            const closeMs = testCloseMillis(test);
 
             return (
               <div 
@@ -663,6 +671,19 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                         <span className="text-xs font-bold text-slate-700">{test.targetMarks || 100} Marks (1M: {test.total1Mark||0}, 2M: {test.total2Mark||0})</span>
                       </div>
                     </div>
+                    {startMs !== null && (
+                      <div className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl border col-span-2 ${availability === AVAILABILITY.UPCOMING ? 'bg-indigo-50 border-indigo-100' : availability === AVAILABILITY.CLOSED ? 'bg-slate-50 border-slate-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                        <CalendarClock size={18} className={`shrink-0 ${availability === AVAILABILITY.UPCOMING ? 'text-indigo-500' : availability === AVAILABILITY.CLOSED ? 'text-slate-400' : 'text-emerald-500'}`} />
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            {availability === AVAILABILITY.UPCOMING ? 'Scheduled' : availability === AVAILABILITY.CLOSED ? 'Closed' : 'Open now'}
+                          </span>
+                          <span className="text-xs font-bold text-slate-700">
+                            {formatTestTime(startMs)}{closeMs !== null ? ` - closes ${formatTestTime(closeMs)}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Button */}
@@ -674,8 +695,22 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                       >
                         <Lock size={18} /> Locked (Pro Required)
                       </button>
+                    ) : !isCompleted && availability === AVAILABILITY.UPCOMING ? (
+                      <button
+                        disabled
+                        className="w-full py-4 bg-indigo-50 text-indigo-600 font-bold text-sm rounded-2xl flex items-center justify-center gap-2 cursor-not-allowed border border-indigo-100 tabular-nums"
+                      >
+                        <Lock size={18} /> Opens in {formatCountdown(startMs - nowTick)}
+                      </button>
+                    ) : !isCompleted && availability === AVAILABILITY.CLOSED ? (
+                      <button
+                        disabled
+                        className="w-full py-4 bg-slate-50 text-slate-400 font-bold text-sm rounded-2xl flex items-center justify-center gap-2 cursor-not-allowed border border-slate-200"
+                      >
+                        <Lock size={18} /> Test Closed
+                      </button>
                     ) : isCompleted ? (
-                      <button 
+                      <button
                         onClick={() => viewAttemptResult(test.id)}
                         className="w-full py-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm border border-emerald-200 hover:border-emerald-300"
                       >

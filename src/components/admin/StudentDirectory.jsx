@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { doc, deleteDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
 import { 
   Search, 
   ChevronDown, 
@@ -19,7 +19,9 @@ import {
   RotateCcw,
   Package,
   Crown,
-  Star
+  Star,
+  UsersRound,
+  Pencil
 } from 'lucide-react';
 
 const DEPARTMENT_OPTIONS = [
@@ -46,6 +48,26 @@ const DEPARTMENT_OPTIONS = [
 
 const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduated'];
 
+// Group filter value for "students not in any group"
+const NO_GROUP = '__no_group__';
+
+// Each group name always gets the same colour, so a group is easy to spot in the list
+const GROUP_COLORS = [
+  'bg-blue-50 text-blue-700 border-blue-200',
+  'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'bg-violet-50 text-violet-700 border-violet-200',
+  'bg-amber-50 text-amber-700 border-amber-200',
+  'bg-rose-50 text-rose-700 border-rose-200',
+  'bg-cyan-50 text-cyan-700 border-cyan-200',
+  'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+  'bg-lime-50 text-lime-700 border-lime-200',
+];
+const groupColor = (name) => {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return GROUP_COLORS[h % GROUP_COLORS.length];
+};
+
 const StudentDirectory = ({
   joinedStudents,
   setJoinedStudents,
@@ -62,9 +84,91 @@ const StudentDirectory = ({
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [bundles, setBundles] = useState([]);
   const [editingStudent, setEditingStudent] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '', isPro: false });
+  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '', isPro: false, groupName: '' });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const studentsPerPage = 10;
+
+  // --- Student groups: one named group per student, stored as `groupName` on joined_students
+  const [filterGroup, setFilterGroup] = useState(''); // '' = all, NO_GROUP = students without one
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [groupDialog, setGroupDialog] = useState(null); // { mode: 'assign' | 'rename', from? }
+  const [groupInput, setGroupInput] = useState('');
+  const [isSavingGroup, setIsSavingGroup] = useState(false);
+
+  const groups = React.useMemo(() => {
+    const counts = {};
+    joinedStudents.forEach(s => {
+      const g = (s.groupName || '').trim();
+      if (g) counts[g] = (counts[g] || 0) + 1;
+    });
+    return Object.keys(counts).sort((a, b) => a.localeCompare(b)).map(name => ({ name, count: counts[name] }));
+  }, [joinedStudents]);
+  const ungroupedCount = joinedStudents.filter(s => !(s.groupName || '').trim()).length;
+
+  // Writes groupName for many students at once (Firestore batches cap at 500 writes)
+  const saveGroupFor = async (ids, groupName) => {
+    const value = (groupName || '').trim();
+    for (let i = 0; i < ids.length; i += 450) {
+      const batch = writeBatch(db);
+      ids.slice(i, i + 450).forEach(id => batch.update(doc(db, 'joined_students', String(id)), { groupName: value }));
+      await batch.commit();
+    }
+    const idSet = new Set(ids.map(String));
+    setJoinedStudents(joinedStudents.map(s => (idSet.has(String(s.id)) ? { ...s, groupName: value } : s)));
+  };
+
+  const runGroupAction = async (action, successReset = true) => {
+    setIsSavingGroup(true);
+    try {
+      await action();
+      if (successReset) {
+        setGroupDialog(null);
+        setGroupInput('');
+      }
+    } catch (err) {
+      console.error('Failed to update student groups', err);
+      alert('Failed to update the group. Please try again.');
+    }
+    setIsSavingGroup(false);
+  };
+
+  const confirmGroupDialog = () => {
+    const name = groupInput.trim();
+    if (!name || !groupDialog) return;
+    if (groupDialog.mode === 'assign') {
+      runGroupAction(async () => {
+        await saveGroupFor(selectedIds, name);
+        setSelectedIds([]);
+      });
+    } else {
+      const memberIds = joinedStudents.filter(s => (s.groupName || '').trim() === groupDialog.from).map(s => s.id);
+      runGroupAction(async () => {
+        await saveGroupFor(memberIds, name);
+        if (filterGroup === groupDialog.from) setFilterGroup(name);
+      });
+    }
+  };
+
+  const removeSelectedFromGroup = () => runGroupAction(async () => {
+    await saveGroupFor(selectedIds, '');
+    setSelectedIds([]);
+  }, false);
+
+  const disbandGroup = (name) => {
+    const memberIds = joinedStudents.filter(s => (s.groupName || '').trim() === name).map(s => s.id);
+    setConfirmDialog({
+      message: `Disband the group "${name}"? Its ${memberIds.length} student(s) stay in the directory, just without a group.`,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        await runGroupAction(async () => {
+          await saveGroupFor(memberIds, '');
+          setFilterGroup('');
+        }, false);
+      }
+    });
+  };
+
+  const toggleSelected = (id) => setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
 
   const formatLastLogin = (lastLogin) => {
     if (!lastLogin) return 'Never logged in';
@@ -91,7 +195,8 @@ const StudentDirectory = ({
       batch: raw.batch || '',
       location: raw.location || '',
       skills: Array.isArray(raw.skills) ? raw.skills.join(', ') : '',
-      isPro: !!raw.isPro
+      isPro: !!raw.isPro,
+      groupName: raw.groupName || ''
     });
     setEditingStudent(raw);
   };
@@ -110,7 +215,8 @@ const StudentDirectory = ({
         batch: editForm.batch.trim(),
         location: editForm.location.trim(),
         skills: editForm.skills.split(',').map(sk => sk.trim()).filter(Boolean),
-        isPro: !!editForm.isPro
+        isPro: !!editForm.isPro,
+        groupName: editForm.groupName.trim()
       };
       await updateDoc(doc(db, 'joined_students', String(editingStudent.id)), updates);
       setJoinedStudents(joinedStudents.map(s =>
@@ -170,8 +276,11 @@ const StudentDirectory = ({
     const statusLow = (student.status || '').toLowerCase();
     const filterStatusLow = filterStatus.toLowerCase();
     const matchesStatus = filterStatus ? statusLow === filterStatusLow || statusLow.includes(filterStatusLow) : true;
-    
-    return matchesSearch && matchesDept && matchesYear && matchesStatus;
+
+    const studentGroup = (student.groupName || '').trim();
+    const matchesGroup = !filterGroup || (filterGroup === NO_GROUP ? !studentGroup : studentGroup === filterGroup);
+
+    return matchesSearch && matchesDept && matchesYear && matchesStatus && matchesGroup;
   }).sort((a, b) => {
     // Pro users first, then students with bundles, then normal users (original order kept within each group)
     const rank = (st) => (st.purchasedBundles && st.purchasedBundles.length > 0 ? 1 : st.isPro ? 0 : 2);
@@ -384,12 +493,104 @@ const StudentDirectory = ({
             </div>
           </div>
 
+          {/* Student Groups - click a group to show just its students */}
+          <div className="bg-white rounded-[20px] border border-[#EEF2F7] shadow-[0_4px_12px_rgba(15,23,42,0.03)] p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1.5 text-[13px] font-bold text-[#0F172A] mr-1">
+                <UsersRound size={16} className="text-[#2563EB]" /> Groups
+              </span>
+              <button
+                onClick={() => { setFilterGroup(''); setCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${!filterGroup ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-white text-[#475569] border-[#E5E7EB] hover:border-[#CBD5E1]'}`}
+              >
+                All ({joinedStudents.length})
+              </button>
+              {groups.map(g => (
+                <button
+                  key={g.name}
+                  onClick={() => { setFilterGroup(filterGroup === g.name ? '' : g.name); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border transition-all ${groupColor(g.name)} ${filterGroup === g.name ? 'ring-2 ring-offset-1 ring-[#2563EB]' : 'hover:brightness-95'}`}
+                >
+                  {g.name} ({g.count})
+                </button>
+              ))}
+              <button
+                onClick={() => { setFilterGroup(filterGroup === NO_GROUP ? '' : NO_GROUP); setCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border border-dashed transition-colors ${filterGroup === NO_GROUP ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-[#64748B] border-[#CBD5E1] hover:text-[#0F172A]'}`}
+              >
+                No group ({ungroupedCount})
+              </button>
+              {groups.length === 0 && (
+                <span className="text-[12.5px] text-[#94A3B8] font-medium">Tick students in the list below and use "Add to group" to create one.</span>
+              )}
+              {filterGroup && filterGroup !== NO_GROUP && (
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    onClick={() => { setGroupInput(filterGroup); setGroupDialog({ mode: 'rename', from: filterGroup }); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-semibold text-[#475569] hover:text-[#0F172A] hover:bg-slate-100 transition-colors"
+                  >
+                    <Pencil size={14} /> Rename group
+                  </button>
+                  <button
+                    onClick={() => disbandGroup(filterGroup)}
+                    disabled={isSavingGroup}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-semibold text-red-600 hover:bg-red-50 transition-colors disabled:opacity-60"
+                  >
+                    <Trash2 size={14} /> Disband group
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bulk actions for the ticked students */}
+          {selectedIds.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
+              <span className="text-[13px] font-bold text-blue-800">{selectedIds.length} selected</span>
+              <div className="flex flex-wrap items-center gap-2 ml-auto">
+                <button
+                  onClick={() => { setGroupInput(''); setGroupDialog({ mode: 'assign' }); }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-bold bg-[#2563EB] hover:bg-[#1D4ED8] text-white transition-colors shadow-sm"
+                >
+                  <UsersRound size={15} /> Add to group...
+                </button>
+                <button
+                  onClick={removeSelectedFromGroup}
+                  disabled={isSavingGroup}
+                  className="px-4 py-2 rounded-xl text-[13px] font-bold bg-white border border-[#E5E7EB] text-[#475569] hover:text-[#0F172A] transition-colors disabled:opacity-60"
+                >
+                  Remove from group
+                </button>
+                <button
+                  onClick={() => setSelectedIds([])}
+                  className="px-3 py-2 rounded-xl text-[13px] font-bold text-[#64748B] hover:text-[#0F172A] hover:bg-white transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Student Table */}
           <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_12px_30px_rgba(15,23,42,0.05)] overflow-hidden">
             <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="border-b border-[#EEF2F7]">
+                    <th className="py-5 pl-5 pr-0 w-[36px]">
+                      <input
+                        type="checkbox"
+                        checked={paginatedStudents.length > 0 && paginatedStudents.every(s => selectedIds.includes(s.id))}
+                        onChange={() => {
+                          const pageIds = paginatedStudents.map(s => s.id);
+                          const allOn = pageIds.every(id => selectedIds.includes(id));
+                          setSelectedIds(prev => (allOn ? prev.filter(id => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]));
+                        }}
+                        disabled={paginatedStudents.length === 0}
+                        title="Select all students on this page"
+                        className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
+                      />
+                    </th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Student</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Department</th>
                     <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">College</th>
@@ -402,7 +603,7 @@ const StudentDirectory = ({
                 <tbody className="divide-y divide-[#EEF2F7]/60">
                   {paginatedStudents.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="py-16 text-center">
+                      <td colSpan="8" className="py-16 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
                             <Search className="text-slate-300" size={32} />
@@ -416,8 +617,16 @@ const StudentDirectory = ({
                     paginatedStudents.map((student) => (
                       <tr 
                         key={student.id} 
-                        className="group h-[82px] hover:bg-[#F8FAFF] transition-colors duration-200"
+                        className={`group h-[82px] transition-colors duration-200 ${selectedIds.includes(student.id) ? 'bg-blue-50/60 hover:bg-blue-50' : 'hover:bg-[#F8FAFF]'}`}
                       >
+                        <td className="pl-5 pr-0">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(student.id)}
+                            onChange={() => toggleSelected(student.id)}
+                            className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
+                          />
+                        </td>
                         <td className="px-4">
                           <div className="flex items-center gap-4">
                             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600 font-bold flex items-center justify-center shrink-0 border border-blue-100 group-hover:scale-105 transition-transform">
@@ -425,7 +634,14 @@ const StudentDirectory = ({
                             </div>
                             <div className="flex flex-col">
                               <span className="font-semibold text-[16px] text-[#0F172A] tracking-tight">{student.name}</span>
-                              <TierPill tier={getTier(student)} />
+                              <div className="flex items-center gap-1.5">
+                                <TierPill tier={getTier(student)} />
+                                {(student.groupName || '').trim() && (
+                                  <span className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold ${groupColor(student.groupName.trim())}`} title="Student group">
+                                    <UsersRound size={11} /> {student.groupName.trim()}
+                                  </span>
+                                )}
+                              </div>
 
                             </div>
                           </div>
@@ -552,7 +768,8 @@ const StudentDirectory = ({
                   { label: 'College', value: selectedStudent.collegeName },
                   { label: 'CGPA', value: selectedStudent.cgpa },
                   { label: 'Batch', value: selectedStudent.batch },
-                  { label: 'Location', value: selectedStudent.location }
+                  { label: 'Location', value: selectedStudent.location },
+                  { label: 'Group', value: selectedStudent.groupName }
                 ].map(f => (
                   <div key={f.label} className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
                     <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">{f.label}</span>
@@ -724,6 +941,18 @@ const StudentDirectory = ({
                 </select>
               </div>
 
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Group</label>
+                <input
+                  type="text"
+                  list="student-group-names"
+                  value={editForm.groupName}
+                  onChange={(e) => setEditForm({ ...editForm, groupName: e.target.value })}
+                  placeholder="Pick an existing group or type a new one (leave blank for none)"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                />
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">College Name</label>
@@ -829,6 +1058,85 @@ const StudentDirectory = ({
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Existing group names, suggested by the group inputs */}
+      <datalist id="student-group-names">
+        {groups.map(g => <option key={g.name} value={g.name} />)}
+      </datalist>
+
+      {/* Add to group / Rename group */}
+      {groupDialog && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => !isSavingGroup && setGroupDialog(null)}>
+          <form
+            onSubmit={(e) => { e.preventDefault(); confirmGroupDialog(); }}
+            className="bg-white rounded-[24px] w-full max-w-md shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center">
+              <h3 className="text-[20px] font-bold text-[#0F172A]">
+                {groupDialog.mode === 'assign' ? `Add ${selectedIds.length} student${selectedIds.length === 1 ? '' : 's'} to a group` : 'Rename group'}
+              </h3>
+              <button type="button" onClick={() => !isSavingGroup && setGroupDialog(null)} className="text-[#64748B] hover:text-[#0F172A] bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Group name</label>
+                <input
+                  type="text"
+                  list="student-group-names"
+                  autoFocus
+                  required
+                  value={groupInput}
+                  onChange={(e) => setGroupInput(e.target.value)}
+                  placeholder="e.g. Weekend Batch A"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
+                />
+              </div>
+              {groupDialog.mode === 'assign' && groups.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Or pick an existing group</p>
+                  <div className="flex flex-wrap gap-2">
+                    {groups.map(g => (
+                      <button
+                        key={g.name}
+                        type="button"
+                        onClick={() => setGroupInput(g.name)}
+                        className={`px-3 py-1.5 rounded-full text-[12.5px] font-semibold border ${groupColor(g.name)} ${groupInput.trim() === g.name ? 'ring-2 ring-offset-1 ring-[#2563EB]' : ''}`}
+                      >
+                        {g.name} ({g.count})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="text-[12px] text-slate-500 font-medium">
+                {groupDialog.mode === 'assign'
+                  ? 'A student belongs to one group - anyone already in another group is moved to this one.'
+                  : `Every student in "${groupDialog.from}" moves to the new name.`}
+              </p>
+            </div>
+            <div className="px-6 pb-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setGroupDialog(null)}
+                disabled={isSavingGroup}
+                className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 text-[#64748B] font-semibold rounded-[14px] transition-colors disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingGroup || !groupInput.trim()}
+                className="px-6 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[14px] transition-colors shadow-md disabled:opacity-60"
+              >
+                {isSavingGroup ? 'Saving...' : groupDialog.mode === 'assign' ? 'Add to group' : 'Rename'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

@@ -9,6 +9,9 @@ import {
   formatReleaseTime, releaseStatusLabel, solutionsEmail
 } from '../utils/solutionRelease';
 
+import TestScheduleCalendar from './tests/TestScheduleCalendar';
+import { formatTestTime, testStartMillis } from '../utils/testSchedule';
+
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
 
@@ -63,6 +66,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [numericalCount, setNumericalCount] = useState('');
   const [theoryCount, setTheoryCount] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
+  const [closesAt, setClosesAt] = useState(''); // optional - no new starts after this (see utils/testSchedule)
+  const [view, setView] = useState('templates'); // 'templates' | 'schedule' (calendar)
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [bundleId, setBundleId] = useState(''); // '' means dept level, 'free' means free, 'specific_id' means exclusive
   const [bundles, setBundles] = useState([]);
@@ -302,7 +307,10 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   const getStep3Warning = () => {
     if (!scheduledTime.trim()) return "Please enter a valid schedule time/date";
-    
+    if (closesAt && new Date(closesAt).getTime() <= new Date(scheduledTime).getTime()) {
+      return "The closing time must be after the scheduled start time";
+    }
+
     if (selectionMode === 'manual') {
       if (manualSelectedIds.length === 0) return "Please manually select at least one question.";
       return null;
@@ -463,6 +471,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       numericalCount: hasCategorySplit ? numericalTarget : null,
       theoryCount: hasCategorySplit ? theoryTarget : null,
       scheduledTime,
+      closesAt: closesAt || '',
       department: selectedDept,
       subject: selectedSubjects.join(', ') || 'General',
       topic: selectedTopics.join(', ') || 'All Topics',
@@ -514,6 +523,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setNumericalCount('');
     setTheoryCount('');
     setScheduledTime('');
+    setClosesAt('');
     setSelectedDept(department || '');
     setSelectedSubjects([]);
     setSelectedTopics([]);
@@ -539,6 +549,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setNumericalCount(test.numericalCount ?? '');
     setTheoryCount(test.theoryCount ?? '');
     setScheduledTime(test.scheduledTime || '');
+    setClosesAt(test.closesAt || '');
     setBundleId(test.bundleId || '');
     setSelectedDept(test.department || department || '');
     setSelectedSubjects(test.subject && test.subject !== 'General' ? test.subject.split(',').map(s => s.trim()).filter(Boolean) : []);
@@ -573,6 +584,36 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       console.error('Failed to update bundle:', err);
       showToast('Failed to update access control. Please try again.', 'error');
     }
+  };
+
+  // Calendar: (re)schedule one test. A pending "N hours after the test ends" answer release moves
+  // with it, the same as when the time is changed in the full editor.
+  const handleScheduleTest = async (test, { scheduledTime: newTime, closesAt: newClose }) => {
+    const update = { scheduledTime: newTime, closesAt: newClose || '' };
+    if (test.solutionsReleasePending && typeof test.solutionsReleaseAfterHours === 'number') {
+      const newEnd = testEndMillis({ ...test, ...update });
+      if (newEnd !== null) {
+        update.solutionsReleaseAt = Timestamp.fromMillis(newEnd + test.solutionsReleaseAfterHours * 60 * 60 * 1000);
+      }
+    }
+    try {
+      await updateDoc(doc(db, 'tests', test.id), update);
+      setTests(prev => prev.map(t => (t.id === test.id ? { ...t, ...update } : t)));
+      showToast(`"${test.title}" scheduled for ${formatTestTime(testStartMillis(update))}`, 'success');
+      return true;
+    } catch (err) {
+      console.error('Failed to schedule test:', err);
+      showToast('Failed to save the schedule. Please try again.', 'error');
+      return false;
+    }
+  };
+
+  // Calendar: "Create a new test on this day" - opens the normal wizard with the date filled in
+  const createTestOnDate = (date) => {
+    resetForm();
+    if (!isTeacher && openFolder && openFolder !== 'Uncategorized') setSelectedDept(openFolder);
+    setScheduledTime(`${date}T10:00`);
+    setIsCreatorOpen(true);
   };
 
   // Emails every student who has attempted the test that its solutions are out. Used by the manual
@@ -787,7 +828,22 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
             </p>
           </div>
         </div>
-        <button 
+        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          {[
+            { key: 'templates', label: 'Templates', icon: FileText },
+            { key: 'schedule', label: 'Schedule', icon: Calendar },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setView(key)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === key ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <Icon size={15} /> {label}
+            </button>
+          ))}
+        </div>
+        <button
           onClick={() => {
             resetForm();
             if (!isTeacher && openFolder && openFolder !== 'Uncategorized') setSelectedDept(openFolder);
@@ -797,10 +853,19 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
         >
           <Plus size={18} strokeWidth={2.5} /> Create Test Template
         </button>
+        </div>
       </div>
 
-      {/* Test Template Cards */}
-      {loading ? (
+      {/* Test Template Cards / Schedule calendar */}
+      {view === 'schedule' && !loading ? (
+        <TestScheduleCalendar
+          tests={isTeacher || !openFolder ? tests : visibleTests}
+          showDepartment={!isTeacher && !openFolder}
+          onSchedule={handleScheduleTest}
+          onCreateOnDate={createTestOnDate}
+          onEditTest={handleEditTest}
+        />
+      ) : loading ? (
         <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-20 text-center flex flex-col items-center justify-center">
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
           <p className="text-slate-500 font-semibold">Loading test templates...</p>
@@ -1357,13 +1422,30 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   <div className="flex flex-col sm:flex-row gap-4 sm:items-end shrink-0">
                     {/* Schedule date input */}
                     <div className="space-y-1.5 flex-1">
-                      <label className="text-[13px] font-[800] text-slate-800">Schedule Date & Time</label>
-                      <input 
-                        type="datetime-local" 
-                        value={scheduledTime} 
+                      <label className="text-[13px] font-[800] text-slate-800">Opens at (Schedule)</label>
+                      <input
+                        type="datetime-local"
+                        value={scheduledTime}
                         onChange={e => setScheduledTime(e.target.value)}
                         className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
                       />
+                    </div>
+                    <div className="space-y-1.5 flex-1">
+                      <label className="text-[13px] font-[800] text-slate-800">Closes at <span className="text-slate-400 font-semibold">(optional)</span></label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="datetime-local"
+                          value={closesAt}
+                          min={scheduledTime || undefined}
+                          onChange={e => setClosesAt(e.target.value)}
+                          className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
+                        />
+                        {closesAt && (
+                          <button type="button" onClick={() => setClosesAt('')} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" title="No closing time">
+                            <X size={16} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-1.5 flex-1">
                       <label className="text-[13px] font-[800] text-slate-800">Selection Mode</label>

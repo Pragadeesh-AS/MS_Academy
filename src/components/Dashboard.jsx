@@ -11,6 +11,7 @@ import RecordingPlayerModal from './shared/RecordingPlayerModal';
 import RoleSwitcher from './shared/RoleSwitcher';
 import { groupBySubject, NO_SUBJECT } from '../utils/subjects';
 import StudentTests from './StudentTests';
+import TestAlerts from './student/TestAlerts';
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
 import { buyBundle, buySubject, buyNoteBundle, verifyOrder } from '../cashfree';
@@ -980,6 +981,15 @@ export default function Dashboard() {
             {tier.icon}
           </button>
         </header>
+
+        {/* New-test and starting-in-30-minutes alerts */}
+        <TestAlerts
+          department={studentDepartment}
+          isPro={isPro}
+          purchasedBundles={purchasedBundles}
+          bundles={availableBundles}
+          onOpenTests={() => setActiveTab('tests')}
+        />
 
         {activeTab === 'learning' && (
           <div className="space-y-8 mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
