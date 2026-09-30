@@ -40,6 +40,7 @@ import LiveTestOverlay from './liveTest/LiveTestOverlay';
 import { PollCard } from './liveTest/PollCard';
 import ParticipantsPanel, { buildPeople } from './liveTest/ParticipantsPanel';
 import AnswerReview, { fetchQuestionBankCopies } from './liveTest/AnswerReview';
+import MatchColumns from './shared/MatchColumns';
 import { gradeAnswer, normalizeQuestion } from '../utils/testGrading';
 import { positiveMarkFor } from '../utils/marking';
 
@@ -318,6 +319,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
                 </div>
                 <div id="qb-qtext" className="flex-1" dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
               </div>
+              <MatchColumns question={activeQuestionState.questions[activeQuestionState.currentIndex]} className={`${isPinned ? 'pl-20' : 'pl-12'} mb-6`} />
               
               {/* Bottom: Options (Left 40%) */}
               <div className="flex flex-col md:flex-row w-full gap-8">
@@ -1181,6 +1183,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                       <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-1 rounded-lg ml-4 flex-shrink-0">{marks} Mark{marks === 1 ? '' : 's'}</span>
                     </div>
                     {q.questionImageUrl && <img src={q.questionImageUrl} alt="Question" className="max-h-52 object-contain rounded-xl border border-slate-100 mb-4" />}
+                    <MatchColumns question={normalizeQuestion(q)} className="mb-4" />
 
                     <div className="space-y-3">
                       {qType === 'Fill in Blanks' ? (

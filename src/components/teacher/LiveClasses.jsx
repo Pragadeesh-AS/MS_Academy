@@ -39,6 +39,7 @@ import AgoraRTC, {
 import Whiteboard from './Whiteboard';
 import { useLiveRecording } from './hooks/useLiveRecording';
 import { subjectOptionsFor, groupBySubject } from '../../utils/subjects';
+import MatchColumns from '../shared/MatchColumns';
 // Extracted component to handle whiteboard sharing as an independent client
 const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) => {
   const [wbClient] = useState(() => AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }));
@@ -645,6 +646,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                 </div>
                 <div id="qb-qtext" className="flex-1" dangerouslySetInnerHTML={{ __html: activeQuestionState.questions[activeQuestionState.currentIndex].questionText }} />
               </div>
+              <MatchColumns question={activeQuestionState.questions[activeQuestionState.currentIndex]} className={`${isPinned ? 'pl-20' : 'pl-12'} mb-6`} />
 
               {/* Bottom: Options (Left 40%) */}
               <div className="flex flex-col md:flex-row w-full gap-8">

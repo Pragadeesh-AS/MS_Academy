@@ -3,6 +3,7 @@ import { db } from '../../firebase';
 import { doc, setDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { motion, useReducedMotion } from 'motion/react';
 import AnswerReview, { fetchQuestionBankCopies } from './AnswerReview';
+import MatchColumns from '../shared/MatchColumns';
 import { normalizeQuestion } from '../../utils/testGrading';
 import { Timer, Trophy, CheckCircle2, XCircle, Clock, ChevronRight, Lock, X, Check, Flame, Zap, Eraser, MinusCircle } from 'lucide-react';
 
@@ -523,6 +524,7 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
       {question.questionImageUrl && (
         <img src={question.questionImageUrl} alt="Question" className="mt-3 max-h-56 object-contain rounded-lg" />
       )}
+      <MatchColumns question={normalizeQuestion(question)} className="mt-4" />
     </>
   );
 
@@ -841,6 +843,7 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
           {question.questionImageUrl && (
             <img src={question.questionImageUrl} alt="Question" className="mt-4 max-h-56 object-contain rounded-xl bg-white p-1" />
           )}
+          <MatchColumns question={question} dark className="mt-5 max-w-3xl" />
         </div>
 
         {/* Answers */}

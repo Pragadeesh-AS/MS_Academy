@@ -10,6 +10,7 @@ import { markNumberOf, markLabelFor, negativeMarkFor } from '../../utils/marking
 import { sameDepartment } from '../../utils/subjects';
 import { answerKeyChanged } from '../../utils/testGrading';
 import { regradeAttemptsForQuestion } from '../../utils/regradeAttempts';
+import MatchColumns from '../shared/MatchColumns';
 
 // Engineering Mathematics and Aptitude banks are shared by every department.
 const isCommonDeptName = (name) => {
@@ -1454,6 +1455,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                                   <img src={q.questionImageUrl} alt="Question" className="max-h-40 rounded-xl border border-slate-200 shadow-sm" />
                                 </div>
                               )}
+                              <MatchColumns question={q} className="mb-4" />
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                                 {['A', 'B', 'C', 'D'].map(opt => {
                                   const text = q[`option${opt}`];
@@ -1888,13 +1890,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                               </div>
                               
                               <div className="flex-1">
-                                <input 
-                                  type="text"
+                                {/* Rich editor: options are HTML (maths is KaTeX) - a plain input showed
+                                    "<span class="katex">..." for every extracted formula */}
+                                <RichTextEditor
                                   name={`option${opt}`}
                                   value={formData[`option${opt}`]}
                                   onChange={handleInputChange}
                                   placeholder={`Option ${opt}`}
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-[15px] font-[700] text-slate-800 placeholder-slate-400 outline-none focus:border-slate-300 transition-colors"
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 min-h-[40px] max-h-[160px] text-[15px] font-[700] text-slate-800 outline-none focus:border-slate-300 transition-colors break-words"
                                 />
                               </div>
 
@@ -2144,27 +2147,25 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                     // Typist editing a question that is already in the Question Bank: it stays there
                     // (and in any test using it), flagged Not Reviewed until the reviewer / admin approves
                     <>
-                      {/* Same compact layout as the other typist / reviewer buttons */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => handleSubmit(e, 'Approved', true)}
-                          title="Stays in the Question Bank (and tests), marked Not Reviewed until your reviewer or the admin approves the change"
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-[#059669] hover:bg-emerald-700 text-white font-[800] text-[13px] transition-colors shadow-md shadow-emerald-500/20"
-                        >
-                          <Check size={15} /> Save
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleSubmit(e, 'In Review')}
-                          title="Takes it out of the Question Bank (and tests) until the reviewer approves it again"
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-full bg-white border border-slate-200 text-[#111827] font-[800] text-[13px] hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
-                        >
-                          <ChevronRight size={15} /> To Reviewer
-                        </button>
-                      </div>
-                      <p className="text-[10.5px] font-[700] text-slate-500 leading-tight">
-                        Save keeps it live as Not Reviewed; To Reviewer takes it out until approved.
+                      {/* Compact, and the skip-review import looks the same as on a new question */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleSubmit(e, 'Approved', true)}
+                        title="Skips your reviewer - the changes go straight into the Question Bank (and tests), flagged as Not Reviewed"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-[800] text-[13px] transition-colors shadow-md shadow-amber-500/20"
+                      >
+                        <Upload size={15} /> Save to Question Bank (Skip Review)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleSubmit(e, 'In Review')}
+                        title="Takes it out of the Question Bank (and tests) until the reviewer approves it again"
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full bg-white border border-slate-200 text-[#111827] font-[800] text-[13px] hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
+                      >
+                        <ChevronRight size={15} /> Send to Reviewer
+                      </button>
+                      <p className="text-[10.5px] font-[700] text-amber-600 flex items-center gap-1 leading-tight">
+                        <AlertTriangle size={12} className="shrink-0" /> Skip Review keeps it live as Not Reviewed.
                       </p>
                     </>
                   ) : (
