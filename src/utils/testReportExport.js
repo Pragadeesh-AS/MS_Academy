@@ -1,6 +1,6 @@
 // Exports one test's Analytics report (the Global Tests drill-down) as an Excel-friendly CSV or a PDF.
 // `report` is the per-test summary Analytics builds: title, department, subject, date, participants,
-// avgScore / highestScore (%), avgTime, distribution [{ range, count }] and students
+// avgTime, distribution [{ range, count }] and students
 // [{ name, score, maxScore, correct, wrong, unattempted, timeTaken, timeSeconds, submittedAt }].
 // Student emails are deliberately left out of both exports.
 import { jsPDF } from 'jspdf';
@@ -14,6 +14,27 @@ const rankedStudents = (report) => [...report.students]
 const num = (n) => String(Math.round((Number(n) || 0) * 100) / 100);
 
 const percentOf = (s) => (s.maxScore > 0 ? Math.round((s.score / s.maxScore) * 100) : 0);
+
+// Both exports report marks, not percentages: average / highest / lowest score and the five
+// score bands (same split as the Analytics chart) labelled in marks
+const marksSummary = (report, students) => {
+  const maxMarks = Math.max(0, ...students.map(s => Number(s.maxScore) || 0));
+  const scores = students.map(s => Number(s.score) || 0);
+  const bandOf = (s) => {
+    const pct = percentOf(s);
+    return pct <= 20 ? 0 : pct <= 40 ? 1 : pct <= 60 ? 2 : pct <= 80 ? 3 : 4;
+  };
+  return {
+    maxMarks,
+    average: scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0,
+    highest: scores.length ? Math.max(...scores) : 0,
+    lowest: scores.length ? Math.min(...scores) : 0,
+    distribution: [0, 1, 2, 3, 4].map(i => ({
+      range: maxMarks ? `${num((maxMarks * i) / 5)}-${num((maxMarks * (i + 1)) / 5)}` : report.distribution[i]?.range,
+      count: students.filter(st => bandOf(st) === i).length,
+    })),
+  };
+};
 
 const safeFileName = (title) => `${(title || 'Test').replace(/[\\/:*?"<>|]+/g, '').trim() || 'Test'} - Report`;
 
@@ -37,6 +58,8 @@ const csvCell = (value) => {
 };
 
 export const exportTestReportCsv = (report) => {
+  const students = rankedStudents(report);
+  const { maxMarks, average, highest, lowest, distribution } = marksSummary(report, students);
   const rows = [
     ['Test Report', report.title],
     ['Department', report.department],
@@ -45,16 +68,19 @@ export const exportTestReportCsv = (report) => {
     ['Exported', today()],
     [],
     ['Total Attempts', report.participants],
-    ['Average Score', `${report.avgScore}%`],
-    ['Highest Score', `${report.highestScore}%`],
+    ['Total Marks', num(maxMarks)],
+    ['Average Marks', num(average)],
+    ['Highest Marks', num(highest)],
+    ['Lowest Marks', num(lowest)],
     ['Average Time Taken', report.avgTime],
     [],
-    ['Score Distribution', 'Students'],
-    ...report.distribution.map(d => [d.range, d.count]),
+    ['Score Distribution (Marks)', 'Students'],
+    // ="0-13" keeps Excel from turning a marks range into a date
+    ...distribution.map(d => [`="${d.range}"`, d.count]),
     [],
-    ['Rank', 'Student Name', 'Score', 'Max Marks', 'Percentage', 'Correct', 'Wrong', 'Unattempted', 'Time Taken', 'Submitted On'],
-    ...rankedStudents(report).map((s, i) => [
-      i + 1, s.name, num(s.score), num(s.maxScore), `${percentOf(s)}%`,
+    ['Rank', 'Student Name', 'Score', 'Max Marks', 'Correct', 'Wrong', 'Unattempted', 'Time Taken', 'Submitted On'],
+    ...students.map((s, i) => [
+      i + 1, s.name, num(s.score), num(s.maxScore),
       s.correct, s.wrong, s.unattempted, s.timeTaken, s.submittedAt,
     ]),
   ];
@@ -147,7 +173,8 @@ export const exportTestReportPdf = async (report) => {
   const margin = 12;
   const contentW = pageW - margin * 2;
   const students = rankedStudents(report);
-  const pcts = students.map(percentOf);
+  const { maxMarks, average, highest, lowest, distribution } = marksSummary(report, students);
+  const outOf = (n) => (maxMarks ? `${num(n)} / ${num(maxMarks)}` : num(n));
 
   // ---------------- Header band
   pdf.setFillColor(...NAVY);
@@ -177,12 +204,11 @@ export const exportTestReportPdf = async (report) => {
   y += 7;
 
   // ---------------- Summary cards
-  const lowest = pcts.length ? Math.min(...pcts) : 0;
   const cards = [
     { label: 'Total Attempts', value: String(report.participants), color: VIOLET },
-    { label: 'Average Score', value: `${report.avgScore}%`, color: BLUE },
-    { label: 'Highest Score', value: `${report.highestScore}%`, color: GREEN },
-    { label: 'Lowest Score', value: `${lowest}%`, color: RED },
+    { label: 'Average Marks', value: outOf(average), color: BLUE },
+    { label: 'Highest Marks', value: outOf(highest), color: GREEN },
+    { label: 'Lowest Marks', value: outOf(lowest), color: RED },
     { label: 'Avg Time Taken', value: report.avgTime, color: AMBER },
   ];
   const gap = 5;
@@ -216,7 +242,7 @@ export const exportTestReportPdf = async (report) => {
     const plotY = y + 15;
     const plotW = chartW - 18;
     const plotH = chartH - 30;
-    const maxCount = Math.max(1, ...report.distribution.map(d => d.count));
+    const maxCount = Math.max(1, ...distribution.map(d => d.count));
     const ticks = Math.min(4, maxCount);
     pdf.setLineWidth(0.2);
     for (let t = 0; t <= ticks; t++) {
@@ -227,9 +253,9 @@ export const exportTestReportPdf = async (report) => {
       setFont(pdf, 7, 'normal', MUTED);
       pdf.text(String(value), plotX - 2, ty + 1, { align: 'right' });
     }
-    const slot = plotW / report.distribution.length;
+    const slot = plotW / distribution.length;
     const barW = slot * 0.58;
-    report.distribution.forEach((d, i) => {
+    distribution.forEach((d, i) => {
       const bx = plotX + i * slot + (slot - barW) / 2;
       const bh = (d.count / maxCount) * plotH;
       if (d.count > 0) {
@@ -242,7 +268,7 @@ export const exportTestReportPdf = async (report) => {
       pdf.text(d.range, bx + barW / 2, plotY + plotH + 5, { align: 'center' });
     });
     setFont(pdf, 7, 'normal', MUTED);
-    pdf.text('Students by score band', plotX + plotW / 2, y + chartH - 3, { align: 'center' });
+    pdf.text(maxMarks ? `Students by marks (out of ${num(maxMarks)})` : 'Students by marks', plotX + plotW / 2, y + chartH - 3, { align: 'center' });
   }
 
   // 2. Answer breakdown - donut over every question of every attempt
@@ -254,7 +280,6 @@ export const exportTestReportPdf = async (report) => {
       unattempted: acc.unattempted + (s.unattempted || 0),
     }), { correct: 0, wrong: 0, unattempted: 0 });
     const all = totals.correct + totals.wrong + totals.unattempted;
-    const share = (n) => (all ? Math.round((n / all) * 100) : 0);
     const segments = [
       { label: 'Correct', value: totals.correct, color: GREEN },
       { label: 'Wrong', value: totals.wrong, color: RED },
@@ -265,7 +290,7 @@ export const exportTestReportPdf = async (report) => {
     const dcy = y + 12 + (chartH - 12) / 2;
     drawDonut(pdf, dcx, dcy, r, r * 0.6, segments);
     setFont(pdf, 13, 'bold');
-    pdf.text(`${share(totals.correct)}%`, dcx, dcy + 1, { align: 'center' });
+    pdf.text(`${totals.correct} / ${all}`, dcx, dcy + 1, { align: 'center' });
     setFont(pdf, 6.5, 'bold', MUTED);
     pdf.text('CORRECT', dcx, dcy + 5, { align: 'center' });
 
@@ -277,7 +302,7 @@ export const exportTestReportPdf = async (report) => {
       setFont(pdf, 8.5, 'bold');
       pdf.text(seg.label, lx + 5, ly);
       setFont(pdf, 8, 'normal', MUTED);
-      pdf.text(`${seg.value} (${share(seg.value)}%)`, lx + 5, ly + 4);
+      pdf.text(`${seg.value} answer${seg.value === 1 ? '' : 's'}`, lx + 5, ly + 4);
       ly += 10;
     });
   }
@@ -305,8 +330,8 @@ export const exportTestReportPdf = async (report) => {
         pdf.setFillColor(...(i < 3 ? MEDALS[i] : BLUE));
         pdf.roundedRect(barX, ry, Math.max(3, (Math.min(pct, 100) / 100) * barMaxW), 4.2, 1.5, 1.5, 'F');
       }
-      setFont(pdf, 8, 'bold', pct < 0 ? RED : TEXT);
-      pdf.text(`${pct}%`, barX + barMaxW + 2, ry + 3.2);
+      setFont(pdf, 8, 'bold', s.score < 0 ? RED : TEXT);
+      pdf.text(num(s.score), barX + barMaxW + 2, ry + 3.2);
     });
   }
 
@@ -323,8 +348,7 @@ export const exportTestReportPdf = async (report) => {
   const cols = [
     { key: 'rank', label: 'Rank', w: 16, align: 'center' },
     { key: 'name', label: 'Student', w: 84 },
-    { key: 'score', label: 'Score', w: 30, align: 'right' },
-    { key: 'pct', label: 'Percentage', w: 48 },
+    { key: 'score', label: 'Score (Marks)', w: 78, align: 'right' },
     { key: 'correct', label: 'Correct', w: 20, align: 'center' },
     { key: 'wrong', label: 'Wrong', w: 20, align: 'center' },
     { key: 'unattempted', label: 'Unattempted', w: 27, align: 'center' },
@@ -381,13 +405,9 @@ export const exportTestReportPdf = async (report) => {
           setFont(pdf, 9, 'bold');
           textAt(s.name, col, x, midY);
           break;
-        case 'score':
-          setFont(pdf, 9, 'bold', s.score < 0 ? RED : TEXT);
-          textAt(`${num(s.score)} / ${num(s.maxScore)}`, col, x, midY);
-          break;
-        case 'pct': {
-          // Small bar + value; green >= 70%, amber >= 40%, red below
-          const barW = col.w - 18;
+        case 'score': {
+          // Small bar + marks; green >= 70% of the total, amber >= 40%, red below
+          const barW = col.w - 30;
           const bx = x + pad;
           const by = y + rowH / 2 - 1.5;
           pdf.setFillColor(...LINE);
@@ -396,8 +416,8 @@ export const exportTestReportPdf = async (report) => {
             pdf.setFillColor(...(pct >= 70 ? GREEN : pct >= 40 ? AMBER : RED));
             pdf.roundedRect(bx, by, Math.max(2, (Math.min(pct, 100) / 100) * barW), 3, 1.2, 1.2, 'F');
           }
-          setFont(pdf, 8.5, 'bold', pct < 0 ? RED : TEXT);
-          pdf.text(`${pct}%`, x + col.w - pad, midY, { align: 'right' });
+          setFont(pdf, 9, 'bold', s.score < 0 ? RED : TEXT);
+          pdf.text(`${num(s.score)} / ${num(s.maxScore)}`, x + col.w - pad, midY, { align: 'right' });
           break;
         }
         case 'correct':

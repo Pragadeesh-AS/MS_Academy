@@ -27,6 +27,7 @@ import FeesTracker from './admin/FeesTracker';
 import SalaryManager from './admin/SalaryManager';
 import TestsManager from './TestsManager';
 import ReportedQuestions from './admin/ReportedQuestions';
+import ReportCountBadge, { usePendingReportCount } from './shared/ReportCountBadge';
 import InvoiceGenerator from './admin/InvoiceGenerator';
 import BlogManager from './admin/BlogManager';
 import RoleSwitcher from './shared/RoleSwitcher';
@@ -90,6 +91,8 @@ const pctChange = (curr, prev) => (prev > 0 ? Math.round(((curr - prev) / prev) 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
+  // Open reported questions across all departments - red badge on "Reported Q's"
+  const pendingReports = usePendingReportCount();
   const [editQuestionId, setEditQuestionId] = useState(null);
   const [adminName, setAdminName] = useState('Admin');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -924,6 +927,7 @@ export default function AdminDashboard() {
                   >
                     <Icon size={20} className={activeTab === key ? 'text-white' : 'text-slate-400'} />
                     <span>{label}</span>
+                    {key === 'reported' && <ReportCountBadge count={pendingReports} />}
                   </button>
                 ))}
               </nav>
@@ -1095,6 +1099,7 @@ export default function AdminDashboard() {
               >
                 <ShieldCheck size={20} className={activeTab === 'reported' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Reported Q's</span>}
+                <ReportCountBadge count={pendingReports} collapsed={isCollapsed} />
               </button>
 
               <button

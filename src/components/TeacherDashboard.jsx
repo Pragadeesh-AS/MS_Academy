@@ -16,6 +16,7 @@ import QuestionBank from './admin/QuestionBank';
 import AttributesManager from './admin/AttributesManager';
 import { gateCoursesData } from './GateCourses';
 import RoleSwitcher from './shared/RoleSwitcher';
+import ReportCountBadge, { usePendingReportCount } from './shared/ReportCountBadge';
 
 const sidebarNavItems = [
   { key: 'courses', label: 'My Courses', icon: BookOpen },
@@ -63,6 +64,8 @@ export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [teacherName, setTeacherName] = useState('Teacher');
   const [teacherDepartment, setTeacherDepartment] = useState('');
+  // Open reports for this teacher's department - shown as a red badge on "Reported Q's"
+  const pendingReports = usePendingReportCount(teacherDepartment || null, !!teacherDepartment);
   const [activeTab, setActiveTab] = useState('courses');
   const [editQuestionId, setEditQuestionId] = useState(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -247,6 +250,7 @@ export default function TeacherDashboard() {
                 >
                   <Icon size={18} />
                   <span>{label}</span>
+                  {key === 'reported' && <ReportCountBadge count={pendingReports} />}
                 </button>
               ))}
               <div className="flex items-center gap-3 px-4 py-3 mt-4 border-t border-slate-100 pt-4">
@@ -298,10 +302,11 @@ export default function TeacherDashboard() {
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === key ? (key === 'reported' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700') : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
+              className={`relative w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-4'} py-3 rounded-xl font-bold transition-all ${activeTab === key ? (key === 'reported' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-700') : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}
             >
               <Icon size={18} />
               {!isCollapsed && <span>{label}</span>}
+              {key === 'reported' && <ReportCountBadge count={pendingReports} collapsed={isCollapsed} />}
             </button>
           ))}
         </nav>
