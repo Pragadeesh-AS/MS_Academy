@@ -812,6 +812,9 @@ export default function AIGenerator({ pairMode = false }) {
   const formatExtractedText = (text) => {
     if (!text) return text;
     const parts = String(text)
+      // The AI sometimes escapes the delimiters ("\$Re\$") - treat them as ordinary "$" (a real
+      // price like "\$5 and \$10" is still recognised as money by repairLine)
+      .replace(/\\\$/g, '$')
       // \( ... \) and \[ ... \] are also LaTeX delimiters - bring them to the $ form
       .replace(/\\\(([\s\S]+?)\\\)/g, (m, math) => `$${math}$`)
       .replace(/\\\[([\s\S]+?)\\\]/g, (m, math) => `$$${math}$$`)

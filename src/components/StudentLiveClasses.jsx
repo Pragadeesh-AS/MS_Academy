@@ -42,6 +42,7 @@ import ParticipantsPanel, { buildPeople } from './liveTest/ParticipantsPanel';
 import AnswerReview, { fetchQuestionBankCopies } from './liveTest/AnswerReview';
 import MatchColumns from './shared/MatchColumns';
 import QuestionExplainPanel from './liveTest/QuestionExplainPanel';
+import { saveLiveReport, loadMyReports, reportTimeLeft, REPORT_TYPES, LIVE_REPORT_KEEP_DAYS } from '../utils/liveReports';
 import { gradeAnswer, normalizeQuestion } from '../utils/testGrading';
 import { positiveMarkFor } from '../utils/marking';
 
@@ -62,7 +63,7 @@ const sendEmailViaGAS = async (to, subject, htmlMessage) => {
 };
 
 // Extracted StudentCall component for custom Agora rendering
-const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, unreadChatCount = 0, showControls, resetControlsTimeout }) => {
+const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, sessionTitle, isChatOpen, toggleChat, chatToast, setChatToast, unreadChatCount = 0, showControls, resetControlsTimeout }) => {
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [pinnedUid, setPinnedUid] = useState(null);
@@ -595,7 +596,7 @@ const StudentCall = ({ appId, channel, token, handleLeaveMeet, sessionId, isChat
       )}
 
       {liveTest?.active && (
-        <LiveTestOverlay liveTest={liveTest} participants={participantsRaw} myUid={client.uid} sessionId={sessionId} />
+        <LiveTestOverlay liveTest={liveTest} participants={participantsRaw} myUid={client.uid} sessionId={sessionId} sessionTitle={sessionTitle} />
       )}
     </div>
   );
@@ -818,7 +819,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
         const data = docSnap.data();
         if (data.status === 'ended') {
           if (data.postClassQuiz && data.postClassQuiz.questions && data.postClassQuiz.questions.length > 0) {
-            setPostClassQuiz({ ...data.postClassQuiz, sessionId: currentSession.id });
+            setPostClassQuiz({ ...data.postClassQuiz, sessionId: currentSession.id, topic: data.topic || currentSession.topic || 'Post-Class Quiz' });
             setQuizAnswers({});
             setQuizSubmitted(false);
             setQuizScore(0);
@@ -1093,6 +1094,33 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     setStillThere(null);
   };
 
+  // ── My Reports: the student's live test / post-class quiz reports from the last 3 days ──
+  const [myReports, setMyReports] = useState([]);
+  const [openReport, setOpenReport] = useState(null); // { report, items | null while loading }
+  useEffect(() => {
+    // Refreshed when the student is back on this page (after a class or a quiz)
+    if (isInCall || postClassQuiz) return;
+    loadMyReports().then(setMyReports).catch(err => console.error('Failed to load reports', err));
+  }, [isInCall, !!postClassQuiz]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const viewReport = async (report) => {
+    setOpenReport({ report, items: null });
+    const saved = report.items || [];
+    // Answer key and explanation as they are in the Question Bank now
+    const questions = await fetchQuestionBankCopies(saved.map(i => ({ id: i.questionId })));
+    const items = saved.map((item, i) => {
+      const q = questions[i] || {};
+      return {
+        question: q.questionText ? q : { ...q, questionText: '<i>This question is no longer in the Question Bank.</i>' },
+        answer: item.answer,
+        isAnswered: item.isAnswered,
+        isCorrect: item.isCorrect,
+        badge: item.badge,
+      };
+    });
+    setOpenReport(prev => (prev?.report.id === report.id ? { report, items } : prev));
+  };
+
   const [dynamicToken, setDynamicToken] = useState(null);
   const [tokenError, setTokenError] = useState(null);
 
@@ -1166,6 +1194,18 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
           console.error("Error saving quiz result:", e);
         }
       }
+
+      // Kept for 3 days in "My Reports" (utils/liveReports)
+      const maxScore = Math.round(questions.reduce((s, q) => s + gradeAnswer(q, null).maxMarks, 0) * 100) / 100;
+      saveLiveReport({
+        type: REPORT_TYPES.QUIZ,
+        key: postClassQuiz.sessionId || 'quiz',
+        sessionId: postClassQuiz.sessionId || null,
+        title: postClassQuiz.topic || 'Post-Class Quiz',
+        scoreText: `${score} / ${maxScore} marks`,
+        summary: `${review.filter(r => r.isCorrect).length}/${review.length} correct`,
+        items: review.map(r => ({ questionId: r.question.id || null, answer: r.answer ?? '', isAnswered: r.isAnswered, isCorrect: r.isCorrect, badge: r.badge })),
+      }).catch(err => console.error('Failed to save quiz report', err));
 
       setQuizReview(review);
       setQuizScore(score);
@@ -1447,6 +1487,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                 channel={rtcProps.channel} 
                 token={rtcProps.token}
                 sessionId={currentSession.id}
+                sessionTitle={currentSession.topic || "Live Test"}
                 handleLeaveMeet={handleLeaveMeet}
                 isChatOpen={isChatOpen}
                 toggleChat={() => setIsChatOpen(!isChatOpen)}
@@ -1519,6 +1560,69 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
 
   return (
     <div className="space-y-8 mt-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+      {/* My Reports - live test and post-class quiz results, kept for 3 days */}
+      {myReports.length > 0 && (
+        <div>
+          <div className="flex items-end justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-xl font-[900] text-slate-900">My Reports</h2>
+              <p className="text-xs font-semibold text-slate-400 mt-0.5">Your live test and post-class quiz results, with solutions. Each report is deleted {LIVE_REPORT_KEEP_DAYS} days after the class.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {myReports.map(r => (
+              <button
+                key={r.id}
+                onClick={() => viewReport(r)}
+                className="text-left p-4 bg-white rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-md transition-all flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <span className={`inline-block text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full mb-1.5 ${r.type === REPORT_TYPES.LIVE_TEST ? 'bg-violet-100 text-violet-700' : 'bg-amber-100 text-amber-700'}`}>
+                    {r.type === REPORT_TYPES.LIVE_TEST ? 'Live Test' : 'Post-Class Quiz'}
+                  </span>
+                  <h4 className="font-bold text-slate-800 truncate">{r.title}</h4>
+                  <p className="text-xs font-semibold text-slate-500 truncate">
+                    {r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString() : ''} - {r.summary}
+                  </p>
+                  <p className="text-[11px] font-semibold text-slate-400">Deletes in {reportTimeLeft(r)}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="font-black text-blue-600 tabular-nums">{r.scoreText}</div>
+                  <div className="text-xs font-bold text-blue-500 mt-1">View report →</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Report viewer */}
+      {openReport && (
+        <div className="fixed inset-0 z-[200] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setOpenReport(null)}>
+          <div className="bg-slate-50 rounded-3xl w-full max-w-3xl max-h-[90vh] shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-5 bg-white rounded-t-3xl border-b border-slate-100 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                  {openReport.report.type === REPORT_TYPES.LIVE_TEST ? 'Live Test Report' : 'Post-Class Quiz Report'}
+                </p>
+                <h3 className="text-lg font-[900] text-slate-900 truncate">{openReport.report.title}</h3>
+                <p className="text-sm font-semibold text-slate-500">
+                  <span className="text-blue-600 font-black">{openReport.report.scoreText}</span> - {openReport.report.summary}
+                </p>
+              </div>
+              <button onClick={() => setOpenReport(null)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full shrink-0"><X size={20} /></button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              {openReport.items ? (
+                <AnswerReview items={openReport.items} />
+              ) : (
+                <p className="text-center py-10 text-sm font-bold text-slate-500">Loading the solutions...</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Shown after the idle safeguard disconnected the student */}
       {idleNotice && (

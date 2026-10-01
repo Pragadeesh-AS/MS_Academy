@@ -5,8 +5,9 @@ const admin = require('firebase-admin');
 const QUIZ_KEEP_DAYS = 3;
 
 // Daily: a post-class quiz is kept for 3 days after its class ended, then the quiz and every
-// student's result are deleted. The class session itself stays. (Teachers' own Live Classes page
-// also removes their expired quizzes as it loads - this catches everyone else's.)
+// student's result are deleted (the class session itself stays), and so are students' live test /
+// quiz reports older than 3 days. (Teachers' Live Classes page and students' Live Sessions page
+// also remove their own expired ones as they load - this catches everyone else's.)
 exports.cleanupPostClassQuizzes = onSchedule({ schedule: 'every day 03:00', timeZone: 'Asia/Kolkata' }, async () => {
   const db = admin.firestore();
   const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - QUIZ_KEEP_DAYS * 24 * 60 * 60 * 1000);
@@ -31,4 +32,15 @@ exports.cleanupPostClassQuizzes = onSchedule({ schedule: 'every day 03:00', time
     }
   }
   console.log(`Deleted ${removed} post-class quiz(zes) older than ${QUIZ_KEEP_DAYS} days.`);
+
+  // Students' live test / post-class quiz reports (src/utils/liveReports.js) past their 3 days
+  const expiredReports = await db.collection('live_reports')
+    .where('expiresAt', '<=', admin.firestore.Timestamp.now())
+    .get();
+  for (let i = 0; i < expiredReports.docs.length; i += 450) {
+    const batch = db.batch();
+    expiredReports.docs.slice(i, i + 450).forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+  console.log(`Deleted ${expiredReports.size} expired student report(s).`);
 });

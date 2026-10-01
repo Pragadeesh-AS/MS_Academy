@@ -4,6 +4,8 @@ import { doc, setDoc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/fi
 import { motion, useReducedMotion } from 'motion/react';
 import AnswerReview, { fetchQuestionBankCopies } from './AnswerReview';
 import MatchColumns from '../shared/MatchColumns';
+import { saveLiveReport, REPORT_TYPES } from '../../utils/liveReports';
+import logoImg from '../../assets/msgate_logo.png';
 import { normalizeQuestion } from '../../utils/testGrading';
 import { Timer, Trophy, CheckCircle2, XCircle, Clock, ChevronRight, Lock, X, Check, Flame, Zap, Eraser, MinusCircle } from 'lucide-react';
 
@@ -145,13 +147,14 @@ export const buildLeaderboard = (liveTest, participants) =>
 // ---------------------------------------------------------------------------
 // Start / control helpers used by the teacher UI
 // ---------------------------------------------------------------------------
-export const startLiveTest = async (sessionId, questions, secondsPerQuestion) => {
+export const startLiveTest = async (sessionId, questions, secondsPerQuestion, title = '') => {
   // Explanations are not needed live and keep the session document small.
   const slim = questions.map(({ explanation, explanationImageUrl, ...rest }) => rest);
   await updateDoc(doc(db, 'live_sessions', sessionId), {
     activeQuestionState: null,
     liveTest: {
       active: true,
+      title: title || 'Live Test', // the name the teacher gave it - shown to students and in reports
       testId: `lt${Date.now()}`,
       questions: slim,
       secondsPerQuestion,
@@ -341,6 +344,82 @@ const CryingFace = () => (
   </div>
 );
 
+// Live leaderboard shown to students after every reveal: it opens in the order from before this
+// question, then the rows slide into the new ranking, with ▲/▼ places moved and the points each
+// student just earned. Top `limit` plus the student's own row if they're further down.
+const RevealLeaderboard = ({ rows, prevRows, questionIndex, myId, limit = 5, animate = true }) => {
+  const [showNew, setShowNew] = useState(!animate);
+  useEffect(() => {
+    if (!animate) { setShowNew(true); return undefined; }
+    setShowNew(false);
+    const t = setTimeout(() => setShowNew(true), (REVEAL_SHAKE_S + 0.5) * 1000);
+    return () => clearTimeout(t);
+  }, [questionIndex, animate]);
+
+  const prevRank = new Map(prevRows.map((r, i) => [r.id, i]));
+  const prevScore = new Map(prevRows.map(r => [r.id, r.score]));
+  const shown = showNew ? rows : prevRows;
+  const myIndex = shown.findIndex(r => r.id === myId);
+  const visible = shown.slice(0, limit);
+  const meOutside = myIndex >= limit ? shown[myIndex] : null;
+
+  const row = (r, rank) => {
+    const isMe = r.id === myId;
+    const moved = showNew && prevRank.has(r.id) ? prevRank.get(r.id) - rank : 0;
+    const gained = r.deltas?.[questionIndex];
+    const score = showNew ? r.score : (prevScore.get(r.id) ?? 0);
+    return (
+      <motion.div
+        key={r.id}
+        layout={animate}
+        transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+        className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl ${isMe ? 'bg-[#8854F5] ring-2 ring-white/60' : 'bg-white/[0.07]'}`}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <span className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-sm font-black ${rank === 0 ? 'bg-yellow-400 text-yellow-950' : rank === 1 ? 'bg-slate-300 text-slate-800' : rank === 2 ? 'bg-orange-400 text-orange-950' : 'bg-white/10 text-white/70'}`}>
+            {rank + 1}
+          </span>
+          <span className="font-bold truncate">{r.name}{isMe ? ' (You)' : ''}</span>
+          {moved !== 0 && (
+            <motion.span
+              initial={{ opacity: 0, y: moved > 0 ? 6 : -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`shrink-0 text-[11px] font-black ${moved > 0 ? 'text-emerald-300' : 'text-red-300'}`}
+            >
+              {moved > 0 ? `▲${moved}` : `▼${-moved}`}
+            </motion.span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {showNew && typeof gained === 'number' && gained !== 0 && (
+            <motion.span
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`text-[11px] font-black px-1.5 py-0.5 rounded ${gained > 0 ? 'bg-emerald-400/20 text-emerald-200' : 'bg-red-400/20 text-red-200'}`}
+            >
+              {gained > 0 ? `+${gained}` : gained}
+            </motion.span>
+          )}
+          <span className="font-black tabular-nums">{score} pts</span>
+        </div>
+      </motion.div>
+    );
+  };
+
+  if (shown.length === 0) return <p className="text-sm text-white/50 font-medium">No students have joined the test yet.</p>;
+  return (
+    <div className="space-y-2">
+      {visible.map((r, i) => row(r, i))}
+      {meOutside && (
+        <>
+          <div className="text-center text-white/30 font-black leading-none">···</div>
+          {row(meOutside, myIndex)}
+        </>
+      )}
+    </div>
+  );
+};
+
 const GameLeaderboard = ({ rows, myId, limit = 5 }) => (
   <div className="space-y-2">
     {rows.slice(0, limit).map((r, i) => (
@@ -389,7 +468,7 @@ const CountdownRing = ({ remainingMs, totalSeconds }) => {
 // ---------------------------------------------------------------------------
 // The overlay itself - one component for both roles.
 // ---------------------------------------------------------------------------
-export default function LiveTestOverlay({ liveTest, participants, myUid, sessionId, isTeacher }) {
+export default function LiveTestOverlay({ liveTest, participants, myUid, sessionId, isTeacher, sessionTitle = 'Live Test' }) {
   const { offset, ready: clockReady } = useServerOffset(sessionId, myUid);
   const [now, setNow] = useState(Date.now());
   // When this screen first saw the current question - the fallback clock (see elapsedAt)
@@ -440,6 +519,11 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
   }, [index, liveTest.testId]);
 
   const leaderboard = useMemo(() => buildLeaderboard(liveTest, participants), [liveTest, participants]);
+  // The standings before the current question was revealed - the reveal leaderboard animates from these
+  const previousLeaderboard = useMemo(
+    () => buildLeaderboard({ ...liveTest, phase: 'question' }, participants),
+    [liveTest, participants]
+  );
   const students = participants.filter(p => p.role !== 'teacher');
   const answeredCount = students.filter(p => p.liveAnswers?.[answerKey(liveTest, index)]).length;
   const myRank = leaderboard.findIndex(r => r.id === String(myUid));
@@ -517,6 +601,38 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
     myStreak = isOnTime(liveTest, a) && checkAnswer(liveTest.questions[i], a.answer) ? myStreak + 1 : 0;
   }
   const mine = myRank >= 0 ? leaderboard[myRank] : null;
+  // The name the teacher gave the test (older tests without one fall back to the class topic)
+  const testName = liveTest.title || sessionTitle || 'Live Test';
+
+  // When the test is over, each student saves their own report so they can review it later from
+  // "My Reports" (kept for 3 days - utils/liveReports). Once per test; safe if it runs again.
+  const reportSavedRef = useRef(null);
+  useEffect(() => {
+    if (isTeacher || phase !== 'finished' || !me || !mine) return;
+    if (reportSavedRef.current === liveTest.testId) return;
+    reportSavedRef.current = liveTest.testId;
+    const items = liveTest.questions.map((q, i) => {
+      const a = me.liveAnswers?.[answerKey(liveTest, i)];
+      const answered = !!a && a.answer !== '' && !(Array.isArray(a.answer) && a.answer.length === 0);
+      const delta = mine.deltas?.[i];
+      return {
+        questionId: q.id || null,
+        answer: answered ? a.answer : '',
+        isAnswered: answered,
+        isCorrect: answered && isOnTime(liveTest, a) && checkAnswer(q, a.answer),
+        badge: typeof delta === 'number' ? `${delta > 0 ? '+' : ''}${delta} pts` : null,
+      };
+    });
+    saveLiveReport({
+      type: REPORT_TYPES.LIVE_TEST,
+      key: liveTest.testId,
+      sessionId,
+      title: liveTest.title || sessionTitle,
+      scoreText: `${mine.score} pts`,
+      summary: `Rank #${myRank + 1} of ${leaderboard.length} - ${mine.correct}/${liveTest.questions.length} correct`,
+      items,
+    }).catch(err => console.error('Failed to save live test report', err));
+  }, [isTeacher, phase, liveTest.testId, !!me, !!mine]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const questionBlock = (
     <>
@@ -551,6 +667,7 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
         <div className="w-full max-w-3xl m-auto px-4 py-8 md:py-12">
           <div className="text-center mb-6">
             <Trophy size={48} className="mx-auto text-yellow-400 mb-3" />
+            <p className="text-xs font-black uppercase tracking-widest text-white/50 mb-1">{testName}</p>
             <h3 className="text-2xl md:text-3xl font-black">Quiz complete!</h3>
             {mine && <p className="mt-1 text-white/60 font-semibold">You finished #{myRank + 1} of {leaderboard.length}</p>}
           </div>
@@ -587,7 +704,7 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
       <div className="fixed inset-0 z-[500] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-xl max-h-[92vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-black text-slate-900 flex items-center gap-2"><Trophy className="text-yellow-500" /> Live Test Leaderboard</h3>
+            <h3 className="text-xl font-black text-slate-900 flex items-center gap-2"><Trophy className="text-yellow-500 shrink-0" /> <span className="truncate">{testName} - Leaderboard</span></h3>
             {isTeacher && <button onClick={closeTest} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full" title="Close"><X size={18} /></button>}
           </div>
           <LeaderboardList rows={leaderboard} myId={String(myUid)} />
@@ -607,7 +724,10 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
           <div>
             <div className="flex items-center justify-between gap-4 mb-5">
               <div>
-                <span className="text-[11px] font-black uppercase tracking-widest text-white bg-red-500 px-2.5 py-1 rounded-full animate-pulse">Live Test</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="shrink-0 text-[11px] font-black uppercase tracking-widest text-white bg-red-500 px-2.5 py-1 rounded-full animate-pulse">Live Test</span>
+                  <span className="text-base font-black text-slate-800 truncate">{testName}</span>
+                </div>
                 <p className="mt-2 text-sm font-bold text-slate-500">
                   Question {index + 1} / {liveTest.questions.length} - {questionMarks(question)} {questionMarks(question) === 1 ? 'mark' : 'marks'}
                   {numerical ? ' - Numerical' : multi ? ' - Select all that apply' : ''}
@@ -778,9 +898,18 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
 
       {/* Top bar: question counter, timer, streak, rank and score */}
       <div className="flex items-center justify-between gap-2 px-3 md:px-6 py-3 shrink-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Academy logo + name */}
+          <div className="flex items-center gap-2 pr-2 mr-1 border-r border-white/15 shrink-0">
+            <img src={logoImg} alt="MS GATE Academy" className="h-8 w-8 object-contain rounded-full bg-white p-0.5" />
+            <div className="hidden lg:flex flex-col leading-none">
+              <span className="text-[12px] font-black uppercase tracking-wide">MS GATE Academy</span>
+              <span className="text-[8px] font-bold uppercase tracking-[0.15em] text-white/60 mt-0.5">Coimbatore</span>
+            </div>
+          </div>
           <span className="px-3 py-1.5 rounded-lg bg-white/10 text-sm font-black tabular-nums">{index + 1}/{liveTest.questions.length}</span>
           <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full bg-red-500 text-[10px] font-black uppercase tracking-widest animate-pulse">Live</span>
+          <span className="hidden md:inline text-sm font-black text-white/80 truncate max-w-[220px]" title={testName}>{testName}</span>
         </div>
         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-black tabular-nums ${urgent ? 'bg-red-500 text-white' : 'bg-white/10'}`}>
           <Timer size={15} /> {phase === 'question' ? `${secondsLeft}s` : "Time's up"}
@@ -831,6 +960,23 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
               </p>
             )}
           </motion.div>
+        )}
+
+        {/* Live leaderboard - right under the result so it's seen at once on every reveal */}
+        {revealed && (
+          <div className="w-full max-w-xl mx-auto">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-black uppercase tracking-wider text-white/60 flex items-center gap-1.5"><Trophy size={14} className="text-yellow-400" /> Live Leaderboard</h4>
+              <span className="text-[11px] font-bold text-white/40">after question {index + 1}</span>
+            </div>
+            <RevealLeaderboard
+              rows={leaderboard}
+              prevRows={previousLeaderboard}
+              questionIndex={index}
+              myId={String(myUid)}
+              animate={!reduceMotion}
+            />
+          </div>
         )}
 
         {/* Question card */}
@@ -941,14 +1087,8 @@ export default function LiveTestOverlay({ liveTest, participants, myUid, session
           </div>
         )}
 
-        {/* Leaderboard after each question */}
         {revealed && (
-          <div className="w-full max-w-xl mx-auto mt-2">
-            <h4 className="text-xs font-black uppercase tracking-wider text-white/50 mb-2">Leaderboard</h4>
-            <GameLeaderboard rows={leaderboard} myId={String(myUid)} limit={5} />
-            {myRank >= 5 && <p className="mt-2 text-xs font-bold text-white/60">Your rank: #{myRank + 1} ({leaderboard[myRank].score} pts)</p>}
-            <p className="mt-4 text-xs text-center font-semibold text-white/40">Waiting for your teacher to continue...</p>
-          </div>
+          <p className="text-xs text-center font-semibold text-white/40">Waiting for your teacher to continue...</p>
         )}
       </div>
     </div>

@@ -5,6 +5,93 @@ import Draggable from 'react-draggable';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { positiveMarkFor, negativeMarkFor } from '../../utils/marking';
+import logoImg from '../../assets/msgate_logo.png';
+
+// Academy logo + name at the top of every exam screen. `pill` puts it on a white chip for the
+// blue header bar of the question screen.
+const AcademyBrand = ({ pill = false, className = '' }) => (
+  <div className={`flex items-center gap-2 ${pill ? 'bg-white rounded-md px-2 py-1 shadow-sm' : ''} ${className}`}>
+    <img src={logoImg} alt="MS GATE Academy" className="h-8 w-8 sm:h-9 sm:w-9 object-contain shrink-0" />
+    <div className="flex flex-col items-start leading-none text-left">
+      <span className="font-black text-[12px] sm:text-[13px] text-[#1e3a8a] uppercase tracking-wide whitespace-nowrap">MS GATE Academy</span>
+      <span className="font-bold text-[8px] sm:text-[9px] text-[#1d4ed8] uppercase tracking-[0.15em] mt-0.5">Coimbatore</span>
+    </div>
+  </div>
+);
+
+// GATE-style virtual number pad for NAT answers. The answer box accepts no keyboard, paste or
+// drop input - students type only with these buttons (as in the real GATE exam). Rules: one
+// leading "-", at most one ".", up to 15 characters. ← / → move the cursor; clicking in the box
+// also places it.
+const NAT_MAX_LENGTH = 15;
+const NatKeypad = ({ value, onChange }) => {
+  const [cursor, setCursor] = useState(value.length);
+  const inputRef = useRef(null);
+
+  // Keep the visible caret where the keypad will type next
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const pos = Math.min(cursor, value.length);
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(pos, pos);
+  }, [cursor, value]);
+
+  const insert = (ch) => {
+    const pos = Math.min(cursor, value.length);
+    if (value.length >= NAT_MAX_LENGTH) return;
+    if (ch === '-' && (pos !== 0 || value.includes('-'))) return;
+    if (ch === '.' && value.includes('.')) return;
+    if (ch !== '-' && pos === 0 && value.startsWith('-')) return; // nothing before the minus sign
+    onChange(value.slice(0, pos) + ch + value.slice(pos));
+    setCursor(pos + 1);
+  };
+  const backspace = () => {
+    const pos = Math.min(cursor, value.length);
+    if (pos === 0) return;
+    onChange(value.slice(0, pos - 1) + value.slice(pos));
+    setCursor(pos - 1);
+  };
+  const block = (e) => { if (e.key !== 'Tab') e.preventDefault(); };
+  const stop = (e) => e.preventDefault();
+
+  const keyCls = 'h-9 min-w-[2.25rem] px-2 rounded-md border border-gray-400 bg-gradient-to-b from-gray-50 to-gray-200 hover:from-white hover:to-gray-100 active:from-gray-200 active:to-gray-300 text-sm font-bold text-gray-900 shadow-sm select-none';
+
+  return (
+    <div className="inline-flex flex-col items-start gap-2 select-none">
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        readOnly
+        inputMode="none"
+        autoComplete="off"
+        onKeyDown={block}
+        onKeyPress={stop}
+        onPaste={stop}
+        onDrop={stop}
+        onCut={stop}
+        onContextMenu={stop}
+        onClick={(e) => setCursor(e.currentTarget.selectionStart ?? value.length)}
+        aria-label="Numerical answer - use the keypad"
+        className="border border-gray-400 bg-white p-2 w-56 text-base font-semibold tracking-wide outline-none focus:border-blue-500 caret-blue-600"
+      />
+      <div className="bg-gray-100 border border-gray-200 rounded-md p-3 flex flex-col items-center gap-2 w-56">
+        <button type="button" onClick={backspace} className={`${keyCls} w-full`}>Backspace</button>
+        <div className="grid grid-cols-3 gap-2">
+          {['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', '.', '-'].map(k => (
+            <button key={k} type="button" onClick={() => insert(k)} className={keyCls}>{k}</button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setCursor(c => Math.max(0, Math.min(c, value.length) - 1))} className={keyCls} aria-label="Move cursor left">←</button>
+          <button type="button" onClick={() => setCursor(c => Math.min(value.length, c + 1))} className={keyCls} aria-label="Move cursor right">→</button>
+        </div>
+        <button type="button" onClick={() => { onChange(''); setCursor(0); }} className={`${keyCls} w-full`}>Clear All</button>
+      </div>
+    </div>
+  );
+};
 
 export default function GateTestInterface({ test, testQuestions: rawTestQuestions, onSubmit, onCancel, studentName }) {
   const { orderedQuestions: testQuestions, sections } = useMemo(() => {
@@ -267,6 +354,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
   const Header = ({ showSystemInfo = true }) => (
     <div className="bg-[#2D66B3] text-white flex flex-col font-sans">
       <div className="bg-white flex flex-col items-center justify-center py-2 px-2 relative text-center">
+        <AcademyBrand className="sm:absolute sm:left-3 sm:top-1/2 sm:-translate-y-1/2 mb-1 sm:mb-0" />
         <h1 className="text-[#364968] text-xs sm:text-base md:text-xl font-bold uppercase">GRADUATE APTITUDE TEST IN ENGINEERING (GATE 2026)</h1>
         <p className="text-[#364968] text-[9px] sm:text-xs font-semibold mt-1 sm:mt-0 sm:absolute sm:bottom-1">Organizing Institute : INDIAN INSTITUTE OF TECHNOLOGY GUWAHATI</p>
       </div>
@@ -322,7 +410,8 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
       <div className="fixed inset-0 z-50 bg-white text-black flex flex-col font-sans overflow-hidden">
         {/* Top Header */}
         <header className="flex flex-col">
-          <div className="flex items-center justify-center px-4 py-2 border-b border-gray-300 text-center">
+          <div className="flex flex-col sm:flex-row items-center justify-center px-4 py-2 border-b border-gray-300 text-center relative">
+            <AcademyBrand className="sm:absolute sm:left-3 sm:top-1/2 sm:-translate-y-1/2 mb-1 sm:mb-0" />
             <div className="flex items-center gap-4">
               <div className="text-center">
                 <h1 className="font-bold text-[#2A4B7C] text-sm sm:text-base md:text-lg tracking-wide uppercase">GRADUATE APTITUDE TEST IN ENGINEERING (GATE 2026)</h1>
@@ -596,7 +685,8 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     return (
       <div className="fixed inset-0 z-50 bg-[#F5F5F5] text-black flex flex-col font-sans select-none">
         {/* Header */}
-        <div className="bg-[#2D66B3] text-white flex justify-center py-2 px-3 border-b border-gray-400 relative">
+        <div className="bg-[#2D66B3] text-white flex flex-col md:flex-row items-center justify-center gap-1.5 py-2 px-3 border-b border-gray-400 relative">
+          <AcademyBrand pill className="md:absolute md:left-3 md:top-1/2 md:-translate-y-1/2" />
           <h1 className="text-[#364968] bg-white px-3 sm:px-10 md:px-20 py-1 text-[11px] sm:text-base md:text-xl font-bold uppercase rounded-sm shadow-sm text-center">GRADUATE APTITUDE TEST IN ENGINEERING (GATE 2026)</h1>
         </div>
 
@@ -683,14 +773,11 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
 
               <div className="space-y-4">
                 {currentQ?.questionType === 'Fill in Blanks' ? (
-                  <div className="flex gap-2 items-center">
-                    <input 
-                      type="text" 
-                      value={selectedAnswers[currentQ.id] || ''}
-                      onChange={(e) => handleSelectOption(currentQ.id, e.target.value)}
-                      className="border border-gray-400 p-2 w-48 text-sm outline-none focus:border-blue-500"
-                    />
-                  </div>
+                  <NatKeypad
+                    key={currentQ.id}
+                    value={String(selectedAnswers[currentQ.id] ?? '')}
+                    onChange={(v) => handleSelectOption(currentQ.id, v)}
+                  />
                 ) : currentQ?.questionType === 'Multiple Choice' ? (
                   <div className="flex flex-col gap-4">
                     {['A', 'B', 'C', 'D'].map(opt => {

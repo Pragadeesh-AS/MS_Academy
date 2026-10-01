@@ -334,6 +334,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [participantsRaw, setParticipantsRaw] = useState([]);
   const [qbMode, setQbMode] = useState('present'); // 'present' | 'live'
   const [qbSeconds, setQbSeconds] = useState(60);
+  const [liveTestName, setLiveTestName] = useState(''); // entered by the teacher before starting a live test
   const [newRecordingName, setNewRecordingName] = useState('');
   const [sessionBundleId, setSessionBundleId] = useState('free');
   // Subject / title the teacher picked when starting the class - the recording is filed under the subject
@@ -575,6 +576,10 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       alert("Selected questions not found.");
       return;
     }
+    if (qbMode === 'live' && !liveTestName.trim()) {
+      alert("Please enter a name for the live test.");
+      return;
+    }
 
     setIsQBModalOpen(false);
     setSelectedQBIds([]);
@@ -583,7 +588,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     if (qbMode === 'live') {
       const secs = Math.max(5, parseInt(qbSeconds) || 0);
       try {
-        await startLiveTest(sessionId, selectedQList, secs);
+        await startLiveTest(sessionId, selectedQList, secs, liveTestName.trim());
+        setLiveTestName('');
       } catch (err) {
         console.error('Failed to start live test', err);
         alert('Could not start the live test. Try selecting fewer questions.');
@@ -1220,6 +1226,17 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                   <button type="button" onClick={() => setQbMode('live')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${qbMode === 'live' ? 'bg-white shadow-sm text-red-600' : 'text-slate-500'}`}>Live Test</button>
                 </div>
                 {qbMode === 'live' && (
+                  <input
+                    type="text"
+                    value={liveTestName}
+                    onChange={(e) => setLiveTestName(e.target.value)}
+                    placeholder="Live test name *"
+                    maxLength={80}
+                    title="Shown to students during the test and in their reports"
+                    className={`w-52 bg-white border rounded-xl px-3 py-2 text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-red-400 ${liveTestName.trim() ? 'border-slate-200' : 'border-red-300'}`}
+                  />
+                )}
+                {qbMode === 'live' && (
                   <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl" title="Time each student gets per question">
                     <Clock size={14} />
                     <input
@@ -1234,7 +1251,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                 )}
                 <button
                   onClick={handleStartQB}
-                  disabled={selectedQBIds.length === 0}
+                  disabled={selectedQBIds.length === 0 || (qbMode === 'live' && !liveTestName.trim())}
+                  title={qbMode === 'live' && !liveTestName.trim() ? 'Enter a name for the live test' : undefined}
                   className={`py-3 px-6 disabled:opacity-60 text-white font-bold rounded-xl shadow-lg transition-colors ${qbMode === 'live' ? 'bg-red-500 hover:bg-red-600 shadow-red-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
                 >
                   {qbMode === 'live' ? 'Start Live Test' : 'Start Presentation'}
