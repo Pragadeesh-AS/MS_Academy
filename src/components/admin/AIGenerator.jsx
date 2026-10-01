@@ -1405,7 +1405,10 @@ IMPORTANT:
         ? { status: 'Approved', reviewed: false, reviewedBy: '' }
         : { status: 'In Review', reviewed: false, reviewerEmail: reviewer };
 
-      for (const original of toImport) {
+      // One timestamp for the whole import + each question's position, so the Question Bank can
+      // list the latest import first while keeping that import in the PDF's order
+      const importedAt = new Date().toISOString();
+      for (const [importOrder, original] of toImport.entries()) {
         const { _duplicate, ...question } = original;
         await addDoc(collection(db, 'question_bank'), {
           ...question,
@@ -1425,6 +1428,8 @@ IMPORTANT:
           ...reviewFields,
           ...pairFields,
           isPremium: importAsPremium,
+          importedAt,
+          importOrder,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });

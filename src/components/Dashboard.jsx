@@ -132,6 +132,14 @@ export default function Dashboard() {
       ? { tier: 'prime', label: 'MS GATE PRIME', icon: '⭐' }
       : { tier: 'foundation', label: 'MS GATE FOUNDATION', icon: '🌱' };
   const [activeTab, setActiveTab] = useState('learning');
+  // Finished practice test -> its report in Analytics; "Review Solutions" there -> the test's review
+  const [analyticsTestId, setAnalyticsTestId] = useState(null);
+  const [reviewTestId, setReviewTestId] = useState(null);
+  // Leaving via the sidebar drops a pending "open this test" so it doesn't pop up later
+  useEffect(() => {
+    if (activeTab !== 'tests') setReviewTestId(null);
+    if (activeTab !== 'analytics') setAnalyticsTestId(null);
+  }, [activeTab]);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [scheduledClasses, setScheduledClasses] = useState([]);
@@ -1498,11 +1506,25 @@ export default function Dashboard() {
         )}
 
         {activeTab === 'analytics' && (
-          <Analytics studentViewOnlyEmail={sessionStorage.getItem('auth_email')} studentViewOnlyName={studentName} />
+          <Analytics
+            studentViewOnlyEmail={sessionStorage.getItem('auth_email')}
+            studentViewOnlyName={studentName}
+            openTestId={analyticsTestId}
+            onOpenedTest={() => setAnalyticsTestId(null)}
+            onReviewSolutions={(testId) => { setReviewTestId(testId); setActiveTab('tests'); }}
+          />
         )}
 
         {activeTab === 'tests' && (
-          <StudentTests isPro={isPro} department={studentDepartment} purchasedBundles={purchasedBundles} bundles={availableBundles} />
+          <StudentTests
+            isPro={isPro}
+            department={studentDepartment}
+            purchasedBundles={purchasedBundles}
+            bundles={availableBundles}
+            onTestCompleted={(testId) => { setReviewTestId(null); setAnalyticsTestId(testId); setActiveTab('analytics'); }}
+            reviewTestId={reviewTestId}
+            onReviewClosed={reviewTestId ? () => { setAnalyticsTestId(reviewTestId); setReviewTestId(null); setActiveTab('analytics'); } : null}
+          />
         )}
 
         {activeTab === 'upgrade' && (

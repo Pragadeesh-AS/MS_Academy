@@ -12,11 +12,13 @@ import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, minut
 
 import TestLeaderboard from './student/TestLeaderboard';
 
-export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [] }) {
+// onTestCompleted(testId): after submitting, the student is taken to their Analytics for that test.
+// reviewTestId: open that completed test's solution review (asked for from Analytics); onReviewClosed
+// takes them back there.
+export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [], onTestCompleted = null, reviewTestId = null, onReviewClosed = null }) {
   const [tests, setTests] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [testsTab, setTestsTab] = useState('pending'); // 'pending' | 'completed'
 
   // Active Test States
   const [activeTest, setActiveTest] = useState(null);
@@ -262,9 +264,16 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     try {
       const docRef = await addDoc(collection(db, 'test_attempts'), attemptPayload);
       const freshAttempt = { id: docRef.id, ...attemptPayload };
-      setActiveAttempt(freshAttempt);
-      setTestMode('result');
       fetchTestsAndAttempts();
+      if (onTestCompleted) {
+        setTestMode('list');
+        setActiveAttempt(null);
+        setActiveTest(null);
+        onTestCompleted(test.id);
+      } else {
+        setActiveAttempt(freshAttempt);
+        setTestMode('result');
+      }
     } catch (err) {
       console.error("Failed to save attempt:", err);
       alert("Test graded but failed to save logs. Score: " + attemptPayload.score + "/" + totalMarks);
@@ -343,6 +352,16 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       });
     }
   };
+
+  // Analytics asked to review a finished test's solutions: open it once tests + attempts are in
+  const openedReviewRef = useRef(null);
+  useEffect(() => {
+    if (!reviewTestId) { openedReviewRef.current = null; return; }
+    if (loading || openedReviewRef.current === reviewTestId) return;
+    if (!tests.some(t => t.id === reviewTestId) || !attempts.some(a => a.testId === reviewTestId)) return;
+    openedReviewRef.current = reviewTestId;
+    viewAttemptResult(reviewTestId);
+  }, [reviewTestId, loading, tests, attempts]);
 
   if (testMode === 'taking' && activeTest) {
     return (
@@ -669,10 +688,10 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         {/* Finish Review Button */}
         <div className="flex justify-end pt-4">
           <button 
-            onClick={() => { setTestMode('list'); setActiveAttempt(null); setActiveTest(null); }}
+            onClick={() => { setTestMode('list'); setActiveAttempt(null); setActiveTest(null); onReviewClosed?.(); }}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md"
           >
-            Back to Dashboard
+            {onReviewClosed ? 'Back to Analytics' : 'Back to Dashboard'}
           </button>
         </div>
 
@@ -689,8 +708,9 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const pendingTests = tests.filter(t => !isTestCompleted(t)).sort((a, b) =>
     availabilityRank[testAvailability(a, nowTick)] - availabilityRank[testAvailability(b, nowTick)]
     || (testStartMillis(a) ?? 0) - (testStartMillis(b) ?? 0));
-  const completedTests = tests.filter(isTestCompleted);
-  const visibleTests = testsTab === 'completed' ? completedTests : pendingTests;
+  // Finished tests aren't listed here - their results are in the student's Analytics
+  const visibleTests = pendingTests;
+
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -722,32 +742,16 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         </div>
       ) : (
         <>
-        <div className="flex gap-2 border-b border-slate-200">
-          {[
-            { key: 'pending', label: 'Not Completed', count: pendingTests.length, active: 'border-blue-600 text-blue-600', badge: 'bg-blue-100 text-blue-700' },
-            { key: 'completed', label: 'Completed', count: completedTests.length, active: 'border-emerald-500 text-emerald-600', badge: 'bg-emerald-100 text-emerald-700' }
-          ].map(t => (
-            <button
-              key={t.key}
-              onClick={() => setTestsTab(t.key)}
-              className={`px-5 py-3 -mb-px border-b-2 font-bold text-sm flex items-center gap-2 transition-colors ${testsTab === t.key ? t.active : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-            >
-              {t.label}
-              <span className={`px-2 py-0.5 rounded-full text-xs font-black ${testsTab === t.key ? t.badge : 'bg-slate-100 text-slate-500'}`}>{t.count}</span>
-            </button>
-          ))}
-        </div>
-
         {visibleTests.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm text-center p-16 flex flex-col items-center justify-center">
             <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-6">
               <Award size={32} />
             </div>
             <h3 className="text-xl font-bold text-slate-800 mb-2">
-              {testsTab === 'completed' ? 'No Completed Tests Yet' : 'All Caught Up!'}
+              All Caught Up!
             </h3>
             <p className="text-slate-500 max-w-md font-medium">
-              {testsTab === 'completed' ? 'Tests you finish will show up here so you can review your results.' : 'You have completed every available practice test.'}
+              You have completed every available practice test. See your results in Analytics.
             </p>
           </div>
         ) : (

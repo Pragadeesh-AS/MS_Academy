@@ -365,6 +365,17 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         qData = qData.filter(q => !duplicateIds.includes(q.id));
       }
 
+      // Newest first: the latest import (or newly added question) sits at the top. Questions of
+      // one import keep their PDF order; ones with no date at all go to the bottom.
+      // (createdAt is an ISO string; a few older questions may hold a Firestore Timestamp instead)
+      const iso = (v) => (v?.toDate ? v.toDate().toISOString() : String(v || ''));
+      const addedAt = (q) => iso(q.importedAt || q.createdAt);
+      qData.sort((a, b) =>
+        addedAt(b).localeCompare(addedAt(a)) ||
+        (a.importOrder ?? 0) - (b.importOrder ?? 0) ||
+        iso(a.createdAt).localeCompare(iso(b.createdAt))
+      );
+
       setQuestions(qData);
     } catch (e) {
       console.error("Failed to fetch data", e);
@@ -805,6 +816,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   };
 
   const needsApproval = (q) => q.status !== 'Approved' || q.reviewed === false;
+  // Admin and reviewers approve anything they can see; a typist approves the questions they typed
+  // or imported themselves (isMyQuestion is declared further down - only called at render time)
+  const isPairTypist = userRole === 'typist' && pairRole === 'typist';
+  const canApprove = (q) => canQuickEdit || (isPairTypist && isMyQuestion(q));
   const approvalFields = () => ({
     status: 'Approved',
     reviewed: true,
@@ -844,6 +859,16 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, isPremium: makePremium, updatedAt } : q));
         showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} moved to the ${makePremium ? 'Premium Question Bank' : 'Question Bank'}`, "success");
       } else if (bulkAction === 'approve') {
+        // A typist's selection may include shared-bank questions they can't approve - skip those
+        const byId = new Map(questions.map(q => [q.id, q]));
+        const allowed = ids.filter(id => byId.get(id) && canApprove(byId.get(id)));
+        ids.splice(0, ids.length, ...allowed);
+        if (ids.length === 0) {
+          showToast("You can only approve questions you typed or imported", "error");
+          setIsBulkWorking(false);
+          setBulkAction(null);
+          return;
+        }
         const update = approvalFields();
         await runBulk(ids, (batch, ref) => batch.update(ref, update));
         setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, ...update } : q));
@@ -1243,15 +1268,17 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
             <div className="mb-3 flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
               <span className="text-[13px] font-[800] text-blue-800">{selectedIds.length} selected</span>
               <div className="flex flex-wrap items-center gap-2 ml-auto">
+                {(canQuickEdit || isPairTypist) && (
+                  <button
+                    type="button"
+                    onClick={() => setBulkAction('approve')}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-[800] bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm"
+                  >
+                    <CheckCircle2 size={15} /> Approve
+                  </button>
+                )}
                 {canQuickEdit && (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => setBulkAction('approve')}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-[800] bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm"
-                    >
-                      <CheckCircle2 size={15} /> Approve
-                    </button>
                     <div className="flex items-center bg-white border border-blue-200 rounded-xl p-0.5">
                       <button type="button" onClick={() => setBulkAction('mark1')} className="px-3 py-1.5 rounded-lg text-[12.5px] font-[800] text-blue-700 hover:bg-blue-50">Set 1 Mark</button>
                       <button type="button" onClick={() => setBulkAction('mark2')} className="px-3 py-1.5 rounded-lg text-[12.5px] font-[800] text-blue-700 hover:bg-blue-50">Set 2 Marks</button>
@@ -1424,7 +1451,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                         </td>
                         <td className="py-4 px-4 h-[82px] text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {canQuickEdit && needsApproval(q) && (
+                            {needsApproval(q) && canApprove(q) && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleQuickApprove(q); }}
                                 title="Approve this question"

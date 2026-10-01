@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 
 import { db } from '../../firebase';
+import { areSolutionsVisible } from '../../utils/solutionRelease';
 import { collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
 
 // Helper
@@ -18,7 +19,7 @@ const formatTime = (seconds) => {
   return `${m}m ${s}s`;
 };
 
-export default function Analytics({ joinedStudents = [], department = null, studentViewOnlyEmail = null, studentViewOnlyName = null }) {
+export default function Analytics({ joinedStudents = [], department = null, studentViewOnlyEmail = null, studentViewOnlyName = null, openTestId = null, onOpenedTest = null, onReviewSolutions = null }) {
   const [activeInnerTab, setActiveInnerTab] = useState('global'); // 'global' or 'student'
   
   // Drill-down states for Global
@@ -193,6 +194,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                 isFillBlank,
                 questionType: qData.questionType || 'Multiple Choice',
                 subject: qData.subject || 'General',
+                topic: qData.topic || '',
                 marks: qData.marks ? Number(qData.marks) : 1,
                 options: isFillBlank ? null : {
                   A: { text: qData.optionA, image: qData.optionAImage },
@@ -258,6 +260,8 @@ export default function Analytics({ joinedStudents = [], department = null, stud
             correct,
             wrong,
             negMarks: 0,
+            // Students only see answers / explanations once the test's solutions are released
+            solutionsVisible: areSolutionsVisible(fetchedTests.find(t => t.id === attempt.testId)),
             allQuestions
           });
         });
@@ -334,6 +338,8 @@ export default function Analytics({ joinedStudents = [], department = null, stud
   
   const activeStudentData = selectedStudentName ? (computedStudentHistory[selectedStudentName] || []) : [];
   const activeDetailedTest = detailedTestId ? activeStudentData.find(t => t.id === detailedTestId) : null;
+  // A student looking at a test whose solutions aren't released yet sees their answers, not the key
+  const hideKey = !!studentViewOnlyEmail && !!activeDetailedTest && !activeDetailedTest.solutionsVisible;
 
   let topperAttempt = null;
   if (activeDetailedTest && activeDetailedTest.testId) {
@@ -354,6 +360,16 @@ export default function Analytics({ joinedStudents = [], department = null, stud
 
   // Global Logic
   const activeGlobalTest = detailedGlobalTestId ? computedTestAnalytics[detailedGlobalTestId] : null;
+
+  // Student just finished a test (or picked one): open that test's latest attempt once data is in
+  useEffect(() => {
+    if (!openTestId || !studentViewOnlyEmail) return;
+    const attemptsOfTest = activeStudentData.filter(t => t.testId === openTestId);
+    if (attemptsOfTest.length === 0) return; // not loaded yet
+    setDetailedTestId(attemptsOfTest[attemptsOfTest.length - 1].id);
+    setFilterStatus('All');
+    onOpenedTest?.();
+  }, [openTestId, studentViewOnlyEmail, activeStudentData, onOpenedTest]);
 
   const openStudentTestDetail = (id) => {
     setDetailedTestId(id);
@@ -1002,94 +1018,6 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                       </ResponsiveContainer>
                     </div>
 
-                    {/* Topic Strengths Section */}
-                    {(() => {
-                      const topicStats = {};
-                      activeStudentData.forEach(test => {
-                        if (test.allQuestions && test.allQuestions.length > 0) {
-                          let topicsInTest = new Set();
-                          test.allQuestions.forEach(q => {
-                            const subj = q.subject || 'General';
-                            if (!topicStats[subj]) {
-                              topicStats[subj] = { totalScore: 0, totalMax: 0, testCount: 0 };
-                            }
-                            topicStats[subj].totalMax += (q.marks || 1);
-                            if (q.status === 'Correct') {
-                              topicStats[subj].totalScore += (q.marks || 1);
-                            }
-                            topicsInTest.add(subj);
-                          });
-                          topicsInTest.forEach(subj => {
-                            topicStats[subj].testCount += 1;
-                          });
-                        } else {
-                          const subj = test.subject || 'General';
-                          if (!topicStats[subj]) {
-                            topicStats[subj] = { totalScore: 0, totalMax: 0, testCount: 0 };
-                          }
-                          topicStats[subj].totalScore += (test.score || 0);
-                          topicStats[subj].totalMax += (test.maxScore || 100);
-                          topicStats[subj].testCount += 1;
-                        }
-                      });
-
-                      const topicStrengths = Object.keys(topicStats).map(subject => {
-                        const stats = topicStats[subject];
-                        const percentage = stats.totalMax > 0 ? Math.round((stats.totalScore / stats.totalMax) * 100) : 0;
-                        return { subject, percentage, testCount: stats.testCount };
-                      }).sort((a, b) => b.percentage - a.percentage);
-
-                      const strongTopics = topicStrengths.filter(t => t.percentage >= 60);
-                      const weakTopics = topicStrengths.filter(t => t.percentage < 60);
-
-                      if (topicStrengths.length === 0) return null;
-
-                      return (
-                        <div className="mb-12">
-                          <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 text-center">Topic Analysis</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Strong Topics */}
-                            <div className="bg-emerald-50/50 border border-emerald-100 rounded-3xl p-6">
-                              <h5 className="text-emerald-700 font-black flex items-center gap-2 mb-4">
-                                <TrendingUp size={20} /> Strong Topics
-                              </h5>
-                              {strongTopics.length > 0 ? (
-                                <div className="flex flex-col gap-3">
-                                  {strongTopics.map(topic => (
-                                    <div key={topic.subject} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-emerald-50">
-                                      <span className="font-bold text-slate-700 text-sm">{topic.subject}</span>
-                                      <span className="font-black text-emerald-600">{topic.percentage}%</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-sm font-semibold text-emerald-600/60 italic">No strong topics yet.</p>
-                              )}
-                            </div>
-
-                            {/* Weak Topics */}
-                            <div className="bg-rose-50/50 border border-rose-100 rounded-3xl p-6">
-                              <h5 className="text-rose-700 font-black flex items-center gap-2 mb-4">
-                                <TrendingUp size={20} className="rotate-180" /> Topics to Improve
-                              </h5>
-                              {weakTopics.length > 0 ? (
-                                <div className="flex flex-col gap-3">
-                                  {weakTopics.map(topic => (
-                                    <div key={topic.subject} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-rose-50">
-                                      <span className="font-bold text-slate-700 text-sm">{topic.subject}</span>
-                                      <span className="font-black text-rose-600">{topic.percentage}%</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-sm font-semibold text-rose-600/60 italic">No weak topics!</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
                     {/* Clean List of Test Cards */}
                     <div>
                       <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 text-center">Test History</h4>
@@ -1143,6 +1071,14 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                       <h4 className="text-[26px] font-[900] tracking-tight text-slate-800">{activeDetailedTest.testName}</h4>
                       <p className="text-sm font-bold text-slate-500 mt-1">Detailed Performance Breakdown for {selectedStudentName}</p>
                     </div>
+                    {onReviewSolutions && activeDetailedTest.testId && (
+                      <button
+                        onClick={() => onReviewSolutions(activeDetailedTest.testId)}
+                        className="flex items-center gap-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl shadow-sm transition-colors"
+                      >
+                        <FileText size={16} /> Review Solutions
+                      </button>
+                    )}
                   </div>
                   <div className="flex flex-col items-end mt-6 sm:mt-0 bg-blue-50/50 px-6 py-4 rounded-2xl border border-blue-100">
                     <span className="text-4xl font-[900] text-blue-600">{activeDetailedTest.score}%</span>
@@ -1170,6 +1106,57 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                   </div>
                 </div>
 
+                {/* Topic Analysis - for this test only */}
+                {(() => {
+                  const stats = {};
+                  activeDetailedTest.allQuestions.forEach(q => {
+                    const name = (q.topic || '').trim() || q.subject || 'General';
+                    if (!stats[name]) stats[name] = { name, scored: 0, total: 0, correct: 0, count: 0 };
+                    const m = q.marks || 1;
+                    stats[name].total += m;
+                    stats[name].count += 1;
+                    if (q.status === 'Correct') { stats[name].scored += m; stats[name].correct += 1; }
+                  });
+                  const topics = Object.values(stats)
+                    .map(t => ({ ...t, percentage: t.total > 0 ? Math.round((t.scored / t.total) * 100) : 0 }))
+                    .sort((a, b) => b.percentage - a.percentage);
+                  if (topics.length === 0) return null;
+                  const strong = topics.filter(t => t.percentage >= 60);
+                  const weak = topics.filter(t => t.percentage < 60);
+                  const topicRow = (t, tone) => (
+                    <div key={t.name} className={`flex justify-between items-center gap-3 bg-white p-3 rounded-xl shadow-sm border ${tone === 'good' ? 'border-emerald-50' : 'border-rose-50'}`}>
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-700 text-sm block truncate">{t.name}</span>
+                        <span className="text-[11px] font-semibold text-slate-400">{t.correct} of {t.count} question{t.count === 1 ? '' : 's'} correct</span>
+                      </div>
+                      <span className={`font-black shrink-0 ${tone === 'good' ? 'text-emerald-600' : 'text-rose-600'}`}>{t.percentage}%</span>
+                    </div>
+                  );
+                  return (
+                    <div className="mb-8">
+                      <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 text-center">Topic Analysis</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-emerald-50/50 border border-emerald-100 rounded-3xl p-5">
+                          <h5 className="text-emerald-700 font-black flex items-center gap-2 mb-3">
+                            <TrendingUp size={20} /> Strong Topics
+                          </h5>
+                          {strong.length > 0
+                            ? <div className="flex flex-col gap-2.5">{strong.map(t => topicRow(t, 'good'))}</div>
+                            : <p className="text-sm font-semibold text-emerald-600/60 italic">No strong topics in this test yet.</p>}
+                        </div>
+                        <div className="bg-rose-50/50 border border-rose-100 rounded-3xl p-5">
+                          <h5 className="text-rose-700 font-black flex items-center gap-2 mb-3">
+                            <TrendingUp size={20} className="rotate-180" /> Topics to Improve
+                          </h5>
+                          {weak.length > 0
+                            ? <div className="flex flex-col gap-2.5">{weak.map(t => topicRow(t, 'weak'))}</div>
+                            : <p className="text-sm font-semibold text-rose-600/60 italic">No weak topics in this test!</p>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Filter Bar */}
                 <div className="flex flex-wrap items-center gap-2 mb-8 bg-slate-50 p-2 rounded-xl border border-slate-200">
                   {['All', 'Correct', 'Wrong', 'Unattempted'].map(status => (
@@ -1182,6 +1169,13 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                     </button>
                   ))}
                 </div>
+
+                {hideKey && (
+                  <div className="mb-6 flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-5 py-4 text-sm font-semibold">
+                    <AlertCircle size={18} className="shrink-0 text-amber-500" />
+                    Correct answers and explanations will appear here once your teacher releases the solutions for this test.
+                  </div>
+                )}
 
                 {/* Detailed Questions List */}
                 <div className="space-y-6">
@@ -1233,7 +1227,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                                   if (!opt || (!opt.text && !opt.image)) return null;
                                   
                                   const isSelected = q.selected && q.selected.includes(`Option ${optKey}`);
-                                  const isCorrect = q.correct && q.correct.includes(`Option ${optKey}`);
+                                  const isCorrect = !hideKey && q.correct && q.correct.includes(`Option ${optKey}`);
                                   
                                   let ringClass = "border-slate-200";
                                   let bgClass = "bg-white";
@@ -1246,6 +1240,16 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                                       <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
                                         <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-200/50 px-2 py-1 rounded border border-emerald-200/50">
                                           <CheckCircle2 size={12} /> Correct & Selected
+                                        </span>
+                                      </div>
+                                    );
+                                  } else if (isSelected && hideKey) {
+                                    ringClass = "border-blue-400";
+                                    bgClass = "bg-blue-50";
+                                    badges = (
+                                      <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
+                                        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-blue-700 bg-blue-200/50 px-2 py-1 rounded border border-blue-200/50">
+                                          Your Answer
                                         </span>
                                       </div>
                                     );
@@ -1300,7 +1304,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                                 </div>
                                 
                                 {/* Correct Answer */}
-                                {q.status !== 'Correct' && (
+                                {q.status !== 'Correct' && !hideKey && (
                                   <div className="flex items-start gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
                                     <div className="mt-0.5 shrink-0 bg-white p-1.5 rounded-full shadow-sm border border-emerald-200">
                                       <CheckCircle2 className="text-emerald-500" size={18} />
@@ -1314,12 +1318,14 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                               </div>
                             )}
                             
+                            {!hideKey && (
                             <div className="pt-5 border-t border-slate-100">
                               <div className="flex items-center gap-3 text-[15px] text-slate-600 bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50">
                                 <AlertCircle className="shrink-0 text-blue-500" size={20} />
                                 <p className="leading-relaxed"><span className="font-bold text-slate-800 mr-1">Explanation:</span> <span dangerouslySetInnerHTML={{ __html: q.explanation }} /></p>
                               </div>
                             </div>
+                            )}
                           </div>
 
                         </div>
