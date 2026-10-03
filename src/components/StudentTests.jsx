@@ -8,6 +8,7 @@ import logoImg from '../assets/msgate_logo.png';
 import { RELEASE_MODES, releaseMode, releaseAtMillis, areSolutionsVisible, formatReleaseTime } from '../utils/solutionRelease';
 import { gradeAnswer, normalizeQuestion, correctAnswerText } from '../utils/testGrading';
 import { canAccessTest as canAccessTestFor } from '../utils/testAccess';
+import { templateKeyOf, templateFoldersFor, folderName, templateMarks } from '../utils/testTemplates';
 import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, minutesAvailable, formatTestTime, formatCountdown } from '../utils/testSchedule';
 
 import TestLeaderboard from './student/TestLeaderboard';
@@ -19,6 +20,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const [tests, setTests] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [openTemplateFolder, setOpenTemplateFolder] = useState(null); // 'topic' | 'subject' | 'full' | 'other'
 
   // Active Test States
   const [activeTest, setActiveTest] = useState(null);
@@ -219,7 +221,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     handleSubmitTest(testQuestions, activeTest, selectedAnswers);
   };
 
-  const handleSubmitTest = async (questionsList, test, answers) => {
+  // meta (from the exam screen): { timeSpent: { questionId: seconds }, order: [questionId in exam order] }
+  const handleSubmitTest = async (questionsList, test, answers, meta = {}) => {
     setLoading(true);
     let correctCount = 0;
     let totalScore = 0;
@@ -227,6 +230,12 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
     const timeTakenSeconds = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
     const avgTimePerQuestion = questionsList.length > 0 ? timeTakenSeconds / questionsList.length : 0;
+    // Report questions in the order the student saw them (aptitude section first, etc.)
+    if (Array.isArray(meta.order) && meta.order.length) {
+      const pos = new Map(meta.order.map((id, i) => [id, i]));
+      questionsList = [...questionsList].sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9));
+    }
+    const hasRealTimes = !!meta.timeSpent && Object.keys(meta.timeSpent).length > 0;
 
     // Evaluate answers - the same marking the answer-key re-grade uses (utils/testGrading).
     // Skipped questions never lose marks - only an attempted-but-wrong answer does.
@@ -244,7 +253,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           isCorrect: graded.isCorrect,
           marksAwarded: graded.marksAwarded,
           correctAnswer: graded.correctAnswer,
-          timeSpent: avgTimePerQuestion
+          // Real seconds on this question (older exam screens only gave the average)
+          timeSpent: hasRealTimes ? (meta.timeSpent[q.id] || 0) : avgTimePerQuestion
         };
       });
 
@@ -257,6 +267,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       totalMarks,
       correctCount,
       totalQuestions: questionsList.length,
+      timeTakenSeconds,
       responses: evaluation,
       submittedAt: serverTimestamp()
     };
@@ -369,7 +380,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         test={activeTest}
         testQuestions={testQuestions}
         studentName={sessionStorage.getItem('auth_name') || 'Student'}
-        onSubmit={(answers) => handleSubmitTest(testQuestions, activeTest, answers)}
+        onSubmit={(answers, meta) => handleSubmitTest(testQuestions, activeTest, answers, meta)}
         onCancel={() => setTestMode('list')}
       />
     );
@@ -708,8 +719,10 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const pendingTests = tests.filter(t => !isTestCompleted(t)).sort((a, b) =>
     availabilityRank[testAvailability(a, nowTick)] - availabilityRank[testAvailability(b, nowTick)]
     || (testStartMillis(a) ?? 0) - (testStartMillis(b) ?? 0));
-  // Finished tests aren't listed here - their results are in the student's Analytics
-  const visibleTests = pendingTests;
+  // Finished tests aren't listed here - their results are in the student's Analytics.
+  // They're grouped into one folder per test template (Topic / Subject / Full Length).
+  const studentFolders = templateFoldersFor(pendingTests);
+  const visibleTests = openTemplateFolder ? pendingTests.filter(t => templateKeyOf(t) === openTemplateFolder) : pendingTests;
 
 
   return (
@@ -742,7 +755,46 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         </div>
       ) : (
         <>
-        {visibleTests.length === 0 ? (
+        {openTemplateFolder && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setOpenTemplateFolder(null)}
+              className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 bg-white transition-colors"
+              title="Back to folders"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <h3 className="text-lg font-[900] text-slate-800">{folderName(openTemplateFolder)}</h3>
+          </div>
+        )}
+        {!openTemplateFolder ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {studentFolders.map(folder => {
+              const openNow = pendingTests.filter(t => templateKeyOf(t) === folder.key && testAvailability(t, nowTick) === AVAILABILITY.OPEN).length;
+              return (
+                <button
+                  key={folder.key}
+                  onClick={() => setOpenTemplateFolder(folder.key)}
+                  className="text-left bg-white rounded-2xl border border-slate-200 p-5 hover:border-blue-300 hover:shadow-lg transition-all duration-200 group flex items-center gap-4"
+                >
+                  <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 border border-blue-100 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-colors">
+                    <FileText size={22} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-[800] text-[15px] text-slate-800 truncate">{folder.name}</h3>
+                    <p className="text-[13px] font-semibold text-slate-400">
+                      {folder.count} {folder.count === 1 ? 'test' : 'tests'} to take{openNow ? ` · ${openNow} open now` : ''}
+                    </p>
+                    {folder.template && (
+                      <p className="text-[11px] font-semibold text-slate-400">{folder.template.duration} mins · {templateMarks(folder.template)} marks</p>
+                    )}
+                  </div>
+                  <ArrowRight size={16} className="ml-auto text-slate-300 group-hover:text-blue-500 shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        ) : visibleTests.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm text-center p-16 flex flex-col items-center justify-center">
             <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-6">
               <Award size={32} />

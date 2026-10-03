@@ -9,6 +9,8 @@ import {
 
 import { db } from '../../firebase';
 import { areSolutionsVisible } from '../../utils/solutionRelease';
+import { positiveMarkFor, negativeMarkFor } from '../../utils/marking';
+import TestReport from '../analytics/TestReport';
 import { collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
 
 // Helper
@@ -195,7 +197,13 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                 questionType: qData.questionType || 'Multiple Choice',
                 subject: qData.subject || 'General',
                 topic: qData.topic || '',
-                marks: qData.marks ? Number(qData.marks) : 1,
+                department: qData.department || '',
+                timeSeconds: Math.round(r.timeSpent || 0),
+                // Marks this answer earned (negative for a penalised wrong answer)
+                awarded: typeof r.marksAwarded === 'number'
+                  ? r.marksAwarded
+                  : status === 'Correct' ? positiveMarkFor(qData) : status === 'Wrong' ? -negativeMarkFor(qData) : 0,
+                marks: qData.marks ? Number(qData.marks) : positiveMarkFor(qData),
                 options: isFillBlank ? null : {
                   A: { text: qData.optionA, image: qData.optionAImage },
                   B: { text: qData.optionB, image: qData.optionBImage },
@@ -260,6 +268,10 @@ export default function Analytics({ joinedStudents = [], department = null, stud
             correct,
             wrong,
             negMarks: 0,
+            totalMarks: attempt.totalMarks ?? maxScore,
+            timeTakenSeconds: attempt.timeTakenSeconds ?? attemptTimeTaken,
+            submittedAt: attempt.submittedAt?.toDate ? attempt.submittedAt.toDate() : null,
+            test: fetchedTests.find(t => t.id === attempt.testId) || null,
             // Students only see answers / explanations once the test's solutions are released
             solutionsVisible: areSolutionsVisible(fetchedTests.find(t => t.id === attempt.testId)),
             allQuestions
@@ -1056,107 +1068,15 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                 )}
               </div>
             ) : (
-              // 3. DRILLED-DOWN DETAILED TEST VIEW                               
+              // 3. DRILLED-DOWN DETAILED TEST VIEW - GATE test-series style report (analytics/TestReport)
+              <TestReport
+                attempt={activeDetailedTest}
+                studentName={selectedStudentName}
+                hideKey={hideKey}
+                onBack={closeStudentTestDetail}
+                onReviewSolutions={onReviewSolutions}
+                solutions={(
               <div className="flex flex-col">
-                {/* Back Button & Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm mb-6">
-                  <div className="flex flex-col items-start gap-4">
-                    <button 
-                      onClick={closeStudentTestDetail}
-                      className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors bg-slate-50 hover:bg-indigo-50 px-3 py-1.5 rounded-lg"
-                    >
-                      <ArrowLeft size={16} /> Back to Student Overview
-                    </button>
-                    <div>
-                      <h4 className="text-[26px] font-[900] tracking-tight text-slate-800">{activeDetailedTest.testName}</h4>
-                      <p className="text-sm font-bold text-slate-500 mt-1">Detailed Performance Breakdown for {selectedStudentName}</p>
-                    </div>
-                    {onReviewSolutions && activeDetailedTest.testId && (
-                      <button
-                        onClick={() => onReviewSolutions(activeDetailedTest.testId)}
-                        className="flex items-center gap-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl shadow-sm transition-colors"
-                      >
-                        <FileText size={16} /> Review Solutions
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end mt-6 sm:mt-0 bg-blue-50/50 px-6 py-4 rounded-2xl border border-blue-100">
-                    <span className="text-4xl font-[900] text-blue-600">{activeDetailedTest.score}%</span>
-                    <span className="text-xs font-black text-blue-400 uppercase tracking-widest mt-1">Final Score</span>
-                  </div>
-                </div>
-
-                {/* Key Stats Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-                    <span className="text-2xl font-[900] text-slate-700">{activeDetailedTest.attempted}/{activeDetailedTest.totalQ}</span>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-1">Attempted</span>
-                  </div>
-                  <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex flex-col items-center text-center">
-                    <span className="text-2xl font-[900] text-emerald-700">{activeDetailedTest.correct}</span>
-                    <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mt-1">Correct</span>
-                  </div>
-                  <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex flex-col items-center text-center">
-                    <span className="text-2xl font-[900] text-red-700">{activeDetailedTest.wrong}</span>
-                    <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider mt-1">Wrong</span>
-                  </div>
-                  <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex flex-col items-center text-center">
-                    <span className="text-2xl font-[900] text-amber-700">{activeDetailedTest.negMarks}</span>
-                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mt-1">Negative Marks</span>
-                  </div>
-                </div>
-
-                {/* Topic Analysis - for this test only */}
-                {(() => {
-                  const stats = {};
-                  activeDetailedTest.allQuestions.forEach(q => {
-                    const name = (q.topic || '').trim() || q.subject || 'General';
-                    if (!stats[name]) stats[name] = { name, scored: 0, total: 0, correct: 0, count: 0 };
-                    const m = q.marks || 1;
-                    stats[name].total += m;
-                    stats[name].count += 1;
-                    if (q.status === 'Correct') { stats[name].scored += m; stats[name].correct += 1; }
-                  });
-                  const topics = Object.values(stats)
-                    .map(t => ({ ...t, percentage: t.total > 0 ? Math.round((t.scored / t.total) * 100) : 0 }))
-                    .sort((a, b) => b.percentage - a.percentage);
-                  if (topics.length === 0) return null;
-                  const strong = topics.filter(t => t.percentage >= 60);
-                  const weak = topics.filter(t => t.percentage < 60);
-                  const topicRow = (t, tone) => (
-                    <div key={t.name} className={`flex justify-between items-center gap-3 bg-white p-3 rounded-xl shadow-sm border ${tone === 'good' ? 'border-emerald-50' : 'border-rose-50'}`}>
-                      <div className="min-w-0">
-                        <span className="font-bold text-slate-700 text-sm block truncate">{t.name}</span>
-                        <span className="text-[11px] font-semibold text-slate-400">{t.correct} of {t.count} question{t.count === 1 ? '' : 's'} correct</span>
-                      </div>
-                      <span className={`font-black shrink-0 ${tone === 'good' ? 'text-emerald-600' : 'text-rose-600'}`}>{t.percentage}%</span>
-                    </div>
-                  );
-                  return (
-                    <div className="mb-8">
-                      <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 text-center">Topic Analysis</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-emerald-50/50 border border-emerald-100 rounded-3xl p-5">
-                          <h5 className="text-emerald-700 font-black flex items-center gap-2 mb-3">
-                            <TrendingUp size={20} /> Strong Topics
-                          </h5>
-                          {strong.length > 0
-                            ? <div className="flex flex-col gap-2.5">{strong.map(t => topicRow(t, 'good'))}</div>
-                            : <p className="text-sm font-semibold text-emerald-600/60 italic">No strong topics in this test yet.</p>}
-                        </div>
-                        <div className="bg-rose-50/50 border border-rose-100 rounded-3xl p-5">
-                          <h5 className="text-rose-700 font-black flex items-center gap-2 mb-3">
-                            <TrendingUp size={20} className="rotate-180" /> Topics to Improve
-                          </h5>
-                          {weak.length > 0
-                            ? <div className="flex flex-col gap-2.5">{weak.map(t => topicRow(t, 'weak'))}</div>
-                            : <p className="text-sm font-semibold text-rose-600/60 italic">No weak topics in this test!</p>}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
                 {/* Filter Bar */}
                 <div className="flex flex-wrap items-center gap-2 mb-8 bg-slate-50 p-2 rounded-xl border border-slate-200">
                   {['All', 'Correct', 'Wrong', 'Unattempted'].map(status => (
@@ -1339,6 +1259,8 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                   })()}
                 </div>
               </div>
+                )}
+              />
             )}
           </div>
             )}

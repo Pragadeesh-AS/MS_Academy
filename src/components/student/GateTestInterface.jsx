@@ -163,6 +163,29 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
 
   const timerRef = useRef(null);
   const fsWarningsRef = useRef(0);
+
+  // Real time spent on each question (seconds), for the "time usage for each question" report.
+  // The clock runs for whichever question is on screen.
+  const timeSpentRef = useRef({});
+  const onScreenRef = useRef({ id: null, at: 0 });
+  const flushQuestionTime = () => {
+    const { id, at } = onScreenRef.current;
+    const now = Date.now();
+    if (id && at) timeSpentRef.current[id] = (timeSpentRef.current[id] || 0) + (now - at) / 1000;
+    onScreenRef.current = { id, at: now };
+  };
+  useEffect(() => {
+    if (mode !== 'taking') return;
+    flushQuestionTime();
+    onScreenRef.current = { id: testQuestions[currentIdx]?.id || null, at: Date.now() };
+  }, [mode, currentIdx]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Every submit path (button, timer, full-screen violations) goes through here
+  const finishTest = (answers) => {
+    flushQuestionTime();
+    const timeSpent = {};
+    Object.entries(timeSpentRef.current).forEach(([id, secs]) => { timeSpent[id] = Math.round(secs); });
+    onSubmit(answers, { timeSpent, order: testQuestions.map(q => q.id) });
+  };
   const [fsWarningCount, setFsWarningCount] = useState(0);
   const [showFsWarning, setShowFsWarning] = useState(false);
 
@@ -191,7 +214,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
             // Auto submit after 3 violations
             setTimeout(() => {
               clearInterval(timerRef.current);
-              onSubmit(answersRef.current);
+              finishTest(answersRef.current);
             }, 2000);
           }
         }
@@ -205,7 +228,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
         setTimeRemaining(prev => {
           if (prev <= 1) {
             clearInterval(timerRef.current);
-            onSubmit(answersRef.current);
+            finishTest(answersRef.current);
             return 0;
           }
           return prev - 1;
@@ -284,7 +307,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
   const confirmSubmit = () => {
     setShowConfirmModal(false);
     if (timerRef.current) clearInterval(timerRef.current);
-    onSubmit(selectedAnswers);
+    finishTest(selectedAnswers);
   };
 
   const [showReportModal, setShowReportModal] = useState(false);

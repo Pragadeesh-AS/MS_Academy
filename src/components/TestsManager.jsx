@@ -11,6 +11,7 @@ import {
 } from '../utils/solutionRelease';
 
 import TestScheduleCalendar from './tests/TestScheduleCalendar';
+import { TEST_TEMPLATES, templateByKey, templateMarks, templateQuestions, templateNumerical, subjectGroup, distributeAllocations, templateKeyOf, templateFoldersFor, folderName } from '../utils/testTemplates';
 import { formatTestTime, testStartMillis } from '../utils/testSchedule';
 
 import tkModule from '@axelixlabs/react-timepicker';
@@ -44,7 +45,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [attributes, setAttributes] = useState([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [editingTestId, setEditingTestId] = useState(null);
-  const [openFolder, setOpenFolder] = useState(null);
+  const [openFolder, setOpenFolder] = useState(null); // department folder (admin)
+  const [openTemplateFolder, setOpenTemplateFolder] = useState(null); // 'topic' | 'subject' | 'full' | 'other'
   const [editBundleTest, setEditBundleTest] = useState(null);
   const [editBundleValue, setEditBundleValue] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -56,6 +58,9 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   // Wizard Step State
   const [step, setStep] = useState(1); // 1: Specs, 2: Hierarchy, 3: Allocations
+  // Built-in blueprint the test was started from ('' = custom) - see utils/testTemplates
+  const [templateKey, setTemplateKey] = useState('');
+  const [templateShortages, setTemplateShortages] = useState([]);
 
   // Wizard Form State
   const [title, setTitle] = useState('');
@@ -260,6 +265,50 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       { count: Math.min(parseInt(alloc.q2) || 0, counts.q2), numerical: counts.n2, theory: counts.t2 }
     ];
   });
+
+  // ---- Test templates
+  const applyTemplate = (key, { fresh = false } = {}) => {
+    const t = templateByKey(key);
+    setTemplateShortages([]);
+    if (!t) { setTemplateKey(''); return; }
+    const previous = templateByKey(templateKey);
+    setTemplateKey(key);
+    // Keep a title the admin typed; replace an empty one or the previous template's default name
+    if (fresh || !title.trim() || (previous && title === previous.name)) setTitle(t.name);
+    setDuration(t.duration);
+    setTargetMarks(templateMarks(t));
+    setTotal1Mark(t.q1);
+    setTotal2Mark(t.q2);
+    setNumericalCount(templateNumerical(t));
+    setTheoryCount(templateQuestions(t) - templateNumerical(t));
+  };
+
+  // Full-length papers fill General Aptitude / Mathematics / Core from the matching topics
+  const topicGroupOf = (topicName) => {
+    const key = (topicName || '').trim().toLowerCase();
+    const topicAttr = attributes.find(a => a.type === 'topic' && (a.name || '').trim().toLowerCase() === key
+      && subjectsList.some(sub => selectedSubjects.includes(sub.name) && sub.attr.id === a.parentId));
+    const sub = topicAttr ? subjectsList.find(x => x.attr.id === topicAttr.parentId) : null;
+    return sub ? subjectGroup(sub.name, sub.commonDept?.name) : 'core';
+  };
+
+  const autoFillAllocations = () => {
+    const t = templateByKey(templateKey);
+    if (!t) return;
+    const availability = Object.fromEntries(selectedTopics.map(topic => [topic, getTopicCounts(topic)]));
+    const { allocations: next, shortages } = distributeAllocations(t, selectedTopics, availability, topicGroupOf);
+    setAllocations(next);
+    setTemplateShortages(shortages);
+  };
+
+  const goToNextStep = () => {
+    // Entering Allocations from a template with nothing allocated yet -> fill it in automatically
+    if (step === 2 && templateKey && !editingTestId) {
+      const allocated = selectedTopics.some(t => (parseInt(allocations[t]?.q1) || 0) + (parseInt(allocations[t]?.q2) || 0) > 0);
+      if (!allocated) autoFillAllocations();
+    }
+    setStep(prev => prev + 1);
+  };
 
   // Filtered pool of questions based on Step 2 Hierarchy (combines selected topics, case-insensitive)
   const availablePool = questions.filter(q => {
@@ -479,6 +528,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       topic: selectedTopics.join(', ') || 'All Topics',
       questions: finalQuestionIds,
       allocations,
+      templateKey: templateKey || '',
       bundleId: isTeacher ? '' : bundleId
     };
 
@@ -516,6 +566,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   const resetForm = () => {
     setEditingTestId(null);
+    setTemplateKey('');
+    setTemplateShortages([]);
     setTitle('');
     setDescription('');
     setDuration(180);
@@ -542,6 +594,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   // selected-questions list (view / remove / add) rather than re-walking the hierarchy.
   const handleEditTest = (test) => {
     setEditingTestId(test.id);
+    setTemplateKey(test.templateKey || '');
+    setTemplateShortages([]);
     setTitle(test.title || '');
     setDescription(test.description || '');
     setDuration(test.duration || 180);
@@ -784,16 +838,25 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   // Admin sees tests grouped into department folders; teachers are already scoped to one department.
   const showFolders = !isTeacher && !openFolder;
   const folderOf = (t) => (t.department || '').trim() || 'Uncategorized';
+  // Inside a department (or a teacher's own list): one folder per test template
+  const deptTests = isTeacher ? tests : tests.filter(t => folderOf(t) === openFolder);
+  const templateFolders = templateFoldersFor(deptTests);
+  const showTemplateFolders = !showFolders && !openTemplateFolder;
   const folders = Object.entries(tests.reduce((acc, t) => {
     const k = folderOf(t);
     acc[k] = (acc[k] || 0) + 1;
     return acc;
   }, {})).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
-  const visibleTests = isTeacher || !openFolder ? tests : tests.filter(t => folderOf(t) === openFolder);
+  const visibleTests = openTemplateFolder ? deptTests.filter(t => templateKeyOf(t) === openTemplateFolder) : deptTests;
 
   useEffect(() => {
     if (openFolder && !loading && !tests.some(t => folderOf(t) === openFolder)) setOpenFolder(null);
   }, [tests, loading, openFolder]);
+  // A new department starts at its template folders; an emptied "Other Tests" folder closes
+  useEffect(() => { setOpenTemplateFolder(null); }, [openFolder]);
+  useEffect(() => {
+    if (openTemplateFolder === 'other' && !loading && !deptTests.some(t => templateKeyOf(t) === 'other')) setOpenTemplateFolder(null);
+  }, [tests, loading, openTemplateFolder]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 font-sans relative">
@@ -811,9 +874,9 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4 min-w-0">
-          {!isTeacher && openFolder && (
+          {(openTemplateFolder || (!isTeacher && openFolder)) && (
             <button
-              onClick={() => setOpenFolder(null)}
+              onClick={() => (openTemplateFolder ? setOpenTemplateFolder(null) : setOpenFolder(null))}
               className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors shrink-0"
               title="Back to folders"
             >
@@ -823,10 +886,15 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
           <div className="min-w-0">
             <h2 className="text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
               <FileText className="text-blue-600 animate-pulse" size={28} />
-              <span className="truncate">{!isTeacher && openFolder ? `${openFolder} Tests` : 'Test Templates'}</span>
+              <span className="truncate">
+                {[!isTeacher && openFolder ? openFolder : null, openTemplateFolder ? folderName(openTemplateFolder) : null].filter(Boolean).join(' › ')
+                  || 'Test Templates'}
+              </span>
             </h2>
             <p className="text-slate-500 font-semibold mt-1">
-              {!isTeacher && !openFolder ? 'Select a department folder to manage its tests.' : 'Configure spec blueprints and schedule tests from subtopics.'}
+              {!isTeacher && !openFolder ? 'Select a department folder to manage its tests.'
+                : !openTemplateFolder ? 'Tests are grouped by the template they were made from.'
+                : 'Configure spec blueprints and schedule tests from subtopics.'}
             </p>
           </div>
         </div>
@@ -849,6 +917,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
           onClick={() => {
             resetForm();
             if (!isTeacher && openFolder && openFolder !== 'Uncategorized') setSelectedDept(openFolder);
+            if (templateByKey(openTemplateFolder)) applyTemplate(openTemplateFolder, { fresh: true });
             setIsCreatorOpen(true);
           }}
           className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] flex items-center gap-2 text-sm"
@@ -861,7 +930,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       {/* Test Template Cards / Schedule calendar */}
       {view === 'schedule' && !loading ? (
         <TestScheduleCalendar
-          tests={isTeacher || !openFolder ? tests : visibleTests}
+          tests={!isTeacher && !openFolder ? tests : visibleTests}
           showDepartment={!isTeacher && !openFolder}
           onSchedule={handleScheduleTest}
           onCreateOnDate={createTestOnDate}
@@ -899,6 +968,37 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
               </div>
             </div>
           ))}
+        </div>
+      ) : showTemplateFolders ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {templateFolders.map(folder => (
+            <div key={folder.key} onClick={() => setOpenTemplateFolder(folder.key)} className="bg-white rounded-2xl border border-slate-200 p-5 cursor-pointer hover:border-blue-300 hover:shadow-lg transition-all duration-200 group flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors border ${folder.template ? 'bg-indigo-50 text-indigo-600 border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600' : 'bg-slate-100 text-slate-500 border-slate-200 group-hover:bg-slate-600 group-hover:text-white'}`}>
+                <FolderOpen size={22} strokeWidth={2} />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <h3 className="font-[700] text-[15px] text-slate-800 truncate" title={folder.name}>{folder.name}</h3>
+                <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[13px] mt-0.5">
+                  <FileText size={12} />
+                  {folder.count} {folder.count === 1 ? 'Test' : 'Tests'}
+                </div>
+                {folder.template && (
+                  <div className="text-[11px] font-semibold text-slate-400 mt-0.5 truncate">
+                    {folder.template.duration} mins · {templateMarks(folder.template)} marks
+                  </div>
+                )}
+              </div>
+              <div className="ml-auto text-slate-300 group-hover:text-blue-400 transition-colors">
+                <ArrowLeft size={16} className="rotate-180" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : visibleTests.length === 0 ? (
+        <div className="bg-white border border-dashed border-slate-300 rounded-3xl text-center p-14 flex flex-col items-center justify-center">
+          <FolderOpen size={36} className="text-slate-300 mb-3" />
+          <h3 className="text-lg font-bold text-slate-700">No {folderName(openTemplateFolder)} yet</h3>
+          <p className="text-slate-500 font-medium mt-1">Use "Create Test Template" - the {templateByKey(openTemplateFolder)?.name || 'template'} is selected for you.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6 items-start">
@@ -1105,6 +1205,52 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
               {/* STEP 1: Specs */}
               {step === 1 && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+
+                  {/* Built-in templates - fill every spec below in one click */}
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-[800] text-slate-800">Start from a template</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      {TEST_TEMPLATES.map(t => {
+                        const active = templateKey === t.key;
+                        return (
+                          <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => applyTemplate(t.key)}
+                            className={`text-left rounded-xl border p-3 transition-all ${active ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100' : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-[13px] font-[900] ${active ? 'text-indigo-700' : 'text-slate-800'}`}>{t.name}</span>
+                              {active && <CheckCircle2 size={16} className="text-indigo-600 shrink-0" />}
+                            </div>
+                            <div className="mt-1 text-[11.5px] font-bold text-slate-500">
+                              {t.duration} mins · {templateMarks(t)} marks · {templateQuestions(t)} Qs
+                            </div>
+                            <div className="text-[11px] font-semibold text-slate-400">
+                              {t.q1} × 1M + {t.q2} × 2M · {templateNumerical(t)} numerical / {templateQuestions(t) - templateNumerical(t)} theory
+                            </div>
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => applyTemplate('')}
+                        className={`text-left rounded-xl border p-3 transition-all ${!templateKey ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100' : 'border-dashed border-slate-300 bg-white hover:border-indigo-300 hover:bg-slate-50'}`}
+                      >
+                        <span className={`text-[13px] font-[900] ${!templateKey ? 'text-indigo-700' : 'text-slate-800'}`}>Custom</span>
+                        <div className="mt-1 text-[11.5px] font-bold text-slate-500">Set everything yourself</div>
+                      </button>
+                    </div>
+                    {templateByKey(templateKey)?.sections && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {templateByKey(templateKey).sections.map(sec => (
+                          <span key={sec.group} className="px-2.5 py-1 rounded-lg bg-slate-100 text-[11.5px] font-bold text-slate-600">
+                            {sec.section} · {sec.name}: {sec.q1} × 1M + {sec.q2} × 2M = {sec.q1 + sec.q2 * 2} marks
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   
                   {/* Template Title */}
                   <div className="space-y-1.5">
@@ -1460,6 +1606,36 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                     </div>
                   </div>
 
+                  {(selectionMode === 'auto' || selectionMode === 'both') && templateKey && (
+                    <div className="space-y-2 shrink-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5">
+                        <span className="text-[12.5px] font-[800] text-indigo-800">
+                          {templateByKey(templateKey)?.name}: question counts are spread over your topics automatically
+                          {templateByKey(templateKey)?.sections ? ' (Aptitude / Mathematics / Core topics fill their own section)' : ''}.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={autoFillAllocations}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-[800] shadow-sm"
+                        >
+                          Re-distribute
+                        </button>
+                      </div>
+                      {templateShortages.length > 0 && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-[12px] font-bold text-amber-800 space-y-0.5">
+                          {templateShortages.map((sh, i) => (
+                            <div key={i} className="flex items-start gap-1.5">
+                              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                              {sh.noTopics
+                                ? <span>{sh.name}: no topic selected - go back to Hierarchy and pick a {sh.name} subject/topic ({sh.missing} × {sh.mark}-mark needed).</span>
+                                : <span>{sh.name}: {sh.missing} more {sh.mark}-mark question{sh.missing === 1 ? '' : 's'} needed than the selected topics have - add topics or questions.</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {(selectionMode === 'auto' || selectionMode === 'both') && (
                     <>
                     <div className="space-y-4 overflow-y-auto pr-1 flex-1">
@@ -1723,7 +1899,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                 <button 
                   type="button"
                   disabled={(step === 1 && !!getStep1Warning()) || (step === 2 && !!getStep2Warning())}
-                  onClick={() => setStep(prev => prev + 1)}
+                  onClick={goToNextStep}
                   className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 text-sm"
                 >
                   Next: {step === 1 ? "Hierarchy" : "Allocations"} <ChevronRight size={16} />
