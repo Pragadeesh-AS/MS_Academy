@@ -721,7 +721,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                     onClose={() => setPrivateSolutionOpen(false)}
                   />
                 )}
-                <div className="absolute bottom-6 right-6 md:bottom-10 md:right-10 flex flex-col items-end gap-2 pointer-events-auto">
+                {/* One row of round icon buttons, the same height as the original single button,
+                    so it stays clear of the teacher's camera tile above it */}
+                <div className="absolute bottom-6 right-6 md:bottom-10 md:right-10 flex items-center gap-3 pointer-events-auto">
                   {activeQuestionState.isAnswerRevealed ? (
                     <button
                       onClick={handleNextQB}
@@ -734,17 +736,17 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                     <>
                       <button
                         onClick={() => setPrivateSolutionOpen(o => !o)}
-                        className={`flex items-center gap-2 pl-3.5 pr-4 py-2.5 rounded-full shadow-xl text-sm font-bold transition-transform hover:scale-105 ${privateSolutionOpen ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-white hover:bg-amber-50 text-amber-700 border-2 border-amber-300'}`}
-                        title="See the answer and explanation yourself - students don't see it"
+                        className={`p-4 rounded-full shadow-xl transition-transform hover:scale-105 ${privateSolutionOpen ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-white hover:bg-amber-50 text-amber-600 ring-2 ring-amber-300'}`}
+                        title={privateSolutionOpen ? 'Hide my solution' : 'Solution for me - only you see the answer and explanation'}
                       >
-                        <Lock size={16} /> {privateSolutionOpen ? 'Hide my solution' : 'Solution for me'}
+                        <Lock size={22} />
                       </button>
                       <button
                         onClick={() => { setPrivateSolutionOpen(false); handleNextQB(); }}
-                        className="flex items-center gap-2 pl-3.5 pr-4 py-2.5 rounded-full shadow-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-transform hover:scale-105"
-                        title="Show the answer and explanation to you and every student"
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-xl transition-transform hover:scale-105"
+                        title="Reveal Answer to everyone"
                       >
-                        <Eye size={16} /> Reveal to everyone
+                        <Eye size={22} />
                       </button>
                     </>
                   )}
@@ -1029,26 +1031,26 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
               {activeQuestionState.isAnswerRevealed ? (
                 <button
                   onClick={handleNextQB}
-                  className="h-9 sm:h-10 md:h-12 px-3 md:px-4 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs md:text-sm font-bold flex items-center gap-1.5 shadow-lg"
+                  className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow-lg"
                   title="Next question"
                 >
-                  <ChevronRight size={16} /> <span className="hidden md:inline">Next</span>
+                  <ChevronRight size={20} />
                 </button>
               ) : (
                 <>
                   <button
                     onClick={() => setPrivateSolutionOpen(o => !o)}
-                    className={`h-9 sm:h-10 md:h-12 px-3 md:px-4 rounded-full text-xs md:text-sm font-bold flex items-center gap-1.5 shadow-lg ${privateSolutionOpen ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-white hover:bg-amber-50 text-amber-700 border-2 border-amber-300'}`}
-                    title="See the answer and explanation yourself - students don't see it"
+                    className={`w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center shadow-lg ${privateSolutionOpen ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-white hover:bg-amber-50 text-amber-600 ring-2 ring-amber-300'}`}
+                    title={privateSolutionOpen ? 'Hide my solution' : 'Solution for me - only you see the answer and explanation'}
                   >
-                    <Lock size={15} /> <span className="hidden md:inline">{privateSolutionOpen ? 'Hide my solution' : 'Solution for me'}</span>
+                    <Lock size={18} />
                   </button>
                   <button
                     onClick={() => { setPrivateSolutionOpen(false); handleNextQB(); }}
-                    className="h-9 sm:h-10 md:h-12 px-3 md:px-4 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs md:text-sm font-bold flex items-center gap-1.5 shadow-lg"
-                    title="Show the answer and explanation to you and every student"
+                    className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow-lg"
+                    title="Reveal Answer to everyone"
                   >
-                    <Eye size={15} /> <span className="hidden md:inline">Reveal to everyone</span>
+                    <Eye size={18} />
                   </button>
                 </>
               )}

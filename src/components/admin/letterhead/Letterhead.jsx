@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Phone, Mail, Globe, MapPin } from 'lucide-react';
-import { toPng } from 'html-to-image';
+import { toCanvas, getFontEmbedCSS } from 'html-to-image';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import logoImg from '../../../assets/msgate_logo.png';
@@ -249,6 +249,11 @@ export const A4Preview = ({ pageRef, children }) => {
     if (pageRef.current) ro.observe(pageRef.current);
     return () => ro.disconnect();
   }, [pageRef]);
+  // Prepare the embedded fonts in the background so the first Download / Send is quick
+  useEffect(() => {
+    const t = setTimeout(() => warmUpPdfRenderer(pageRef.current), 1500);
+    return () => clearTimeout(t);
+  }, [pageRef]);
   return (
     <div ref={boxRef} className="w-full">
       <div style={{ width: PAGE_W * scale, height: height * scale, margin: '0 auto', overflow: 'hidden', boxShadow: '0 10px 30px rgba(15,23,42,0.18)' }}>
@@ -260,24 +265,52 @@ export const A4Preview = ({ pageRef, children }) => {
   );
 };
 
+// The web fonts embedded into the rendered page. Building this means downloading and encoding
+// the font files, so it's done once (warmed up when a letterhead page opens) and reused.
+let fontEmbedCssPromise = null;
+const fontEmbedCss = (element) => {
+  if (!fontEmbedCssPromise) {
+    fontEmbedCssPromise = getFontEmbedCSS(element).catch(err => {
+      fontEmbedCssPromise = null; // try again next time
+      throw err;
+    });
+  }
+  return fontEmbedCssPromise;
+};
+export const warmUpPdfRenderer = async (element) => {
+  if (!element) return;
+  try {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await fontEmbedCss(element);
+  } catch {
+    // the first export will retry
+  }
+};
+
+// JPEG quality for the page image. At 4x (about 384 dpi) 0.98 is visually identical to PNG,
+// and jsPDF embeds a JPEG as-is - a PNG it has to decode and re-compress, which took ~6 s a page.
+const PAGE_JPEG_QUALITY = 0.98;
+
 // Render a page element at 4x onto an A4 PDF (a taller page if the content grew)
 export const renderPagePdf = async (element) => {
   if (document.fonts?.ready) await document.fonts.ready;
   const width = element.offsetWidth;
   const height = element.offsetHeight;
-  let imgData;
+  let canvas;
   try {
-    imgData = await toPng(element, { pixelRatio: EXPORT_SCALE, cacheBust: true, backgroundColor: '#ffffff', width, height });
+    canvas = await toCanvas(element, {
+      pixelRatio: EXPORT_SCALE, backgroundColor: '#ffffff', width, height, fontEmbedCSS: await fontEmbedCss(element),
+    });
   } catch (err) {
     // Fallback renderer (no web-font embedding, but still high resolution)
     console.warn('html-to-image failed, using html2canvas', err);
-    const canvas = await html2canvas(element, { scale: EXPORT_SCALE, useCORS: true, backgroundColor: '#ffffff' });
-    imgData = canvas.toDataURL('image/png');
+    canvas = await html2canvas(element, { scale: EXPORT_SCALE, useCORS: true, backgroundColor: '#ffffff' });
   }
+  const imgData = canvas.toDataURL('image/jpeg', PAGE_JPEG_QUALITY);
   const pdfW = 210;
   const pdfH = Math.max(297, (height / width) * pdfW);
   const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfW, pdfH], compress: true });
-  pdf.addImage(imgData, 'PNG', 0, 0, pdfW, (height / width) * pdfW, undefined, 'SLOW');
+  pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, (height / width) * pdfW, undefined, 'NONE');
   return pdf;
 };
 
