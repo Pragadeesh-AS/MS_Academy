@@ -24,11 +24,12 @@ const sentOn = (s) => {
 // "Mechanical (ME)" -> "ME"; otherwise the department as written
 const deptCode = (dept) => ((dept || '').match(/\(([^)]+)\)/) || [])[1] || dept || '';
 
-// Text written on a blank line of the form (the line grows for a long value); empty = blank line
-const Blank = ({ value, width, style }) => (
-  <span style={{ display: 'inline-block', minWidth: width, borderBottom: `1.5px solid ${INK}`, lineHeight: 1.2, padding: '0 4px', verticalAlign: 'baseline', whiteSpace: 'nowrap', boxSizing: 'border-box', ...style }}>
-    {value || ' '}
-  </span>
+// "Label: value" - bold label, plain value (like the invoice's "Invoice No.:"); a missing value
+// shows a faint dash so the line isn't left empty in the preview
+const Field = ({ label, value }) => (
+  <div>
+    <b>{label}:</b>&nbsp; {value || <span style={{ color: '#a7b3cc' }}>-</span>}
+  </div>
 );
 
 const emailHtml = ({ name, paper, department, college, refNo }) => `
@@ -276,18 +277,16 @@ export default function WelcomeLetter({ students = [], sendEmail, onSent }) {
 
               {/* Ref. No. / Date */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 18, fontSize: 16.5 }}>
-                <span>Ref. No.: <Blank value={form.refNo} width={150} style={{ fontSize: 15 }} /></span>
-                <span>
-                  Date: <Blank value={date?.d} width={30} style={{ textAlign: 'center', paddingLeft: 0 }} /> / <Blank value={date?.m} width={30} style={{ textAlign: 'center', paddingLeft: 0 }} /> / <Blank value={date?.y} width={44} style={{ textAlign: 'center', paddingLeft: 0 }} />
-                </span>
+                <Field label="Ref. No." value={form.refNo} />
+                <Field label="Date" value={date ? `${date.d}/${date.m}/${date.y}` : ''} />
               </div>
 
               {/* Student details */}
-              <div style={{ marginTop: 30, marginLeft: 43, fontSize: 17, lineHeight: 1, display: 'flex', flexDirection: 'column', gap: 13 }}>
-                <div>Student Name: <Blank value={form.name} width={273} /></div>
-                <div>Department: <Blank value={form.department} width={289} /></div>
-                <div>UG College Name: <Blank value={form.college} width={254} /></div>
-                <div>GATE Paper with Year: <Blank value={form.paper} width={209} /></div>
+              <div style={{ marginTop: 30, marginLeft: 43, fontSize: 17, lineHeight: 1.2, display: 'flex', flexDirection: 'column', gap: 11 }}>
+                <Field label="Student Name" value={form.name} />
+                <Field label="Department" value={form.department} />
+                <Field label="UG College Name" value={form.college} />
+                <Field label="GATE Paper with Year" value={form.paper} />
               </div>
 
               {/* Letter body */}

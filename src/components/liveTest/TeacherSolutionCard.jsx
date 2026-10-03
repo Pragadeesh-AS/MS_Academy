@@ -7,13 +7,15 @@ import { normalizeQuestion, correctAnswerText } from '../../utils/testGrading';
 // don't get it - and it sits outside the question panel the recording captures, so it isn't
 // recorded either. It also doesn't move anything on the slide, so whiteboard writing still lines
 // up with what students see.
-export default function TeacherSolutionCard({ question, onClose }) {
+// `floating`: pinned to the browser window (used when the question isn't the main screen) instead
+// of the top-right corner of the question slide.
+export default function TeacherSolutionCard({ question, onClose, floating = false }) {
   const q = normalizeQuestion(question || {});
   const answer = correctAnswerText(q);
   const hasExplanation = !!(q.explanation || q.explanationImageUrl);
 
   return (
-    <div className="absolute top-16 right-4 md:right-6 w-[min(420px,calc(100%-2rem))] max-h-[60%] flex flex-col rounded-2xl bg-white border-2 border-amber-300 shadow-2xl pointer-events-auto overflow-hidden">
+    <div className={`${floating ? 'fixed top-20 right-4 md:right-6 z-[9999] w-[min(420px,calc(100vw-2rem))] max-h-[65vh]' : 'absolute top-16 right-4 md:right-6 w-[min(420px,calc(100%-2rem))] max-h-[60%]'} flex flex-col rounded-2xl bg-white border-2 border-amber-300 shadow-2xl pointer-events-auto overflow-hidden text-left`}>
       <div className="flex items-center justify-between gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200">
         <span className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-amber-700">
           <Lock size={13} /> Only you can see this

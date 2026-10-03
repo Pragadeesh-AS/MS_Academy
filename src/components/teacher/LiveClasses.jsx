@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { db } from '../../firebase';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
 import {
@@ -1020,6 +1021,48 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
           >
             <BookOpen size={16} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
           </button>
+
+          {/* Reveal choice when the question isn't the pinned main screen (the pinned slide has
+              the same buttons in its bottom-right corner) */}
+          {activeQuestionState?.isActive && pinnedUid !== 'question-bank' && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              {activeQuestionState.isAnswerRevealed ? (
+                <button
+                  onClick={handleNextQB}
+                  className="h-9 sm:h-10 md:h-12 px-3 md:px-4 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs md:text-sm font-bold flex items-center gap-1.5 shadow-lg"
+                  title="Next question"
+                >
+                  <ChevronRight size={16} /> <span className="hidden md:inline">Next</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setPrivateSolutionOpen(o => !o)}
+                    className={`h-9 sm:h-10 md:h-12 px-3 md:px-4 rounded-full text-xs md:text-sm font-bold flex items-center gap-1.5 shadow-lg ${privateSolutionOpen ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-white hover:bg-amber-50 text-amber-700 border-2 border-amber-300'}`}
+                    title="See the answer and explanation yourself - students don't see it"
+                  >
+                    <Lock size={15} /> <span className="hidden md:inline">{privateSolutionOpen ? 'Hide my solution' : 'Solution for me'}</span>
+                  </button>
+                  <button
+                    onClick={() => { setPrivateSolutionOpen(false); handleNextQB(); }}
+                    className="h-9 sm:h-10 md:h-12 px-3 md:px-4 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs md:text-sm font-bold flex items-center gap-1.5 shadow-lg"
+                    title="Show the answer and explanation to you and every student"
+                  >
+                    <Eye size={15} /> <span className="hidden md:inline">Reveal to everyone</span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {activeQuestionState?.isActive && pinnedUid !== 'question-bank' && privateSolutionOpen && !activeQuestionState.isAnswerRevealed
+            && createPortal(
+              <TeacherSolutionCard
+                floating
+                question={activeQuestionState.questions[activeQuestionState.currentIndex]}
+                onClose={() => setPrivateSolutionOpen(false)}
+              />,
+              document.body
+            )}
 
           {/* Whiteboard Button */}
           <button
