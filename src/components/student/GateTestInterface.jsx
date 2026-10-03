@@ -726,7 +726,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
         <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
 
           {/* Left Panel */}
-          <div className="flex-1 flex flex-col border-r border-gray-400 bg-white lg:min-h-0">
+          <div className="flex-1 min-w-0 flex flex-col border-r border-gray-400 bg-white lg:min-h-0">
             <div className="flex bg-[#EAF2FA] border-b border-gray-300 text-sm overflow-x-auto">
               {sections.map((sec, i) => (
                 <div 
@@ -745,9 +745,9 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
               <div className="font-normal text-gray-600">Marks for correct answer: <span className="text-green-600">{positiveMarkFor(currentQ)}</span> | Negative Marks: <span className="text-red-500">{negativeMarkFor(currentQ)}</span></div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 xl:p-8 flex flex-col w-full min-w-0">
               <div className="flex items-center justify-between mb-4">
-                <div className="font-bold text-base">Question No. {currentIdx + 1}</div>
+                <div className="font-bold text-base lg:text-lg">Question No. {currentIdx + 1}</div>
                 <button 
                   onClick={() => setShowReportModal(true)}
                   className="flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition-colors"
@@ -755,16 +755,16 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                   <AlertTriangle size={14} /> Report Error
                 </button>
               </div>
-              <div className="mb-6">
+              <div className="mb-6 w-full">
                 {isEmptyHtml(currentQ?.questionText) && !currentQ?.questionImageUrl ? (
                   <div className="text-red-500 italic p-4 bg-red-50 border border-red-200 rounded">
                     This question has no text or image content. It may have been saved empty in the Question Bank.
                   </div>
                 ) : (
-                  <div className="text-base leading-relaxed overflow-hidden q-content" dangerouslySetInnerHTML={{ __html: currentQ?.questionText || '' }} />
+                  <div className="w-full text-base lg:text-lg xl:text-xl leading-relaxed break-words q-content [&_*]:max-w-full [&_p]:w-auto [&_table]:w-full [&_img]:h-auto" dangerouslySetInnerHTML={{ __html: currentQ?.questionText || '' }} />
                 )}
                 {currentQ?.questionImageUrl && (
-                  <img src={currentQ.questionImageUrl} alt="Question Graphic" className="mt-4 max-w-full" />
+                  <img src={currentQ.questionImageUrl} alt="Question Graphic" className="mt-4 max-w-full w-auto max-h-[55vh] object-contain" />
                 )}
                 {currentQ?.questionType === 'Match' && (currentQ?.matchColumn1 || currentQ?.matchColumn2) && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
@@ -772,7 +772,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                       <div className="bg-gray-100 text-sm font-bold px-3 py-1.5 border-b border-gray-300">List I</div>
                       <div className="divide-y divide-gray-200">
                         {(currentQ.matchColumn1 || []).filter(item => item && item.trim()).map((item, i) => (
-                          <div key={i} className="flex gap-2 px-3 py-2 text-sm">
+                          <div key={i} className="flex gap-2 px-3 py-2 text-sm lg:text-base">
                             <span className="font-bold shrink-0">{String.fromCharCode(80 + i)}.</span>
                             <span dangerouslySetInnerHTML={{ __html: item }} />
                           </div>
@@ -783,7 +783,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                       <div className="bg-gray-100 text-sm font-bold px-3 py-1.5 border-b border-gray-300">List II</div>
                       <div className="divide-y divide-gray-200">
                         {(currentQ.matchColumn2 || []).filter(item => item && item.trim()).map((item, i) => (
-                          <div key={i} className="flex gap-2 px-3 py-2 text-sm">
+                          <div key={i} className="flex gap-2 px-3 py-2 text-sm lg:text-base">
                             <span className="font-bold shrink-0">{i + 1}.</span>
                             <span dangerouslySetInnerHTML={{ __html: item }} />
                           </div>
@@ -809,16 +809,16 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                       if (isEmptyHtml(text) && !img) return null;
                       const isChecked = Array.isArray(selectedAnswers[currentQ.id]) && selectedAnswers[currentQ.id].includes(opt);
                       return (
-                        <label key={opt} className="flex items-start gap-3 cursor-pointer group">
+                        <label key={opt} className="w-full flex items-start gap-3 cursor-pointer group rounded-md border border-transparent hover:border-gray-200 hover:bg-gray-50 px-2 py-1.5 -mx-2">
                           <input
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => handleToggleOption(currentQ.id, opt)}
-                            className="mt-1 accent-blue-600 w-4 h-4"
+                            className="mt-1 lg:mt-1.5 accent-blue-600 w-4 h-4 lg:w-5 lg:h-5 shrink-0"
                           />
-                          <div>
-                            {text && <span className="text-sm block" dangerouslySetInnerHTML={{ __html: text }} />}
-                            {img && <img src={img} alt={`Option ${opt}`} className="mt-2 max-h-24 border border-gray-200" />}
+                          <div className="flex-1 min-w-0">
+                            {text && <span className="text-sm lg:text-base xl:text-lg block break-words [&_*]:max-w-full" dangerouslySetInnerHTML={{ __html: text }} />}
+                            {img && <img src={img} alt={`Option ${opt}`} className="mt-2 max-h-40 lg:max-h-56 max-w-full object-contain border border-gray-200" />}
                           </div>
                         </label>
                       );
@@ -831,17 +831,17 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                       const img = currentQ?.[`option${opt}Image`];
                       if (isEmptyHtml(text) && !img) return null;
                       return (
-                        <label key={opt} className="flex items-start gap-3 cursor-pointer group">
+                        <label key={opt} className="w-full flex items-start gap-3 cursor-pointer group rounded-md border border-transparent hover:border-gray-200 hover:bg-gray-50 px-2 py-1.5 -mx-2">
                           <input
                             type="radio"
                             name={`q_${currentQ.id}`}
                             checked={selectedAnswers[currentQ.id] === opt}
                             onChange={() => handleSelectOption(currentQ.id, opt)}
-                            className="mt-1 accent-blue-600 w-4 h-4"
+                            className="mt-1 lg:mt-1.5 accent-blue-600 w-4 h-4 lg:w-5 lg:h-5 shrink-0"
                           />
-                          <div>
-                            {text && <span className="text-sm block" dangerouslySetInnerHTML={{ __html: text }} />}
-                            {img && <img src={img} alt={`Option ${opt}`} className="mt-2 max-h-24 border border-gray-200" />}
+                          <div className="flex-1 min-w-0">
+                            {text && <span className="text-sm lg:text-base xl:text-lg block break-words [&_*]:max-w-full" dangerouslySetInnerHTML={{ __html: text }} />}
+                            {img && <img src={img} alt={`Option ${opt}`} className="mt-2 max-h-40 lg:max-h-56 max-w-full object-contain border border-gray-200" />}
                           </div>
                         </label>
                       );
@@ -862,7 +862,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
           </div>
 
           {/* Right Panel */}
-          <div className="w-full lg:w-[280px] bg-[#EAF2FA] flex flex-col border-t lg:border-t-0 border-gray-400">
+          <div className="w-full lg:w-[280px] lg:shrink-0 bg-[#EAF2FA] flex flex-col border-t lg:border-t-0 border-gray-400">
             <div className="flex p-3 bg-white border-b border-gray-300 gap-3">
               <div className="w-16 h-16 border border-gray-300 bg-gray-50 flex items-center justify-center"><User className="text-gray-400 w-12 h-12"/></div>
               <div>

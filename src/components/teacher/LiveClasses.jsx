@@ -11,7 +11,7 @@ import {
   Calendar,
   Plus,
   Clock,
-  BookOpen, Presentation, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud, MoreHorizontal, Trophy, Award
+  BookOpen, Presentation, Pin, PinOff, SquareUser, Users, MessageSquareText, FileText, CheckCircle2, Play, Pause, ChevronLeft, ChevronRight, X, User, PlayCircle, Check, UserPlus, MessageCircle, Send, Search, Eye, WifiOff, UploadCloud, MoreHorizontal, Trophy, Award, Lock
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import LiveTestOverlay, { startLiveTest } from '../liveTest/LiveTestOverlay';
@@ -41,6 +41,7 @@ import { useLiveRecording } from './hooks/useLiveRecording';
 import { subjectOptionsFor, groupBySubject } from '../../utils/subjects';
 import MatchColumns from '../shared/MatchColumns';
 import QuestionExplainPanel from '../liveTest/QuestionExplainPanel';
+import TeacherSolutionCard from '../liveTest/TeacherSolutionCard';
 import { QUIZ_KEEP_DAYS, isQuizExpired, quizTimeLeft, deletePostClassQuiz } from '../../utils/postClassQuiz';
 // Extracted component to handle whiteboard sharing as an independent client
 const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) => {
@@ -330,6 +331,9 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
   const [qbTopicFilter, setQbTopicFilter] = useState("ALL");
   const [activeQuestionState, setActiveQuestionState] = useState(null);
   const activeQuestionStateRef = useRef(activeQuestionState);
+  // "Solution for me": the teacher's private view of the answer - local only, never synced
+  const [privateSolutionOpen, setPrivateSolutionOpen] = useState(false);
+  useEffect(() => { setPrivateSolutionOpen(false); }, [activeQuestionState?.currentIndex, activeQuestionState?.isActive]);
   const [liveTest, setLiveTest] = useState(null);
   const [participantsRaw, setParticipantsRaw] = useState([]);
   const [qbMode, setQbMode] = useState('present'); // 'present' | 'live'
@@ -710,13 +714,40 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
                   aligned to the Q.1 row, so it never ends up sitting on top of the question text,
                   image, or options, whatever their length happens to be. */}
               <div className="absolute inset-0 pointer-events-none z-[100]">
-                <button
-                  onClick={handleNextQB}
-                  className="absolute bottom-6 right-6 md:bottom-10 md:right-10 bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-xl transition-transform hover:scale-105 pointer-events-auto"
-                  title={activeQuestionState.isAnswerRevealed ? "Next Question" : "Reveal Answer"}
-                >
-                  {activeQuestionState.isAnswerRevealed ? <ChevronRight size={22} /> : <Eye size={22} />}
-                </button>
+                {privateSolutionOpen && !activeQuestionState.isAnswerRevealed && (
+                  <TeacherSolutionCard
+                    question={activeQuestionState.questions[activeQuestionState.currentIndex]}
+                    onClose={() => setPrivateSolutionOpen(false)}
+                  />
+                )}
+                <div className="absolute bottom-6 right-6 md:bottom-10 md:right-10 flex flex-col items-end gap-2 pointer-events-auto">
+                  {activeQuestionState.isAnswerRevealed ? (
+                    <button
+                      onClick={handleNextQB}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-xl transition-transform hover:scale-105"
+                      title="Next Question"
+                    >
+                      <ChevronRight size={22} />
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setPrivateSolutionOpen(o => !o)}
+                        className={`flex items-center gap-2 pl-3.5 pr-4 py-2.5 rounded-full shadow-xl text-sm font-bold transition-transform hover:scale-105 ${privateSolutionOpen ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-white hover:bg-amber-50 text-amber-700 border-2 border-amber-300'}`}
+                        title="See the answer and explanation yourself - students don't see it"
+                      >
+                        <Lock size={16} /> {privateSolutionOpen ? 'Hide my solution' : 'Solution for me'}
+                      </button>
+                      <button
+                        onClick={() => { setPrivateSolutionOpen(false); handleNextQB(); }}
+                        className="flex items-center gap-2 pl-3.5 pr-4 py-2.5 rounded-full shadow-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-transform hover:scale-105"
+                        title="Show the answer and explanation to you and every student"
+                      >
+                        <Eye size={16} /> Reveal to everyone
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           )}
