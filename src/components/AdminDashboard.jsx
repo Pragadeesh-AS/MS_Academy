@@ -29,6 +29,7 @@ import TestsManager from './TestsManager';
 import ReportedQuestions from './admin/ReportedQuestions';
 import ReportCountBadge, { usePendingReportCount } from './shared/ReportCountBadge';
 import InvoiceGenerator from './admin/InvoiceGenerator';
+import WelcomeLetter from './admin/WelcomeLetter';
 import BlogManager from './admin/BlogManager';
 import RoleSwitcher from './shared/RoleSwitcher';
 
@@ -908,6 +909,7 @@ export default function AdminDashboard() {
                   { key: 'salary', label: 'Staff Salary', icon: IndianRupee },
                   { key: 'courses', label: 'Course Setup', icon: Package },
                   { key: 'invoice', label: 'Invoice', icon: FileText },
+                  { key: 'welcome_letter', label: 'Welcome Letter', icon: Mail },
                   { key: 'notes', label: 'Study Notes', icon: FileText },
                   { key: 'recordings', label: 'Live Recordings', icon: Video },
                   { key: 'attributes', label: 'Attributes', icon: Tag },
@@ -1040,6 +1042,14 @@ export default function AdminDashboard() {
               >
                 <FileText size={20} className={activeTab === 'invoice' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Invoice</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('welcome_letter')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'welcome_letter' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+              >
+                <Mail size={20} className={activeTab === 'welcome_letter' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Welcome Letter</span>}
               </button>
 
               {/* Decorative Placeholders */}
@@ -1901,6 +1911,13 @@ export default function AdminDashboard() {
         {/* Active Tab: Course Bundles */}
         {activeTab === 'courses' && <CourseSetup />}
         {activeTab === 'invoice' && <InvoiceGenerator />}
+        {activeTab === 'welcome_letter' && (
+          <WelcomeLetter
+            students={joinedStudents}
+            sendEmail={sendEmailViaGAS}
+            onSent={(updated) => setJoinedStudents(prev => prev.map(st => (st.id === updated.id ? updated : st)))}
+          />
+        )}
         {activeTab === 'fees' && <FeesTracker />}
         {activeTab === 'salary' && <SalaryManager teachers={invitedTeachers} typists={invitedTypists} />}
 
