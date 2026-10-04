@@ -508,7 +508,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (step !== 4) return; // Enter in an earlier step shouldn't save
+    if (step !== 4) return; // only the Step 4 Save button saves
     if (getStep1Warning() || getStep2Warning() || getStep3Warning() || getStep4Warning()) {
       showToast("Please resolve all warnings before saving.", "error");
       return;
@@ -1248,7 +1248,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       {/* 4-Step Wizard Modal */}
       {isCreatorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto font-sans">
-          <form onSubmit={handleSubmit} className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col my-8 max-h-[95vh] overflow-hidden animate-in zoom-in-95 duration-200">
+          <form onSubmit={e => e.preventDefault()} className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col my-8 max-h-[95vh] overflow-hidden animate-in zoom-in-95 duration-200">
             
             {/* Modal Header */}
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
@@ -2149,6 +2149,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
               {/* Next/Finish button */}
               {step < 4 ? (
                 <button 
+                  key="next"
                   type="button"
                   disabled={(step === 1 && !!getStep1Warning()) || (step === 2 && !!getStep2Warning()) || (step === 3 && !!getStep3Warning())}
                   onClick={goToNextStep}
@@ -2158,7 +2159,9 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                 </button>
               ) : (
                 <button 
-                  type="submit"
+                  key="save"
+                  type="button"
+                  onClick={handleSubmit}
                   disabled={!!getStep3Warning() || !!getStep4Warning()}
                   className="px-6 py-2.5 bg-indigo-600 hover:bg-[#7C3AED] disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-xl transition-all shadow-md text-sm"
                 >
