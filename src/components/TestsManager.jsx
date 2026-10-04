@@ -14,6 +14,7 @@ import TestScheduleCalendar from './tests/TestScheduleCalendar';
 import { sameDepartment, canonicalDepartment } from '../utils/subjects';
 import { TEST_TEMPLATES, templateByKey, templateMarks, templateQuestions, templateNumerical, subjectGroup, distributeAllocations, templateKeyOf, templateFoldersFor, folderName } from '../utils/testTemplates';
 import { formatTestTime, testStartMillis } from '../utils/testSchedule';
+import { QUESTION_TYPES, TYPE_KEYS, TYPE_PRESETS, presetLabel, questionTypeKey, typeCountsOf, sumCounts, pctOf, cellsCanSupply, planTypeMix, buildTypeSplit, defaultTypeSplit } from '../utils/questionTypeSplit';
 
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
@@ -58,7 +59,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   };
 
   // Wizard Step State
-  const [step, setStep] = useState(1); // 1: Specs, 2: Hierarchy, 3: Allocations
+  const [step, setStep] = useState(1); // 1: Specs, 2: Hierarchy, 3: Topic Marks (allocations), 4: Question Types
   // Built-in blueprint the test was started from ('' = custom) - see utils/testTemplates
   const [templateKey, setTemplateKey] = useState('');
   const [templateShortages, setTemplateShortages] = useState([]);
@@ -87,6 +88,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'manual' | 'both'
   const [manualSelectedIds, setManualSelectedIds] = useState([]);
   const [manualFilters, setManualFilters] = useState({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
+  // Step 4 MCQ / MSQ / NAT / Match mix: { mode, autoAdjusted, fromDefault, pct: { MCQ: '25', ... }, count: { MCQ: 16, ... } }
+  const [typeSplit, setTypeSplit] = useState(null);
 
 
   useEffect(() => {
@@ -305,6 +308,14 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       const allocated = selectedTopics.some(t => (parseInt(allocations[t]?.q1) || 0) + (parseInt(allocations[t]?.q2) || 0) > 0);
       if (!allocated) autoFillAllocations();
     }
+    // Entering Question Types: (re)apply the default rule or the chosen preset to the current
+    // allocations; a split the admin typed in themselves is kept as it is
+    if (step === 3 && usesTypeMix && typeSplit?.mode !== 'custom') {
+      const { total, pool, fits } = typeMixContext();
+      setTypeSplit(!typeSplit || typeSplit.fromDefault
+        ? defaultTypeSplit(total, pool, fits)
+        : buildTypeSplit(typeSplit.mode, total, pool, fits));
+    }
     setStep(prev => prev + 1);
   };
 
@@ -319,6 +330,53 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     }
     return true;
   });
+
+  // One cell per topic x mark allocation (Step 3) with the questions it can draw from
+  const autoCells = (excludeIds = new Set()) => selectedTopics.flatMap(topic => {
+    const alloc = allocations[topic] || {};
+    const topicPool = questions.filter(q =>
+      questionDeptMatches(q.department, q.subject) && selectedSubjects.some(sub => (q.subject || '').trim().toLowerCase() === sub.toLowerCase()) &&
+      (q.topic || '').trim().toLowerCase() === topic.trim().toLowerCase() &&
+      !excludeIds.has(q.id)
+    );
+    return [[1, alloc.q1], [2, alloc.q2]].map(([mark, wanted]) => {
+      const pool = topicPool.filter(q => markValue(q) === mark);
+      return { count: Math.min(parseInt(wanted) || 0, pool.length), questions: pool };
+    });
+  });
+
+  // ---- Question-type mix (Step 4). It shapes the auto-selected questions; in "Both" mode the
+  // manual picks are added as they are, and in "Manual" mode the picks themselves are the mix.
+  const usesTypeMix = selectionMode !== 'manual';
+  const typeMixContext = () => {
+    const cells = autoCells(selectionMode === 'both' ? new Set(manualSelectedIds) : new Set());
+    return {
+      cells,
+      total: cells.reduce((a, c) => a + c.count, 0),
+      pool: typeCountsOf(availablePool),
+      fits: (counts) => cellsCanSupply(cells, counts),
+    };
+  };
+
+  const applyTypePreset = (preset) => {
+    const { total, pool, fits } = typeMixContext();
+    setTypeSplit(buildTypeSplit(preset, total, pool, fits));
+  };
+
+  // Editing a row turns the split into a custom one; % and question count stay in step
+  const handleTypePctChange = (key, value, total) => setTypeSplit(prev => ({
+    mode: 'custom',
+    pct: { ...(prev?.pct || {}), [key]: value },
+    count: { ...(prev?.count || {}), [key]: Math.max(0, Math.round(total * (parseFloat(value) || 0) / 100)) },
+  }));
+  const handleTypeCountChange = (key, value, total) => {
+    const count = value === '' ? '' : Math.max(0, parseInt(value) || 0);
+    setTypeSplit(prev => ({
+      mode: 'custom',
+      pct: { ...(prev?.pct || {}), [key]: pctOf(count, total) },
+      count: { ...(prev?.count || {}), [key]: count },
+    }));
+  };
 
   // Calculate available marks question count in database (flexible mark matching)
   const available1MarkQ = availablePool.filter(q => markValue(q) === 1);
@@ -398,6 +456,21 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     return null;
   };
 
+  const getStep4Warning = () => {
+    if (!usesTypeMix) return null;
+    const { cells, total, pool } = typeMixContext();
+    if (total === 0) return null; // "Both" mode with only manual picks
+    if (!typeSplit) return "Please choose a question type split";
+    const pctSum = TYPE_KEYS.reduce((a, k) => a + (parseFloat(typeSplit.pct?.[k]) || 0), 0);
+    if (Math.abs(pctSum - 100) > 0.5) return `Weightage percentage sum (${Math.round(pctSum * 10) / 10}%) must equal 100%`;
+    const countSum = sumCounts(typeSplit.count);
+    if (countSum !== total) return `Contributed questions (${countSum}) must equal the ${total} questions allocated in Topic Marks`;
+    const over = QUESTION_TYPES.find(t => (parseInt(typeSplit.count?.[t.key]) || 0) > pool[t.key]);
+    if (over) return `${over.label}: ${parseInt(typeSplit.count[over.key])} requested but the repository pool has only ${pool[over.key]}`;
+    if (!cellsCanSupply(cells, typeSplit.count)) return "The topic allocations can't supply this mix - try Next Best Equal Split or adjust the counts";
+    return null;
+  };
+
   const handleAllocationChange = (topic, type, val) => {
     setAllocations(prev => ({
       ...prev,
@@ -435,7 +508,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (getStep1Warning() || getStep2Warning() || getStep3Warning()) {
+    if (step !== 4) return; // Enter in an earlier step shouldn't save
+    if (getStep1Warning() || getStep2Warning() || getStep3Warning() || getStep4Warning()) {
       showToast("Please resolve all warnings before saving.", "error");
       return;
     }
@@ -455,21 +529,29 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     if (selectionMode === 'auto' || selectionMode === 'both') {
       const shuffle = (arr) => [...arr].sort(() => 0.5 - Math.random());
 
-      // One cell per topic x mark allocation, with its numerical and theory pools
-      const cells = selectedTopics.flatMap(topic => {
-        const alloc = allocations[topic] || { q1: 0, q2: 0 };
-        const topicPool = questions.filter(q =>
-          questionDeptMatches(q.department, q.subject) && selectedSubjects.some(sub => (q.subject || '').trim().toLowerCase() === sub.toLowerCase()) &&
-          (q.topic || '').trim().toLowerCase() === topic.trim().toLowerCase() &&
-          !manualIdsSet.has(q.id) // exclude manually selected ones
-        );
-        return [[1, alloc.q1], [2, alloc.q2]].map(([mark, wanted]) => {
-          const pool = topicPool.filter(q => markValue(q) === mark);
-          const numericalPool = pool.filter(isNumericalQuestion).map(q => q.id);
-          const theoryPool = pool.filter(q => !isNumericalQuestion(q)).map(q => q.id);
-          return { count: Math.min(parseInt(wanted) || 0, pool.length), numericalPool, theoryPool, allIds: pool.map(q => q.id) };
-        });
-      });
+      // One cell per topic x mark allocation (manually selected questions excluded), split by
+      // question type so the picks follow the Step 4 mix
+      const allocCells = autoCells(manualIdsSet);
+      let units = allocCells;
+      if (allocCells.some(c => c.count > 0)) {
+        const plan = planTypeMix(allocCells, typeSplit?.count || {});
+        if (!plan) {
+          showToast("The question type mix can't be met with these topic allocations.", "error");
+          return;
+        }
+        units = allocCells.flatMap((c, i) => TYPE_KEYS.map((key, j) => ({
+          count: plan[i][j],
+          questions: c.questions.filter(q => questionTypeKey(q) === key)
+        })));
+      }
+
+      // ...each with its numerical and theory pools
+      const cells = units.filter(u => u.count > 0).map(u => ({
+        count: u.count,
+        numericalPool: u.questions.filter(isNumericalQuestion).map(q => q.id),
+        theoryPool: u.questions.filter(q => !isNumericalQuestion(q)).map(q => q.id),
+        allIds: u.questions.map(q => q.id)
+      }));
 
       if (!hasCategorySplit) {
         cells.forEach(c => finalQuestionIds.push(...shuffle(c.allIds).slice(0, c.count)));
@@ -527,6 +609,13 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       questions: finalQuestionIds,
       allocations,
       templateKey: templateKey || '',
+      typeSplit: typeSplit ? {
+        mode: typeSplit.mode,
+        autoAdjusted: !!typeSplit.autoAdjusted,
+        fromDefault: !!typeSplit.fromDefault,
+        pct: Object.fromEntries(TYPE_KEYS.map(k => [k, parseFloat(typeSplit.pct?.[k]) || 0])),
+        count: Object.fromEntries(TYPE_KEYS.map(k => [k, parseInt(typeSplit.count?.[k]) || 0]))
+      } : null,
       bundleId: isTeacher ? '' : bundleId
     };
 
@@ -583,6 +672,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setSelectionMode('auto');
     setManualSelectedIds([]);
     setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
+    setTypeSplit(null);
     setBundleId('');
     setStep(1);
   };
@@ -616,6 +706,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setSelectionMode('manual');
     setManualSelectedIds(test.questions || []);
     setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
+    setTypeSplit(test.typeSplit || null);
     setStep(3);
     setIsCreatorOpen(true);
   };
@@ -1154,7 +1245,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
         </div>
       )}
 
-      {/* 3-Step Wizard Modal */}
+      {/* 4-Step Wizard Modal */}
       {isCreatorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto font-sans">
           <form onSubmit={handleSubmit} className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col my-8 max-h-[95vh] overflow-hidden animate-in zoom-in-95 duration-200">
@@ -1166,11 +1257,12 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   <FileText size={20} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-[900] text-slate-900 leading-tight">{editingTestId ? 'Edit Test Template' : 'Create Test Template'} (Step {step} of 3)</h2>
+                  <h2 className="text-lg font-[900] text-slate-900 leading-tight">{editingTestId ? 'Edit Test Template' : 'Create Test Template'} (Step {step} of 4)</h2>
                   <p className="text-xs text-slate-400 font-semibold mt-0.5">
                     {step === 1 && "Configure template title, total time duration, target marks, and question count targets."}
                     {step === 2 && "Configure structural course hierarchy and audience alignment."}
                     {step === 3 && (editingTestId ? "View, remove or add questions. Edit a question's content directly in the Question Bank." : "Allocate 1-mark and 2-mark question counts for each selected topic with live availability checks.")}
+                    {step === 4 && "Configure target question type distribution matrix (MCQ, MSQ, NAT, Match) with smart presets."}
                   </p>
                 </div>
               </div>
@@ -1193,7 +1285,12 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
               <div className="h-0.5 bg-slate-200 flex-1 mx-4"></div>
               <div className="flex items-center gap-2">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${step === 3 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'bg-slate-200 text-slate-500'}`}>3</span>
-                <span className={step === 3 ? 'text-indigo-600' : ''}>Allocations</span>
+                <span className={step === 3 ? 'text-indigo-600' : ''}>Topic Marks</span>
+              </div>
+              <div className="h-0.5 bg-slate-200 flex-1 mx-4"></div>
+              <div className="flex items-center gap-2">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${step === 4 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'bg-slate-200 text-slate-500'}`}>4</span>
+                <span className={step === 4 ? 'text-indigo-600' : ''}>Question Types</span>
               </div>
             </div>
 
@@ -1859,16 +1956,170 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                 );
               })()}
 
+              {/* STEP 4: Question Types */}
+              {step === 4 && (() => {
+                const inputCls = "w-24 border rounded-xl px-3 py-2 text-[14px] font-[800] text-slate-800 text-center focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm disabled:bg-slate-50";
+                const pool = typeCountsOf(availablePool);
+                const poolTotal = sumCounts(pool);
+
+                // Manual Select: the picks themselves are the mix - show it read-only
+                if (!usesTypeMix) {
+                  const picked = questions.filter(q => manualSelectedIds.includes(q.id));
+                  const pickedCounts = typeCountsOf(picked);
+                  return (
+                    <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+                      <div className="bg-blue-50/60 border border-blue-100 rounded-2xl px-4 py-3 text-[12.5px] font-semibold text-slate-600">
+                        <span className="font-[800] text-slate-700">Manual Select:</span> the question type mix is whatever you pick in Topic Marks. Switch to <i>Auto-Select</i> or <i>Both</i> there to plan a mix with presets.
+                      </div>
+                      <div className="border border-slate-200 rounded-2xl overflow-x-auto">
+                        <table className="w-full text-left min-w-[560px]">
+                          <thead className="bg-slate-50 text-[11px] font-[900] text-slate-500 uppercase tracking-wide">
+                            <tr>
+                              <th className="px-4 py-3">Question Type</th>
+                              <th className="px-4 py-3 text-center">Repository Pool Available</th>
+                              <th className="px-4 py-3 text-center">Share (%)</th>
+                              <th className="px-4 py-3 text-center">Selected Qs</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {QUESTION_TYPES.map(t => (
+                              <tr key={t.key}>
+                                <td className="px-4 py-3 text-[13px] font-[800] text-slate-800">{t.label}</td>
+                                <td className="px-4 py-3 text-center"><span className={`px-2.5 py-1 rounded-full border text-[11.5px] font-[800] ${TYPE_META[t.key].chip}`}>{pool[t.key]} Qs</span></td>
+                                <td className="px-4 py-3 text-center text-[13px] font-[800] text-slate-700">{pctOf(pickedCounts[t.key], picked.length)}%</td>
+                                <td className="px-4 py-3 text-center text-[13px] font-[800] text-slate-700">{pickedCounts[t.key]}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const { total } = typeMixContext();
+                const split = typeSplit || { mode: 'custom', pct: {}, count: {} };
+                const pctSum = Math.round(TYPE_KEYS.reduce((a, k) => a + (parseFloat(split.pct?.[k]) || 0), 0) * 10) / 10;
+                const countSum = sumCounts(split.count);
+                const pctOk = Math.abs(pctSum - 100) <= 0.5;
+                const countOk = countSum === total;
+
+                return (
+                  <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
+
+                    {/* Presets */}
+                    <div className="border border-slate-200 rounded-2xl p-4 space-y-3">
+                      {(split.autoAdjusted || split.mode === 'custom') && (
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[12px] font-[800] text-white ${split.autoAdjusted ? 'bg-amber-600' : 'bg-slate-500'}`}>
+                          {split.autoAdjusted ? `⚡ Auto-Adjusted: ${presetLabel(split.mode)}` : '✏️ Custom Split'}
+                        </span>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {TYPE_PRESETS.map(p => {
+                          const active = split.mode === p.key;
+                          return (
+                            <button
+                              key={p.key}
+                              type="button"
+                              onClick={() => applyTypePreset(p.key)}
+                              className={`px-4 py-2 rounded-xl border text-[13px] font-[800] transition-all ${active ? 'bg-indigo-500 border-transparent text-white shadow-md shadow-indigo-500/25' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                            >
+                              {p.icon} {p.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50/60 border border-blue-100 rounded-2xl px-4 py-3 text-[12.5px] font-semibold text-slate-500">
+                      <span className="font-[800] text-slate-700">Default Ratio Rule:</span> Percentages default to 25% for each question type. If the selected topics can't supply 25% of any type, it automatically falls back to <i>Next Best Equal Split</i>.
+                      {selectionMode === 'both' && <> The mix applies to the {total} auto-picked questions; your {manualSelectedIds.length} manual pick{manualSelectedIds.length === 1 ? '' : 's'} are added as they are.</>}
+                    </div>
+
+                    {/* Distribution matrix */}
+                    <div className="border border-slate-200 rounded-2xl overflow-x-auto">
+                      <table className="w-full text-left min-w-[560px]">
+                        <thead className="bg-slate-50 text-[11px] font-[900] text-slate-500 uppercase tracking-wide">
+                          <tr>
+                            <th className="px-4 py-3">Question Type</th>
+                            <th className="px-4 py-3 text-center">Repository Pool Available</th>
+                            <th className="px-4 py-3 text-center">Weightage (%)</th>
+                            <th className="px-4 py-3 text-center">Contributed Qs</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {QUESTION_TYPES.map(t => {
+                            const count = split.count?.[t.key] ?? '';
+                            const tooMany = (parseInt(count) || 0) > pool[t.key];
+                            return (
+                              <tr key={t.key}>
+                                <td className="px-4 py-3 text-[13px] font-[800] text-slate-800">{t.label}</td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className={`px-2.5 py-1 rounded-full border text-[11.5px] font-[800] ${TYPE_META[t.key].chip}`}>{pool[t.key]} Qs</span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.1"
+                                      value={split.pct?.[t.key] ?? ''}
+                                      disabled={total === 0}
+                                      onChange={e => handleTypePctChange(t.key, e.target.value, total)}
+                                      className={`${inputCls} border-slate-200`}
+                                    />
+                                    <span className="text-[13px] font-bold text-slate-400">%</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={count}
+                                    disabled={total === 0}
+                                    onChange={e => handleTypeCountChange(t.key, e.target.value, total)}
+                                    title={tooMany ? `Only ${pool[t.key]} in the repository pool` : undefined}
+                                    className={`${inputCls} ${tooMany ? 'border-red-300 bg-red-50 text-red-600' : 'border-slate-200'}`}
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-slate-50 border-t border-slate-200">
+                          <tr>
+                            <td className="px-4 py-3 text-[11px] font-[900] text-slate-500 uppercase tracking-wide">Total Summary</td>
+                            <td className="px-4 py-3 text-center text-[13px] font-[800] text-slate-700">{poolTotal} Pool Total</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`px-2 py-1 rounded-md text-[12px] font-[800] ${pctOk ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>{pctSum}%</span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`px-2 py-1 rounded-md text-[12px] font-[800] ${countOk ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>{countSum} / {total} Qs</span>
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {total === 0 && (
+                      <div className="text-[12px] font-semibold text-slate-400">No questions are auto-picked (only your manual picks), so there is no mix to plan.</div>
+                    )}
+                  </div>
+                );
+              })()}
+
             </div>
 
             {/* Validation warning block at bottom */}
-            {((step === 1 && getStep1Warning()) || (step === 2 && getStep2Warning()) || (step === 3 && getStep3Warning())) && (
+            {((step === 1 && getStep1Warning()) || (step === 2 && getStep2Warning()) || (step === 3 && getStep3Warning()) || (step === 4 && getStep4Warning())) && (
               <div className="mx-6 mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-700 flex items-center gap-2">
                 <Info size={16} />
                 <span>
                   {step === 1 && getStep1Warning()}
                   {step === 2 && getStep2Warning()}
                   {step === 3 && getStep3Warning()}
+                  {step === 4 && getStep4Warning()}
                 </span>
               </div>
             )}
@@ -1896,19 +2147,19 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
               )}
 
               {/* Next/Finish button */}
-              {step < 3 ? (
+              {step < 4 ? (
                 <button 
                   type="button"
-                  disabled={(step === 1 && !!getStep1Warning()) || (step === 2 && !!getStep2Warning())}
+                  disabled={(step === 1 && !!getStep1Warning()) || (step === 2 && !!getStep2Warning()) || (step === 3 && !!getStep3Warning())}
                   onClick={goToNextStep}
                   className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 text-sm"
                 >
-                  Next: {step === 1 ? "Hierarchy" : "Allocations"} <ChevronRight size={16} />
+                  Next: {step === 1 ? "Hierarchy" : step === 2 ? "Topic Marks" : "Question Types"} <ChevronRight size={16} />
                 </button>
               ) : (
                 <button 
                   type="submit"
-                  disabled={!!getStep3Warning()}
+                  disabled={!!getStep3Warning() || !!getStep4Warning()}
                   className="px-6 py-2.5 bg-indigo-600 hover:bg-[#7C3AED] disabled:opacity-30 disabled:pointer-events-none text-white font-bold rounded-xl transition-all shadow-md text-sm"
                 >
                   {editingTestId ? 'Save Changes' : 'Save Test Template Blueprint'}
