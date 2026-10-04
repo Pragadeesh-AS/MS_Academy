@@ -26,6 +26,52 @@ export const sameDepartment = (a, b) => {
   return !!bx && bx === baseName(b);
 };
 
+// The departments students pick from during onboarding - tests and classes are saved under these
+// names so they reach the right students (see canonicalDepartment)
+export const STUDENT_DEPARTMENTS = [
+  'Computer Science (CSE)',
+  'Electronics (ECE)',
+  'Mechanical (ME)',
+  'Civil (CE)',
+  'Electrical (EE)',
+  'Data Science & AI (DS)',
+  'Production & Industrial Engg (PI)',
+  'Instrumentation Engg (IN)',
+  'Biotechnology (BT)',
+  'Chemical Engineering (CH)',
+  'Biomedical Engineering (BM)',
+  'Physics (PH)',
+  'Architecture & Planning (AR)',
+  'Agricultural Engineering (AG)',
+  'Metallurgical Engineering (MT)',
+  'Environmental Science (ES)',
+  'Life Sciences (XL)',
+  'Aerospace Engineering (AE)',
+];
+
+// Other common ways admins name a department in the Attributes tab
+const DEPARTMENT_ALIASES = {
+  aids: 'Data Science & AI (DS)',
+  'ai&ds': 'Data Science & AI (DS)',
+  'ai & ds': 'Data Science & AI (DS)',
+  'ai and ds': 'Data Science & AI (DS)',
+  'ai-ds': 'Data Science & AI (DS)',
+  'artificial intelligence and data science': 'Data Science & AI (DS)',
+  eee: 'Electrical (EE)',
+  chemical: 'Chemical Engineering (CH)',
+  civil: 'Civil (CE)',
+};
+
+// An attribute department name ("CHEMICAL ENGINEERING", "ECE", "AIDS") as the student-side name
+// ("Chemical Engineering (CH)", "Electronics (ECE)", "Data Science & AI (DS)"); names that match
+// none of them are kept as they are
+export const canonicalDepartment = (name) => {
+  const n = (name || '').trim();
+  if (!n) return '';
+  const hit = STUDENT_DEPARTMENTS.find(d => sameDepartment(d, n));
+  return hit || DEPARTMENT_ALIASES[n.toLowerCase()] || n;
+};
+
 const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
 /**

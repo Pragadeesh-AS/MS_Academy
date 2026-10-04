@@ -11,6 +11,7 @@ import {
 } from '../utils/solutionRelease';
 
 import TestScheduleCalendar from './tests/TestScheduleCalendar';
+import { sameDepartment, canonicalDepartment } from '../utils/subjects';
 import { TEST_TEMPLATES, templateByKey, templateMarks, templateQuestions, templateNumerical, subjectGroup, distributeAllocations, templateKeyOf, templateFoldersFor, folderName } from '../utils/testTemplates';
 import { formatTestTime, testStartMillis } from '../utils/testSchedule';
 
@@ -87,17 +88,6 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [manualSelectedIds, setManualSelectedIds] = useState([]);
   const [manualFilters, setManualFilters] = useState({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
 
-  // Department mapping for pills
-  const deptMapping = {
-    'ECE': 'Electronics (ECE)',
-    'CSE': 'Computer Science (CSE)',
-    'ME': 'Mechanical (ME)',
-    'CE': 'Civil (CE)',
-    'EE': 'Electrical (EE)',
-    'DS': 'Data Science (DS)'
-  };
-
-  const departmentsList = ['ECE', 'CSE', 'ME', 'CE', 'EE', 'DS'];
 
   useEffect(() => {
     fetchTests();
@@ -173,12 +163,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   // The pills use full names like "Computer Science (CSE)", but department attributes and
   // question records store the short code ("CSE"), so accept either form.
-  const matchesSelectedDept = (value) => {
-    const v = (value || '').trim().toLowerCase();
-    const full = (selectedDept || '').trim().toLowerCase();
-    const code = ((selectedDept || '').match(/\(([^)]+)\)/) || [])[1];
-    return v === full || (!!code && v === code.trim().toLowerCase());
-  };
+  // ("Chemical Engineering (CH)" also matches "CHEMICAL ENGINEERING" / "Chemical Engineering")
+  const matchesSelectedDept = (value) => sameDepartment(value, selectedDept);
 
   // Cascading lists helper
   const selectedDeptObj = selectedDept ? attributes.find(a => a.type === 'department' && matchesSelectedDept(a.name)) : null;
@@ -192,7 +178,19 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   const commonDeptObjs = attributes.filter(a => a.type === 'department' && isCommonDeptName(a.name) && a.id !== selectedDeptObj?.id);
 
-  const deptSubjectAttrs = attributes.filter(a => a.type === 'subject' && (selectedDept ? (!!selectedDeptObj && a.parentId === selectedDeptObj.id) : true));
+  // Target department buttons: the departments set up in the Attributes tab (not the shared
+  // Maths / Aptitude banks), labelled as the admin named them. A test is saved under the matching
+  // student-side name ("CHEMICAL ENGINEERING" -> "Chemical Engineering (CH)") so it reaches the
+  // students of that department.
+  const targetDepartments = attributes
+    .filter(a => a.type === 'department' && !isCommonDeptName(a.name))
+    .map(a => ({ id: a.id, label: a.name, value: canonicalDepartment(a.name) }))
+    .filter((d, i, all) => all.findIndex(x => sameDepartment(x.value, d.value)) === i)
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  // Every department attribute that is this department (e.g. "Chemical" and "CHEMICAL ENGINEERING")
+  const selectedDeptIds = new Set(attributes.filter(a => a.type === 'department' && !isCommonDeptName(a.name) && matchesSelectedDept(a.name)).map(a => a.id));
+  const deptSubjectAttrs = attributes.filter(a => a.type === 'subject' && (selectedDept ? selectedDeptIds.has(a.parentId) : true));
 
   const subjectsList = [
     ...deptSubjectAttrs.map(a => ({ name: a.name, label: a.name, attr: a, commonDept: null })),
@@ -1401,25 +1399,28 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                       <Landmark className="text-amber-500" size={16} /> 1. Select Target Department
                     </label>
                     <div className="flex flex-wrap gap-2">
-                      {departmentsList.map(code => {
-                        const fullName = deptMapping[code];
-                        const isSelected = selectedDept === fullName;
+                      {targetDepartments.map(({ id, label, value }) => {
+                        const isSelected = sameDepartment(selectedDept, value);
                         return (
                           <button
-                            key={code}
+                            key={id}
                             type="button"
-                            disabled={isTeacher && department && department !== fullName}
-                            onClick={() => { setSelectedDept(fullName); setSelectedSubjects([]); setSelectedTopics([]); }}
+                            disabled={isTeacher && department && !sameDepartment(department, value)}
+                            onClick={() => { setSelectedDept(value); setSelectedSubjects([]); setSelectedTopics([]); }}
+                            title={value}
                             className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
-                              isSelected 
-                                ? 'bg-[#F59E0B] border-transparent text-white shadow-md shadow-amber-500/20' 
+                              isSelected
+                                ? 'bg-[#F59E0B] border-transparent text-white shadow-md shadow-amber-500/20'
                                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40'
                             }`}
                           >
-                            {code}
+                            {label}
                           </button>
                         );
                       })}
+                      {targetDepartments.length === 0 && (
+                        <div className="text-slate-400 text-xs font-semibold py-2">No departments yet - add them in the Attributes tab.</div>
+                      )}
                     </div>
                   </div>
 

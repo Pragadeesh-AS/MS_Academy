@@ -8,6 +8,7 @@ import logoImg from '../assets/msgate_logo.png';
 import { RELEASE_MODES, releaseMode, releaseAtMillis, areSolutionsVisible, formatReleaseTime } from '../utils/solutionRelease';
 import { gradeAnswer, normalizeQuestion, correctAnswerText } from '../utils/testGrading';
 import { canAccessTest as canAccessTestFor } from '../utils/testAccess';
+import { sameDepartment } from '../utils/subjects';
 import { templateKeyOf, templateFoldersFor, folderName, templateMarks } from '../utils/testTemplates';
 import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, minutesAvailable, formatTestTime, formatCountdown } from '../utils/testSchedule';
 
@@ -126,10 +127,9 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       const testsSnapshot = await getDocs(collection(db, 'tests'));
       const allTests = testsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // Filter by department (matching student department or "All Departments")
-      const studentTests = allTests.filter(t => 
-        t.department === department
-      );
+      // The student's department ("Chemical Engineering (CH)" also matches tests saved as
+      // "CHEMICAL ENGINEERING" / "Chemical Engineering")
+      const studentTests = allTests.filter(t => sameDepartment(t.department, department));
       setTests(studentTests);
 
       if (email) {

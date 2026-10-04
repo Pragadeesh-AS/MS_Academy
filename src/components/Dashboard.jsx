@@ -9,7 +9,7 @@ import { ref, listAll, getDownloadURL } from 'firebase/storage';
 import StudentLiveClasses from './StudentLiveClasses';
 import RecordingPlayerModal from './shared/RecordingPlayerModal';
 import RoleSwitcher from './shared/RoleSwitcher';
-import { groupBySubject, NO_SUBJECT } from '../utils/subjects';
+import { STUDENT_DEPARTMENTS, groupBySubject, NO_SUBJECT } from '../utils/subjects';
 import StudentTests from './StudentTests';
 import TestAlerts from './student/TestAlerts';
 import { canAccessTest } from '../utils/testAccess';
@@ -770,24 +770,7 @@ export default function Dashboard() {
                   className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
                 >
                   <option value="">Select Department...</option>
-                  <option value="Computer Science (CSE)">Computer Science (CSE)</option>
-                  <option value="Electronics (ECE)">Electronics (ECE)</option>
-                  <option value="Mechanical (ME)">Mechanical (ME)</option>
-                  <option value="Civil (CE)">Civil (CE)</option>
-                  <option value="Electrical (EE)">Electrical (EE)</option>
-                  <option value="Data Science & AI (DS)">Data Science & AI (DS)</option>
-                  <option value="Production & Industrial Engg (PI)">Production & Industrial Engg (PI)</option>
-                  <option value="Instrumentation Engg (IN)">Instrumentation Engg (IN)</option>
-                  <option value="Biotechnology (BT)">Biotechnology (BT)</option>
-                  <option value="Chemical Engineering (CH)">Chemical Engineering (CH)</option>
-                  <option value="Biomedical Engineering (BM)">Biomedical Engineering (BM)</option>
-                  <option value="Physics (PH)">Physics (PH)</option>
-                  <option value="Architecture & Planning (AR)">Architecture & Planning (AR)</option>
-                  <option value="Agricultural Engineering (AG)">Agricultural Engineering (AG)</option>
-                  <option value="Metallurgical Engineering (MT)">Metallurgical Engineering (MT)</option>
-                  <option value="Environmental Science (ES)">Environmental Science (ES)</option>
-                  <option value="Life Sciences (XL)">Life Sciences (XL)</option>
-                  <option value="Aerospace Engineering (AE)">Aerospace Engineering (AE)</option>
+                  {STUDENT_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                   <option value="Other">Other</option>
                 </select>
               </div>
