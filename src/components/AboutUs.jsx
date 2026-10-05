@@ -39,49 +39,6 @@ export default function AboutUs() {
       </div>
 
       <div className="w-full relative z-10 pb-16 pt-4 lg:pb-24 lg:pt-8 max-w-[1200px] mx-auto px-6 flex flex-col gap-24">
-      {/* Hero Section */}
-      <section className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          className="flex-1 flex flex-col gap-6"
-        >
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-[#1d4ed8] font-semibold text-sm w-fit border border-blue-100">
-            <Sparkles size={16} />
-            <span>Ignite your dreams</span>
-          </div>
-          <h1 className="text-4xl lg:text-6xl font-black text-slate-900 leading-tight tracking-tight">
-            Comprehensive <br />
-            <span className="text-[#1d4ed8]">Educational Support</span>
-          </h1>
-          <p className="text-lg text-slate-500 leading-relaxed max-w-xl">
-            MS Academy provides comprehensive educational support with clear concepts, personal attention, and updated study materials in a friendly environment. We aim to help students prepare with clarity and confidence.
-          </p>
-        </motion.div>
-        
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="flex-1 w-full lg:w-auto h-[400px] relative rounded-3xl overflow-hidden shadow-2xl border border-slate-100 flex items-center justify-center bg-slate-100"
-        >
-          <AnimatePresence mode="wait">
-            <motion.img
-              key={currentImageIndex}
-              src={images[currentImageIndex]}
-              initial={{ opacity: 0, scale: 1.05 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.8 }}
-              className="absolute inset-0 w-full h-full object-cover"
-              alt="MS Academy Slideshow"
-            />
-          </AnimatePresence>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10 pointer-events-none"></div>
-        </motion.div>
-      </section>
-
       {/* Founder Section */}
       <section className="relative">
         <div className="absolute inset-0 bg-slate-50 rounded-[3rem] -z-10 transform -rotate-1 scale-105 opacity-50"></div>
@@ -123,7 +80,7 @@ export default function AboutUs() {
             <div>
               <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-2">Dr. M. Muthu Samy</h2>
               <p className="text-[#1d4ed8] font-semibold text-lg flex items-center gap-2">
-                <GraduationCap size={20} /> Founder, MS Academy | NIT Trichy Alumnus
+                <GraduationCap size={20} /> Founder, MS GATE Academy | M.E., Ph.D, NIT Trichy Alumnus
               </p>
             </div>
             
@@ -154,11 +111,56 @@ export default function AboutUs() {
               </div>
               <div>
                 <p className="text-[10px] font-extrabold text-[#1d4ed8] uppercase tracking-widest leading-none mb-1.5">UDYAM Startup Registration</p>
-                <p className="text-[15px] font-black text-slate-800 leading-none">UDYAM-TN-03-0337502</p>
+                <p className="text-[15px] font-black text-slate-800 leading-none">TN-03-0337502</p>
               </div>
             </div>
           </motion.div>
         </div>
+      </section>
+
+      {/* Why Choose MS Gate Academy */}
+      <section className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+          className="flex-1 flex flex-col gap-6"
+        >
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-[#1d4ed8] font-semibold text-sm w-fit border border-blue-100">
+            <Sparkles size={16} />
+            <span>Ignite your dreams</span>
+          </div>
+          <h1 className="text-4xl lg:text-6xl font-black text-slate-900 leading-tight tracking-tight">
+            Why Choose <br />
+            <span className="text-[#1d4ed8]">MS Gate Academy?</span>
+          </h1>
+          <p className="text-lg text-slate-500 leading-relaxed max-w-xl">
+            MS Academy provides comprehensive educational support with clear concepts, personal attention, and updated study materials in a friendly environment. We aim to help students prepare with clarity and confidence.
+          </p>
+        </motion.div>
+        
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8, delay: 0.2 }}
+          className="flex-1 w-full lg:w-auto h-[400px] relative rounded-3xl overflow-hidden shadow-2xl border border-slate-100 flex items-center justify-center bg-slate-100"
+        >
+          <AnimatePresence mode="wait">
+            <motion.img
+              key={currentImageIndex}
+              src={images[currentImageIndex]}
+              initial={{ opacity: 0, scale: 1.05 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.8 }}
+              className="absolute inset-0 w-full h-full object-cover"
+              alt="MS Academy Slideshow"
+            />
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10 pointer-events-none"></div>
+        </motion.div>
       </section>
 
       {/* Stats Section */}

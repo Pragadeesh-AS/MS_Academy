@@ -56,9 +56,20 @@ export default function Contact() {
               </div>
               <div className="flex flex-col justify-center">
                 <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider mb-2">Address</span>
-                <span className="text-[16px] md:text-[22px] font-medium text-slate-700 leading-relaxed max-w-[400px]">
-                  9 Vinayagar Koil Street, RC Nagar, Othakkalmandapam (P.O), Coimbatore - 641032
-                </span>
+                <div className="flex flex-col gap-5">
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-bold text-[#1d4ed8] uppercase tracking-wider mb-1">Othakkalmandapam Branch</span>
+                    <span className="text-[16px] md:text-[22px] font-medium text-slate-700 leading-relaxed max-w-[400px]">
+                      9 Vinayagar Koil Street, RC Nagar, Othakkalmandapam (P.O), Coimbatore - 641032
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-bold text-[#1d4ed8] uppercase tracking-wider mb-1">Malumichampatti Branch</span>
+                    <span className="text-[16px] md:text-[22px] font-medium text-slate-700 leading-relaxed max-w-[400px]">
+                      MS GATE Academy, MVP Complex, 1/453 B5, Chettipalayam Road, Malumichampatti, Coimbatore - 641050 (Near VMK Bakery, Malumichampatti Bus Stop)
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -70,7 +81,7 @@ export default function Contact() {
               <div className="flex flex-col justify-center">
                 <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider mb-2">Startup Registration</span>
                 <span className="text-[16px] md:text-[22px] font-medium text-slate-700 leading-relaxed">
-                  UDYAM-TN-03-0337502
+                  TN-03-0337502
                 </span>
               </div>
             </div>

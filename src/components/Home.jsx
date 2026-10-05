@@ -397,7 +397,7 @@ export default function Home() {
           </h1>
 
           <p className="text-base md:text-[17px] font-bold text-slate-700 mb-10 leading-relaxed">
-            Learn directly from Dr. M. Muthu Samy (NIT Trichy Alumnus). Go from average scores to your dream PSU or IIT with ease using MS Gate Academy, your favourite coaching platform.
+            Learn directly from Dr. M. Muthu Samy (M.E., Ph.D, NIT Trichy Alumnus & 4-Time Consecutive GATE Qualifier, 2021-2024)
           </p>
 
           <ShinyButton onClick={() => navigate('/login')} className="px-8 py-4 text-[17px] font-semibold text-white rounded-xl bg-gradient-to-b from-[#4a4a4a] via-[#2a2a2a] to-[#111111] shadow-[0_8px_30px_rgba(0,0,0,0.12)] hover:scale-[1.02] transition-transform border border-[#333333]">

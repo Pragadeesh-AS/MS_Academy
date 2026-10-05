@@ -29,7 +29,7 @@ export const SERIF = '"PT Serif", Georgia, "Times New Roman", serif';
 export const SCRIPT = '"Great Vibes", "Brush Script MT", cursive';
 const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Great+Vibes&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&display=swap';
 
-export const UDYAM_NO = 'UDYAM-TN-03-0337502';
+export const UDYAM_NO = 'TN-03-0337502';
 const CONTACTS = [
   { icon: Phone, text: '+91 80120 52331' },
   { icon: Mail, text: 'msamy5031@gmail.com' },
@@ -37,7 +37,7 @@ const CONTACTS = [
 ];
 const BRANCHES = [
   { name: 'OTHAKKALMANDAPAM BRANCH', address: 'Pollachi Main Road, Othakkalmandapam, Coimbatore' },
-  { name: 'MALUMICHAMPATTI BRANCH', address: 'Pollachi Main Road, Malumichampatti, Coimbatore' },
+  { name: 'MALUMICHAMPATTI BRANCH', address: 'MVP Complex, Chettipalayam Road, Malumichampatti' },
 ];
 const FOOTER_TAGS = ['GATE', 'PSUs', 'HIGHER STUDIES', 'RESEARCH CAREER'];
 

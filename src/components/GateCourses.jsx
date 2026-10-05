@@ -4,7 +4,7 @@ import {
   Monitor, Cpu, Cog, Building2, Zap, Settings, Database, Gauge, 
   Dna, FlaskConical, HeartPulse, Atom, DraftingCompass, Sprout, 
   Anvil, Leaf, Microscope, Plane, ArrowRight, BookOpen, 
-  GraduationCap, Award, Briefcase, Globe, Sparkles, Tag, Clock 
+  GraduationCap, Award, Briefcase, Globe, Sparkles, Clock 
 } from 'lucide-react';
 
 const ScrollVideo = ({ src, className }) => {
@@ -444,15 +444,9 @@ export default function GateCourses() {
                   ))}
                 </div>
                 
-                {/* Admin Configurations (Fee & Batch Info) */}
-                {(course.fee || course.batch) && (
+                {/* Admin Configurations (Batch Info) */}
+                {course.batch && (
                   <div className="flex flex-wrap gap-x-6 gap-y-2 mb-6 p-4 bg-slate-50 border border-slate-100 rounded-2xl w-full max-w-md">
-                    {course.fee && (
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                        <Tag size={14} className="text-[#1d4ed8]" />
-                        <span>Fee: {course.fee}</span>
-                      </div>
-                    )}
                     {course.batch && (
                       <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
                         <Clock size={14} className="text-[#1d4ed8]" />
