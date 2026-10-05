@@ -1,7 +1,6 @@
 import React from 'react';
 import { Phone, Mail, MapPin, Send, Award } from 'lucide-react';
 import { ShinyButton } from "./ui/shiny-button";
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import SocialCard from './SocialCard';
 
 export default function Contact() {
@@ -88,14 +87,18 @@ export default function Contact() {
           </div>
         </div>
 
-        {/* Animation Container */}
-        <div className="relative flex justify-center items-center w-full lg:w-[110%] xl:w-[120%] h-full transform lg:translate-x-4">
-          <DotLottieReact
-            src="https://lottie.host/c55b41b0-7ebd-49f3-8503-c09fbcc556b3/r82htSwswC.lottie"
-            loop
-            autoplay
-            className="w-full h-full object-contain scale-110"
-          />
+        {/* Map Container */}
+        <div className="relative flex justify-center items-center w-full h-[300px] sm:h-[400px] lg:h-[450px]">
+          <iframe
+            src="https://maps.google.com/maps?q=MS%20GATE%20Academy%20-%20Ignite%20your%20dreams,%20Coimbatore&cid=63708029789861343&t=&z=15&ie=UTF8&iwloc=&output=embed"
+            width="100%"
+            height="100%"
+            style={{ border: 0, borderRadius: "24px" }}
+            allowFullScreen=""
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            className="shadow-xl border border-slate-100 max-w-[500px] lg:max-w-[550px]"
+          ></iframe>
         </div>
 
       </div>
