@@ -234,6 +234,8 @@ export default function XlCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/Life_Science.mp4" 
+            poster="/posters/Life_Science.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

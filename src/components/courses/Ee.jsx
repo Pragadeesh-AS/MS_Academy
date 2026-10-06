@@ -74,6 +74,8 @@ export default function EeCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/EEE.mp4" 
+            poster="/posters/EEE.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

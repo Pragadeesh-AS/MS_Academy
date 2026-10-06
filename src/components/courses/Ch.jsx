@@ -74,6 +74,8 @@ export default function ChCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/Chemical_Engineering.mp4" 
+            poster="/posters/Chemical_Engineering.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

@@ -38,14 +38,18 @@ code {
 
 /* Safety net for teacher/admin-authored HTML content (questions, options, notes)
    rendered via dangerouslySetInnerHTML — prevents wide embedded images/tables
-   from forcing horizontal overflow on narrow screens. */
-img {
-  max-width: 100%;
-  height: auto;
-}
+   from forcing horizontal overflow on narrow screens. In the base layer so that size
+   utilities (h-full, h-40...) on an image still win - unlayered, `height: auto` would
+   override them on every image in the site. */
+@layer base {
+  img {
+    max-width: 100%;
+    height: auto;
+  }
 
-table {
-  max-width: 100%;
+  table {
+    max-width: 100%;
+  }
 }
 
 .no-scrollbar {

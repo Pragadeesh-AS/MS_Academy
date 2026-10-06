@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Monitor, Cpu, Cog, Building2, Zap, Settings, Database, Gauge, 
@@ -7,38 +7,46 @@ import {
   GraduationCap, Award, Briefcase, Globe, Sparkles, Clock 
 } from 'lucide-react';
 
-const ScrollVideo = ({ src, className }) => {
+// The first frame of each video (public/posters), shown instantly while the video loads
+export const posterFor = (videoSrc) => `/posters/${videoSrc.replace(/^\//, '').replace(/\.mp4$/, '.jpg')}`;
+
+// A course video that only downloads when it's about to scroll into view (the page has 18 of them,
+// ~80 MB - loading them all at once made the first ones slow to appear), shows its poster frame
+// until it can play, and plays only while it's on screen. `eager` loads it straight away.
+const ScrollVideo = ({ src, className, eager = false }) => {
   const videoRef = useRef(null);
+  const onScreen = useRef(false);
+  const [load, setLoad] = useState(eager);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
+    const video = videoRef.current;
+    if (!video) return undefined;
+    const nearby = new IntersectionObserver(
+      (entries) => { if (entries.some(e => e.isIntersecting)) { setLoad(true); nearby.disconnect(); } },
+      { rootMargin: '600px 0px' }
+    );
+    const visible = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            videoRef.current?.play().catch(e => console.log("Video play interrupted:", e));
-          } else {
-            videoRef.current?.pause();
-          }
+          onScreen.current = entry.isIntersecting;
+          if (entry.isIntersecting) video.play().catch(() => { /* not loaded yet - onCanPlay starts it */ });
+          else video.pause();
         });
       },
       { threshold: 0.3 }
     );
-
-    if (videoRef.current) {
-      observer.observe(videoRef.current);
-    }
-
-    return () => {
-      if (videoRef.current) {
-        observer.unobserve(videoRef.current);
-      }
-    };
+    nearby.observe(video);
+    visible.observe(video);
+    return () => { nearby.disconnect(); visible.disconnect(); };
   }, []);
 
   return (
     <video
       ref={videoRef}
-      src={src}
+      src={load ? src : undefined}
+      poster={posterFor(src)}
+      preload={load ? 'auto' : 'none'}
+      onCanPlay={(e) => { if (onScreen.current) e.currentTarget.play().catch(() => {}); }}
       loop
       muted
       playsInline
@@ -390,7 +398,8 @@ export default function GateCourses() {
                   {course.video ? (
                     <ScrollVideo
                       src={course.video}
-                      className="w-full h-auto max-h-[350px] object-cover transition-transform duration-700 group-hover/media:scale-[1.03]"
+                      eager={index < 2}
+                      className="w-full h-auto aspect-video max-h-[350px] object-cover transition-transform duration-700 group-hover/media:scale-[1.03]"
                     />
                   ) : (
                     <img

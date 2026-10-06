@@ -6,6 +6,7 @@ import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { positiveMarkFor, negativeMarkFor } from '../../utils/marking';
 import logoImg from '../../assets/msgate_logo.png';
+import { examSections, shuffledQuestions, shuffleSeed, optionOrderFor } from '../../utils/testShuffle';
 
 // Academy logo + name at the top of every exam screen. `pill` puts it on a white chip for the
 // blue header bar of the question screen.
@@ -97,51 +98,23 @@ const NatKeypad = ({ value, onChange }) => {
 // exam reopens on a "Resume" screen with their answers. onProgress(progress) is called as they work
 // so it can be saved.
 export default function GateTestInterface({ test, testQuestions: rawTestQuestions, onSubmit, onCancel, studentName, savedProgress = null, onProgress }) {
-  const { orderedQuestions: testQuestions, sections } = useMemo(() => {
-    const aptitudeQs = [];
-    const mathsQs = [];
-    const coreQs = [];
-    
-    // Categorize
-    rawTestQuestions.forEach(q => {
-      const dept = (q.department || '').trim().toLowerCase();
-      if (/ap+titude/.test(dept)) { // "Aptitude", "General Aptitude", or the "Apptitude" spelling
-        aptitudeQs.push(q);
-      } else if (dept.includes('mathematics') || dept.includes('maths') || dept === 'engineering mathematics') {
-        mathsQs.push(q);
-      } else {
-        coreQs.push(q);
-      }
-    });
-
-    const sortByMarks = (qs) => [...qs].sort((a, b) => (parseFloat(a.mark) || 1) - (parseFloat(b.mark) || 1));
-
-    const sortedAptitude = sortByMarks(aptitudeQs);
-    const sortedMaths = sortByMarks(mathsQs);
-    const sortedCore = sortByMarks(coreQs);
-
-    const coreSectionQs = [...sortedMaths, ...sortedCore];
-
-    const newSections = [];
-    let ordered = [];
-
-    if (sortedAptitude.length > 0) {
-      newSections.push({ id: 'aptitude', name: 'General Aptitude', startIndex: 0, count: sortedAptitude.length });
-      ordered = ordered.concat(sortedAptitude);
-    }
-
-    if (coreSectionQs.length > 0) {
-      const coreDeptName = coreQs.length > 0 ? coreQs[0].department : (mathsQs.length > 0 ? mathsQs[0].department : test.department);
-      newSections.push({ id: 'core', name: coreDeptName || 'Core Subject', startIndex: ordered.length, count: coreSectionQs.length });
-      ordered = ordered.concat(coreSectionQs);
-    }
-    
-    if (newSections.length === 0) {
-      newSections.push({ id: 'all', name: 'All Sections', startIndex: 0, count: ordered.length });
-    }
-
-    return { orderedQuestions: ordered, sections: newSections };
-  }, [rawTestQuestions, test.department]);
+  // Standard order (attempts are saved in it, so every student's Q5 is the same question in
+  // analytics) and this student's own shuffled order, which is what they see. A resumed test keeps
+  // the order it was started with.
+  const seed = shuffleSeed(sessionStorage.getItem('auth_email') || studentName, test.id);
+  const { standardOrder, testQuestions, sections } = useMemo(() => {
+    const { orderedQuestions, sections: secs } = examSections(rawTestQuestions, test.department);
+    const savedOrder = Array.isArray(savedProgress?.order) ? savedProgress.order : null;
+    const byId = new Map(orderedQuestions.map(q => [q.id, q]));
+    const sameSet = savedOrder && savedOrder.length === orderedQuestions.length && savedOrder.every(id => byId.has(id));
+    const shown = sameSet ? savedOrder.map(id => byId.get(id)) : shuffledQuestions(orderedQuestions, secs, seed);
+    return { standardOrder: orderedQuestions.map(q => q.id), testQuestions: shown, sections: secs };
+  }, [rawTestQuestions, test.department]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Each question's options in this student's shuffled order (answers are still saved as 'A'..'D')
+  const optionOrders = useMemo(
+    () => new Map(testQuestions.map(q => [q.id, optionOrderFor(q, seed)])),
+    [testQuestions] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const [mode, setMode] = useState(savedProgress ? 'resume' : 'login'); // login, instructions1, instructions2, resume, taking
   
@@ -187,7 +160,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     flushQuestionTime();
     const timeSpent = {};
     Object.entries(timeSpentRef.current).forEach(([id, secs]) => { timeSpent[id] = Math.round(secs); });
-    onSubmit(answers, { timeSpent, order: testQuestions.map(q => q.id) });
+    onSubmit(answers, { timeSpent, order: standardOrder, shownOrder: testQuestions.map(q => q.id) });
   };
   const [fsWarningCount, setFsWarningCount] = useState(fsWarningsRef.current);
   const [showFsWarning, setShowFsWarning] = useState(false);
@@ -893,7 +866,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                   />
                 ) : currentQ?.questionType === 'Multiple Choice' ? (
                   <div className="flex flex-col gap-4">
-                    {['A', 'B', 'C', 'D'].map(opt => {
+                    {(optionOrders.get(currentQ?.id) || []).map(opt => {
                       const text = currentQ?.[`option${opt}`];
                       const img = currentQ?.[`option${opt}Image`];
                       if (isEmptyHtml(text) && !img) return null;
@@ -916,7 +889,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4">
-                    {['A', 'B', 'C', 'D'].map(opt => {
+                    {(optionOrders.get(currentQ?.id) || []).map(opt => {
                       const text = currentQ?.[`option${opt}`];
                       const img = currentQ?.[`option${opt}Image`];
                       if (isEmptyHtml(text) && !img) return null;

@@ -4,6 +4,7 @@ import { db, auth } from '../firebase';
 import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle, CalendarClock, Flag } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
+import { examSections } from '../utils/testShuffle';
 import logoImg from '../assets/msgate_logo.png';
 import { RELEASE_MODES, releaseMode, releaseAtMillis, areSolutionsVisible, formatReleaseTime } from '../utils/solutionRelease';
 import { gradeAnswer, normalizeQuestion, correctAnswerText } from '../utils/testGrading';
@@ -199,7 +200,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         startTimeRef.current = saved.startedAt;
         await handleSubmitTest(matchedQuestions, timedTest, saved.answers, {
           timeSpent: saved.timeSpent,
-          order: saved.order,
+          shownOrder: saved.order,
           timeTakenSeconds: Math.round((saved.deadline - saved.startedAt) / 1000)
         });
         return;
@@ -245,7 +246,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     handleSubmitTest(testQuestions, activeTest, selectedAnswers);
   };
 
-  // meta (from the exam screen): { timeSpent: { questionId: seconds }, order: [questionId in exam order] }
+  // meta (from the exam screen): { timeSpent: { questionId: seconds }, shownOrder: [questionId in the
+  // shuffled order this student saw] }
   const handleSubmitTest = async (questionsList, test, answers, meta = {}) => {
     setLoading(true);
     let correctCount = 0;
@@ -254,11 +256,11 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
     const timeTakenSeconds = meta.timeTakenSeconds ?? (startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0);
     const avgTimePerQuestion = questionsList.length > 0 ? timeTakenSeconds / questionsList.length : 0;
-    // Report questions in the order the student saw them (aptitude section first, etc.)
-    if (Array.isArray(meta.order) && meta.order.length) {
-      const pos = new Map(meta.order.map((id, i) => [id, i]));
-      questionsList = [...questionsList].sort((a, b) => (pos.get(a.id) ?? 1e9) - (pos.get(b.id) ?? 1e9));
-    }
+    // Saved in the test's standard order (aptitude section first, 1-mark before 2-mark), the same
+    // for every student, so Q5 is the same question in everyone's analytics. The shuffled order this
+    // student actually saw is kept in questionOrder.
+    questionsList = examSections(questionsList, test.department).orderedQuestions;
+    const questionOrder = Array.isArray(meta.shownOrder) && meta.shownOrder.length ? meta.shownOrder : null;
     const hasRealTimes = !!meta.timeSpent && Object.keys(meta.timeSpent).length > 0;
 
     // Evaluate answers - the same marking the answer-key re-grade uses (utils/testGrading).
@@ -293,6 +295,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       totalQuestions: questionsList.length,
       timeTakenSeconds,
       responses: evaluation,
+      ...(questionOrder ? { questionOrder } : {}),
       submittedAt: serverTimestamp()
     };
 

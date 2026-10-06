@@ -49,6 +49,8 @@ export default function MeCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/MECH.mp4" 
+            poster="/posters/MECH.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

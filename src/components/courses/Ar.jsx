@@ -98,6 +98,8 @@ export default function ArCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/Architecture and Planning.mp4" 
+            poster="/posters/Architecture and Planning.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

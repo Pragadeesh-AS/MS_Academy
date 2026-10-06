@@ -78,6 +78,8 @@ export default function PhCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/Physics.mp4" 
+            poster="/posters/Physics.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

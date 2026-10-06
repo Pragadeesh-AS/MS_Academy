@@ -58,6 +58,8 @@ export default function BtCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/Bio_technology.mp4" 
+            poster="/posters/Bio_technology.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

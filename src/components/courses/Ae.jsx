@@ -54,6 +54,8 @@ export default function AeCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/Aerospace_Engineering.mp4" 
+            poster="/posters/Aerospace_Engineering.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

@@ -66,6 +66,8 @@ export default function DsCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/AIDS.mp4" 
+            poster="/posters/AIDS.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

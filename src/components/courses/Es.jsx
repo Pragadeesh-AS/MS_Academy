@@ -70,6 +70,8 @@ export default function EsCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/Environment.mp4" 
+            poster="/posters/Environment.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

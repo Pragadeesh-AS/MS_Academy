@@ -62,6 +62,8 @@ export default function CeCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/Civil.mp4" 
+            poster="/posters/Civil.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 

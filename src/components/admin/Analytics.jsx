@@ -150,6 +150,10 @@ export default function Analytics({ joinedStudents = [], department = null, stud
           let unattempted = 0;
           let negMarks = 0;
 
+          // Responses are saved in the test's standard order; questionOrder is the shuffled order
+          // this student saw the questions in (attempts from before shuffling don't have it)
+          const shownPos = Array.isArray(attempt.questionOrder) ? new Map(attempt.questionOrder.map((id, i) => [id, i + 1])) : null;
+
           if (attempt.responses && Array.isArray(attempt.responses)) {
             allQuestions = attempt.responses.map((r, i) => {
               const qData = questionsMap[r.questionId] || {};
@@ -187,6 +191,8 @@ export default function Analytics({ joinedStudents = [], department = null, stud
 
               return {
                 qIndex: i + 1,
+                questionId: r.questionId,
+                shownAs: shownPos?.get(r.questionId) || null,
                 q: qData.questionText || "Question text unavailable",
                 qImage: qData.questionImageUrl || null,
                 // Group I / Group II of a Match question - its options ("P-2, Q-1...") refer to them
@@ -220,10 +226,11 @@ export default function Analytics({ joinedStudents = [], department = null, stud
 
           if (!testSummary.questionStats) testSummary.questionStats = {};
           allQuestions.forEach((q, idx) => {
-            const qKey = q.qIndex || (idx + 1);
+            // Per question, not per position, so every student's answer to it is counted together
+            const qKey = q.questionId || q.qIndex || (idx + 1);
             if (!testSummary.questionStats[qKey]) {
               testSummary.questionStats[qKey] = {
-                qIndex: qKey,
+                qIndex: q.qIndex || (idx + 1),
                 qText: q.q,
                 qImage: q.qImage,
                 matchColumn1: q.matchColumn1,
@@ -1121,6 +1128,11 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                               <span className="text-sm font-black text-slate-500 bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded-xl shadow-sm">
                                 Q{q.qIndex}
                               </span>
+                              {q.shownAs && q.shownAs !== q.qIndex && (
+                                <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-lg" title="Questions are shuffled for each student - this is the number this student saw">
+                                  Seen as Q{q.shownAs}
+                                </span>
+                              )}
                               {q.status === 'Correct' && <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700"><CheckCircle2 size={16} className="text-emerald-500"/> Correct</span>}
                               {q.status === 'Wrong' && <span className="flex items-center gap-1.5 text-xs font-bold text-red-700"><XCircle size={16} className="text-red-500"/> Wrong</span>}
                               {q.status === 'Unattempted' && <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600"><MinusCircle size={16} className="text-slate-400"/> Unattempted</span>}

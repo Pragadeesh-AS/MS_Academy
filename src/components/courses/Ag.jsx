@@ -62,6 +62,8 @@ export default function AgCourse() {
         <div className="flex-1 w-full max-w-[650px] flex justify-center items-center lg:pl-10">
           <video 
             src="/Agricultural_Engineering.mp4" 
+            poster="/posters/Agricultural_Engineering.jpg"
+            preload="auto"
             autoPlay 
             loop 
             muted 
