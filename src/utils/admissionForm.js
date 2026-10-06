@@ -8,6 +8,12 @@ import { STUDENT_DEPARTMENTS } from './subjects';
 
 export const ADMISSION_FORMS = 'admission_forms';
 
+// Student groups (Student Directory "group") that don't fill in the admission form.
+// Keep in sync with EXEMPT_GROUPS in functions/cashfree.js.
+const EXEMPT_GROUPS = ['kpr'];
+export const isAdmissionFormExempt = (student) => EXEMPT_GROUPS.includes(String(student?.groupName || '').trim().toLowerCase());
+export const needsAdmissionForm = (student) => !student?.admissionFormSubmitted && !isAdmissionFormExempt(student);
+
 export const GENDERS = ['Male', 'Female', 'Other'];
 export const CURRENT_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduated'];
 export const GATE_PAPERS = [...STUDENT_DEPARTMENTS, 'Other'];

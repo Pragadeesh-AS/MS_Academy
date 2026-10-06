@@ -20,6 +20,7 @@ import { gateCoursesData } from './GateCourses';
 import { buyBundle, buySubject, buyNoteBundle, verifyOrder } from '../cashfree';
 import Analytics from './admin/Analytics';
 import AdmissionGate from './admission/AdmissionGate';
+import { needsAdmissionForm } from '../utils/admissionForm';
 import { TrendingUp } from 'lucide-react';
 
 function VideoDuration({ url, storedDuration }) {
@@ -519,7 +520,7 @@ export default function Dashboard() {
             }
             
             setStudentRecord(data);
-            setAdmissionPending(!data.admissionFormSubmitted);
+            setAdmissionPending(needsAdmissionForm(data));
           } else {
             setAdmissionPending(true);
           }

@@ -116,9 +116,14 @@ exports.createCashfreeOrder = onCall({ secrets: SECRETS }, async (request) => {
   const student = studentDoc.data();
 
   // The signed Admission Application Form must be submitted before any payment
-  const admissionForm = await db.collection('admission_forms').doc(studentDoc.id).get();
-  if (!admissionForm.exists || !admissionForm.data().signature) {
-    throw new HttpsError('failed-precondition', 'Please submit your Admission Application Form before making a payment.');
+  // (except for groups that don't fill it in - keep in sync with src/utils/admissionForm.js)
+  const EXEMPT_GROUPS = ['kpr'];
+  const exempt = EXEMPT_GROUPS.includes(String(student.groupName || '').trim().toLowerCase());
+  if (!exempt) {
+    const admissionForm = await db.collection('admission_forms').doc(studentDoc.id).get();
+    if (!admissionForm.exists || !admissionForm.data().signature) {
+      throw new HttpsError('failed-precondition', 'Please submit your Admission Application Form before making a payment.');
+    }
   }
 
   let itemName;

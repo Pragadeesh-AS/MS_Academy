@@ -12,6 +12,7 @@ import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/fire
 import { updatePassword } from 'firebase/auth';
 import { motion } from 'framer-motion';
 import { SKILLS } from './skillsList';
+import { needsAdmissionForm } from '../utils/admissionForm';
 
 const SKILL_STYLES = [
   "text-blue-600 bg-blue-50",
@@ -120,7 +121,7 @@ export default function StudentProfile() {
             const studentDoc = querySnapshot.docs[0];
             const data = studentDoc.data();
             // The admission form comes first - it's shown on the student dashboard
-            if (!data.admissionFormSubmitted) {
+            if (needsAdmissionForm(data)) {
               navigate('/student', { replace: true });
               return;
             }

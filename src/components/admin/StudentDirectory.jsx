@@ -25,6 +25,7 @@ import {
   FileSignature
 } from 'lucide-react';
 import AdmissionFormViewer from './AdmissionFormViewer';
+import { needsAdmissionForm, isAdmissionFormExempt } from '../../utils/admissionForm';
 
 const DEPARTMENT_OPTIONS = [
   'Computer Science (CSE)',
@@ -628,7 +629,7 @@ const StudentDirectory = ({
                               <span className="font-semibold text-[16px] text-[#0F172A] tracking-tight">{student.name}</span>
                               <div className="flex items-center gap-1.5">
                                 <TierPill tier={getTier(student)} />
-                                {!student.admissionFormSubmitted && (
+                                {needsAdmissionForm(student) && (
                                   <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-bold" title="Has not submitted the Admission Application Form yet">
                                     <FileSignature size={11} /> Form pending
                                   </span>
@@ -774,6 +775,11 @@ const StudentDirectory = ({
                   </span>
                   <span className="text-[13px] font-bold text-emerald-700 shrink-0">View</span>
                 </button>
+              ) : isAdmissionFormExempt(selectedStudent) ? (
+                <div className="flex items-center gap-3 p-4 rounded-[16px] border border-slate-200 bg-slate-50">
+                  <FileSignature size={20} className="text-slate-400 shrink-0" />
+                  <span className="text-[13.5px] font-medium text-slate-600">Admission form not required for the {selectedStudent.groupName.trim()} group.</span>
+                </div>
               ) : (
                 <div className="flex items-center gap-3 p-4 rounded-[16px] border border-amber-100 bg-amber-50/60">
                   <FileSignature size={20} className="text-amber-600 shrink-0" />
