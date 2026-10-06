@@ -93,7 +93,10 @@ const NatKeypad = ({ value, onChange }) => {
   );
 };
 
-export default function GateTestInterface({ test, testQuestions: rawTestQuestions, onSubmit, onCancel, studentName }) {
+// savedProgress: a test this student started earlier and didn't submit (utils/testProgress) - the
+// exam reopens on a "Resume" screen with their answers. onProgress(progress) is called as they work
+// so it can be saved.
+export default function GateTestInterface({ test, testQuestions: rawTestQuestions, onSubmit, onCancel, studentName, savedProgress = null, onProgress }) {
   const { orderedQuestions: testQuestions, sections } = useMemo(() => {
     const aptitudeQs = [];
     const mathsQs = [];
@@ -140,7 +143,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     return { orderedQuestions: ordered, sections: newSections };
   }, [rawTestQuestions, test.department]);
 
-  const [mode, setMode] = useState('login'); // login, instructions1, instructions2, taking
+  const [mode, setMode] = useState(savedProgress ? 'resume' : 'login'); // login, instructions1, instructions2, resume, taking
   
   // Login State
   const [loginId, setLoginId] = useState('11111');
@@ -150,23 +153,23 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
   const [agreed, setAgreed] = useState(false);
 
   // Taking State
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [currentIdx, setCurrentIdx] = useState(() => Math.min(savedProgress?.currentIdx || 0, Math.max(testQuestions.length - 1, 0)));
+  const [selectedAnswers, setSelectedAnswers] = useState(() => savedProgress?.answers || {});
   // Latest answers for the timer / full-screen auto-submit, whose callbacks are created once when
   // the test starts and would otherwise only ever see the empty starting answers.
   const answersRef = useRef(selectedAnswers);
   answersRef.current = selectedAnswers;
-  const [flagged, setFlagged] = useState([]);
-  const [visited, setVisited] = useState([]);
+  const [flagged, setFlagged] = useState(() => savedProgress?.flagged || []);
+  const [visited, setVisited] = useState(() => savedProgress?.visited || []);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [showCalculator, setShowCalculator] = useState(false);
 
   const timerRef = useRef(null);
-  const fsWarningsRef = useRef(0);
+  const fsWarningsRef = useRef(savedProgress?.fsWarnings || 0);
 
   // Real time spent on each question (seconds), for the "time usage for each question" report.
   // The clock runs for whichever question is on screen.
-  const timeSpentRef = useRef({});
+  const timeSpentRef = useRef(savedProgress?.timeSpent || {});
   const onScreenRef = useRef({ id: null, at: 0 });
   const flushQuestionTime = () => {
     const { id, at } = onScreenRef.current;
@@ -186,7 +189,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     Object.entries(timeSpentRef.current).forEach(([id, secs]) => { timeSpent[id] = Math.round(secs); });
     onSubmit(answers, { timeSpent, order: testQuestions.map(q => q.id) });
   };
-  const [fsWarningCount, setFsWarningCount] = useState(0);
+  const [fsWarningCount, setFsWarningCount] = useState(fsWarningsRef.current);
   const [showFsWarning, setShowFsWarning] = useState(false);
 
   // Enter fullscreen when test starts
@@ -197,11 +200,37 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
   };
 
+  // The clock counts down to a fixed deadline, so it keeps running across a refresh (a resumed test
+  // doesn't get its time back) and a throttled background tab can't stretch it
+  const deadlineRef = useRef(savedProgress?.deadline || null);
+  const startedAtRef = useRef(savedProgress?.startedAt || null);
+  const timeUpRef = useRef(false);
   useEffect(() => {
-    // Do not start timer until mode === 'taking'
+    if (mode !== 'taking' && mode !== 'resume') return undefined;
+    if (!deadlineRef.current) {
+      startedAtRef.current = Date.now();
+      deadlineRef.current = startedAtRef.current + test.duration * 60 * 1000;
+    }
+    const tick = () => {
+      const left = Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000));
+      setTimeRemaining(left);
+      if (left <= 0) {
+        clearInterval(timerRef.current);
+        if (!timeUpRef.current) {
+          timeUpRef.current = true;
+          finishTest(answersRef.current);
+        }
+      }
+    };
+    timerRef.current = setInterval(tick, 1000);
+    tick();
+    return () => clearInterval(timerRef.current);
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    // Full screen is only asked for once the exam screen is up
     if (mode === 'taking') {
-      setTimeRemaining(test.duration * 60);
-      setVisited([testQuestions[0]?.id]);
+      setVisited(prev => (prev.length ? prev : [testQuestions[0]?.id]));
       enterFullscreen();
 
       const handleFsChange = () => {
@@ -224,19 +253,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
       document.addEventListener('webkitfullscreenchange', handleFsChange);
       document.addEventListener('mozfullscreenchange', handleFsChange);
 
-      timerRef.current = setInterval(() => {
-        setTimeRemaining(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            finishTest(answersRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
       return () => {
-        if (timerRef.current) clearInterval(timerRef.current);
         document.removeEventListener('fullscreenchange', handleFsChange);
         document.removeEventListener('webkitfullscreenchange', handleFsChange);
         document.removeEventListener('mozfullscreenchange', handleFsChange);
@@ -244,10 +261,45 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
         if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
       };
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return undefined;
   }, [mode]);
+
+  // Save the exam as the student works, so a refresh or a crashed tab can pick it up again.
+  // Saved on every answer / navigation, and when the page is hidden or closed (for the time spent).
+  const flaggedRef = useRef(flagged);
+  flaggedRef.current = flagged;
+  const visitedRef = useRef(visited);
+  visitedRef.current = visited;
+  const currentIdxRef = useRef(currentIdx);
+  currentIdxRef.current = currentIdx;
+  const saveProgress = () => {
+    if (!onProgress || !deadlineRef.current) return;
+    flushQuestionTime();
+    onProgress({
+      answers: answersRef.current,
+      flagged: flaggedRef.current,
+      visited: visitedRef.current,
+      currentIdx: currentIdxRef.current,
+      timeSpent: timeSpentRef.current,
+      fsWarnings: fsWarningsRef.current,
+      order: testQuestions.map(q => q.id),
+      startedAt: startedAtRef.current,
+      deadline: deadlineRef.current
+    });
+  };
+  useEffect(() => {
+    if (mode === 'taking') saveProgress();
+  }, [mode, selectedAnswers, flagged, visited, currentIdx, fsWarningCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (mode !== 'taking') return undefined;
+    const onHide = () => { if (document.visibilityState === 'hidden') saveProgress(); };
+    window.addEventListener('pagehide', saveProgress);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', saveProgress);
+      document.removeEventListener('visibilitychange', onHide);
+    };
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
@@ -403,6 +455,39 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     </div>
   );
 
+  // Shown when the student comes back to a test they started but didn't submit. The button press
+  // is what lets the browser go full screen again.
+  const ResumeScreen = () => {
+    const answeredCount = testQuestions.filter(q => isAnswered(selectedAnswers[q.id])).length;
+    const timeUp = timeRemaining <= 0;
+    return (
+      <div className="fixed inset-0 z-50 bg-white flex flex-col">
+        <Header />
+        <div className="flex-1 flex items-center justify-center bg-gray-100 p-4">
+          <div className="bg-[#EBEBEB] border border-gray-300 w-96 max-w-full shadow-sm rounded-sm">
+            <div className="bg-[#D1D1D1] text-gray-700 font-bold px-4 py-2 text-sm border-b border-gray-300">Resume Test</div>
+            <div className="p-6 space-y-4 text-sm text-gray-800">
+              <p>Your test is still in progress. Your answers have been restored.</p>
+              <div className="bg-white border border-gray-300 divide-y divide-gray-200">
+                <div className="flex justify-between px-3 py-2"><span>Answered</span><span className="font-bold">{answeredCount} of {testQuestions.length}</span></div>
+                <div className="flex justify-between px-3 py-2"><span>Time left</span><span className="font-bold tabular-nums">{formatTimer(timeRemaining)}</span></div>
+              </div>
+              <p className="text-xs text-gray-600">The timer kept running while you were away.</p>
+              <button
+                onClick={() => setMode('taking')}
+                disabled={timeUp}
+                className="w-full bg-[#3EA9F5] hover:bg-[#2B8CCF] disabled:bg-gray-400 text-white py-2 text-sm font-bold"
+              >
+                {timeUp ? 'Time is up - submitting...' : 'Resume Test'}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="bg-[#5B7184] text-white text-center py-1 text-xs">Version : 17.07.00</div>
+      </div>
+    );
+  };
+
   const LoginScreen = () => (
     <div className="fixed inset-0 z-50 bg-white flex flex-col">
       <Header />
@@ -418,7 +503,12 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
               <div className="bg-gray-100 p-2 border-r border-gray-300"><HelpCircle size={20} className="text-gray-500" /></div>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-2 outline-none text-sm" />
             </div>
-            <button onClick={() => setMode('instructions1')} className="w-full bg-[#3EA9F5] hover:bg-[#2B8CCF] text-white py-2 text-sm font-bold mt-2">Sign In</button>
+            {/* The login is only a practice copy of the real GATE screen - nothing is checked */}
+            <div className="flex items-start gap-2 bg-[#E8F4FD] border border-[#9CCFF5] text-[#1d4ed8] px-3 py-2 text-xs leading-snug">
+              <Info size={16} className="shrink-0 mt-px" />
+              <span>No login details needed. Just click <strong>Sign In</strong> without entering anything.</span>
+            </div>
+            <button onClick={() => setMode('instructions1')} className="w-full bg-[#3EA9F5] hover:bg-[#2B8CCF] text-white py-2 text-sm font-bold">Sign In</button>
           </div>
         </div>
       </div>
@@ -1069,6 +1159,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
       {mode === 'login' && LoginScreen()}
       {mode === 'instructions1' && Instructions1()}
       {mode === 'instructions2' && Instructions2()}
+      {mode === 'resume' && ResumeScreen()}
       {mode === 'taking' && TakingScreen()}
 
       {/* Draggable Calculator */}

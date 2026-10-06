@@ -11,8 +11,12 @@ import { canAccessTest as canAccessTestFor } from '../utils/testAccess';
 import { sameDepartment } from '../utils/subjects';
 import { templateKeyOf, templateFoldersFor, folderName, templateMarks } from '../utils/testTemplates';
 import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, minutesAvailable, formatTestTime, formatCountdown } from '../utils/testSchedule';
+import { loadTestProgress, saveTestProgress, clearTestProgress, inProgressTestIds } from '../utils/testProgress';
 
 import TestLeaderboard from './student/TestLeaderboard';
+
+// The signed-in student (sessionStorage survives a refresh, before Firebase Auth has restored the user)
+const currentEmail = () => auth.currentUser?.email || sessionStorage.getItem('auth_email') || '';
 
 // onTestCompleted(testId): after submitting, the student is taken to their Analytics for that test.
 // reviewTestId: open that completed test's solution review (asked for from Analytics); onReviewClosed
@@ -34,6 +38,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const [activeAttempt, setActiveAttempt] = useState(null);
   const [globalQuestionStats, setGlobalQuestionStats] = useState(null);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
+  // A test started earlier and not submitted (refresh / crash / dropped connection), being resumed
+  const [resumeProgress, setResumeProgress] = useState(null);
 
   // Re-checks a scheduled answer release the moment its time arrives, so a student sitting on the
   // results screen sees the solutions appear without reloading
@@ -141,6 +147,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         const attemptsSnapshot = await getDocs(attemptsQuery);
         const allAttempts = attemptsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setAttempts(allAttempts);
+        allAttempts.forEach(a => clearTestProgress(email, a.testId));
       }
     } catch (err) {
       console.error("Error fetching tests/attempts:", err);
@@ -150,19 +157,24 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   };
 
   const startTest = async (test) => {
-    // Re-checked at the click - the list may have been open since before the test opened/closed
-    const availability = testAvailability(test);
-    if (availability === AVAILABILITY.UPCOMING) {
-      alert(`This test opens on ${formatTestTime(testStartMillis(test))}.`);
-      return;
+    // Already started on this device: resume it, even if the test has closed since
+    const saved = loadTestProgress(currentEmail(), test.id);
+    let timedTest = test;
+    if (!saved) {
+      // Re-checked at the click - the list may have been open since before the test opened/closed
+      const availability = testAvailability(test);
+      if (availability === AVAILABILITY.UPCOMING) {
+        alert(`This test opens on ${formatTestTime(testStartMillis(test))}.`);
+        return;
+      }
+      const minutesLeft = minutesAvailable(test);
+      if (availability === AVAILABILITY.CLOSED || minutesLeft <= 0) {
+        alert('This test has closed and can no longer be started.');
+        return;
+      }
+      // Starting close to the closing time: the timer only runs until the test closes
+      if (minutesLeft < (parseInt(test.duration) || 0)) timedTest = { ...test, duration: minutesLeft };
     }
-    const minutesLeft = minutesAvailable(test);
-    if (availability === AVAILABILITY.CLOSED || minutesLeft <= 0) {
-      alert('This test has closed and can no longer be started.');
-      return;
-    }
-    // Starting close to the closing time: the timer only runs until the test closes
-    const timedTest = minutesLeft < (parseInt(test.duration) || 0) ? { ...test, duration: minutesLeft } : test;
     try {
       setLoading(true);
       // Fetch full question details for the list of IDs in this test
@@ -179,9 +191,21 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         };
       });
 
-      startTimeRef.current = Date.now();
       setTestQuestions(matchedQuestions);
       setActiveTest(timedTest);
+      if (saved && saved.deadline <= Date.now()) {
+        // Time ran out while the student was away - submit what they had saved
+        alert('Time ran out for this test while you were away. Your saved answers will now be submitted.');
+        startTimeRef.current = saved.startedAt;
+        await handleSubmitTest(matchedQuestions, timedTest, saved.answers, {
+          timeSpent: saved.timeSpent,
+          order: saved.order,
+          timeTakenSeconds: Math.round((saved.deadline - saved.startedAt) / 1000)
+        });
+        return;
+      }
+      startTimeRef.current = saved ? saved.startedAt : Date.now();
+      setResumeProgress(saved);
       setTestMode('taking');
     } catch (err) {
       console.error("Error loading test questions:", err);
@@ -228,7 +252,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     let totalScore = 0;
     let totalMarks = 0;
 
-    const timeTakenSeconds = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
+    const timeTakenSeconds = meta.timeTakenSeconds ?? (startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0);
     const avgTimePerQuestion = questionsList.length > 0 ? timeTakenSeconds / questionsList.length : 0;
     // Report questions in the order the student saw them (aptitude section first, etc.)
     if (Array.isArray(meta.order) && meta.order.length) {
@@ -274,6 +298,10 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
     try {
       const docRef = await addDoc(collection(db, 'test_attempts'), attemptPayload);
+      // Saved for good - the in-progress copy is no longer needed. (If saving failed it stays, so
+      // the student can reopen the test and submit again.)
+      clearTestProgress(attemptPayload.studentEmail, test.id);
+      setResumeProgress(null);
       const freshAttempt = { id: docRef.id, ...attemptPayload };
       fetchTestsAndAttempts();
       if (onTestCompleted) {
@@ -374,6 +402,16 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     viewAttemptResult(reviewTestId);
   }, [reviewTestId, loading, tests, attempts]);
 
+  // A test left unfinished (the student refreshed or the tab crashed mid-test) reopens on its own
+  const autoResumedRef = useRef(false);
+  useEffect(() => {
+    if (autoResumedRef.current || loading || testMode !== 'list' || reviewTestId) return;
+    autoResumedRef.current = true;
+    const unfinished = new Set(inProgressTestIds(currentEmail()));
+    const test = tests.find(t => unfinished.has(t.id) && !attempts.some(a => a.testId === t.id));
+    if (test) startTest(test);
+  }, [loading, testMode, reviewTestId, tests, attempts]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (testMode === 'taking' && activeTest) {
     return (
       <GateTestInterface 
@@ -382,6 +420,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         studentName={sessionStorage.getItem('auth_name') || 'Student'}
         onSubmit={(answers, meta) => handleSubmitTest(testQuestions, activeTest, answers, meta)}
         onCancel={() => setTestMode('list')}
+        savedProgress={resumeProgress}
+        onProgress={(progress) => saveTestProgress(currentEmail(), activeTest.id, progress)}
       />
     );
   }
@@ -723,6 +763,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   // They're grouped into one folder per test template (Topic / Subject / Full Length).
   const studentFolders = templateFoldersFor(pendingTests);
   const visibleTests = openTemplateFolder ? pendingTests.filter(t => templateKeyOf(t) === openTemplateFolder) : pendingTests;
+  const unfinishedTestIds = new Set(inProgressTestIds(currentEmail()));
 
 
   return (
@@ -811,6 +852,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           {visibleTests.map((test) => {
             const userAttempt = attempts.find(a => a.testId === test.id);
             const isCompleted = !!userAttempt;
+            const isUnfinished = !isCompleted && unfinishedTestIds.has(test.id);
             const availability = testAvailability(test, nowTick);
             const startMs = testStartMillis(test);
             const closeMs = testCloseMillis(test);
@@ -899,6 +941,13 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                         className="w-full py-4 bg-slate-50 text-slate-400 font-bold text-sm rounded-2xl flex items-center justify-center gap-2 cursor-not-allowed border border-slate-200"
                       >
                         <Lock size={18} /> Locked (Pro Required)
+                      </button>
+                    ) : isUnfinished ? (
+                      <button
+                        onClick={() => startTest(test)}
+                        className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white font-[800] text-sm rounded-2xl transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] flex items-center justify-center gap-2 hover:-translate-y-0.5"
+                      >
+                        Resume Test <ArrowRight size={18} />
                       </button>
                     ) : !isCompleted && availability === AVAILABILITY.UPCOMING ? (
                       <button

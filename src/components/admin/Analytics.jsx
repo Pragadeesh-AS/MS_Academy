@@ -11,6 +11,7 @@ import { db } from '../../firebase';
 import { areSolutionsVisible } from '../../utils/solutionRelease';
 import { positiveMarkFor, negativeMarkFor } from '../../utils/marking';
 import TestReport from '../analytics/TestReport';
+import MatchColumns from '../shared/MatchColumns';
 import { collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
 
 // Helper
@@ -188,6 +189,9 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                 qIndex: i + 1,
                 q: qData.questionText || "Question text unavailable",
                 qImage: qData.questionImageUrl || null,
+                // Group I / Group II of a Match question - its options ("P-2, Q-1...") refer to them
+                matchColumn1: qData.matchColumn1 || [],
+                matchColumn2: qData.matchColumn2 || [],
                 selected: formatAnswer(r.selectedAnswer),
                 correct: formatAnswer(r.correctAnswer) || 'Unknown',
                 explanation: qData.explanation || 'No explanation provided.',
@@ -222,6 +226,8 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                 qIndex: qKey,
                 qText: q.q,
                 qImage: q.qImage,
+                matchColumn1: q.matchColumn1,
+                matchColumn2: q.matchColumn2,
                 options: q.options,
                 isFillBlank: q.isFillBlank,
                 questionType: q.questionType,
@@ -886,6 +892,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                                     <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1">Question {q.qIndex}</span>
                                     <p className="text-sm font-semibold text-slate-700" dangerouslySetInnerHTML={{ __html: q.qText }} />
                                     {q.qImage && <img src={q.qImage} alt="Question" className="mt-3 max-h-40 rounded-lg shadow-sm" />}
+                                    <MatchColumns question={q} className="mt-3" />
                                   </div><div className="shrink-0 text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{q.questionType === 'Multiple Select' ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
                                 </div>
                                 
@@ -1139,6 +1146,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                           <div className="p-6">
                             <p className="font-[800] text-slate-800 mb-6 text-base leading-relaxed tracking-tight" dangerouslySetInnerHTML={{ __html: q.q }} />
                             {q.qImage && <img src={q.qImage} alt="Question" className="max-w-full h-auto mb-6 rounded-lg border border-slate-200 shadow-sm" />}
+                            <MatchColumns question={q} className="mb-6" />
                             
                             {q.options ? (
                               <div className="flex flex-col gap-3 mb-6">

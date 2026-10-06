@@ -1,252 +1,140 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Quote, CheckCircle2, Star } from 'lucide-react';
+import React from 'react';
+import { ChevronLeft, ChevronRight, Quote, Star } from 'lucide-react';
+import { Autoplay, Navigation, Pagination } from 'swiper/modules';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import 'swiper/css';
+import 'swiper/css/pagination';
 
-export default function TestimonialCarousel({ reviews }) {
-  const defaultIndex = reviews?.findIndex(r => r.name === "Priya") ?? 0;
-  const [activeIndex, setActiveIndex] = useState(defaultIndex !== -1 ? defaultIndex : 0);
+// Card colour themes, used in turn. Full class strings so Tailwind keeps them.
+const THEMES = [
+  { card: 'bg-[#eff6ff] shadow-[-7px_7px_0_0_#bfdbfe]', blob: 'bg-[#dbeafe]', badge: 'bg-[#1d4ed8]', ring: 'border-[#93c5fd]' },
+  { card: 'bg-[#FFFCE1] shadow-[-7px_7px_0_0_#fde68a]', blob: 'bg-[#fef3c7]', badge: 'bg-[#1e3a8a]', ring: 'border-[#fcd34d]' },
+  { card: 'bg-[#f5f7ff] shadow-[-7px_7px_0_0_#c7d2fe]', blob: 'bg-[#e0e7ff]', badge: 'bg-[#4f46e5]', ring: 'border-[#a5b4fc]' }
+];
 
-  // Default reviews if none provided
-  const testimonials = reviews && reviews.length > 0 ? reviews : [
-    {
-      name: "Senthamizhselvi Senthilnathan",
-      role: "Google Reviewer",
-      discipline: "GATE Coaching",
-      quote: "Very excellent teaching. Goes in depth of the subject and explains even complex concepts with easiness for the students. Dedicated teacher for the student's success",
-      rating: 5,
-      initials: "SS",
-      bgGradient: "from-violet-500 to-purple-600"
-    },
-    {
-      name: "VASANTH",
-      role: "Google Reviewer",
-      discipline: "GATE Coaching",
-      quote: "Hi ...This is the genuine feedback of this academy. Gate coaching is best at very less price. Teacher has good knowledge and share lots of information",
-      rating: 5,
-      initials: "V",
-      bgGradient: "from-sky-400 to-blue-500"
-    },
-    {
-      name: "Rithikaa Kannan",
-      role: "GATE ASPIRANT",
-      discipline: "One-to-One Online Classes",
-      quote: "I am truly grateful to be a part of this academy. The GATE coaching is excellent, with well-structured classes and experienced faculty.",
-      rating: 5,
-      initials: "RK",
-      bgGradient: "from-blue-500 to-indigo-600"
-    },
-    {
-      name: "Priya",
-      role: "GATE ASPIRANT",
-      discipline: "GATE Coaching",
-      quote: "The teaching faculty is excellent and has a very friendly approach. The one to one online classes are highly effective and help me gain indepth knowledge.",
-      rating: 5,
-      initials: "P",
-      bgGradient: "from-purple-500 to-pink-600"
-    },
-    {
-      name: "Kiruthika Krishnakumar",
-      role: "GATE ASPIRANT",
-      discipline: "GATE Preparation",
-      quote: "The teaching at this GATE academy is excellent. Every concept is explained clearly and in a simple way, making even tough topics easy to understand.",
-      rating: 5,
-      initials: "KK",
-      bgGradient: "from-emerald-500 to-teal-600"
-    },
-    {
-      name: "Sanjay Kumar",
-      role: "GATE ASPIRANT",
-      discipline: "GATE Preparation",
-      quote: "Amazing experience! The mock tests and personalized attention helped me secure a top rank in my discipline. Highly recommend this academy.",
-      rating: 5,
-      initials: "SK",
-      bgGradient: "from-cyan-500 to-blue-500"
-    },
-    {
-      name: "Anita Desai",
-      role: "GATE ASPIRANT",
-      discipline: "GATE Coaching",
-      quote: "The best coaching institute for GATE. The study materials are top-notch and the faculty is always available for doubt clearance.",
-      rating: 5,
-      initials: "AD",
-      bgGradient: "from-teal-400 to-emerald-500"
-    }
-  ];
+// Longer than this and the card shows "Read more" (the text is clamped to fit the card)
+const LONG_QUOTE = 170;
 
-  const handleNext = () => {
-    setActiveIndex((prev) => (prev + 1) % testimonials.length);
-  };
+const css = `
+  .reviews-swiper { padding: 12px 0 56px !important; }
+  .reviews-swiper .swiper-slide { width: min(480px, 86vw); height: auto; }
+  .reviews-swiper .swiper-pagination-bullet {
+    width: 22px; height: 3px; border-radius: 2px; margin: 0 4px !important;
+    background: #bfdbfe; opacity: 1; transition: background .3s, width .3s;
+  }
+  .reviews-swiper .swiper-pagination-bullet-active { width: 34px; background: #1d4ed8; }
+`;
 
-  const handlePrev = () => {
-    setActiveIndex((prev) => (prev - 1 + testimonials.length) % testimonials.length);
-  };
+function ReviewCard({ review, theme, onReadMore }) {
+  const isLong = review.quote.length > LONG_QUOTE;
+  return (
+    <div className={`relative h-full min-h-[270px] rounded-[22px] overflow-hidden ${theme.card}`}>
+      {/* Soft corner blob */}
+      <div aria-hidden="true" className={`absolute -right-16 -bottom-24 w-60 h-60 rounded-full ${theme.blob}`} />
 
-  const getVisibleCards = () => {
-    const total = testimonials.length;
-    // We want 3 cards visible: prev, current, next
-    let prevIndex = (activeIndex - 1 + total) % total;
-    let nextIndex = (activeIndex + 1) % total;
-    
-    // For mapping to UI, return array with relative positions
-    return [
-      { item: testimonials[prevIndex], position: 'prev', index: prevIndex },
-      { item: testimonials[activeIndex], position: 'center', index: activeIndex },
-      { item: testimonials[nextIndex], position: 'next', index: nextIndex }
-    ];
-  };
+      <div className="relative h-full flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6 p-6 sm:p-7">
+        {/* Avatar with quote badge */}
+        <div className="relative shrink-0 self-start sm:self-center">
+          <div className={`w-20 h-20 sm:w-[124px] sm:h-[124px] rounded-full border bg-white p-1.5 ${theme.ring}`}>
+            <div className={`w-full h-full rounded-full bg-gradient-to-br ${review.bgGradient || 'from-blue-500 to-indigo-600'} flex items-center justify-center text-white font-bold text-2xl sm:text-4xl`}>
+              {review.initials}
+            </div>
+          </div>
+          <span className={`absolute -top-1 -right-1 sm:top-1 sm:right-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full ${theme.badge} text-white flex items-center justify-center shadow-md`}>
+            <Quote size={16} className="fill-white" />
+          </span>
+        </div>
 
-  const visibleCards = getVisibleCards();
+        {/* Review */}
+        <div className="min-w-0 flex-1 flex flex-col">
+          <div className="flex gap-0.5 mb-2">
+            {[...Array(review.rating || 5)].map((_, i) => (
+              <Star key={i} size={13} className="fill-amber-400 text-amber-400" />
+            ))}
+          </div>
+          <p className="text-[15px] leading-[1.6] text-slate-700 line-clamp-5 whitespace-pre-line">{review.quote}</p>
+          {isLong && onReadMore && (
+            <button
+              type="button"
+              onClick={() => onReadMore(review)}
+              className="self-start mt-1 text-[13px] font-semibold text-[#1d4ed8] hover:underline"
+            >
+              Read more
+            </button>
+          )}
+          <div className="mt-4">
+            <div className="text-[15px] font-bold text-[#1d4ed8] truncate">{review.name}</div>
+            <div className="text-[13px] text-slate-500 truncate">
+              {[review.role, review.discipline].filter(Boolean).join(' · ')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// onReadMore(review): open the full text of a long review
+export default function TestimonialCarousel({ reviews = [], onReadMore }) {
+  // Star-only ratings have nothing to show on a quote card
+  const withText = reviews.filter(r => r.quote && r.quote.trim());
+  if (withText.length === 0) return null;
+  // The endless loop needs a few more slides than fit on screen - repeat a short list
+  let slides = withText;
+  while (slides.length < 8) slides = slides.concat(withText);
+  // Colours go round in turn; where the loop joins, the last card mustn't match the first
+  const themeFor = (i) => (i === slides.length - 1 && i % THEMES.length === 0 ? THEMES[1] : THEMES[i % THEMES.length]);
+
+  const reduceMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
   return (
     <section className="relative w-full overflow-hidden bg-white py-20">
-      {/* Background soft abstract glow effects */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-cyan-100/40 rounded-full blur-[100px] pointer-events-none -z-10" />
-      <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-blue-50/50 rounded-full blur-[80px] pointer-events-none -z-10" />
+      <style>{css}</style>
 
-      <div className="max-w-[1200px] mx-auto px-4 relative z-10">
-        {/* Headings */}
-        <div className="text-center mb-16">
-          <h2 className="text-[40px] md:text-[48px] font-[900] text-[#0f172a] mb-3 tracking-tight">
-            What Our Students Say
-          </h2>
-          <p className="text-[18px] text-slate-500 font-medium">
-            Real experiences from our GATE aspirants
-          </p>
-        </div>
+      <div className="max-w-[1200px] mx-auto px-4 text-center mb-12">
+        <h2 className="text-[36px] md:text-[48px] font-[900] text-[#0f172a] mb-3 tracking-tight">
+          What Our Students Say
+        </h2>
+        <p className="text-[17px] md:text-[18px] text-slate-500 font-medium">
+          Real experiences from our GATE aspirants
+        </p>
+      </div>
 
-        {/* Carousel Container */}
-        <div className="relative flex items-center justify-center min-h-[450px]">
-          
-          {/* Navigation - Left Arrow */}
-          <button 
-            onClick={handlePrev}
-            className="absolute left-0 md:left-4 z-20 w-12 h-12 flex items-center justify-center bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.06)] hover:bg-slate-50 hover:scale-105 transition-all text-slate-700 border border-slate-100 hidden md:flex"
-            aria-label="Previous testimonial"
-          >
-            <ChevronLeft size={24} />
-          </button>
+      <div className="relative max-w-[1500px] mx-auto">
+        <Swiper
+          className="reviews-swiper"
+          modules={[Autoplay, Navigation, Pagination]}
+          slidesPerView="auto"
+          centeredSlides
+          loop
+          spaceBetween={28}
+          speed={700}
+          autoplay={reduceMotion ? false : { delay: 3500, disableOnInteraction: false, pauseOnMouseEnter: true }}
+          pagination={{ clickable: true }}
+          navigation={{ prevEl: '.reviews-prev', nextEl: '.reviews-next' }}
+        >
+          {slides.map((review, i) => (
+            <SwiperSlide key={review.name + i}>
+              <ReviewCard review={review} theme={themeFor(i)} onReadMore={onReadMore} />
+            </SwiperSlide>
+          ))}
+        </Swiper>
 
-          {/* Cards Area */}
-          <div className="relative w-full max-w-[900px] h-[400px] flex justify-center items-center perspective-[1200px]">
-            <AnimatePresence mode="popLayout">
-              {visibleCards.map((card) => {
-                const isCenter = card.position === 'center';
-                const isLeft = card.position === 'prev';
-                const isRight = card.position === 'next';
-
-                // Assign background color based on position (matching the image)
-                const backdropColor = isLeft ? 'bg-[#1E88E5]' : isCenter ? 'bg-[#66BB6A]' : 'bg-[#26A69A]';
-                // Rotation for the backdrop
-                const backdropRotation = isLeft ? 'rotate-[-6deg]' : isCenter ? 'rotate-[4deg]' : 'rotate-[-8deg]';
-
-                return (
-                  <motion.div
-                    key={card.index}
-                    layout
-                    initial={{ 
-                      opacity: 0, 
-                      x: isLeft ? -200 : isRight ? 200 : 0,
-                      scale: 0.8,
-                      z: -100
-                    }}
-                    animate={{ 
-                      opacity: isCenter ? 1 : 0.6, 
-                      x: isLeft ? '-105%' : isRight ? '105%' : '0%',
-                      scale: isCenter ? 1 : 0.85,
-                      z: isCenter ? 0 : -50
-                    }}
-                    exit={{ 
-                      opacity: 0,
-                      scale: 0.8,
-                      z: -100
-                    }}
-                    transition={{ 
-                      duration: 0.5, 
-                      ease: [0.32, 0.72, 0, 1] 
-                    }}
-                    className="absolute w-full max-w-[320px] md:max-w-[350px] flex flex-col items-center"
-                  >
-                    {/* Tilted Colorful Backdrop */}
-                    <div className={`absolute inset-0 rounded-[30px] ${backdropColor} ${backdropRotation} transition-all duration-500 z-0 opacity-80`}></div>
-
-                    {/* Main White Card */}
-                    <div className="relative w-full bg-white rounded-[30px] pt-14 pb-8 px-6 flex flex-col items-center text-center shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] z-10 h-[380px]">
-                      
-                      {/* Avatar Overlapping Top Edge */}
-                      <div className="absolute -top-10 left-1/2 -translate-x-1/2">
-                        <div className={`w-20 h-20 rounded-full bg-gradient-to-br ${card.item.bgGradient} flex items-center justify-center text-white text-2xl font-bold shadow-md border-[5px] border-white overflow-hidden`}>
-                           {card.item.initials}
-                        </div>
-                      </div>
-
-                      {/* Name & Role (Position) */}
-                      <div className="mt-2 mb-4 shrink-0">
-                        <h3 className="text-xl font-medium text-slate-800 mb-0.5">{card.item.name}</h3>
-                        <p className="text-[14px] italic text-slate-500 font-serif">
-                          {card.item.role || "position"}
-                        </p>
-                      </div>
-
-                      {/* Text (Scrollable) */}
-                      <div className="flex-1 w-full overflow-y-auto px-1 mb-4 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-                        <p className="text-slate-600 text-[13px] leading-relaxed">
-                          {card.item.quote}
-                        </p>
-                      </div>
-
-                      {/* Star Badge at bottom for center card */}
-                      {isCenter && (
-                        <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 h-10 px-4 bg-white rounded-full flex items-center justify-center shadow-[0_4px_10px_rgba(0,0,0,0.1)] border border-slate-50 z-20 gap-1">
-                          {[...Array(card.item.rating || 5)].map((_, i) => (
-                            <Star key={i} size={16} className="fill-amber-400 text-amber-400" />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
-
-          {/* Navigation - Right Arrow */}
-          <button 
-            onClick={handleNext}
-            className="absolute right-0 md:right-4 z-20 w-12 h-12 flex items-center justify-center bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.06)] hover:bg-slate-50 hover:scale-105 transition-all text-slate-700 border border-slate-100 hidden md:flex"
-            aria-label="Next testimonial"
-          >
-            <ChevronRight size={24} />
-          </button>
-        </div>
-
-        {/* Pagination Dots */}
-        <div className="flex justify-center items-center gap-2 mt-8">
-          {[...Array(Math.min(5, testimonials.length))].map((_, i) => {
-            // For > 5 items, we can just show 5 dots and highlight the one corresponding to activeIndex modulo 5
-            const dotIndex = testimonials.length > 5 ? activeIndex % 5 : i;
-            const isActive = testimonials.length > 5 ? (activeIndex % 5 === i) : (activeIndex === i);
-            
-            return (
-              <button
-                key={i}
-                onClick={() => setActiveIndex(i)}
-                className={`transition-all duration-300 rounded-full ${
-                  isActive 
-                  ? 'w-6 h-2 bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]' 
-                  : 'w-2 h-2 bg-slate-200 hover:bg-slate-300'
-                }`}
-                aria-label={`Go to slide ${i + 1}`}
-              />
-            )
-          })}
-        </div>
-        
-        {/* Mobile Nav Arrows (Visible only on small screens) */}
-        <div className="flex justify-center gap-4 mt-6 md:hidden">
-          <button onClick={handlePrev} className="p-3 bg-white rounded-full shadow-sm border border-slate-100 text-slate-700"><ChevronLeft size={20}/></button>
-          <button onClick={handleNext} className="p-3 bg-white rounded-full shadow-sm border border-slate-100 text-slate-700"><ChevronRight size={20}/></button>
-        </div>
-
+        {/* Arrows (phones swipe instead) */}
+        <button
+          type="button"
+          aria-label="Previous review"
+          className="reviews-prev absolute left-8 top-[calc(50%-22px)] -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-[#1d4ed8] hover:bg-[#1e3a8a] text-white hidden md:flex items-center justify-center shadow-[0_6px_18px_rgba(29,78,216,0.35)] transition-colors"
+        >
+          <ChevronLeft size={22} strokeWidth={2.5} />
+        </button>
+        <button
+          type="button"
+          aria-label="Next review"
+          className="reviews-next absolute right-8 top-[calc(50%-22px)] -translate-y-1/2 z-10 w-12 h-12 rounded-full bg-[#1d4ed8] hover:bg-[#1e3a8a] text-white hidden md:flex items-center justify-center shadow-[0_6px_18px_rgba(29,78,216,0.35)] transition-colors"
+        >
+          <ChevronRight size={22} strokeWidth={2.5} />
+        </button>
       </div>
     </section>
   );

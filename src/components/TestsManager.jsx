@@ -15,6 +15,7 @@ import { sameDepartment, canonicalDepartment } from '../utils/subjects';
 import { TEST_TEMPLATES, templateByKey, templateMarks, templateQuestions, templateNumerical, subjectGroup, distributeAllocations, templateKeyOf, templateFoldersFor, folderName } from '../utils/testTemplates';
 import { formatTestTime, testStartMillis } from '../utils/testSchedule';
 import { QUESTION_TYPES, TYPE_KEYS, TYPE_PRESETS, presetLabel, questionTypeKey, typeCountsOf, sumCounts, pctOf, cellsCanSupply, planTypeMix, buildTypeSplit, defaultTypeSplit } from '../utils/questionTypeSplit';
+import { DIFFICULTIES, DIFFICULTY_KEYS, difficultyKey, hasDifficultyMix, difficultyTotal, splitByDifficulty } from '../utils/questionDifficulty';
 
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
@@ -230,7 +231,17 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     const pool2 = pool.filter(q => markValue(q) === 2);
     const n1 = pool1.filter(isNumericalQuestion).length;
     const n2 = pool2.filter(isNumericalQuestion).length;
-    return { q1: pool1.length, q2: pool2.length, n1, n2, t1: pool1.length - n1, t2: pool2.length - n2 };
+    // { 1: { easy, medium, hard }, 2: {...} } - questions of each difficulty per mark
+    const byDifficulty = (list) => Object.fromEntries(DIFFICULTY_KEYS.map(k => [k, list.filter(q => difficultyKey(q) === k).length]));
+    return { q1: pool1.length, q2: pool2.length, n1, n2, t1: pool1.length - n1, t2: pool2.length - n2, diff: { 1: byDifficulty(pool1), 2: byDifficulty(pool2) } };
+  };
+
+  // A topic's Easy / Medium / Hard counts split over its 1-mark and 2-mark questions, or null when
+  // the topic has no difficulty mix or the bank can't supply it (getStep3Warning says which)
+  const difficultyPlanFor = (topic) => {
+    const alloc = allocations[topic] || {};
+    if (!hasDifficultyMix(alloc)) return null;
+    return splitByDifficulty({ 1: alloc.q1, 2: alloc.q2 }, alloc, getTopicCounts(topic).diff);
   };
 
   // Numerical/theory split: both boxes empty = no split
@@ -258,13 +269,9 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     max: r.max + Math.min(c.count, c.numerical)
   }), { min: 0, max: 0 });
 
-  const allocationCells = () => selectedTopics.flatMap(topic => {
-    const counts = getTopicCounts(topic);
-    const alloc = allocations[topic] || {};
-    return [
-      { count: Math.min(parseInt(alloc.q1) || 0, counts.q1), numerical: counts.n1, theory: counts.t1 },
-      { count: Math.min(parseInt(alloc.q2) || 0, counts.q2), numerical: counts.n2, theory: counts.t2 }
-    ];
+  const allocationCells = () => autoCells().map(c => {
+    const numerical = c.questions.filter(isNumericalQuestion).length;
+    return { count: c.count, numerical, theory: c.questions.length - numerical };
   });
 
   // ---- Test templates
@@ -298,7 +305,11 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     if (!t) return;
     const availability = Object.fromEntries(selectedTopics.map(topic => [topic, getTopicCounts(topic)]));
     const { allocations: next, shortages } = distributeAllocations(t, selectedTopics, availability, topicGroupOf);
-    setAllocations(next);
+    // Keep any Easy / Medium / Hard counts already typed in
+    setAllocations(prev => Object.fromEntries(Object.entries(next).map(([topic, a]) => [
+      topic,
+      { ...a, ...Object.fromEntries(DIFFICULTY_KEYS.filter(k => prev[topic]?.[k] !== undefined).map(k => [k, prev[topic][k]])) }
+    ])));
     setTemplateShortages(shortages);
   };
 
@@ -331,7 +342,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     return true;
   });
 
-  // One cell per topic x mark allocation (Step 3) with the questions it can draw from
+  // One cell per topic x mark allocation (Step 3) with the questions it can draw from. A topic with
+  // an Easy / Medium / Hard mix gets one cell per mark x difficulty instead, so the picks follow it.
   const autoCells = (excludeIds = new Set()) => selectedTopics.flatMap(topic => {
     const alloc = allocations[topic] || {};
     const topicPool = questions.filter(q =>
@@ -339,9 +351,14 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       (q.topic || '').trim().toLowerCase() === topic.trim().toLowerCase() &&
       !excludeIds.has(q.id)
     );
-    return [[1, alloc.q1], [2, alloc.q2]].map(([mark, wanted]) => {
+    const plan = difficultyPlanFor(topic);
+    return [[1, alloc.q1], [2, alloc.q2]].flatMap(([mark, wanted]) => {
       const pool = topicPool.filter(q => markValue(q) === mark);
-      return { count: Math.min(parseInt(wanted) || 0, pool.length), questions: pool };
+      if (!plan) return [{ count: Math.min(parseInt(wanted) || 0, pool.length), questions: pool }];
+      return DIFFICULTY_KEYS.map(k => {
+        const diffPool = pool.filter(q => difficultyKey(q) === k);
+        return { count: Math.min(plan[mark][k], diffPool.length), questions: diffPool };
+      });
     });
   });
 
@@ -421,6 +438,16 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     if (selectionMode === 'manual') {
       if (manualSelectedIds.length === 0) return "Please manually select at least one question.";
       return null;
+    }
+
+    // Easy / Medium / Hard counts must cover the topic's questions and be in the bank
+    for (const t of selectedTopics) {
+      const alloc = allocations[t] || {};
+      if (!hasDifficultyMix(alloc)) continue;
+      const wanted = (parseInt(alloc.q1) || 0) + (parseInt(alloc.q2) || 0);
+      const typed = difficultyTotal(alloc);
+      if (typed !== wanted) return `${t}: Easy + Medium + Hard (${typed}) must equal its 1-mark + 2-mark questions (${wanted})`;
+      if (!difficultyPlanFor(t)) return `${t}: the question bank doesn't have enough questions for this Easy / Medium / Hard mix at these 1-mark / 2-mark counts`;
     }
 
     if (selectionMode === 'both') {
@@ -1785,6 +1812,48 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                               />
                             </div>
                           </div>
+
+                          {/* Difficulty mix (optional) - blank = any difficulty */}
+                          {(() => {
+                            const hasMix = hasDifficultyMix(alloc);
+                            const wanted = (parseInt(alloc.q1) || 0) + (parseInt(alloc.q2) || 0);
+                            const typed = difficultyTotal(alloc);
+                            const status = !hasMix ? null
+                              : typed !== wanted ? { ok: false, text: `${typed} / ${wanted} - must match` }
+                              : difficultyPlanFor(topic) ? { ok: true, text: `${typed} / ${wanted}` }
+                              : { ok: false, text: 'Not enough in bank' };
+                            return (
+                              <div className="border-t border-slate-100 pt-4 space-y-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-[11px] font-[800] text-slate-500">
+                                    Difficulty Mix <span className="font-semibold text-slate-400">(optional - leave blank to pick any difficulty)</span>
+                                  </span>
+                                  {status && (
+                                    <span className={`text-[11px] font-[800] uppercase ${status.ok ? 'text-emerald-600' : 'text-red-500'}`}>{status.text}</span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-3 gap-3">
+                                  {DIFFICULTIES.map(({ key, label }) => {
+                                    const color = key === 'easy' ? 'text-emerald-700' : key === 'medium' ? 'text-amber-700' : 'text-red-700';
+                                    return (
+                                      <div key={key} className="space-y-1">
+                                        <label className={`text-[11px] font-[800] ${color}`}>{label}</label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          placeholder="Any"
+                                          value={alloc[key] ?? ''}
+                                          onChange={e => handleAllocationChange(topic, key, e.target.value)}
+                                          className="w-full border border-slate-150 rounded-xl px-3 py-2 text-[13px] font-bold text-slate-800 placeholder:text-slate-300 placeholder:font-semibold focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                                        />
+                                        <div className="text-[10px] font-bold text-slate-400">Bank: {counts.diff[1][key]} (1M) / {counts.diff[2][key]} (2M)</div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                         </div>
                       );

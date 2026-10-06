@@ -314,4 +314,29 @@ export const renderPagePdf = async (element) => {
   return pdf;
 };
 
-export const safeFilePart = (s) => String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_').trim();
+// Several A4 page elements as one PDF, one page each (same rendering as renderPagePdf)
+export const renderPagesPdf = async (elements, { scale = EXPORT_SCALE } = {}) => {
+  if (document.fonts?.ready) await document.fonts.ready;
+  let pdf = null;
+  for (const element of elements) {
+    const width = element.offsetWidth;
+    const height = element.offsetHeight;
+    let canvas;
+    try {
+      canvas = await toCanvas(element, {
+        pixelRatio: scale, backgroundColor: '#ffffff', width, height, fontEmbedCSS: await fontEmbedCss(element),
+      });
+    } catch (err) {
+      console.warn('html-to-image failed, using html2canvas', err);
+      canvas = await html2canvas(element, { scale, useCORS: true, backgroundColor: '#ffffff' });
+    }
+    const pdfW = 210;
+    const pdfH = Math.max(297, (height / width) * pdfW);
+    if (!pdf) pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pdfW, pdfH], compress: true });
+    else pdf.addPage([pdfW, pdfH], 'p');
+    pdf.addImage(canvas.toDataURL('image/jpeg', PAGE_JPEG_QUALITY), 'JPEG', 0, 0, pdfW, (height / width) * pdfW, undefined, 'NONE');
+  }
+  return pdf;
+};
+
+export const safeFilePart =(s) => String(s || '').replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_').trim();

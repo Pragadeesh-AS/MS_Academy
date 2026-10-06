@@ -21,8 +21,10 @@ import {
   Crown,
   Star,
   UsersRound,
-  Pencil
+  Pencil,
+  FileSignature
 } from 'lucide-react';
+import AdmissionFormViewer from './AdmissionFormViewer';
 
 const DEPARTMENT_OPTIONS = [
   'Computer Science (CSE)',
@@ -79,6 +81,7 @@ const StudentDirectory = ({
   const [filterStatus, setFilterStatus] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [viewingForm, setViewingForm] = useState(null); // student whose admission form is open
   const [bundles, setBundles] = useState([]);
   const [editingStudent, setEditingStudent] = useState(null);
   const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '', isPro: false, groupName: '' });
@@ -625,6 +628,11 @@ const StudentDirectory = ({
                               <span className="font-semibold text-[16px] text-[#0F172A] tracking-tight">{student.name}</span>
                               <div className="flex items-center gap-1.5">
                                 <TierPill tier={getTier(student)} />
+                                {!student.admissionFormSubmitted && (
+                                  <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-bold" title="Has not submitted the Admission Application Form yet">
+                                    <FileSignature size={11} /> Form pending
+                                  </span>
+                                )}
                                 {(student.groupName || '').trim() && (
                                   <span className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold ${groupColor(student.groupName.trim())}`} title="Student group">
                                     <UsersRound size={11} /> {student.groupName.trim()}
@@ -659,6 +667,11 @@ const StudentDirectory = ({
                             <button onClick={() => setSelectedStudent(student)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
                               <Eye size={18} />
                             </button>
+                            {student.admissionFormSubmitted && (
+                              <button onClick={() => setViewingForm(student)} className="p-2 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-[10px] transition-colors" title="View Application Form">
+                                <FileSignature size={18} />
+                              </button>
+                            )}
                             <button onClick={() => openEditStudent(student)} className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Student">
                               <Edit size={18} />
                             </button>
@@ -725,6 +738,8 @@ const StudentDirectory = ({
       )}
 
       {/* Student Details Modal */}
+      {viewingForm && <AdmissionFormViewer student={viewingForm} onClose={() => setViewingForm(null)} />}
+
       {selectedStudent && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setSelectedStudent(null)}>
           <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -744,6 +759,27 @@ const StudentDirectory = ({
                   <p className="text-[15px] font-medium text-[#64748B] mt-1 truncate">{selectedStudent.email}</p>
                 </div>
               </div>
+
+              {selectedStudent.admissionFormSubmitted ? (
+                <button
+                  onClick={() => setViewingForm(selectedStudent)}
+                  className="w-full flex items-center justify-between gap-3 p-4 rounded-[16px] border border-emerald-100 bg-emerald-50/60 hover:bg-emerald-50 transition-colors text-left"
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <FileSignature size={20} className="text-emerald-600 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block text-[14px] font-bold text-[#0F172A]">Admission Application Form</span>
+                      <span className="block text-[12.5px] font-medium text-[#64748B] truncate">Signed · {selectedStudent.admissionFormNo || 'Form submitted'}</span>
+                    </span>
+                  </span>
+                  <span className="text-[13px] font-bold text-emerald-700 shrink-0">View</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-3 p-4 rounded-[16px] border border-amber-100 bg-amber-50/60">
+                  <FileSignature size={20} className="text-amber-600 shrink-0" />
+                  <span className="text-[13.5px] font-medium text-amber-800">Admission form not submitted yet - they'll be asked to fill it in when they next open the portal.</span>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-[#EEF2F7]">
                 <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">

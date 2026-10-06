@@ -119,6 +119,11 @@ export default function StudentProfile() {
           if (!querySnapshot.empty) {
             const studentDoc = querySnapshot.docs[0];
             const data = studentDoc.data();
+            // The admission form comes first - it's shown on the student dashboard
+            if (!data.admissionFormSubmitted) {
+              navigate('/student', { replace: true });
+              return;
+            }
             setDocId(studentDoc.id);
             setProfileData(data);
             setEditFormData({

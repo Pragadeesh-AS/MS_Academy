@@ -32,7 +32,7 @@ export default function Overlay() {
           Ignite your dreams
         </h2>
         <p className="text-xl md:text-2xl text-slate-600 max-w-2xl mb-10 italic">
-          Learn directly from <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-amber-600 font-extrabold not-italic">Dr. M. Muthu Samy</span> (M.E., Ph.D, NIT Trichy Alumnus & 4-Time Consecutive GATE Qualifier)
+          Learn directly from <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-amber-600 font-extrabold not-italic">Dr. M. Muthu Samy</span> M.E., Ph.D (NIT - Trichy Alumnus & 4-Time Consecutive GATE Qualifier)
         </p>
         <button className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 via-purple-600 to-blue-600 hover:scale-105 text-white px-8 py-4 rounded-full font-bold shadow-xl shadow-blue-500/20 transition-transform">
           Book your 1st free session

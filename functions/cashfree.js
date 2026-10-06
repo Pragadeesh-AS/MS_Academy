@@ -115,6 +115,12 @@ exports.createCashfreeOrder = onCall({ secrets: SECRETS }, async (request) => {
   if (!studentDoc) throw new HttpsError('not-found', 'Student profile not found.');
   const student = studentDoc.data();
 
+  // The signed Admission Application Form must be submitted before any payment
+  const admissionForm = await db.collection('admission_forms').doc(studentDoc.id).get();
+  if (!admissionForm.exists || !admissionForm.data().signature) {
+    throw new HttpsError('failed-precondition', 'Please submit your Admission Application Form before making a payment.');
+  }
+
   let itemName;
   let amount;
 

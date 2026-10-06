@@ -543,6 +543,48 @@ const trimWhitespace = (canvas, margin = 12) => {
   return out;
 };
 
+// A loose AI box often catches the question line just above (or below) the figure, sliced through
+// by the crop edge - students then see half a line of text on top of the diagram. That shows up as
+// a thin band of ink touching the top/bottom edge, with blank rows between it and the figure, that
+// reads like running text: it spans much of the width or is cut at the left/right edge too. Cut
+// it off. Short labels near the edge (an axis title like "θ(x)") don't match, so they stay.
+const dropSlicedEdgeLines = (canvas, maxBand) => {
+  const { width, height } = canvas;
+  const data = canvas.getContext('2d').getImageData(0, 0, width, height).data;
+  const bands = []; // runs of rows that have ink: { top, bottom, left, right }
+  for (let y = 0; y < height; y++) {
+    let left = -1, right = -1;
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (data[i] < 245 || data[i + 1] < 245 || data[i + 2] < 245) {
+        if (left < 0) left = x;
+        right = x;
+      }
+    }
+    if (left < 0) continue;
+    const last = bands[bands.length - 1];
+    if (last && last.bottom === y - 1) {
+      last.bottom = y;
+      last.left = Math.min(last.left, left);
+      last.right = Math.max(last.right, right);
+    } else {
+      bands.push({ top: y, bottom: y, left, right });
+    }
+  }
+  if (bands.length < 2) return canvas;
+  const slicedText = (b) => b.bottom - b.top + 1 <= maxBand
+    && (b.right - b.left + 1 >= width * 0.4 || b.left <= 1 || b.right >= width - 2);
+  let first = 0, lastIdx = bands.length - 1;
+  if (bands[first].top <= 1 && slicedText(bands[first])) first++;
+  if (lastIdx > first && bands[lastIdx].bottom >= height - 2 && slicedText(bands[lastIdx])) lastIdx--;
+  if (first === 0 && lastIdx === bands.length - 1) return canvas;
+  const top = first > 0 ? bands[first - 1].bottom + 1 : 0;
+  const bottom = lastIdx < bands.length - 1 ? bands[lastIdx + 1].top - 1 : height - 1;
+  const out = makeCanvas(width, bottom - top + 1);
+  out.getContext('2d').drawImage(canvas, 0, top, width, out.height, 0, 0, width, out.height);
+  return out;
+};
+
 const cropRegion = (pageCanvas, rect) => {
   const W = pageCanvas.width, H = pageCanvas.height;
   const sx = Math.floor(Math.max(0, rect.left - CROP_PADDING) * W);
@@ -551,7 +593,8 @@ const cropRegion = (pageCanvas, rect) => {
   const ey = Math.ceil(Math.min(1, rect.bottom + CROP_PADDING) * H);
   const crop = makeCanvas(ex - sx, ey - sy);
   crop.getContext('2d').drawImage(pageCanvas, sx, sy, crop.width, crop.height, 0, 0, crop.width, crop.height);
-  return trimWhitespace(crop);
+  // One line of body text is roughly 2% of the page height
+  return trimWhitespace(dropSlicedEdgeLines(crop, Math.round(0.022 * H)));
 };
 
 const scaleCanvas = (canvas, factor) => {

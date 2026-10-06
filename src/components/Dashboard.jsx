@@ -14,10 +14,12 @@ import StudentTests from './StudentTests';
 import TestAlerts from './student/TestAlerts';
 import { canAccessTest } from '../utils/testAccess';
 import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, formatTestTime, formatCountdown } from '../utils/testSchedule';
+import { inProgressTestIds } from '../utils/testProgress';
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
 import { buyBundle, buySubject, buyNoteBundle, verifyOrder } from '../cashfree';
 import Analytics from './admin/Analytics';
+import AdmissionGate from './admission/AdmissionGate';
 import { TrendingUp } from 'lucide-react';
 
 function VideoDuration({ url, storedDuration }) {
@@ -131,7 +133,8 @@ export default function Dashboard() {
     : bundleCount > 0
       ? { tier: 'prime', label: 'MS GATE PRIME', icon: '⭐' }
       : { tier: 'foundation', label: 'MS GATE FOUNDATION', icon: '🌱' };
-  const [activeTab, setActiveTab] = useState('learning');
+  // Back on the Tests tab if a test was left mid-way (refresh / crash), where it reopens
+  const [activeTab, setActiveTab] = useState(() => (inProgressTestIds(sessionStorage.getItem('auth_email')).length ? 'tests' : 'learning'));
   // Finished practice test -> its report in Analytics; "Review Solutions" there -> the test's review
   const [analyticsTestId, setAnalyticsTestId] = useState(null);
   const [reviewTestId, setReviewTestId] = useState(null);
@@ -146,7 +149,9 @@ export default function Dashboard() {
   
   // Onboarding State
   const [loading, setLoading] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  // Students must submit the signed Admission Application Form before using the portal
+  const [admissionPending, setAdmissionPending] = useState(false);
+  const [studentRecord, setStudentRecord] = useState(null);
   const [docId, setDocId] = useState(null);
   const [payingBundleId, setPayingBundleId] = useState(null);
   const [purchasedSubjects, setPurchasedSubjects] = useState([]);
@@ -167,13 +172,6 @@ export default function Dashboard() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
-
-  const [formData, setFormData] = useState({
-    department: '',
-    collegeName: '',
-    yearOfStudy: '',
-    referralSource: ''
-  });
 
   const [recordings, setRecordings] = useState([]);
   const [recordingSubject, setRecordingSubject] = useState(null); // open subject folder (null = folder list)
@@ -520,10 +518,10 @@ export default function Dashboard() {
               setPurchasedNoteBundles(data.purchasedNoteBundles);
             }
             
-            // Check if all onboarding fields exist
-            if (!data.department || !data.collegeName || !data.yearOfStudy || !data.referralSource) {
-              setShowOnboarding(true);
-            }
+            setStudentRecord(data);
+            setAdmissionPending(!data.admissionFormSubmitted);
+          } else {
+            setAdmissionPending(true);
           }
         }
       } catch (e) {
@@ -545,27 +543,6 @@ export default function Dashboard() {
     localStorage.removeItem('pair_role');
     window.dispatchEvent(new Event('storage'));
     navigate('/');
-  };
-
-  const handleOnboardingSubmit = async (e) => {
-    e.preventDefault();
-    if (!docId) return;
-
-    try {
-      await updateDoc(doc(db, 'joined_students', docId), {
-        department: formData.department,
-        collegeName: formData.collegeName,
-        yearOfStudy: formData.yearOfStudy,
-        referralSource: formData.referralSource,
-        onboardingCompleted: true
-      });
-      setStudentDepartment(formData.department);
-      localStorage.setItem('student_department', formData.department);
-      setShowOnboarding(false);
-    } catch (e) {
-      console.error("Error updating onboarding details", e);
-      alert("Failed to save details. Please try again.");
-    }
   };
 
   const handleUpgradeToPro = async (bundleId) => {
@@ -729,102 +706,29 @@ export default function Dashboard() {
     );
   }
 
+  if (admissionPending) {
+    return (
+      <AdmissionGate
+        studentId={docId}
+        student={studentRecord}
+        email={sessionStorage.getItem('auth_email') || ''}
+        onLogout={handleLogout}
+        onSubmitted={({ studentId, name, department }) => {
+          setDocId(studentId);
+          setStudentName(name);
+          sessionStorage.setItem('auth_name', name);
+          setStudentDepartment(department);
+          localStorage.setItem('student_department', department);
+          setAdmissionPending(false);
+          window.dispatchEvent(new Event('storage'));
+        }}
+      />
+    );
+  }
+
   return (
     <div className="h-screen bg-slate-50 flex relative overflow-hidden">
       
-      {/* Onboarding Modal Overlay */}
-      {showOnboarding && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6 text-white text-center">
-              <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
-                <GraduationCap size={32} className="text-white" />
-              </div>
-              <h2 className="text-2xl font-[900] tracking-tight">Welcome to MS Academy!</h2>
-              <p className="text-blue-100 font-medium text-sm mt-1">Let's personalize your learning experience.</p>
-            </div>
-            
-            <form onSubmit={handleOnboardingSubmit} className="p-6 space-y-5">
-              <div>
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                  <Building2 size={16} className="text-slate-400" /> College Name
-                </label>
-                <input 
-                  type="text" 
-                  required
-                  value={formData.collegeName}
-                  onChange={(e) => setFormData({...formData, collegeName: e.target.value})}
-                  placeholder="e.g. NIT Trichy"
-                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                  <School size={16} className="text-slate-400" /> Department
-                </label>
-                <select 
-                  required
-                  value={formData.department}
-                  onChange={(e) => setFormData({...formData, department: e.target.value})}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
-                >
-                  <option value="">Select Department...</option>
-                  {STUDENT_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                  <Calendar size={16} className="text-slate-400" /> Current Year of Study
-                </label>
-                <select 
-                  required
-                  value={formData.yearOfStudy}
-                  onChange={(e) => setFormData({...formData, yearOfStudy: e.target.value})}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
-                >
-                  <option value="">Select Year...</option>
-                  <option value="1st Year">1st Year</option>
-                  <option value="2nd Year">2nd Year</option>
-                  <option value="3rd Year">3rd Year</option>
-                  <option value="4th Year">4th Year</option>
-                  <option value="Graduated">Graduated / Working</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                  <HelpCircle size={16} className="text-slate-400" /> How did you hear about us?
-                </label>
-                <select 
-                  required
-                  value={formData.referralSource}
-                  onChange={(e) => setFormData({...formData, referralSource: e.target.value})}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-[14px] focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
-                >
-                  <option value="">Select an option...</option>
-                  <option value="College Seminar / Professor">College Seminar / Professor</option>
-                  <option value="Friends / Seniors">Friends / Seniors</option>
-                  <option value="Social Media (Instagram/Facebook)">Social Media</option>
-                  <option value="Google Search">Google Search</option>
-                  <option value="YouTube">YouTube</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              <button 
-                type="submit"
-                className="w-full py-3 mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-600/30 active:scale-[0.98]"
-              >
-                Complete Profile
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Mobile Top Bar */}
       <div className="md:hidden fixed top-0 inset-x-0 z-30 bg-white border-b border-slate-200 flex items-center justify-between px-4 py-3">
         <Link to="/" className="flex items-center gap-2.5 min-w-0">
@@ -996,7 +900,7 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className={`flex-1 min-w-0 p-4 pt-20 sm:p-6 sm:pt-20 md:p-8 overflow-y-auto ${showOnboarding ? 'blur-sm pointer-events-none' : ''} transition-all duration-300`}>
+      <main className={`flex-1 min-w-0 p-4 pt-20 sm:p-6 sm:pt-20 md:p-8 overflow-y-auto`}>
         <header className="mb-8 flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
           <div>
             <h1 className="text-2xl sm:text-3xl font-[900] text-slate-900 tracking-tight flex items-center gap-3">
