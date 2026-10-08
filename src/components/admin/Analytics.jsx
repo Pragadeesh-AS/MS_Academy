@@ -204,7 +204,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                 status,
                 timeSpent: formatTime(r.timeSpent || 0),
                 isFillBlank,
-                questionType: qData.questionType || 'Multiple Choice',
+                questionType: qData.questionType || 'Single Choice',
                 subject: qData.subject || 'General',
                 topic: qData.topic || '',
                 department: qData.department || '',
@@ -900,7 +900,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                                     <p className="text-sm font-semibold text-slate-700" dangerouslySetInnerHTML={{ __html: q.qText }} />
                                     {q.qImage && <img src={q.qImage} alt="Question" className="mt-3 max-h-40 rounded-lg shadow-sm" />}
                                     <MatchColumns question={q} className="mt-3" />
-                                  </div><div className="shrink-0 text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{q.questionType === 'Multiple Select' ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
+                                  </div><div className="shrink-0 text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{(q.questionType === 'Multiple Choice' || q.questionType === 'Multiple Select') ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
                                 </div>
                                 
                                 <div className="grid grid-cols-4 gap-4 mt-6 pt-4 border-t border-slate-200">
@@ -1138,11 +1138,18 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                               {q.status === 'Unattempted' && <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600"><MinusCircle size={16} className="text-slate-400"/> Unattempted</span>}
                             </div>
                             <div className="flex items-center gap-2">
-                                <div className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{q.questionType === 'Multiple Select' ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
+                                <div className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{(q.questionType === 'Multiple Choice' || q.questionType === 'Multiple Select') ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
                               {(() => {
-                                const topperQ = topperAttempt ? topperAttempt.allQuestions.find(tq => tq.q === q.q) : null;
+                                const topperQ = topperAttempt
+                                  ? topperAttempt.allQuestions.find(tq => (q.questionId ? tq.questionId === q.questionId : tq.q === q.q))
+                                  : null;
+                                // Border shows how the topper did on this question; colours only once the key is visible
+                                const topperBorder = hideKey ? 'border border-amber-200'
+                                  : topperQ?.status === 'Correct' ? 'border-2 border-emerald-500'
+                                  : topperQ?.status === 'Wrong' ? 'border-2 border-red-500'
+                                  : 'border-2 border-slate-300';
                                 return topperQ ? (
-                                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl shadow-sm" title="Topper's Time">
+                                  <div className={`flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl shadow-sm ${topperBorder}`} title={hideKey ? "Topper's Time" : `Topper's Time - ${topperQ.status}`}>
                                     👑 <Clock size={14} className="text-amber-500" />
                                     {topperQ.timeSpent}
                                   </div>
@@ -1166,8 +1173,10 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                                   const opt = q.options[optKey];
                                   if (!opt || (!opt.text && !opt.image)) return null;
                                   
-                                  const isSelected = q.selected && q.selected.includes(`Option ${optKey}`);
-                                  const isCorrect = !hideKey && q.correct && q.correct.includes(`Option ${optKey}`);
+                                  // "Option A, D" -> ['A', 'D']: a substring check would only find the first letter of an MSQ answer
+                                  const letters = (ans) => String(ans || '').replace(/^Option\s+/, '').split(',').map(s => s.trim());
+                                  const isSelected = letters(q.selected).includes(optKey);
+                                  const isCorrect = !hideKey && letters(q.correct).includes(optKey);
                                   
                                   let ringClass = "border-slate-200";
                                   let bgClass = "bg-white";
