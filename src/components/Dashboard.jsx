@@ -20,7 +20,7 @@ import { gateCoursesData } from './GateCourses';
 import { buyBundle, buySubject, buyNoteBundle, verifyOrder } from '../cashfree';
 import Analytics from './admin/Analytics';
 import AdmissionGate from './admission/AdmissionGate';
-import { needsAdmissionForm } from '../utils/admissionForm';
+import { needsAdmissionForm, admissionFormBlocksPortal } from '../utils/admissionForm';
 import { TrendingUp } from 'lucide-react';
 
 function VideoDuration({ url, storedDuration }) {
@@ -153,6 +153,8 @@ export default function Dashboard() {
   // Students must submit the signed Admission Application Form before using the portal
   const [admissionPending, setAdmissionPending] = useState(false);
   const [studentRecord, setStudentRecord] = useState(null);
+  // A purchase waiting for the admission form: { kind: 'bundle' | 'subject' | 'notebundle', id }
+  const [admissionForPurchase, setAdmissionForPurchase] = useState(null);
   const [docId, setDocId] = useState(null);
   const [payingBundleId, setPayingBundleId] = useState(null);
   const [purchasedSubjects, setPurchasedSubjects] = useState([]);
@@ -520,7 +522,7 @@ export default function Dashboard() {
             }
             
             setStudentRecord(data);
-            setAdmissionPending(needsAdmissionForm(data));
+            setAdmissionPending(admissionFormBlocksPortal(data));
           } else {
             setAdmissionPending(true);
           }
@@ -546,8 +548,9 @@ export default function Dashboard() {
     navigate('/');
   };
 
-  const handleUpgradeToPro = async (bundleId) => {
+  const handleUpgradeToPro = async (bundleId, { formDone = false } = {}) => {
     if (!docId || !bundleId || payingBundleId) return;
+    if (!formDone && needsAdmissionForm(studentRecord)) { setAdmissionForPurchase({ kind: 'bundle', id: bundleId }); return; }
 
     setPayingBundleId(bundleId);
     try {
@@ -570,8 +573,9 @@ export default function Dashboard() {
     }
   };
 
-  const handleBuySubject = async (subjectId) => {
+  const handleBuySubject = async (subjectId, { formDone = false } = {}) => {
     if (!docId || !subjectId || payingSubjectId) return;
+    if (!formDone && needsAdmissionForm(studentRecord)) { setAdmissionForPurchase({ kind: 'subject', id: subjectId }); return; }
 
     setPayingSubjectId(subjectId);
     try {
@@ -594,8 +598,9 @@ export default function Dashboard() {
     }
   };
 
-  const handleBuyNoteBundle = async (bundleId) => {
+  const handleBuyNoteBundle = async (bundleId, { formDone = false } = {}) => {
     if (!docId || !bundleId || payingNoteBundleId) return;
+    if (!formDone && needsAdmissionForm(studentRecord)) { setAdmissionForPurchase({ kind: 'notebundle', id: bundleId }); return; }
 
     setPayingNoteBundleId(bundleId);
     try {
@@ -707,21 +712,31 @@ export default function Dashboard() {
     );
   }
 
-  if (admissionPending) {
+  if (admissionPending || admissionForPurchase) {
+    const purchase = admissionPending ? null : admissionForPurchase;
     return (
       <AdmissionGate
         studentId={docId}
         student={studentRecord}
         email={sessionStorage.getItem('auth_email') || ''}
         onLogout={handleLogout}
+        forPayment={!!purchase}
+        onCancel={() => setAdmissionForPurchase(null)}
         onSubmitted={({ studentId, name, department }) => {
           setDocId(studentId);
           setStudentName(name);
           sessionStorage.setItem('auth_name', name);
           setStudentDepartment(department);
           localStorage.setItem('student_department', department);
+          // Submitted once - later purchases go straight to payment
+          setStudentRecord(prev => ({ ...(prev || {}), admissionFormSubmitted: true }));
           setAdmissionPending(false);
+          setAdmissionForPurchase(null);
           window.dispatchEvent(new Event('storage'));
+          // Carry on with the purchase that asked for the form
+          if (purchase?.kind === 'bundle') handleUpgradeToPro(purchase.id, { formDone: true });
+          else if (purchase?.kind === 'subject') handleBuySubject(purchase.id, { formDone: true });
+          else if (purchase?.kind === 'notebundle') handleBuyNoteBundle(purchase.id, { formDone: true });
         }}
       />
     );

@@ -1,5 +1,5 @@
-// Admission Application Form: every student fills it in (with photo and signature) before they can
-// use the student portal or pay for anything. The form lives in admission_forms/{joined_students id};
+// Admission Application Form: a student fills it in (with photo and signature) before their first
+// payment, or before using the portal at all once an admin has sent it to them. The form lives in admission_forms/{joined_students id};
 // the student record only carries admissionFormSubmitted / admissionFormNo, so the admin student list
 // doesn't download everyone's photo and signature.
 import { db } from '../firebase';
@@ -13,6 +13,9 @@ export const ADMISSION_FORMS = 'admission_forms';
 const EXEMPT_GROUPS = ['kpr'];
 export const isAdmissionFormExempt = (student) => EXEMPT_GROUPS.includes(String(student?.groupName || '').trim().toLowerCase());
 export const needsAdmissionForm = (student) => !student?.admissionFormSubmitted && !isAdmissionFormExempt(student);
+// The form is asked for at the first purchase. It locks the whole portal only when an admin has
+// sent it to the student (admissionFormRequested), e.g. for students paying in instalments offline.
+export const admissionFormBlocksPortal = (student) => needsAdmissionForm(student) && student?.admissionFormRequested === true;
 
 export const GENDERS = ['Male', 'Female', 'Other'];
 export const CURRENT_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduated'];

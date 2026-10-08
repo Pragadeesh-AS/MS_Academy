@@ -2019,10 +2019,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
                       <div className="w-full h-px bg-slate-100 my-2"></div>
 
-                      {/* Value Input */}
-                      {formData.fillBlankMode === 'Exact Match' ? (
-                        <div className="flex flex-col gap-2">
-                          <label className="text-[13px] font-[900] text-slate-800">Exact Answer Value <span className="text-red-500">*</span></label>
+                      {/* Value Input - the exact value always shows; Numeric Range adds the range under it */}
+                      <div className="flex flex-col gap-2">
+                          <label className="text-[13px] font-[900] text-slate-800">Exact Answer Value {formData.fillBlankMode === 'Exact Match' && <span className="text-red-500">*</span>}</label>
                           <input 
                             type="text"
                             name="fillBlankAnswer"
@@ -2031,8 +2030,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                             placeholder="e.g. 2"
                             className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-[15px] font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
                           />
-                        </div>
-                      ) : (
+                      </div>
+                      {formData.fillBlankMode === 'Numeric Range' && (
                         <div className="flex flex-col gap-2">
                           <label className="text-[13px] font-[900] text-slate-800">Numeric Range <span className="text-red-500">*</span></label>
                           <div className="flex items-center gap-3">

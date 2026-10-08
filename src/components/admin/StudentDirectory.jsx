@@ -22,7 +22,8 @@ import {
   Star,
   UsersRound,
   Pencil,
-  FileSignature
+  FileSignature,
+  Send
 } from 'lucide-react';
 import AdmissionFormViewer from './AdmissionFormViewer';
 import { needsAdmissionForm, isAdmissionFormExempt } from '../../utils/admissionForm';
@@ -83,6 +84,25 @@ const StudentDirectory = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [viewingForm, setViewingForm] = useState(null); // student whose admission form is open
+  const [sendingForm, setSendingForm] = useState(false);
+
+  // Sends the admission form to a student who skipped it (e.g. joined offline on instalments): the
+  // portal stays locked for them until they fill it in. Cancelling the request unlocks it again.
+  const setAdmissionFormRequested = async (student, requested) => {
+    setSendingForm(true);
+    try {
+      const updates = { admissionFormRequested: requested, admissionFormRequestedAt: requested ? new Date().toISOString() : null };
+      await updateDoc(doc(db, 'joined_students', String(student.id)), updates);
+      const updatedStudent = { ...student, ...updates };
+      setSelectedStudent(updatedStudent);
+      setJoinedStudents(prev => prev.map(s => (s.id === student.id ? updatedStudent : s)));
+    } catch (error) {
+      console.error('Error updating admission form request:', error);
+      alert(`Failed to ${requested ? 'send' : 'cancel'} the admission form. Error: ${error.message}`);
+    } finally {
+      setSendingForm(false);
+    }
+  };
   const [bundles, setBundles] = useState([]);
   const [editingStudent, setEditingStudent] = useState(null);
   const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '', isPro: false, groupName: '' });
@@ -668,11 +688,6 @@ const StudentDirectory = ({
                             <button onClick={() => setSelectedStudent(student)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
                               <Eye size={18} />
                             </button>
-                            {student.admissionFormSubmitted && (
-                              <button onClick={() => setViewingForm(student)} className="p-2 text-[#64748B] hover:text-emerald-600 hover:bg-emerald-50 rounded-[10px] transition-colors" title="View Application Form">
-                                <FileSignature size={18} />
-                              </button>
-                            )}
                             <button onClick={() => openEditStudent(student)} className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Student">
                               <Edit size={18} />
                             </button>
@@ -780,10 +795,29 @@ const StudentDirectory = ({
                   <FileSignature size={20} className="text-slate-400 shrink-0" />
                   <span className="text-[13.5px] font-medium text-slate-600">Admission form not required for the {selectedStudent.groupName.trim()} group.</span>
                 </div>
+              ) : selectedStudent.admissionFormRequested ? (
+                <div className="flex flex-wrap items-center gap-3 p-4 rounded-[16px] border border-blue-100 bg-blue-50/60">
+                  <FileSignature size={20} className="text-blue-600 shrink-0" />
+                  <span className="flex-1 min-w-[200px] text-[13.5px] font-medium text-blue-800">Admission form sent - they must fill it in before they can use the portal.</span>
+                  <button
+                    onClick={() => setAdmissionFormRequested(selectedStudent, false)}
+                    disabled={sendingForm}
+                    className="px-4 py-2 rounded-[12px] border border-blue-200 bg-white text-[13px] font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors shrink-0"
+                  >
+                    {sendingForm ? 'Saving…' : 'Cancel request'}
+                  </button>
+                </div>
               ) : (
-                <div className="flex items-center gap-3 p-4 rounded-[16px] border border-amber-100 bg-amber-50/60">
+                <div className="flex flex-wrap items-center gap-3 p-4 rounded-[16px] border border-amber-100 bg-amber-50/60">
                   <FileSignature size={20} className="text-amber-600 shrink-0" />
-                  <span className="text-[13.5px] font-medium text-amber-800">Admission form not submitted yet - they'll be asked to fill it in when they next open the portal.</span>
+                  <span className="flex-1 min-w-[200px] text-[13.5px] font-medium text-amber-800">Admission form not submitted yet - they'll be asked to fill it in before their first payment. Send it to make them fill it in now.</span>
+                  <button
+                    onClick={() => setAdmissionFormRequested(selectedStudent, true)}
+                    disabled={sendingForm}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[12px] bg-amber-500 hover:bg-amber-600 text-white text-[13px] font-bold disabled:opacity-50 transition-colors shrink-0"
+                  >
+                    <Send size={14} /> {sendingForm ? 'Sending…' : 'Send form'}
+                  </button>
                 </div>
               )}
 

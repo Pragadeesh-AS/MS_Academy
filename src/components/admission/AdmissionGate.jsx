@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, ClipboardPaste, Upload, PenLine, Eraser, X, LogOut, Loader2, CheckCircle2, AlertCircle, FileSignature, ArrowRight } from 'lucide-react';
+import { Camera, ClipboardPaste, Upload, PenLine, Eraser, X, LogOut, Loader2, CheckCircle2, AlertCircle, FileSignature, ArrowRight, ArrowLeft } from 'lucide-react';
 import logoImg from '../../assets/msgate_logo.png';
 import { AdmissionPageOne, AdmissionPageTwo } from './AdmissionFormSheet';
 import {
@@ -217,7 +217,9 @@ function SignatureTools({ signature, busy, onFile, onDraw, onRemove, onFocusChan
   );
 }
 
-export default function AdmissionGate({ studentId, student, email, onSubmitted, onLogout }) {
+// forPayment: opened from a Buy Now button - the student can go back instead of logging out, and
+// submitting continues to the payment.
+export default function AdmissionGate({ studentId, student, email, onSubmitted, onLogout, forPayment = false, onCancel }) {
   const [form, setForm] = useState(() => ({ ...prefill(student, email), ...(loadDraft(email) || {}) }));
   const [attempted, setAttempted] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -329,7 +331,7 @@ export default function AdmissionGate({ studentId, student, email, onSubmitted, 
             onClick={() => onSubmitted({ studentId: done.studentId, name: form.fullName.trim(), department: form.gatePaper })}
             className="mt-6 w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[15px] shadow-lg shadow-blue-600/25 transition-colors inline-flex items-center justify-center gap-2"
           >
-            Continue to MS GATE Academy <ArrowRight size={17} />
+            {forPayment ? 'Continue to payment' : 'Continue to MS GATE Academy'} <ArrowRight size={17} />
           </button>
         </div>
       </div>
@@ -348,9 +350,15 @@ export default function AdmissionGate({ studentId, student, email, onSubmitted, 
               <div className="text-[11.5px] font-semibold text-slate-500 mt-1 truncate">{email}</div>
             </div>
           </div>
-          <button type="button" onClick={onLogout} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-bold text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0">
-            <LogOut size={15} /> Log out
-          </button>
+          {forPayment ? (
+            <button type="button" onClick={onCancel} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors shrink-0">
+              <ArrowLeft size={15} /> Back
+            </button>
+          ) : (
+            <button type="button" onClick={onLogout} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-bold text-slate-600 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0">
+              <LogOut size={15} /> Log out
+            </button>
+          )}
         </div>
       </header>
 
@@ -359,9 +367,11 @@ export default function AdmissionGate({ studentId, student, email, onSubmitted, 
         <div className="rounded-2xl bg-gradient-to-r from-[#1f3a68] to-[#2563eb] text-white p-5 sm:p-6 flex items-start gap-4 shadow-lg shadow-blue-900/10">
           <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center shrink-0"><FileSignature size={22} /></div>
           <div>
-            <h1 className="text-[19px] sm:text-[21px] font-[900] tracking-tight leading-tight">Complete your admission form to continue</h1>
+            <h1 className="text-[19px] sm:text-[21px] font-[900] tracking-tight leading-tight">{forPayment ? 'Complete your admission form to continue to payment' : 'Complete your admission form to continue'}</h1>
             <p className="text-[13.5px] text-blue-100 font-medium mt-1.5 leading-relaxed">
-              Fill in every field, add your passport photo and signature, and submit. Your classes, tests, notes and payments open once it is submitted. It takes about 5 minutes.
+              {forPayment
+                ? 'Fill in every field, add your passport photo and signature, and submit. You fill it in only once - the payment opens right after, and later purchases go straight to payment. It takes about 5 minutes.'
+                : 'Fill in every field, add your passport photo and signature, and submit. Your classes, tests, notes and payments open once it is submitted. It takes about 5 minutes.'}
             </p>
           </div>
         </div>

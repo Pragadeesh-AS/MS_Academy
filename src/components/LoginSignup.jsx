@@ -6,6 +6,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithP
 import { collection, getDocs, query, where, updateDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { resolveUserRoles, pickPrimaryRole, switchToRole, ADMIN_EMAILS } from '../utils/roles';
+import academyLogo from '../assets/msgate_logo_small.webp';
 
 export default function LoginSignup() {
   const [isLogin, setIsLogin] = useState(true);
@@ -257,15 +258,18 @@ export default function LoginSignup() {
   return (
     <div className="min-h-screen w-full bg-white flex overflow-hidden font-sans text-slate-900 relative">
       
-      {/* Full Page Loading Overlay */}
+      {/* Full Page Loading Overlay: the academy badge inside a spinning ring */}
       {loading && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-          <div className="flex flex-col items-center bg-white p-6 rounded-2xl shadow-xl border border-gray-100">
-            <svg className="animate-spin h-10 w-10 text-blue-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span className="text-blue-700 font-semibold text-[15px]" style={{ fontFamily: 'Inter, sans-serif' }}>Authenticating...</span>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm" role="status" aria-live="polite">
+          <div className="flex flex-col items-center">
+            <div className="relative w-36 h-36 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
+              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-blue-600 border-r-blue-400 animate-[spin_1.1s_linear_infinite]" />
+              <div className="absolute inset-[10px] rounded-full bg-white shadow-[0_10px_30px_rgba(37,99,235,0.18)]" />
+              <img src={academyLogo} alt="MS GATE Academy" className="relative w-24 h-auto object-contain animate-pulse" />
+            </div>
+            <div className="mt-5 text-[18px] font-[900] text-[#1f3a68] tracking-tight">MS GATE Academy</div>
+            <div className="mt-1 text-[13px] font-semibold text-slate-500">Signing you in…</div>
           </div>
         </div>
       )}
