@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Carousel_003 } from "./ui/swiper-carousel";
 import { ShinyButton } from "./ui/shiny-button";
 import { BookOpen, Target, Users, Star, Quote } from 'lucide-react';
-import homeImg from '../assets/home.jpeg';
+import homeImg from '../assets/home.webp';
 import { motion, AnimatePresence } from 'framer-motion';
 import SocialCard from './SocialCard';
 import TestimonialCarousel from './ui/TestimonialCarousel';

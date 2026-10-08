@@ -32,12 +32,15 @@ export const isEmptyQuestion = (q) => !stripHtml(q?.questionText)
   && OPTION_FIELDS.every(f => !stripHtml(q?.[f]))
   && IMAGE_FIELDS.every(f => !q?.[f]);
 
-// Exact identity: used where duplicates are deleted automatically, so it stays strict
+// Exact identity: used where duplicates are deleted automatically, so it stays strict.
+// A question the extracter compared and chose to import anyway (allowDuplicate) is its own
+// identity, so the Question Bank cleanup never deletes it as a copy of the one it was compared with.
 export const questionFingerprint = (q) => [
   stripHtml(q.questionText),
   ...OPTION_FIELDS.map(f => stripHtml(q[f])),
   ...columns(q).map(stripHtml).filter(Boolean),
-  ...IMAGE_FIELDS.map(f => q[f] || '')
+  ...IMAGE_FIELDS.map(f => q[f] || ''),
+  ...(q.allowDuplicate === true ? [`keep:${q.id || ''}`] : [])
 ].join(SEP);
 
 // Looser text identity for spotting an incoming question that is already in the bank: ignores

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GraduationCap, Award, Users, BookOpen, Sparkles, TrendingUp, Target } from 'lucide-react';
-import slide1 from '../assets/slideshow1.jpeg';
-import slide2 from '../assets/slideshow2.jpeg';
-import slide3 from '../assets/slideshow3.jpeg';
+import slide1 from '../assets/slideshow1.webp';
+import slide2 from '../assets/slideshow2.webp';
+import slide3 from '../assets/slideshow3.webp';
 import SocialCard from './SocialCard';
-import aboutImg from '../assets/about.jpeg';
+import aboutImg from '../assets/about.webp';
 
 export default function AboutUs() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);

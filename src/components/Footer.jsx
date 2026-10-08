@@ -108,7 +108,7 @@ export default function Footer() {
           {/* About */}
           <div className="px-6 sm:px-8 py-10">
             <Link to="/" className="flex items-center gap-3">
-              <img src="/logo.png" alt="MS GATE Academy" className="w-12 h-12 object-contain" />
+              <img src="/logo.webp" alt="MS GATE Academy" className="w-12 h-12 object-contain" />
               <div className="flex flex-col">
                 <span className="font-black text-[17px] text-[#1e3a8a] uppercase tracking-wide leading-none">MS GATE Academy</span>
                 <span className="font-bold text-[11px] text-[#1d4ed8] uppercase tracking-[0.15em] mt-1 leading-none">Coimbatore</span>

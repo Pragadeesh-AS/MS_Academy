@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import './index.css';
 import { ShinyButton } from "./components/ui/shiny-button";
@@ -30,16 +30,11 @@ import AeCourse from './components/courses/Ae';
 import MorphPanel from './components/ui/ai-input';
 import EnquiryForm from './components/ui/EnquiryForm';
 import ProgrammingCourses from './components/ProgrammingCourses';
-import TeacherDashboard from './components/TeacherDashboard';
-import TypistDashboard from './components/TypistDashboard';
 import Footer from './components/Footer';
 import Careers from './components/Careers';
 import Blog from './components/Blog';
 import GateCourses from './components/GateCourses';
 import LoginSignup from './components/LoginSignup';
-import Dashboard from './components/Dashboard';
-import StudentProfile from './components/StudentProfile';
-import AdminDashboard from './components/AdminDashboard';
 import MarketingPopup from './components/MarketingPopup';
 import NotFound from './components/NotFound';
 import Forbidden403 from './components/Forbidden403';
@@ -47,7 +42,15 @@ import ServerError500 from './components/ServerError500';
 import Maintenance from './components/Maintenance';
 import Offline from './components/Offline';
 import SessionExpired from './components/SessionExpired';
-import TestStates from './components/TestStates';
+import Loader from './components/Loader';
+
+// Logged-in dashboards are loaded only when opened, so the public site doesn't download them
+const TeacherDashboard = lazy(() => import('./components/TeacherDashboard'));
+const TypistDashboard = lazy(() => import('./components/TypistDashboard'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const StudentProfile = lazy(() => import('./components/StudentProfile'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const TestStates = lazy(() => import('./components/TestStates'));
 
 export default function App() {
   const navigate = useNavigate();
@@ -237,7 +240,7 @@ export default function App() {
           className="flex flex-row self-center items-center justify-between py-3 mx-auto px-4 md:px-8 rounded-full relative z-[100]"
         >
           <Link to="/" className="flex flex-row items-center gap-3 whitespace-nowrap">
-            <img src="/logo.png" alt="MS Academy Logo" className="w-12 h-12 object-contain" />
+            <img src="/logo.webp" alt="MS Academy Logo" className="w-12 h-12 object-contain" />
             <div className="flex flex-col justify-center">
               <span className="font-black text-[17px] text-slate-900 uppercase tracking-wide leading-none">MS GATE ACADEMY</span>
               <span className="font-bold text-[10px] text-[#1d4ed8] uppercase tracking-[0.15em] mt-1 leading-none">COIMBATORE</span>
@@ -336,7 +339,7 @@ export default function App() {
       <div className="md:hidden fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/70 shadow-sm">
         <div className="flex items-center justify-between px-4 py-2.5">
           <Link to="/" className="flex flex-row items-center gap-2 whitespace-nowrap min-w-0">
-            <img src="/logo.png" alt="MS Academy Logo" className="w-9 h-9 object-contain flex-shrink-0" />
+            <img src="/logo.webp" alt="MS Academy Logo" className="w-9 h-9 object-contain flex-shrink-0" />
             <div className="flex flex-col justify-center min-w-0">
               <span className="font-black text-[13px] text-slate-900 uppercase tracking-wide leading-none truncate">MS GATE ACADEMY</span>
               <span className="font-bold text-[8px] text-[#1d4ed8] uppercase tracking-[0.15em] mt-1 leading-none">COIMBATORE</span>
@@ -422,6 +425,7 @@ export default function App() {
       </>
       )}
 
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader /></div>}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<AboutUs />} />
@@ -463,6 +467,7 @@ export default function App() {
         <Route path="/test-states" element={<TestStates />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </Suspense>
 
       {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student') && <Footer />}
 

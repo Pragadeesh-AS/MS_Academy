@@ -609,8 +609,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       return;
     }
 
-    // Duplicate Check
-    if (!isEmptyQuestion(formData)) {
+    // Duplicate Check (skipped for a question the extracter kept on purpose after comparing it)
+    const keptDuplicate = isEditing && questions.find(q => q.id === currentId)?.allowDuplicate === true;
+    if (!keptDuplicate && !isEmptyQuestion(formData)) {
       const payloadHash = questionFingerprint(formData);
       const isDuplicate = questions.some(q => {
         if (isEditing && q.id === currentId) return false;
@@ -679,8 +680,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       return;
     }
     
-    // Duplicate Check
-    if (!isEmptyQuestion(formData)) {
+    // Duplicate Check (skipped for a question the extracter kept on purpose after comparing it)
+    const keptDuplicate = isEditing && questions.find(q => q.id === currentId)?.allowDuplicate === true;
+    if (!keptDuplicate && !isEmptyQuestion(formData)) {
       const payloadHash = questionFingerprint(formData);
       const isDuplicate = questions.some(q => {
         if (isEditing && q.id === currentId) return false;

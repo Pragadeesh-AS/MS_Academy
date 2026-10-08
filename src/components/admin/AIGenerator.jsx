@@ -1353,6 +1353,9 @@ IMPORTANT:
         matchColumn1: (q.matchColumn1 || []).map(item => formatExtractedText(wrapBareLatex(item))),
         matchColumn2: (q.matchColumn2 || []).map(item => formatExtractedText(wrapBareLatex(item)))
       } : q));
+      // Stable id per extracted question, so a duplicate flag can point at "question #3 of this PDF"
+      // even after other questions are edited or removed
+      parsedQuestions = parsedQuestions.map((q, i) => ({ ...q, _key: i }));
       setExtractedQuestions(parsedQuestions);
       setStatus('review');
       markDuplicates(parsedQuestions);
@@ -1364,12 +1367,12 @@ IMPORTANT:
   };
 
   const handleApprove = () => {
-    if (!canImport) return;
+    if (!canImport || undecidedDuplicates > 0 || checkingDuplicates) return;
     confirmApprove(false);
   };
 
   const handleImportDirect = () => {
-    if (!canImportDirect) return;
+    if (!canImportDirect || undecidedDuplicates > 0 || checkingDuplicates) return;
     confirmApprove(true);
   };
 
@@ -1389,21 +1392,26 @@ IMPORTANT:
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   };
 
-  const describeDuplicate = (match) => (match.source === 'bank'
-    ? { source: 'bank', id: match.question.id, status: match.question.status || '', subject: match.question.subject || '' }
-    : { source: 'batch' });
+  // What the review screen needs to show the matched question next to the extracted one
+  const COMPARE_FIELDS = ['questionType', 'questionText', 'questionImageUrl', 'optionA', 'optionAImage', 'optionB', 'optionBImage',
+    'optionC', 'optionCImage', 'optionD', 'optionDImage', 'correctAnswer', 'correctAnswers', 'fillBlankAnswer', 'fillBlankMode',
+    'fillBlankRangeStart', 'fillBlankRangeEnd', 'matchColumn1', 'matchColumn2', 'explanation', 'department', 'subject', 'topic',
+    'mark', 'status', 'isPremium'];
+  const pickCompareFields = (q) => Object.fromEntries(COMPARE_FIELDS.filter(f => q[f] !== undefined).map(f => [f, q[f]]));
+
+  const describeDuplicate = (match, list) => (match.source === 'bank'
+    ? { source: 'bank', id: match.question.id, status: match.question.status || '', subject: match.question.subject || '', question: pickCompareFields(match.question) }
+    : { source: 'batch', key: list[match.index]._key });
 
   // Flags extracted questions that are already in the Question Bank (or repeat another question
-  // from the same PDF) so the review screen shows which ones the import will skip.
+  // from the same PDF). The extracter compares each one with its match and decides to import or remove it.
   const markDuplicates = async (list) => {
     setCheckingDuplicates(true);
     try {
       const matches = await findDuplicateQuestions(list, await loadQuestionBank());
-      // Match by object, not index - the reviewer may have removed questions meanwhile
-      setExtractedQuestions(prev => prev.map(q => {
-        const i = list.indexOf(q);
-        return i === -1 ? q : { ...q, _duplicate: matches[i] ? describeDuplicate(matches[i]) : null };
-      }));
+      // Match by key, not index - the extracter may have removed or edited questions meanwhile
+      const byKey = new Map(list.map((q, i) => [q._key, matches[i] ? describeDuplicate(matches[i], list) : null]));
+      setExtractedQuestions(prev => prev.map(q => (byKey.has(q._key) ? { ...q, _duplicate: byKey.get(q._key) } : q)));
     } catch (err) {
       console.error('Duplicate check failed:', err);
     } finally {
@@ -1419,7 +1427,8 @@ IMPORTANT:
     setErrorMsg('');
 
     // Re-check against the bank as it is right now (someone may have added questions since the
-    // review screen opened); duplicates are skipped and everything else is imported.
+    // review screen opened). Every duplicate needs the extracter's decision, so a newly found one
+    // goes back to the review screen for comparison instead of being imported or skipped silently.
     let matches;
     try {
       matches = await findDuplicateQuestions(extractedQuestions, await loadQuestionBank());
@@ -1429,8 +1438,18 @@ IMPORTANT:
       setStatus('review');
       return;
     }
-    const toImport = extractedQuestions.filter((_, i) => !matches[i]);
-    const skipped = extractedQuestions.length - toImport.length;
+    const newlyFound = new Map();
+    extractedQuestions.forEach((q, i) => {
+      if (matches[i] && !duplicateOf(q) && q._dupDecision !== 'import') newlyFound.set(q._key, describeDuplicate(matches[i], extractedQuestions));
+    });
+    if (newlyFound.size > 0) {
+      setExtractedQuestions(prev => prev.map(q => (newlyFound.has(q._key) ? { ...q, _duplicate: newlyFound.get(q._key) } : q)));
+      setErrorMsg(`${newlyFound.size} more duplicate question(s) were found while importing. Nothing was imported - compare them below and choose Import anyway or Remove, then import again.`);
+      setStatus('review');
+      return;
+    }
+    const toImport = extractedQuestions;
+    const keptDuplicates = toImport.filter(q => duplicateOf(q)).length;
     const imported = new Set();
 
     try {
@@ -1452,7 +1471,7 @@ IMPORTANT:
       // list the latest import first while keeping that import in the PDF's order
       const importedAt = new Date().toISOString();
       for (const [importOrder, original] of toImport.entries()) {
-        const { _duplicate, ...question } = original;
+        const { _duplicate, _key, _dupDecision, ...question } = original;
         await addDoc(collection(db, 'question_bank'), {
           ...question,
           department: importSettings.department,
@@ -1471,6 +1490,8 @@ IMPORTANT:
           ...reviewFields,
           ...pairFields,
           isPremium: importAsPremium,
+          // Compared with its duplicate and kept on purpose - the Question Bank cleanup leaves it alone
+          ...(duplicateOf(original) ? { allowDuplicate: true } : {}),
           importedAt,
           importOrder,
           createdAt: new Date().toISOString(),
@@ -1478,7 +1499,7 @@ IMPORTANT:
         });
         imported.add(original);
       }
-      setImportSummary({ imported: toImport.length, skipped });
+      setImportSummary({ imported: toImport.length, keptDuplicates });
       setStatus('success');
       setTimeout(() => {
         resetState();
@@ -1510,6 +1531,101 @@ IMPORTANT:
       : q)));
   };
 
+  // --- Duplicate comparison: the extracted question next to the one it matches ---
+  const plainText = (html) => String(html || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  const isFillBlank = (q) => ['Fill in the Blanks', 'Fill in Blanks'].includes(q.questionType);
+  const answerText = (q) => {
+    if (isFillBlank(q)) return q.fillBlankMode === 'Numeric Range' ? `${q.fillBlankRangeStart ?? ''} to ${q.fillBlankRangeEnd ?? ''}` : String(q.fillBlankAnswer ?? '');
+    if (q.questionType === 'Multiple Choice') return [...(q.correctAnswers || [])].sort().join(', ');
+    return q.correctAnswer || '';
+  };
+  const isCorrectOption = (q, opt) => (q.questionType === 'Multiple Choice' ? (q.correctAnswers || []).includes(opt) : q.correctAnswer === opt);
+  const COMPARE_IMAGES = [['questionImageUrl', 'Question diagram'], ['optionAImage', 'Option A diagram'], ['optionBImage', 'Option B diagram'], ['optionCImage', 'Option C diagram'], ['optionDImage', 'Option D diagram']];
+
+  const duplicateDifferences = (a, b, otherName) => {
+    const diffs = [];
+    if ((a.questionType || '') !== (b.questionType || '')) diffs.push(`Question type: ${a.questionType || '-'} vs ${b.questionType || '-'}`);
+    if (plainText(a.questionText) !== plainText(b.questionText)) diffs.push('Question text wording');
+    ['A', 'B', 'C', 'D'].forEach(o => { if (plainText(a[`option${o}`]) !== plainText(b[`option${o}`])) diffs.push(`Option ${o} wording`); });
+    if (answerText(a) !== answerText(b)) diffs.push(`Correct answer: ${answerText(a) || '-'} (extracted) vs ${answerText(b) || '-'} (${otherName})`);
+    COMPARE_IMAGES.forEach(([f, label]) => { if (!!a[f] !== !!b[f]) diffs.push(`${label} only in the ${a[f] ? 'extracted' : otherName} question`); });
+    if (plainText(a.explanation) !== plainText(b.explanation)) diffs.push('Explanation');
+    return diffs;
+  };
+
+  const renderCompareSide = (q, title, detail, highlight) => (
+    <div className={`min-w-0 rounded-xl border bg-white p-4 ${highlight}`}>
+      <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{title}</div>
+      {detail && <div className="text-xs font-semibold text-slate-600 mt-0.5">{detail}</div>}
+      <div className="mt-3 text-sm font-semibold text-slate-900 break-words" dangerouslySetInnerHTML={{ __html: q.questionText || '<em>No question text</em>' }} />
+      {q.questionImageUrl && <img src={q.questionImageUrl} alt="Question diagram" className="mt-3 max-h-48 max-w-full rounded-lg border border-slate-200" />}
+      {q.questionType === 'Match' && (
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+          {[q.matchColumn1, q.matchColumn2].map((col, c) => (
+            <div key={c} className="space-y-1">
+              {(col || []).filter(item => String(item).trim()).map((item, i) => (
+                <div key={i} className="rounded-md border border-slate-200 bg-slate-50 p-1.5" dangerouslySetInnerHTML={{ __html: item }} />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+      {isFillBlank(q) ? (
+        <div className="mt-3 text-sm"><span className="font-bold text-green-800">Answer: </span><span className="text-green-700">{answerText(q) || 'N/A'}</span></div>
+      ) : (
+        <div className="mt-3 space-y-1.5">
+          {['A', 'B', 'C', 'D'].map(opt => (
+            <div key={opt} className={`flex gap-2 rounded-lg border p-2 text-sm ${isCorrectOption(q, opt) ? 'bg-green-50 border-green-200 text-green-800' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+              <span className="font-bold">{opt}.</span>
+              <div className="min-w-0 break-words">
+                <span dangerouslySetInnerHTML={{ __html: q[`option${opt}`] || '' }} />
+                {q[`option${opt}Image`] && <img src={q[`option${opt}Image`]} alt={`Option ${opt} diagram`} className="mt-1 max-h-24 max-w-full rounded border border-slate-200" />}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderDuplicateComparison = (q, idx, dup) => {
+    const otherName = q._duplicate.source === 'bank' ? 'existing' : 'other PDF';
+    const diffs = duplicateDifferences(q, dup.question, otherName);
+    const kept = q._dupDecision === 'import';
+    return (
+      <div className={`mb-5 rounded-2xl border p-4 ${kept ? 'border-green-200 bg-green-50/50' : 'border-amber-200 bg-amber-50/60'}`}>
+        <h5 className={`text-sm font-bold ${kept ? 'text-green-900' : 'text-amber-900'}`}>Compare with the matching question</h5>
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+          {renderCompareSide(q, 'Extracted from this PDF', `Question ${idx + 1}`, 'border-purple-200')}
+          {renderCompareSide(dup.question, dup.label, dup.detail, 'border-amber-300')}
+        </div>
+        <div className="mt-3 text-sm">
+          {diffs.length === 0 ? (
+            <p className="font-semibold text-slate-700">No differences found - the text, options, answer and diagrams match.</p>
+          ) : (
+            <>
+              <p className="font-bold text-slate-800">Differences:</p>
+              <ul className="list-disc pl-5 text-slate-700">{diffs.map(d => <li key={d}>{d}</li>)}</ul>
+            </>
+          )}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {kept ? (
+            <>
+              <span className="flex items-center gap-1.5 text-sm font-bold text-green-700"><CheckCircle2 size={16} /> Will be imported as a separate question</span>
+              <button type="button" onClick={() => setDuplicateDecision(idx, undefined)} className="px-3 py-1.5 text-sm font-bold rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100">Undo</button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={() => setDuplicateDecision(idx, 'import')} className="px-4 py-2 text-sm font-bold rounded-lg bg-green-600 hover:bg-green-700 text-white">Import anyway</button>
+              <button type="button" onClick={() => removeQuestion(idx)} className="px-4 py-2 text-sm font-bold rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200">Remove</button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const removeExtractedImage = (index, field) => {
     setExtractedQuestions(prev => prev.map((q, i) => (i === index ? { ...q, [field]: '' } : q)));
   };
@@ -1537,7 +1653,24 @@ IMPORTANT:
     }
   };
 
-  const duplicateCount = extractedQuestions.filter(q => q._duplicate).length;
+  // The question an extracted one duplicates: { label, question } or null. A repeat of another
+  // PDF question stops counting once that other question has been removed.
+  const duplicateOf = (q) => {
+    const dup = q._duplicate;
+    if (!dup) return null;
+    if (dup.source === 'bank') {
+      return { label: 'Already in Question Bank', detail: [dup.subject, dup.question?.topic, dup.status].filter(Boolean).join(' • '), question: dup.question || {} };
+    }
+    const at = extractedQuestions.findIndex(o => o._key === dup.key && o !== q);
+    return at === -1 ? null : { label: `Repeats question ${at + 1} of this PDF`, detail: '', question: extractedQuestions[at] };
+  };
+
+  const setDuplicateDecision = (index, decision) => {
+    setExtractedQuestions(prev => prev.map((q, i) => (i === index ? { ...q, _dupDecision: decision } : q)));
+  };
+
+  const duplicateCount = extractedQuestions.filter(q => duplicateOf(q)).length;
+  const undecidedDuplicates = extractedQuestions.filter(q => duplicateOf(q) && q._dupDecision !== 'import').length;
   // Regulation (year) is optional; the other attributes are required on every question.
   const canImport = isValidReviewerEmail && !!importSettings.department && !!importSettings.subject && !!importSettings.mark && !!importSettings.difficultyLevel;
   // Skipping the reviewer doesn't need a reviewer email - just the attributes every question needs.
@@ -1667,6 +1800,9 @@ IMPORTANT:
       {!canImport && (
         <p className="mt-4 text-xs font-bold text-amber-600">Fill in Department, Subject, Marks, Difficulty and a valid reviewer to enable Approve & Import.</p>
       )}
+      {undecidedDuplicates > 0 && (
+        <p className="mt-2 text-xs font-bold text-amber-600">{undecidedDuplicates} duplicate question(s) still need a decision - compare each one below and choose Import anyway or Remove to enable importing.</p>
+      )}
     </div>
   );
 
@@ -1685,15 +1821,16 @@ IMPORTANT:
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={handleApprove}
-              disabled={!canImport}
+              disabled={!canImport || undecidedDuplicates > 0 || checkingDuplicates}
+              title={undecidedDuplicates > 0 ? `Compare the ${undecidedDuplicates} duplicate question(s) and choose Import anyway or Remove first` : undefined}
               className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(147,51,234,0.3)] flex items-center gap-2"
             >
               <Database size={18} /> Approve & Import
             </button>
             <button
               onClick={handleImportDirect}
-              disabled={!canImportDirect}
-              title="Skips the reviewer - the questions go straight into the Question Bank, flagged as Not Reviewed"
+              disabled={!canImportDirect || undecidedDuplicates > 0 || checkingDuplicates}
+              title={undecidedDuplicates > 0 ? `Compare the ${undecidedDuplicates} duplicate question(s) and choose Import anyway or Remove first` : 'Skips the reviewer - the questions go straight into the Question Bank, flagged as Not Reviewed'}
               className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] flex items-center gap-2"
             >
               <Upload size={18} /> Import Directly (Skip Review)
@@ -1779,15 +1916,13 @@ IMPORTANT:
             <CheckCircle2 size={48} />
           </div>
           <h3 className="text-2xl font-black text-slate-800 mb-2">
-            {importSummary && importSummary.imported === 0 ? 'Nothing New to Import' : 'Successfully Imported!'}
+            Successfully Imported!
           </h3>
           <p className="text-slate-500 font-medium">
-            {importSummary && importSummary.imported === 0
-              ? `All ${importSummary.skipped} question(s) are already in the Question Bank, so no duplicates were added.`
-              : `${importSummary ? `${importSummary.imported} question(s) imported. ` : ''}The extracted questions have been sent to the reviewer. They reach the Question Bank once approved.`}
+            {`${importSummary ? `${importSummary.imported} question(s) imported. ` : ''}The extracted questions have been sent to the reviewer. They reach the Question Bank once approved.`}
           </p>
-          {importSummary?.skipped > 0 && importSummary.imported > 0 && (
-            <p className="text-amber-700 font-semibold mt-2">{importSummary.skipped} duplicate question(s) were skipped.</p>
+          {importSummary?.keptDuplicates > 0 && (
+            <p className="text-amber-700 font-semibold mt-2">{importSummary.keptDuplicates} of them matched an existing question and were imported because you chose to keep them.</p>
           )}
         </div>
       )}
@@ -1854,9 +1989,10 @@ IMPORTANT:
                   <Database size={20} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-amber-900">{duplicateCount} duplicate question{duplicateCount > 1 ? 's' : ''} found</h4>
+                  <h4 className="font-bold text-amber-900">{duplicateCount} possible duplicate question{duplicateCount > 1 ? 's' : ''} found</h4>
                   <p className="text-sm text-amber-800 mt-1">
-                    {duplicateCount > 1 ? 'They are' : 'It is'} marked below and will be skipped. The other {extractedQuestions.length - duplicateCount} question(s) will be imported.
+                    Each one is shown below next to the question it matches. Compare them and choose <strong>Import anyway</strong> or <strong>Remove</strong>.
+                    {undecidedDuplicates > 0 ? ` ${undecidedDuplicates} still need${undecidedDuplicates === 1 ? 's' : ''} a decision before you can import.` : ' All decided.'}
                   </p>
                 </div>
               </div>
@@ -1876,8 +2012,10 @@ IMPORTANT:
             )}
 
             <div className="grid grid-cols-1 gap-6">
-              {extractedQuestions.map((q, idx) => (
-                <div key={idx} className={`bg-white border rounded-2xl p-6 shadow-sm relative group ${q._duplicate ? 'border-amber-300 opacity-60' : 'border-slate-200'}`}>
+              {extractedQuestions.map((q, idx) => {
+                const dup = duplicateOf(q);
+                return (
+                <div key={q._key ?? idx} className={`bg-white border rounded-2xl p-6 shadow-sm relative group ${dup ? (q._dupDecision === 'import' ? 'border-green-300' : 'border-amber-400 ring-2 ring-amber-100') : 'border-slate-200'}`}>
                   <button 
                     onClick={() => removeQuestion(idx)}
                     className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
@@ -1900,15 +2038,15 @@ IMPORTANT:
                     >
                       {q.questionCategory || 'Theory'} ⇄
                     </button>
-                    {q._duplicate && (
-                      <span className="text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1 rounded-md">
-                        {q._duplicate.source === 'bank'
-                          ? `Already in Question Bank${q._duplicate.subject ? ` (${q._duplicate.subject}${q._duplicate.status ? `, ${q._duplicate.status}` : ''})` : ''} - will be skipped`
-                          : 'Repeats another question in this PDF - will be skipped'}
+                    {dup && (
+                      <span className={`text-xs font-bold px-3 py-1 rounded-md ${q._dupDecision === 'import' ? 'text-green-800 bg-green-100' : 'text-amber-800 bg-amber-100'}`}>
+                        {dup.label}{q._dupDecision === 'import' ? ' - will be imported' : ' - decision needed'}
                       </span>
                     )}
                   </div>
-                  
+
+                  {dup && renderDuplicateComparison(q, idx, dup)}
+
                   <h4 className="text-lg font-bold text-slate-900 mb-4" dangerouslySetInnerHTML={{ __html: q.questionText }}></h4>
 
                   {q.questionImageUrl && (
@@ -1970,7 +2108,8 @@ IMPORTANT:
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

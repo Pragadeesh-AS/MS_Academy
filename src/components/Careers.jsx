@@ -289,7 +289,7 @@ export default function Careers() {
             {/* Logo Wrapper with shadow */}
             <div className="w-32 h-32 rounded-[2rem] bg-white border border-slate-100 shadow-md flex items-center justify-center p-5 z-10 hover:scale-105 transition-transform duration-500">
               <img 
-                src="/logo.png" 
+                src="/logo.webp" 
                 alt="MS Academy Logo" 
                 className="w-full h-full object-contain"
                 onError={(e) => {

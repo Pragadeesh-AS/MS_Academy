@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { db, auth } from '../firebase';
-import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp, documentId } from 'firebase/firestore';
 import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle, CalendarClock, Flag } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
 import { examSections } from '../utils/testShuffle';
@@ -18,6 +18,16 @@ import TestLeaderboard from './student/TestLeaderboard';
 
 // The signed-in student (sessionStorage survives a refresh, before Firebase Auth has restored the user)
 const currentEmail = () => auth.currentUser?.email || sessionStorage.getItem('auth_email') || '';
+
+// Reads only the question_bank documents a test uses, not the whole collection
+// (a Firestore 'in' filter takes at most 30 values, so the IDs are queried in groups of 30)
+const fetchQuestionDocs = async (ids) => {
+  const unique = [...new Set((Array.isArray(ids) ? ids : []).filter(id => typeof id === 'string' && id && !id.includes('/')))];
+  const groups = [];
+  for (let i = 0; i < unique.length; i += 30) groups.push(unique.slice(i, i + 30));
+  const snaps = await Promise.all(groups.map(group => getDocs(query(collection(db, 'question_bank'), where(documentId(), 'in', group)))));
+  return snaps.flatMap(snap => snap.docs);
+};
 
 // onTestCompleted(testId): after submitting, the student is taken to their Analytics for that test.
 // reviewTestId: open that completed test's solution review (asked for from Analytics); onReviewClosed
@@ -179,10 +189,10 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     try {
       setLoading(true);
       // Fetch full question details for the list of IDs in this test
-      const qSnapshot = await getDocs(collection(db, 'question_bank'));
-      const allQuestions = qSnapshot.docs.map(doc => normalizeQuestion({ id: doc.id, ...doc.data() })).filter(q => q.status === 'Approved' || !q.status);
-      
       const qList = Array.isArray(test.questions) ? test.questions : [];
+      const qDocs = await fetchQuestionDocs(qList);
+      const allQuestions = qDocs.map(doc => normalizeQuestion({ id: doc.id, ...doc.data() })).filter(q => q.status === 'Approved' || !q.status);
+      
       const matchedQuestions = qList.map(qId => {
         return allQuestions.find(q => q.id === qId) || {
           id: qId,
@@ -369,9 +379,9 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     if (matchedAttempt) {
       // Reload questions first
       setLoading(true);
-      getDocs(collection(db, 'question_bank')).then((qSnapshot) => {
-        const allQuestions = qSnapshot.docs.map(doc => normalizeQuestion({ id: doc.id, ...doc.data() })).filter(q => q.status === 'Approved' || !q.status);
-        const testObj = tests.find(t => t.id === testId);
+      const testObj = tests.find(t => t.id === testId);
+      fetchQuestionDocs(testObj?.questions).then((qDocs) => {
+        const allQuestions = qDocs.map(doc => normalizeQuestion({ id: doc.id, ...doc.data() })).filter(q => q.status === 'Approved' || !q.status);
         
         const matchedQuestions = testObj.questions.map(qId => {
           return allQuestions.find(q => q.id === qId) || {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, TrendingUp, BookOpen, Trophy, Quote, Phone } from 'lucide-react';
-import signupImage from '../assets/signup2.png';
+import signupImage from '../assets/signup2.webp';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, sendPasswordResetEmail, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import { collection, getDocs, query, where, updateDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -280,7 +280,7 @@ export default function LoginSignup() {
         <div className="w-full max-w-[500px] mx-auto">
           {/* Logo */}
           <div className="flex items-center gap-3 mb-8">
-            <img src="/logo.png" alt="MS Academy Logo" className="w-12 h-12 object-contain" />
+            <img src="/logo.webp" alt="MS Academy Logo" className="w-12 h-12 object-contain" />
             <div className="flex flex-col justify-center">
               <span className="text-[22px] font-bold text-[#1e293b] leading-none tracking-tight">MS Academy</span>
             </div>
