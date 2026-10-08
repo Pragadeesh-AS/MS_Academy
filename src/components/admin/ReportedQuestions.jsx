@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, orderBy } from 'firebase/firestore';
-import { AlertTriangle, CheckCircle2, Search, Clock, Check, X, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Search, Clock, Check, X, ShieldAlert, ChevronDown } from 'lucide-react';
 
 export default function ReportedQuestions({ role = 'admin', department = '', onViewQuestion }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('pending');
+  const [expandedId, setExpandedId] = useState(null); // resolved report opened in the list
 
   useEffect(() => {
     fetchReports();
@@ -53,6 +54,97 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
   const resolvedCount = reports.length - pendingCount;
   const visibleReports = reports.filter(r => (activeTab === 'resolved' ? isResolved(r) : !isResolved(r)));
 
+  // Full details of one report (reason, question, reporter, resolution, actions)
+  const renderDetails = (report) => (
+    <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reported Reason</div>
+          <div className="bg-red-50 text-red-800 p-4 rounded-xl font-medium border border-red-100">
+            "{report.reason}"
+          </div>
+          {report.source === 'solution-review' && (
+            <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+              <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">Reported from the solutions</span>
+              <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                Student answered: {Array.isArray(report.studentAnswer) ? (report.studentAnswer.join(', ') || '(blank)') : (report.studentAnswer || '(blank)')}
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-100">Answer key: {report.keyAnswer || '-'}</span>
+            </div>
+          )}
+          {report.reportType === 'The correct answer is wrong' && report.status !== 'resolved' && (
+            <p className="mt-2 text-xs font-semibold text-slate-500">
+              If the student is right, correct the answer in the Question Bank - every attempt of the tests using this question is re-marked automatically and this report is resolved.
+            </p>
+          )}
+        </div>
+        <div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Question Context</div>
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm max-h-48 overflow-y-auto">
+            <div dangerouslySetInnerHTML={{ __html: report.questionText || '<i class="text-slate-400">No text provided</i>' }} />
+            <div className="mt-4 pt-3 border-t border-slate-200 flex flex-wrap gap-2 items-center justify-between text-xs font-bold text-slate-500">
+              <span className="flex items-center gap-1" title={report.questionId}>
+                Question Ref: <span className="text-slate-700 bg-slate-200 px-2 py-0.5 rounded uppercase">{report.questionId.substring(0, 6)}</span>
+              </span>
+              <span>Author: {report.teacher}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Reporter Details</div>
+          <div className="flex flex-col gap-2">
+            <div className="font-bold text-slate-800">{report.studentName}</div>
+            <div className="text-sm text-slate-500">{report.studentEmail}</div>
+          </div>
+        </div>
+
+        {report.status === 'resolved' && (
+          <div className="bg-green-50/50 p-5 rounded-xl border border-green-100">
+            <div className="text-xs font-bold text-green-600 uppercase tracking-wider mb-2">Resolution Details</div>
+            <div className="flex flex-col gap-1">
+              <div className="text-sm text-slate-600 font-medium">Resolved by: <span className="font-bold text-slate-900">{report.resolvedBy || 'Admin'}</span></div>
+              {report.resolution && <div className="text-xs text-green-700 font-bold">{report.resolution}</div>}
+              {report.resolvedAt && (
+                <div className="text-xs text-slate-500 font-medium">
+                  On: {report.resolvedAt.toDate ? report.resolvedAt.toDate().toLocaleString() : new Date(report.resolvedAt).toLocaleString()}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3">
+          {report.status !== 'resolved' && (
+            <button 
+              onClick={() => markResolved(report.id)}
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors shadow-md"
+            >
+              Mark as Resolved
+            </button>
+          )}
+          
+          {onViewQuestion && (
+            <button 
+              onClick={() => onViewQuestion(report.questionId)}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-md flex items-center justify-center gap-2"
+            >
+              <Search size={18} />
+              View / Edit in Question Bank
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const resolvedOn = (r) => {
+    const d = r.resolvedAt?.toDate ? r.resolvedAt.toDate() : r.resolvedAt ? new Date(r.resolvedAt) : null;
+    return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+  };
+
   if (loading) {
     return <div className="p-8 text-center text-slate-500 font-bold">Loading reported questions...</div>;
   }
@@ -92,6 +184,39 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
           <h4 className="text-lg font-bold text-slate-800 mb-2">{activeTab === 'resolved' ? 'No Resolved Questions' : 'No Reports'}</h4>
           <p className="text-slate-500">{activeTab === 'resolved' ? 'Resolved reports will appear here.' : 'There are no pending reported questions at the moment.'}</p>
         </div>
+      ) : activeTab === 'resolved' ? (
+        // Resolved reports: a compact list (like the Question Bank) - click a row to see the details
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden divide-y divide-slate-100">
+          {visibleReports.map((report) => {
+            const open = expandedId === report.id;
+            return (
+              <div key={report.id}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(open ? null : report.id)}
+                  className={`w-full text-left px-5 py-4 flex items-center gap-4 transition-colors ${open ? 'bg-green-50/40' : 'hover:bg-slate-50'}`}
+                >
+                  <span className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0"><Check size={16} /></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-slate-800 line-clamp-1 break-words" dangerouslySetInnerHTML={{ __html: report.questionText || 'Question' }} />
+                    <div className="mt-1 text-xs font-medium text-red-700/80 truncate">"{report.reason}"</div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
+                      <span>{report.studentName}</span>
+                      <span className="truncate max-w-[240px]">Test: {report.testTitle}</span>
+                      <span>Dept: {report.department}</span>
+                    </div>
+                  </div>
+                  <div className="hidden sm:block text-right text-xs font-semibold text-slate-500 shrink-0">
+                    <div>Resolved {resolvedOn(report)}</div>
+                    <div className="text-slate-400 mt-0.5">by {report.resolvedBy || 'Admin'}</div>
+                  </div>
+                  <ChevronDown size={18} className={`text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
+                {open && <div className="border-t border-slate-100">{renderDetails(report)}</div>}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="grid gap-6">
           {visibleReports.map((report) => (
@@ -112,89 +237,7 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
                   {report.timestamp?.toDate ? report.timestamp.toDate().toLocaleString() : 'Recent'}
                 </div>
               </div>
-              
-              <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-4">
-                  <div>
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Reported Reason</div>
-                    <div className="bg-red-50 text-red-800 p-4 rounded-xl font-medium border border-red-100">
-                      "{report.reason}"
-                    </div>
-                    {report.source === 'solution-review' && (
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
-                        <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">Reported from the solutions</span>
-                        <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                          Student answered: {Array.isArray(report.studentAnswer) ? (report.studentAnswer.join(', ') || '(blank)') : (report.studentAnswer || '(blank)')}
-                        </span>
-                        <span className="px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-100">Answer key: {report.keyAnswer || '-'}</span>
-                      </div>
-                    )}
-                    {report.reportType === 'The correct answer is wrong' && report.status !== 'resolved' && (
-                      <p className="mt-2 text-xs font-semibold text-slate-500">
-                        If the student is right, correct the answer in the Question Bank - every attempt of the tests using this question is re-marked automatically and this report is resolved.
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Question Context</div>
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm max-h-48 overflow-y-auto">
-                      <div dangerouslySetInnerHTML={{ __html: report.questionText || '<i class="text-slate-400">No text provided</i>' }} />
-                      <div className="mt-4 pt-3 border-t border-slate-200 flex flex-wrap gap-2 items-center justify-between text-xs font-bold text-slate-500">
-                        <span className="flex items-center gap-1" title={report.questionId}>
-                          Question Ref: <span className="text-slate-700 bg-slate-200 px-2 py-0.5 rounded uppercase">{report.questionId.substring(0, 6)}</span>
-                        </span>
-                        <span>Author: {report.teacher}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Reporter Details</div>
-                    <div className="flex flex-col gap-2">
-                      <div className="font-bold text-slate-800">{report.studentName}</div>
-                      <div className="text-sm text-slate-500">{report.studentEmail}</div>
-                    </div>
-                  </div>
-
-                  {report.status === 'resolved' && (
-                    <div className="bg-green-50/50 p-5 rounded-xl border border-green-100">
-                      <div className="text-xs font-bold text-green-600 uppercase tracking-wider mb-2">Resolution Details</div>
-                      <div className="flex flex-col gap-1">
-                        <div className="text-sm text-slate-600 font-medium">Resolved by: <span className="font-bold text-slate-900">{report.resolvedBy || 'Admin'}</span></div>
-                        {report.resolution && <div className="text-xs text-green-700 font-bold">{report.resolution}</div>}
-                        {report.resolvedAt && (
-                          <div className="text-xs text-slate-500 font-medium">
-                            On: {report.resolvedAt.toDate ? report.resolvedAt.toDate().toLocaleString() : new Date(report.resolvedAt).toLocaleString()}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-3">
-                    {report.status !== 'resolved' && (
-                      <button 
-                        onClick={() => markResolved(report.id)}
-                        className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors shadow-md"
-                      >
-                        Mark as Resolved
-                      </button>
-                    )}
-                    
-                    {onViewQuestion && (
-                      <button 
-                        onClick={() => onViewQuestion(report.questionId)}
-                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors shadow-md flex items-center justify-center gap-2"
-                      >
-                        <Search size={18} />
-                        View / Edit in Question Bank
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {renderDetails(report)}
             </div>
           ))}
         </div>

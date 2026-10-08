@@ -4,9 +4,8 @@ import React from "react"
 import { cx } from "class-variance-authority"
 import { AnimatePresence, motion } from "motion/react"
 import { MessageSquarePlus, X, Send } from "lucide-react"
-import emailjs from '@emailjs/browser'
 import { db } from '../../firebase'
-import { collection, addDoc } from 'firebase/firestore'
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 
 import { Button } from "./button"
 
@@ -167,42 +166,26 @@ const InputForm = React.forwardRef(({ onSuccess, formWidth, formHeight }, ref) =
     e.preventDefault()
     setIsSubmitting(true)
 
-    // 1. Save to Firestore for Admin Dashboard
+    // Save for the Admin Dashboard (it shows a notification). The admin email is sent by the
+    // notifyAdminOfEnquiry Cloud Function when this document is created.
     try {
       const newQuery = {
         fullName: formData.studentName,
         email: formData.email,
         phone: formData.phone,
+        course: formData.course,
+        college: formData.college,
+        department: formData.department,
+        description: formData.description,
         message: `Course: ${formData.course}\nCollege: ${formData.college}\nDept: ${formData.department}\n\nQuery: ${formData.description}`,
         date: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+        createdAt: serverTimestamp(),
         status: 'Pending'
       };
       
       await addDoc(collection(db, 'contact_queries'), newQuery);
     } catch (err) {
       console.error("Firestore database error", err);
-    }
-
-    // 2. Send Email via EmailJS
-    try {
-      const SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID';
-      const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'YOUR_TEMPLATE_ID';
-      const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY';
-      
-      if (SERVICE_ID !== 'YOUR_SERVICE_ID') {
-        const templateParams = {
-          to_email: 'msacademy2026@gmail.com', // Target admin email
-          from_name: formData.studentName,
-          reply_to: formData.email,
-          phone: formData.phone,
-          course: formData.course,
-          college: formData.college,
-          message: formData.description
-        };
-        await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
-      }
-    } catch (err) {
-      console.error("EmailJS Error:", err);
     }
 
     setIsSubmitting(false)

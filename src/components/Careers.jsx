@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { ShinyButton } from "./ui/shiny-button";
 import { db, storage } from '../firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export default function Careers() {
@@ -199,6 +199,7 @@ export default function Careers() {
           month: 'short',
           year: 'numeric'
         }),
+        createdAt: serverTimestamp(),
         status: 'Pending'
       };
 

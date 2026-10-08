@@ -104,7 +104,7 @@ const sidebarNavItems = [
   { key: 'recordings', label: 'Recordings', icon: PlayCircle },
   { key: 'notes', label: 'Study Notes', icon: FileText },
   { key: 'schedule', label: 'Schedule', icon: Calendar },
-  { key: 'tests', label: 'Practice Tests', icon: Trophy },
+  { key: 'tests', label: 'Academy Tests', icon: Trophy },
   { key: 'analytics', label: 'Analytics', icon: TrendingUp },
 ];
 

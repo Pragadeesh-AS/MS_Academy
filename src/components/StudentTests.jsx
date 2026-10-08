@@ -787,7 +787,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         <div>
           <h2 className="text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
             <Award className="text-blue-600" size={28} />
-            Practice Tests
+            Academy Tests
           </h2>
           <p className="text-slate-500 font-medium mt-1">Take practice exams and review your key performance metrics.</p>
         </div>
@@ -797,7 +797,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       {loading ? (
         <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-20 text-center flex flex-col items-center justify-center">
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-slate-500 font-semibold">Loading practice tests...</p>
+          <p className="text-slate-500 font-semibold">Loading academy tests...</p>
         </div>
       ) : tests.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-3xl shadow-sm text-center p-20 flex flex-col items-center justify-center">
@@ -805,7 +805,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
             <ShieldAlert size={32} />
           </div>
           <h3 className="text-xl font-bold text-slate-800 mb-2">No Active Tests</h3>
-          <p className="text-slate-500 max-w-md font-medium">There are currently no active practice test modules scheduled for your department ({department}).</p>
+          <p className="text-slate-500 max-w-md font-medium">There are currently no active academy tests scheduled for your department ({department}).</p>
         </div>
       ) : (
         <>
@@ -857,7 +857,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
               All Caught Up!
             </h3>
             <p className="text-slate-500 max-w-md font-medium">
-              You have completed every available practice test. See your results in Analytics.
+              You have completed every available academy test. See your results in Analytics.
             </p>
           </div>
         ) : (

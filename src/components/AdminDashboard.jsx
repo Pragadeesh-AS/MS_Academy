@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import { useNavigate, Link } from 'react-router-dom';
 import CreateTestButton from './CreateTestButton';
@@ -11,7 +11,7 @@ import {
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
 import NotesManager from './admin/NotesManager';
@@ -196,13 +196,9 @@ export default function AdminDashboard() {
   useEffect(() => {
     const syncData = async () => {
       try {
-        // 1. Fetch Applications
-        const appsSnapshot = await getDocs(collection(db, 'career_applications'));
-        setApplications(appsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+        // 1. Applications are kept live by the notifications listener below
 
-        // 2. Fetch Queries
-        const queriesSnapshot = await getDocs(collection(db, 'contact_queries'));
-        setQueries(queriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+        // 2. Queries (enquiries) are kept live by the contact_queries listener below
 
         // 3. Fetch Joined Students
         const studentsSnapshot = await getDocs(collection(db, 'joined_students'));
@@ -334,7 +330,83 @@ export default function AdminDashboard() {
     };
   }, [tests, testAttempts, joinedStudents]);
 
-  const pendingInbox = queries.filter(q => q.status === 'Pending').length + applications.filter(a => a.status === 'Pending').length;
+  // ---- Admin notifications: everything that needs the admin's action - website enquiries,
+  // reported questions and job applications - is listened to live, so a new one shows up here
+  // (pop-up + bell list) without reloading
+  const [reportedList, setReportedList] = useState([]);
+  const [alerts, setAlerts] = useState([]); // pop-ups for items that arrived since this page opened
+  const [showInbox, setShowInbox] = useState(false);
+  const inboxRef = useRef(null);
+
+  const msOf = (ts, dateText) => ts?.toMillis?.() || Date.parse(dateText) || 0;
+  const NOTIFY_KINDS = {
+    enquiry: { label: 'New enquiry', icon: Mail, tint: 'bg-blue-50 text-[#2563EB]' },
+    report: { label: 'Question reported', icon: ShieldCheck, tint: 'bg-red-50 text-red-600' },
+    application: { label: 'New job application', icon: Users, tint: 'bg-amber-50 text-amber-600' },
+  };
+  const toNotification = {
+    enquiry: (q) => ({ kind: 'enquiry', id: q.id, title: q.fullName || 'Enquiry', detail: [q.course, q.phone].filter(Boolean).join(' · ') || q.email, ms: msOf(q.createdAt, q.date), dateText: q.date }),
+    report: (r) => ({ kind: 'report', id: r.id, title: r.studentName || 'Student', detail: [r.testTitle, r.reason && `"${r.reason}"`].filter(Boolean).join(' · '), ms: msOf(r.timestamp), dateText: '' }),
+    application: (a) => ({ kind: 'application', id: a.id, title: a.fullName || 'Applicant', detail: [a.role, a.phone].filter(Boolean).join(' · ') || a.email, ms: msOf(a.createdAt, a.date), dateText: a.date }),
+  };
+  const isPendingItem = { enquiry: (q) => q.status === 'Pending', report: (r) => r.status !== 'resolved', application: (a) => a.status === 'Pending' };
+
+  useEffect(() => {
+    const watch = (name, kind, setList) => {
+      let first = true;
+      return onSnapshot(collection(db, name), (snap) => {
+        setList(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+        if (first) { first = false; return; } // what was already there when the page opened
+        const added = snap.docChanges()
+          .filter(c => c.type === 'added' && !c.doc.metadata.hasPendingWrites)
+          .map(c => ({ ...c.doc.data(), id: c.doc.id }))
+          .filter(isPendingItem[kind])
+          .map(toNotification[kind]);
+        if (added.length) setAlerts(prev => [...added, ...prev].slice(0, 3));
+      }, (err) => console.error(`Failed to listen to ${name}`, err));
+    };
+    const unsubs = [
+      watch('contact_queries', 'enquiry', setQueries),
+      watch('reported_questions', 'report', setReportedList),
+      watch('career_applications', 'application', setApplications),
+    ];
+    return () => unsubs.forEach(u => u());
+  }, []);
+  // A pop-up hides itself after 10 seconds; the item stays in the bell list until it is dealt with
+  useEffect(() => {
+    if (alerts.length === 0) return undefined;
+    const t = setTimeout(() => setAlerts(prev => prev.slice(0, -1)), 10000);
+    return () => clearTimeout(t);
+  }, [alerts]);
+  useEffect(() => {
+    if (!showInbox) return undefined;
+    const close = (e) => { if (inboxRef.current && !inboxRef.current.contains(e.target)) setShowInbox(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [showInbox]);
+
+  const pendingNotifications = [
+    ...queries.filter(isPendingItem.enquiry).map(toNotification.enquiry),
+    ...reportedList.filter(isPendingItem.report).map(toNotification.report),
+    ...applications.filter(isPendingItem.application).map(toNotification.application),
+  ].sort((a, b) => b.ms - a.ms);
+  const pendingInbox = pendingNotifications.length;
+  const timeAgo = (n) => {
+    if (!n.ms) return n.dateText || '';
+    const mins = Math.round((Date.now() - n.ms) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins} min ago`;
+    if (mins < 24 * 60) return `${Math.round(mins / 60)} h ago`;
+    return n.dateText || new Date(n.ms).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  };
+  // Opens the item: an enquiry or application in its details pop-up, a report in Reported Q's
+  const openNotification = (n) => {
+    setShowInbox(false);
+    setAlerts(prev => prev.filter(a => !(a.kind === n.kind && a.id === n.id)));
+    if (n.kind === 'enquiry') setSelectedQuery(queries.find(x => x.id === n.id) || null);
+    else if (n.kind === 'application') setSelectedApp(applications.find(x => x.id === n.id) || null);
+    else setActiveTab('reported');
+  };
 
   const deleteTest = async (test) => {
     if (!window.confirm(`Delete "${test.title || 'this test'}"? Student attempts already recorded will remain.`)) return;
@@ -1215,10 +1287,10 @@ export default function AdminDashboard() {
               </div>
 
               {/* Right Section: Notification */}
-              <div className="flex items-center">
-                {/* Notification Button */}
+              <div className="flex items-center relative" ref={inboxRef}>
+                {/* Notification Button - opens the list of pending enquiries */}
                 <button
-                  onClick={() => { setStudentSubTab('queries'); setActiveTab('queries'); }}
+                  onClick={() => setShowInbox(v => !v)}
                   title={pendingInbox > 0 ? `${pendingInbox} pending queries/applications` : 'No pending items'}
                   className="relative flex items-center justify-center w-[42px] h-[42px] bg-[#FFFFFF] border border-[#EEF2F7] rounded-full shadow-[0_2px_12px_rgba(15,23,42,0.03)] hover:bg-[#F8FAFF] hover:border-blue-200 transition-all group"
                 >
@@ -1227,6 +1299,53 @@ export default function AdminDashboard() {
                     <span className="absolute -top-1 -right-0.5 min-w-[16px] h-[16px] px-1 bg-[#EF4444] rounded-full border-[1.5px] border-white flex items-center justify-center text-[9px] font-bold text-white shadow-sm">{pendingInbox > 99 ? '99+' : pendingInbox}</span>
                   )}
                 </button>
+                {showInbox && (
+                  <div className="absolute right-0 top-[52px] z-50 w-[360px] max-w-[calc(100vw-32px)] bg-white border border-[#EEF2F7] rounded-[18px] shadow-[0_20px_50px_rgba(15,23,42,0.15)] overflow-hidden">
+                    <div className="px-4 py-3 border-b border-[#EEF2F7] flex items-center justify-between">
+                      <span className="text-[14px] font-bold text-[#0F172A]">Notifications</span>
+                      <span className="text-[12px] font-semibold text-[#64748B]">{pendingNotifications.length} pending</span>
+                    </div>
+                    <div className="max-h-[380px] overflow-y-auto">
+                      {pendingNotifications.length === 0 ? (
+                        <p className="px-4 py-8 text-center text-[13px] font-medium text-[#94A3B8]">You're all caught up</p>
+                      ) : pendingNotifications.slice(0, 30).map(n => {
+                        const kind = NOTIFY_KINDS[n.kind];
+                        const Icon = kind.icon;
+                        return (
+                          <button
+                            key={`${n.kind}:${n.id}`}
+                            onClick={() => openNotification(n)}
+                            className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-[#F8FAFF] border-b border-[#F1F5F9] last:border-b-0 transition-colors"
+                          >
+                            <span className={`mt-0.5 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${kind.tint}`}><Icon size={15} /></span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8]">{kind.label}</span>
+                                <span className="text-[11px] font-semibold text-[#94A3B8] shrink-0">{timeAgo(n)}</span>
+                              </span>
+                              <span className="block text-[13.5px] font-bold text-[#0F172A] truncate">{n.title}</span>
+                              <span className="block text-[12.5px] font-medium text-[#64748B] truncate">{n.detail}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="grid grid-cols-2 border-t border-[#EEF2F7]">
+                      <button
+                        onClick={() => { setShowInbox(false); setStudentSubTab('queries'); setActiveTab('queries'); }}
+                        className="px-4 py-2.5 text-[13px] font-bold text-[#2563EB] bg-[#F8FAFC] hover:bg-blue-50 transition-colors"
+                      >
+                        All enquiries
+                      </button>
+                      <button
+                        onClick={() => { setShowInbox(false); setActiveTab('reported'); }}
+                        className="px-4 py-2.5 text-[13px] font-bold text-[#2563EB] bg-[#F8FAFC] hover:bg-blue-50 border-l border-[#EEF2F7] transition-colors"
+                      >
+                        Reported questions
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -2068,6 +2187,30 @@ export default function AdminDashboard() {
       )}
 
       {/* Details Modal Overlay for queries */}
+      {/* Notification pop-ups (bottom right) for new enquiries, reports and applications */}
+      {alerts.length > 0 && (
+        <div className="fixed bottom-5 right-5 z-[120] flex flex-col gap-3 w-[340px] max-w-[calc(100vw-40px)]">
+          {alerts.map(n => {
+            const kind = NOTIFY_KINDS[n.kind];
+            const Icon = kind.icon;
+            return (
+              <div key={`${n.kind}:${n.id}`} className="bg-white border border-slate-200 rounded-[18px] shadow-[0_20px_50px_rgba(15,23,42,0.18)] p-4 flex items-start gap-3">
+                <span className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${kind.tint}`}><Icon size={18} /></span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-[#2563EB]">{kind.label}</div>
+                  <div className="text-[14px] font-bold text-[#0F172A] truncate">{n.title}</div>
+                  <div className="text-[12.5px] font-medium text-[#64748B] truncate">{n.detail}</div>
+                  <button onClick={() => openNotification(n)} className="mt-2 text-[12.5px] font-bold text-[#2563EB] hover:underline">View</button>
+                </div>
+                <button onClick={() => setAlerts(prev => prev.filter(a => !(a.kind === n.kind && a.id === n.id)))} className="p-1 text-[#94A3B8] hover:text-[#0F172A] rounded-full hover:bg-slate-100" title="Dismiss">
+                  <X size={15} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {selectedQuery && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-[600px] max-h-[90vh] overflow-y-auto shadow-2xl p-5 sm:p-6 md:p-8 relative space-y-6">

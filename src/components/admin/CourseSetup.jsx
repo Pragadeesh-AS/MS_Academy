@@ -478,7 +478,7 @@ export default function CourseSetup() {
                   
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
-                      { id: 'tests', label: 'Practice Tests' },
+                      { id: 'tests', label: 'Academy Tests' },
                       { id: 'live_classes', label: 'Live Classes' },
                       { id: 'recordings', label: 'Recordings' },
                       { id: 'notes', label: 'Study Notes' }
