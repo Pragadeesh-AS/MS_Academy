@@ -479,9 +479,9 @@ export default function App() {
         transition={{ delay: 1, duration: 0.8 }}
         className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] pointer-events-none"
       >
-        <div className="px-5 py-2.5 rounded-full bg-white/70 backdrop-blur-md border border-[#1d4ed8]/20 shadow-[0_8px_30px_rgba(29,78,216,0.15)] flex items-center gap-2">
+        <div className="w-max px-4 py-2 md:px-5 md:py-2.5 rounded-full bg-white/70 backdrop-blur-md border border-[#1d4ed8]/20 shadow-[0_8px_30px_rgba(29,78,216,0.15)] flex items-center gap-2">
           <Sparkles size={14} className="text-[#1d4ed8] animate-pulse" />
-          <span className="text-[13px] font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-[#1d4ed8] to-blue-500">
+          <span className="whitespace-nowrap text-[11px] md:text-[13px] font-black tracking-[0.15em] md:tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-[#1d4ed8] to-blue-500">
             Ignite your dreams
           </span>
           <Sparkles size={14} className="text-[#1d4ed8] animate-pulse" />
