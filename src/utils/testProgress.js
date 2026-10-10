@@ -5,6 +5,7 @@
 //   fsWarnings   full-screen exits so far (a refresh doesn't reset them)
 //   startedAt    ms when the exam screen started
 //   deadline     ms when time runs out - the clock keeps running while the page is closed
+//   practice     true for a student-built practice test (the dashboard reopens the Practice tab)
 // Removed once the attempt is saved to Firestore.
 
 const PREFIX = 'test_progress:';
@@ -30,6 +31,13 @@ export const saveTestProgress = (email, testId, progress) => {
 export const clearTestProgress = (email, testId) => {
   if (!email || !testId) return;
   try { localStorage.removeItem(keyFor(email, testId)); } catch { /* storage unavailable */ }
+};
+
+// The sidebar tab an unfinished test reopens on: Academy Tests first, else Practice Tests, else none
+export const unfinishedTestTab = (email) => {
+  const ids = inProgressTestIds(email);
+  if (ids.some(id => !loadTestProgress(email, id)?.practice)) return 'tests';
+  return ids.length ? 'practice' : null;
 };
 
 // Ids of this student's tests that were started but never submitted

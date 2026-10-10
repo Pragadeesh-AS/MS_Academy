@@ -14,14 +14,14 @@ import StudentTests from './StudentTests';
 import TestAlerts from './student/TestAlerts';
 import { canAccessTest } from '../utils/testAccess';
 import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, formatTestTime, formatCountdown } from '../utils/testSchedule';
-import { inProgressTestIds } from '../utils/testProgress';
+import { unfinishedTestTab } from '../utils/testProgress';
 import PDFViewer from './PDFViewer';
 import { gateCoursesData } from './GateCourses';
 import { buyBundle, buySubject, buyNoteBundle, verifyOrder } from '../cashfree';
 import Analytics from './admin/Analytics';
 import AdmissionGate from './admission/AdmissionGate';
 import { needsAdmissionForm, admissionFormBlocksPortal } from '../utils/admissionForm';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, Dumbbell } from 'lucide-react';
 
 function VideoDuration({ url, storedDuration }) {
   const [duration, setDuration] = useState('Loading...');
@@ -105,6 +105,7 @@ const sidebarNavItems = [
   { key: 'notes', label: 'Study Notes', icon: FileText },
   { key: 'schedule', label: 'Schedule', icon: Calendar },
   { key: 'tests', label: 'Academy Tests', icon: Trophy },
+  { key: 'practice', label: 'Practice Tests', icon: Dumbbell },
   { key: 'analytics', label: 'Analytics', icon: TrendingUp },
 ];
 
@@ -134,8 +135,8 @@ export default function Dashboard() {
     : bundleCount > 0
       ? { tier: 'prime', label: 'MS GATE PRIME', icon: '⭐' }
       : { tier: 'foundation', label: 'MS GATE FOUNDATION', icon: '🌱' };
-  // Back on the Tests tab if a test was left mid-way (refresh / crash), where it reopens
-  const [activeTab, setActiveTab] = useState(() => (inProgressTestIds(sessionStorage.getItem('auth_email')).length ? 'tests' : 'learning'));
+  // Back on the Academy / Practice Tests tab if a test was left mid-way (refresh / crash), where it reopens
+  const [activeTab, setActiveTab] = useState(() => unfinishedTestTab(sessionStorage.getItem('auth_email')) || 'learning');
   // Finished practice test -> its report in Analytics; "Review Solutions" there -> the test's review
   const [analyticsTestId, setAnalyticsTestId] = useState(null);
   const [reviewTestId, setReviewTestId] = useState(null);
@@ -1427,6 +1428,17 @@ export default function Dashboard() {
             onTestCompleted={(testId) => { setReviewTestId(null); setAnalyticsTestId(testId); setActiveTab('analytics'); }}
             reviewTestId={reviewTestId}
             onReviewClosed={reviewTestId ? () => { setAnalyticsTestId(reviewTestId); setReviewTestId(null); setActiveTab('analytics'); } : null}
+            onUpgrade={() => setActiveTab('upgrade')}
+          />
+        )}
+
+        {activeTab === 'practice' && (
+          <StudentTests
+            section="practice"
+            isPro={isPro}
+            department={studentDepartment}
+            purchasedBundles={purchasedBundles}
+            bundles={availableBundles}
             onUpgrade={() => setActiveTab('upgrade')}
           />
         )}

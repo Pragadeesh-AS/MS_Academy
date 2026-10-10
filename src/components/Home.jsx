@@ -7,6 +7,8 @@ import homeImg from '../assets/home.webp';
 import { motion, AnimatePresence } from 'framer-motion';
 import SocialCard from './SocialCard';
 import TestimonialCarousel from './ui/TestimonialCarousel';
+import { db } from '../firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 const courses = [
   {
@@ -362,10 +364,56 @@ function TestimonialCard({ testimonial, onReadMore }) {
   );
 }
 
+// Google reviews synced daily by the syncGoogleReviews Cloud Function (functions/googleReviews.js)
+const REVIEW_GRADIENTS = [
+  'from-blue-500 to-indigo-600', 'from-cyan-400 to-blue-500', 'from-emerald-500 to-teal-600', 'from-violet-500 to-purple-600',
+  'from-orange-500 to-amber-600', 'from-pink-500 to-rose-600', 'from-sky-400 to-blue-500', 'from-green-500 to-lime-600',
+];
+const MIN_SHOWN_RATING = 4;
+
+// "5 days ago", "a month ago", "2 years ago" - as Google shows it
+const timeAgo = (seconds) => {
+  const days = Math.max(0, Math.floor((Date.now() / 1000 - seconds) / 86400));
+  const unit = (n, word) => (n <= 1 ? `a ${word} ago` : `${n} ${word}s ago`);
+  if (days < 1) return 'today';
+  if (days < 7) return unit(days, 'day');
+  if (days < 30) return unit(Math.floor(days / 7), 'week');
+  if (days < 365) return unit(Math.floor(days / 30), 'month');
+  return unit(Math.floor(days / 365), 'year');
+};
+
+const initialsOf = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+
+const googleReviewCard = (r, i) => ({
+  name: r.name,
+  role: 'Google Reviewer',
+  discipline: r.time ? timeAgo(r.time) : '',
+  quote: r.text || '',
+  rating: r.rating,
+  initials: initialsOf(r.name),
+  bgGradient: REVIEW_GRADIENTS[i % REVIEW_GRADIENTS.length],
+});
+
+const sameReviewer = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+
 export default function Home() {
   const [activeTestimonial, setActiveTestimonial] = useState(null);
   const [activeFAQ, setActiveFAQ] = useState(null);
   const [reviews, setReviews] = useState(testimonials);
+
+  // Newest Google reviews first (4 and 5 stars, with text), then the saved ones not already among them
+  useEffect(() => {
+    getDocs(collection(db, 'google_reviews'))
+      .then(snap => {
+        const google = snap.docs.map(d => d.data())
+          .filter(r => r.rating >= MIN_SHOWN_RATING && (r.text || '').trim())
+          .sort((a, b) => (b.time || 0) - (a.time || 0))
+          .map(googleReviewCard);
+        if (google.length === 0) return;
+        setReviews([...google, ...testimonials.filter(t => !google.some(g => sameReviewer(g.name, t.name)))]);
+      })
+      .catch(err => console.error('Failed to load Google reviews', err));
+  }, []);
   const navigate = useNavigate();
 
   const toggleFAQ = (index) => {

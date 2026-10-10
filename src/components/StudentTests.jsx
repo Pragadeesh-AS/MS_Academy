@@ -33,13 +33,13 @@ const fetchQuestionDocs = async (ids) => {
 
 // onTestCompleted(testId): after submitting, the student is taken to their Analytics for that test.
 // reviewTestId: open that completed test's solution review (asked for from Analytics); onReviewClosed
-// takes them back there. onUpgrade: open the bundles page (from the Practice tab).
-export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [], onTestCompleted = null, reviewTestId = null, onReviewClosed = null, onUpgrade = null }) {
+// takes them back there. section: 'academy' (admin-made tests) or 'practice' (student-built tests,
+// utils/practiceTests) - each has its own sidebar tab. onUpgrade: open the bundles page.
+export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [], onTestCompleted = null, reviewTestId = null, onReviewClosed = null, onUpgrade = null, section = 'academy' }) {
   const [tests, setTests] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openTemplateFolder, setOpenTemplateFolder] = useState(null); // 'topic' | 'subject' | 'full' | 'other'
-  const [section, setSection] = useState('academy'); // 'academy' | 'practice' (student-built tests, utils/practiceTests)
   const [practiceTests, setPracticeTests] = useState([]);
 
   // Active Test States
@@ -461,8 +461,10 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     if (autoResumedRef.current || loading || testMode !== 'list' || reviewTestId) return;
     autoResumedRef.current = true;
     const unfinished = new Set(inProgressTestIds(currentEmail()));
-    const test = tests.find(t => unfinished.has(t.id) && !attempts.some(a => a.testId === t.id))
-      || practiceTests.find(t => unfinished.has(t.id) && t.status !== 'completed');
+    // Each tab resumes its own kind of test (the dashboard opens the tab the unfinished test is on)
+    const test = section === 'practice'
+      ? practiceTests.find(t => unfinished.has(t.id) && t.status !== 'completed')
+      : tests.find(t => unfinished.has(t.id) && !attempts.some(a => a.testId === t.id));
     if (test) startTest(test);
   }, [loading, testMode, reviewTestId, tests, attempts, practiceTests]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -475,7 +477,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         onSubmit={(answers, meta) => handleSubmitTest(testQuestions, activeTest, answers, meta)}
         onCancel={() => setTestMode('list')}
         savedProgress={resumeProgress}
-        onProgress={(progress) => saveTestProgress(currentEmail(), activeTest.id, progress)}
+        onProgress={(progress) => saveTestProgress(currentEmail(), activeTest.id, { ...progress, practice: !!activeTest.isPractice })}
       />
     );
   }
@@ -827,24 +829,12 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
           <h2 className="text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
-            <Award className="text-blue-600" size={28} />
-            Academy Tests
+            {section === 'practice' ? <Dumbbell className="text-blue-600" size={28} /> : <Award className="text-blue-600" size={28} />}
+            {section === 'practice' ? 'Practice Tests' : 'Academy Tests'}
           </h2>
-          <p className="text-slate-500 font-medium mt-1">Take practice exams and review your key performance metrics.</p>
-        </div>
-        <div className="flex bg-slate-100 p-1 rounded-2xl self-start sm:self-auto">
-          {[
-            { key: 'academy', label: 'Academy Tests', icon: Award },
-            { key: 'practice', label: 'Practice Tests', icon: Dumbbell },
-          ].map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setSection(key)}
-              className={`px-4 py-2 rounded-xl text-[13px] font-[800] flex items-center gap-2 transition-all ${section === key ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              <Icon size={16} /> {label}
-            </button>
-          ))}
+          <p className="text-slate-500 font-medium mt-1">
+            {section === 'practice' ? 'Build your own test from your topics and practise at your own pace.' : 'Take practice exams and review your key performance metrics.'}
+          </p>
         </div>
       </div>
 
@@ -852,7 +842,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       {loading ? (
         <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-20 text-center flex flex-col items-center justify-center">
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-slate-500 font-semibold">Loading academy tests...</p>
+          <p className="text-slate-500 font-semibold">{section === 'practice' ? 'Loading practice tests...' : 'Loading academy tests...'}</p>
         </div>
       ) : section === 'practice' ? (
         <PracticeTests
