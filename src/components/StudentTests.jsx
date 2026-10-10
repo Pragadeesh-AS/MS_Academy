@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { db, auth } from '../firebase';
-import { collection, getDocs, addDoc, query, where, doc, getDoc, serverTimestamp, documentId } from 'firebase/firestore';
-import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle, CalendarClock, Flag } from 'lucide-react';
+import { collection, getDocs, addDoc, updateDoc, query, where, doc, getDoc, serverTimestamp, documentId } from 'firebase/firestore';
+import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle, CalendarClock, Flag, Dumbbell } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
 import { examSections } from '../utils/testShuffle';
 import logoImg from '../assets/msgate_logo.png';
@@ -15,6 +15,8 @@ import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, minut
 import { loadTestProgress, saveTestProgress, clearTestProgress, inProgressTestIds } from '../utils/testProgress';
 
 import TestLeaderboard from './student/TestLeaderboard';
+import PracticeTests from './student/PracticeTests';
+import { hasUnlimitedPractice } from '../utils/practiceTests';
 
 // The signed-in student (sessionStorage survives a refresh, before Firebase Auth has restored the user)
 const currentEmail = () => auth.currentUser?.email || sessionStorage.getItem('auth_email') || '';
@@ -31,12 +33,14 @@ const fetchQuestionDocs = async (ids) => {
 
 // onTestCompleted(testId): after submitting, the student is taken to their Analytics for that test.
 // reviewTestId: open that completed test's solution review (asked for from Analytics); onReviewClosed
-// takes them back there.
-export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [], onTestCompleted = null, reviewTestId = null, onReviewClosed = null }) {
+// takes them back there. onUpgrade: open the bundles page (from the Practice tab).
+export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [], onTestCompleted = null, reviewTestId = null, onReviewClosed = null, onUpgrade = null }) {
   const [tests, setTests] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openTemplateFolder, setOpenTemplateFolder] = useState(null); // 'topic' | 'subject' | 'full' | 'other'
+  const [section, setSection] = useState('academy'); // 'academy' | 'practice' (student-built tests, utils/practiceTests)
+  const [practiceTests, setPracticeTests] = useState([]);
 
   // Active Test States
   const [activeTest, setActiveTest] = useState(null);
@@ -159,6 +163,12 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         const allAttempts = attemptsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setAttempts(allAttempts);
         allAttempts.forEach(a => clearTestProgress(email, a.testId));
+
+        const practiceSnapshot = await getDocs(query(collection(db, 'practice_tests'), where('studentEmail', '==', email)));
+        const allPractice = practiceSnapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt?.toMillis?.() ?? Infinity) - (a.createdAt?.toMillis?.() ?? Infinity));
+        setPracticeTests(allPractice);
+        allPractice.filter(t => t.status === 'completed').forEach(t => clearTestProgress(email, t.id));
       }
     } catch (err) {
       console.error("Error fetching tests/attempts:", err);
@@ -310,14 +320,20 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     };
 
     try {
-      const docRef = await addDoc(collection(db, 'test_attempts'), attemptPayload);
+      // A practice test keeps its own attempt on the practice_tests document - never in test_attempts
+      let attemptId = test.id;
+      if (test.isPractice) {
+        await updateDoc(doc(db, 'practice_tests', test.id), { ...attemptPayload, status: 'completed' });
+      } else {
+        attemptId = (await addDoc(collection(db, 'test_attempts'), attemptPayload)).id;
+      }
       // Saved for good - the in-progress copy is no longer needed. (If saving failed it stays, so
       // the student can reopen the test and submit again.)
       clearTestProgress(attemptPayload.studentEmail, test.id);
       setResumeProgress(null);
-      const freshAttempt = { id: docRef.id, ...attemptPayload };
+      const freshAttempt = { id: attemptId, ...attemptPayload };
       fetchTestsAndAttempts();
-      if (onTestCompleted) {
+      if (onTestCompleted && !test.isPractice) {
         setTestMode('list');
         setActiveAttempt(null);
         setActiveTest(null);
@@ -405,6 +421,30 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     }
   };
 
+  // A finished practice test: its document holds both the questions and the attempt
+  const viewPracticeResult = async (practiceTest) => {
+    setLoading(true);
+    try {
+      const qDocs = await fetchQuestionDocs(practiceTest.questions);
+      const byId = Object.fromEntries(qDocs.map(d => [d.id, normalizeQuestion({ id: d.id, ...d.data() })]));
+      setTestQuestions((practiceTest.questions || []).map(qId => byId[qId] || {
+        id: qId,
+        questionText: "Question details not found.",
+        optionA: "N/A", optionB: "N/A", optionC: "N/A", optionD: "N/A",
+        correctAnswer: "A"
+      }));
+      setGlobalQuestionStats(null);
+      setActiveTest(practiceTest);
+      setActiveAttempt(practiceTest);
+      setTestMode('result');
+    } catch (err) {
+      console.error('Error loading practice results:', err);
+      alert('Failed to load the results. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Analytics asked to review a finished test's solutions: open it once tests + attempts are in
   const openedReviewRef = useRef(null);
   useEffect(() => {
@@ -421,9 +461,10 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     if (autoResumedRef.current || loading || testMode !== 'list' || reviewTestId) return;
     autoResumedRef.current = true;
     const unfinished = new Set(inProgressTestIds(currentEmail()));
-    const test = tests.find(t => unfinished.has(t.id) && !attempts.some(a => a.testId === t.id));
+    const test = tests.find(t => unfinished.has(t.id) && !attempts.some(a => a.testId === t.id))
+      || practiceTests.find(t => unfinished.has(t.id) && t.status !== 'completed');
     if (test) startTest(test);
-  }, [loading, testMode, reviewTestId, tests, attempts]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loading, testMode, reviewTestId, tests, attempts, practiceTests]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (testMode === 'taking' && activeTest) {
     return (
@@ -468,8 +509,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           </div>
         </div>
 
-        {/* Student Leaderboard */}
-        <TestLeaderboard testId={activeTest.id} currentStudentEmail={sessionStorage.getItem('auth_email')} />
+        {/* Student Leaderboard (a practice test is the student's own - nobody to rank against) */}
+        {!activeTest.isPractice && <TestLeaderboard testId={activeTest.id} currentStudentEmail={sessionStorage.getItem('auth_email')} />}
 
         {/* Detailed Question Review List */}
         {areSolutionsVisible(activeTest, releaseClock) ? (
@@ -752,10 +793,10 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         {/* Finish Review Button */}
         <div className="flex justify-end pt-4">
           <button 
-            onClick={() => { setTestMode('list'); setActiveAttempt(null); setActiveTest(null); onReviewClosed?.(); }}
+            onClick={() => { const practice = activeTest.isPractice; setTestMode('list'); setActiveAttempt(null); setActiveTest(null); if (!practice) onReviewClosed?.(); }}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-md"
           >
-            {onReviewClosed ? 'Back to Analytics' : 'Back to Dashboard'}
+            {activeTest.isPractice ? 'Back to Practice Tests' : onReviewClosed ? 'Back to Analytics' : 'Back to Dashboard'}
           </button>
         </div>
 
@@ -791,6 +832,20 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           </h2>
           <p className="text-slate-500 font-medium mt-1">Take practice exams and review your key performance metrics.</p>
         </div>
+        <div className="flex bg-slate-100 p-1 rounded-2xl self-start sm:self-auto">
+          {[
+            { key: 'academy', label: 'Academy Tests', icon: Award },
+            { key: 'practice', label: 'Practice Tests', icon: Dumbbell },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setSection(key)}
+              className={`px-4 py-2 rounded-xl text-[13px] font-[800] flex items-center gap-2 transition-all ${section === key ? 'bg-white shadow-sm text-blue-700' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              <Icon size={16} /> {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tests Board */}
@@ -799,6 +854,18 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
           <p className="text-slate-500 font-semibold">Loading academy tests...</p>
         </div>
+      ) : section === 'practice' ? (
+        <PracticeTests
+          department={department}
+          studentEmail={currentEmail()}
+          studentName={sessionStorage.getItem('auth_name') || 'Student'}
+          practiceTests={practiceTests}
+          unlimited={hasUnlimitedPractice({ purchasedBundles, bundles, department })}
+          onStart={(t) => { setPracticeTests(prev => [t, ...prev]); startTest(t); }}
+          onResume={startTest}
+          onReview={viewPracticeResult}
+          onUpgrade={onUpgrade}
+        />
       ) : tests.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-3xl shadow-sm text-center p-20 flex flex-col items-center justify-center">
           <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mb-6">

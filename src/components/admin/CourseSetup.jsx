@@ -9,6 +9,7 @@ import { db, storage } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { gateCoursesData } from '../GateCourses';
+import { isFullBundle, FREE_PRACTICE_QUESTIONS } from '../../utils/practiceTests';
 
 export default function CourseSetup() {
   const [bundles, setBundles] = useState([]);
@@ -494,6 +495,11 @@ export default function CourseSetup() {
                       </label>
                     ))}
                   </div>
+                  <p className={`text-xs font-bold ${isFullBundle(formData) ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    {isFullBundle(formData)
+                      ? 'All resources ticked: buyers also get unlimited Practice Tests free.'
+                      : `Tick all four to give buyers unlimited Practice Tests free (otherwise they keep the ${FREE_PRACTICE_QUESTIONS} free practice questions).`}
+                  </p>
                 </div>
 
                 {(formData.permissions || []).includes('notes') && (() => {

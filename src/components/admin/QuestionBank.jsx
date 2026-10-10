@@ -222,7 +222,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const [filterYear, setFilterYear] = useState('All');
   const [filterMark, setFilterMark] = useState('All');
   const [filterDifficulty, setFilterDifficulty] = useState('All');
-  const [filterStatus, setFilterStatus] = useState(externalFilter || 'Approved');
+  const [filterStatus, setFilterStatus] = useState(externalFilter || 'All');
   const [filterType, setFilterType] = useState('All');
   const [filterCategory, setFilterCategory] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
@@ -991,8 +991,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     // "1 Mark (-0.33)", "1" or "1 Mark", and one with no mark shows (and scores) as 1 mark
     const matchesMark = filterMark === 'All' || (markNumberOf(q.mark) || 1) === markNumberOf(filterMark);
     const matchesDifficulty = filterDifficulty === 'All' || q.difficultyLevel === filterDifficulty;
+    // Approved and Not Reviewed don't overlap: a Skip-Review question is saved as Approved with
+    // reviewed: false, and questions saved before statuses existed count as Approved. A typist's
+    // Approved tab still lists their Skip-Review questions.
+    const isApprovedQ = q.status === 'Approved' || !q.status;
     const matchesStatus = filterStatus === 'All'
-      || (filterStatus === 'Not Reviewed' ? (q.status === 'Approved' && q.reviewed === false) : q.status === filterStatus);
+      || (filterStatus === 'Not Reviewed' ? (isApprovedQ && q.reviewed === false)
+        : filterStatus === 'Approved' ? (isApprovedQ && (userRole === 'typist' || q.reviewed !== false))
+        : q.status === filterStatus);
     const matchesType = filterType === 'All' || q.questionType === filterType;
     const matchesCategory = filterCategory === 'All' || getQuestionCategory(q) === filterCategory;
 

@@ -1427,6 +1427,7 @@ export default function Dashboard() {
             onTestCompleted={(testId) => { setReviewTestId(null); setAnalyticsTestId(testId); setActiveTab('analytics'); }}
             reviewTestId={reviewTestId}
             onReviewClosed={reviewTestId ? () => { setAnalyticsTestId(reviewTestId); setReviewTestId(null); setActiveTab('analytics'); } : null}
+            onUpgrade={() => setActiveTab('upgrade')}
           />
         )}
 

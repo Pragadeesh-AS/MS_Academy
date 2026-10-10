@@ -13,7 +13,8 @@ import {
 import TestScheduleCalendar from './tests/TestScheduleCalendar';
 import { sameDepartment, canonicalDepartment } from '../utils/subjects';
 import { TEST_TEMPLATES, templateByKey, templateMarks, templateQuestions, templateNumerical, subjectGroup, distributeAllocations, templateKeyOf, templateFoldersFor, folderName } from '../utils/testTemplates';
-import { formatTestTime, testStartMillis } from '../utils/testSchedule';
+import { formatTestTime, testStartMillis, toDateTimeLocal } from '../utils/testSchedule';
+import { recentQuestionUse, pickRotated } from '../utils/questionRotation';
 import { QUESTION_TYPES, TYPE_KEYS, TYPE_PRESETS, presetLabel, questionTypeKey, typeCountsOf, sumCounts, pctOf, cellsCanSupply, planTypeMix, buildTypeSplit, defaultTypeSplit } from '../utils/questionTypeSplit';
 import { DIFFICULTIES, DIFFICULTY_KEYS, difficultyKey, hasDifficultyMix, difficultyTotal, splitByDifficulty } from '../utils/questionDifficulty';
 
@@ -77,6 +78,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [theoryCount, setTheoryCount] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [closesAt, setClosesAt] = useState(''); // optional - no new starts after this (see utils/testSchedule)
+  const [goLiveNow, setGoLiveNow] = useState(false); // new tests only: opens the moment it is saved
   const [view, setView] = useState('templates'); // 'templates' | 'schedule' (calendar)
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [bundleId, setBundleId] = useState(''); // '' means dept level, 'free' means free, 'specific_id' means exclusive
@@ -430,8 +432,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   };
 
   const getStep3Warning = () => {
-    if (!scheduledTime.trim()) return "Please enter a valid schedule time/date";
-    if (closesAt && new Date(closesAt).getTime() <= new Date(scheduledTime).getTime()) {
+    if (!goLiveNow && !scheduledTime.trim()) return "Please enter a valid schedule time/date";
+    if (closesAt && new Date(closesAt).getTime() <= (goLiveNow ? Date.now() : new Date(scheduledTime).getTime())) {
       return "The closing time must be after the scheduled start time";
     }
 
@@ -555,6 +557,10 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
     if (selectionMode === 'auto' || selectionMode === 'both') {
       const shuffle = (arr) => [...arr].sort(() => 0.5 - Math.random());
+      // Questions this department's other tests use within two months of this one are picked last
+      const startsAt = goLiveNow && !editingTestId ? Date.now() : (new Date(scheduledTime).getTime() || Date.now());
+      const recentUse = recentQuestionUse(tests, { department: selectedDept, atMillis: startsAt, excludeTestId: editingTestId });
+      const pick = (ids, n) => pickRotated(ids, n, recentUse);
 
       // One cell per topic x mark allocation (manually selected questions excluded), split by
       // question type so the picks follow the Step 4 mix
@@ -581,7 +587,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       }));
 
       if (!hasCategorySplit) {
-        cells.forEach(c => finalQuestionIds.push(...shuffle(c.allIds).slice(0, c.count)));
+        cells.forEach(c => finalQuestionIds.push(...pick(c.allIds, c.count)));
       } else {
         // Numerical questions still needed from auto-pick (manual picks already count in "Both" mode)
         const manualNumerical = questions.filter(q => manualIdsSet.has(q.id) && isNumericalQuestion(q)).length;
@@ -607,8 +613,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
         cells.forEach((c, i) => {
           const n = numericalPerCell[i];
           finalQuestionIds.push(
-            ...shuffle(c.numericalPool).slice(0, n),
-            ...shuffle(c.theoryPool).slice(0, c.count - n)
+            ...pick(c.numericalPool, n),
+            ...pick(c.theoryPool, c.count - n)
           );
         });
       }
@@ -628,7 +634,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       total2Mark: parseInt(total2Mark),
       numericalCount: hasCategorySplit ? numericalTarget : null,
       theoryCount: hasCategorySplit ? theoryTarget : null,
-      scheduledTime,
+      scheduledTime: goLiveNow && !editingTestId ? toDateTimeLocal(Date.now()) : scheduledTime,
       closesAt: closesAt || '',
       department: selectedDept,
       subject: selectedSubjects.join(', ') || 'General',
@@ -692,6 +698,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setTheoryCount('');
     setScheduledTime('');
     setClosesAt('');
+    setGoLiveNow(false);
     setSelectedDept(department || '');
     setSelectedSubjects([]);
     setSelectedTopics([]);
@@ -721,6 +728,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setTheoryCount(test.theoryCount ?? '');
     setScheduledTime(test.scheduledTime || '');
     setClosesAt(test.closesAt || '');
+    setGoLiveNow(false);
     setBundleId(test.bundleId || '');
     setSelectedDept(test.department || department || '');
     setSelectedSubjects(test.subject && test.subject !== 'General' ? test.subject.split(',').map(s => s.trim()).filter(Boolean) : []);
@@ -1696,13 +1704,32 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   <div className="flex flex-col sm:flex-row gap-4 sm:items-end shrink-0">
                     {/* Schedule date input */}
                     <div className="space-y-1.5 flex-1">
-                      <label className="text-[13px] font-[800] text-slate-800">Opens at (Schedule)</label>
-                      <input
-                        type="datetime-local"
-                        value={scheduledTime}
-                        onChange={e => setScheduledTime(e.target.value)}
-                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
-                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[13px] font-[800] text-slate-800">Opens at (Schedule)</label>
+                        {!editingTestId && (
+                          <label className="flex items-center gap-1.5 text-[12px] font-[800] text-emerald-700 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={goLiveNow}
+                              onChange={e => setGoLiveNow(e.target.checked)}
+                              className="w-3.5 h-3.5 accent-emerald-600"
+                            />
+                            Go live now
+                          </label>
+                        )}
+                      </div>
+                      {goLiveNow && !editingTestId ? (
+                        <div className="w-full border border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-[14px] font-[800] text-emerald-700 shadow-sm">
+                          Live as soon as it's saved
+                        </div>
+                      ) : (
+                        <input
+                          type="datetime-local"
+                          value={scheduledTime}
+                          onChange={e => setScheduledTime(e.target.value)}
+                          className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
+                        />
+                      )}
                     </div>
                     <div className="space-y-1.5 flex-1">
                       <label className="text-[13px] font-[800] text-slate-800">Closes at <span className="text-slate-400 font-semibold">(optional)</span></label>
@@ -1710,7 +1737,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                         <input
                           type="datetime-local"
                           value={closesAt}
-                          min={scheduledTime || undefined}
+                          min={(goLiveNow && !editingTestId ? toDateTimeLocal(Date.now()) : scheduledTime) || undefined}
                           onChange={e => setClosesAt(e.target.value)}
                           className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm"
                         />
