@@ -240,7 +240,7 @@ export default function App() {
             duration: 0.8,
             ease: [0.16, 1, 0.3, 1] // Custom smooth spring-like curve
           }}
-          className="flex flex-row self-center items-center justify-between py-3 mx-auto px-4 md:px-8 rounded-full relative z-[100]"
+          className="flex flex-row self-center items-center justify-between gap-4 py-3 mx-auto px-4 md:px-8 rounded-full relative z-[100]"
         >
           <Link to="/" className="flex flex-row items-center gap-3 whitespace-nowrap">
             <img src="/logo.webp" alt="MS Academy Logo" className="w-12 h-12 object-contain" />
@@ -250,49 +250,49 @@ export default function App() {
             </div>
           </Link>
           
-          <div className="hidden lg:flex gap-2 text-[14px] font-semibold text-slate-700 whitespace-nowrap items-center">
+          <div className="hidden lg:flex gap-1 text-[14px] font-semibold text-slate-700 whitespace-nowrap items-center">
             
             {/* Home Link */}
-            <Link to="/" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
+            <Link to="/" className={`relative group px-3 py-2 transition-colors duration-300 ${location.pathname === '/' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
               <span className="relative z-10">Home</span>
               <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
             </Link>
             
             {/* GATE Courses Link */}
-            <Link to="/gate-courses" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/gate-courses' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
+            <Link to="/gate-courses" className={`relative group px-3 py-2 transition-colors duration-300 ${location.pathname === '/gate-courses' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
               <span className="relative z-10">GATE Courses</span>
               <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/gate-courses' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
             </Link>
 
             {/* Dynamic Link (Programming Courses / Active Page) */}
-            <Link to={dynamicLink.path} className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === dynamicLink.path ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
+            <Link to={dynamicLink.path} className={`relative group px-3 py-2 transition-colors duration-300 ${location.pathname === dynamicLink.path ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
               <span className="relative z-10">{dynamicLink.label}</span>
               <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === dynamicLink.path ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
             </Link>
             
             {/* Collapsible Links based on Scroll */}
-            <div className={`flex items-center gap-2 overflow-hidden transition-all duration-700 ${isScrolled ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-              <Link to="/about" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/about' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
+            <div className={`flex items-center gap-1 overflow-hidden transition-all duration-700 ${isScrolled ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+              <Link to="/about" className={`relative group px-3 py-2 transition-colors duration-300 ${location.pathname === '/about' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">About Us</span>
                 <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/about' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>
               
-              <Link to="/careers" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/careers' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
+              <Link to="/careers" className={`relative group px-3 py-2 transition-colors duration-300 ${location.pathname === '/careers' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">Careers</span>
                 <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/careers' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>
               
-              <Link to="/blog" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/blog' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
+              <Link to="/blog" className={`relative group px-3 py-2 transition-colors duration-300 ${location.pathname === '/blog' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">Blog</span>
                 <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/blog' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>
               
-              <Link to="/gallery" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/gallery' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
+              <Link to="/gallery" className={`relative group px-3 py-2 transition-colors duration-300 ${location.pathname === '/gallery' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">Gallery</span>
                 <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/gallery' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>
               
-              <Link to="/contact" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/contact' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
+              <Link to="/contact" className={`relative group px-3 py-2 transition-colors duration-300 ${location.pathname === '/contact' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">Contact</span>
                 <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/contact' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>

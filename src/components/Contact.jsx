@@ -7,7 +7,7 @@ export default function Contact() {
   return (
     <>
       {/* Fixed Social Sidebar */}
-      <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50 hidden xl:block">
+      <div className="fixed left-4 top-1/2 -translate-y-1/2 z-50 hidden min-[1440px]:block">
         <SocialCard />
       </div>
 
