@@ -113,6 +113,36 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     }
   };
 
+  // Students see targetMarks / total1Mark / total2Mark on their test cards without loading the questions,
+  // so keep those fields equal to the test's actual questions (they drift when questions are swapped or
+  // a question's mark is edited). Only tests whose questions are all found are touched.
+  const syncingTotals = React.useRef(new Set());
+  useEffect(() => {
+    if (!tests.length || !questions.length) return;
+    const byId = new Map(questions.map(q => [q.id, q]));
+    tests.forEach(test => {
+      const ids = test.questions || [];
+      const found = ids.map(id => byId.get(id)).filter(Boolean);
+      if (!ids.length || found.length !== ids.length || syncingTotals.current.has(test.id)) return;
+      const actual = {
+        targetMarks: found.reduce((a, q) => a + markValue(q), 0),
+        total1Mark: found.filter(q => markValue(q) === 1).length,
+        total2Mark: found.filter(q => markValue(q) === 2).length
+      };
+      // A numerical/theory split must add up to the question count (Step 1 check), so recount it too
+      if (test.numericalCount != null || test.theoryCount != null) {
+        actual.numericalCount = found.filter(isNumericalQuestion).length;
+        actual.theoryCount = found.length - actual.numericalCount;
+      }
+      if (Object.keys(actual).every(k => test[k] === actual[k])) return;
+      syncingTotals.current.add(test.id);
+      updateDoc(doc(db, 'tests', test.id), actual)
+        .then(() => setTests(prev => prev.map(t => (t.id === test.id ? { ...t, ...actual } : t))))
+        .catch(err => console.warn(`Could not sync marks for test ${test.id}:`, err))
+        .finally(() => syncingTotals.current.delete(test.id));
+    });
+  }, [tests, questions]);
+
   // Always pull the latest counts from database when the creator modal opens or step changes
   useEffect(() => {
     if (isCreatorOpen) {
@@ -930,18 +960,36 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     });
     const typedTotal = Object.values(typeCounts).reduce((a, b) => a + b, 0);
 
-    // Prefer the saved allocations for the split; fall back to the question data
+    // Split comes from the questions themselves (same source as Total Qs / Total Marks);
+    // saved allocations go stale once questions are swapped or edited, so they're only a fallback
     const allocs = test.allocations || {};
     const allocTopics = Object.keys(allocs);
-    const q1 = allocTopics.length ? allocTopics.reduce((a, t) => a + (allocs[t]?.q1 || 0), 0) : found.filter(q => markValue(q) === 1).length;
-    const q2 = allocTopics.length ? allocTopics.reduce((a, t) => a + (allocs[t]?.q2 || 0), 0) : found.filter(q => markValue(q) === 2).length;
-
     const allFound = ids.length > 0 && found.length === ids.length;
+    const useAllocs = !allFound && allocTopics.length > 0;
+    const q1 = useAllocs ? allocTopics.reduce((a, t) => a + (allocs[t]?.q1 || 0), 0) : found.filter(q => markValue(q) === 1).length;
+    const q2 = useAllocs ? allocTopics.reduce((a, t) => a + (allocs[t]?.q2 || 0), 0) : found.filter(q => markValue(q) === 2).length;
+
     const totalMarks = allFound ? found.reduce((a, q) => a + markValue(q), 0) : (test.targetMarks || 0);
 
-    const topics = allocTopics.length
-      ? allocTopics.map(t => ({ name: t, q1: allocs[t]?.q1 || 0, q2: allocs[t]?.q2 || 0 }))
-      : (test.topic && test.topic !== 'All Topics' ? test.topic.split(',').map(t => ({ name: t.trim() })) : []);
+    // Per-topic counts also come from the questions, so the chips add up to the Marks Split
+    const countTopics = () => {
+      const allocName = new Map(allocTopics.map(t => [t.trim().toLowerCase(), t]));
+      const byTopic = new Map();
+      found.forEach(q => {
+        const raw = (q.topic || '').trim();
+        const key = raw.toLowerCase();
+        if (!byTopic.has(key)) byTopic.set(key, { name: allocName.get(key) || raw || 'No topic', q1: 0, q2: 0 });
+        const entry = byTopic.get(key);
+        if (markValue(q) === 1) entry.q1 += 1;
+        else if (markValue(q) === 2) entry.q2 += 1;
+      });
+      return [...byTopic.values()];
+    };
+    const topics = allFound
+      ? countTopics()
+      : allocTopics.length
+        ? allocTopics.map(t => ({ name: t, q1: allocs[t]?.q1 || 0, q2: allocs[t]?.q2 || 0 }))
+        : (test.topic && test.topic !== 'All Topics' ? test.topic.split(',').map(t => ({ name: t.trim() })) : []);
 
     return { typeCounts, typedTotal, q1, q2, totalMarks, totalQs: ids.length, topics };
   };

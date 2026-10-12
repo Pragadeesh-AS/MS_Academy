@@ -33,6 +33,7 @@ import ProgrammingCourses from './components/ProgrammingCourses';
 import Footer from './components/Footer';
 import Careers from './components/Careers';
 import Blog from './components/Blog';
+import Gallery from './components/Gallery';
 import GateCourses from './components/GateCourses';
 import LoginSignup from './components/LoginSignup';
 import MarketingPopup from './components/MarketingPopup';
@@ -175,6 +176,8 @@ export default function App() {
         return { path: '/careers', label: 'Careers' };
       case '/blog':
         return { path: '/blog', label: 'Blog' };
+      case '/gallery':
+        return { path: '/gallery', label: 'Gallery' };
       default:
         return defaultLink;
     }
@@ -284,6 +287,11 @@ export default function App() {
                 <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/blog' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
               </Link>
               
+              <Link to="/gallery" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/gallery' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
+                <span className="relative z-10">Gallery</span>
+                <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/gallery' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
+              </Link>
+              
               <Link to="/contact" className={`relative group px-4 py-2 transition-colors duration-300 ${location.pathname === '/contact' ? 'text-[#1d4ed8]' : 'hover:text-slate-900'}`}>
                 <span className="relative z-10">Contact</span>
                 <div className={`absolute inset-0 rounded-full border transition-all duration-300 ${location.pathname === '/contact' ? 'border-[#1d4ed8]/20 bg-blue-50/80 shadow-[0_0_15px_rgba(243,107,43,0.1)]' : 'border-transparent group-hover:border-slate-900/10 group-hover:bg-slate-900/5 group-hover:shadow-[0_0_15px_rgba(0,0,0,0.05)]'} backdrop-blur-md`}></div>
@@ -372,6 +380,7 @@ export default function App() {
                   { path: '/programming', label: 'Programming Courses' },
                   { path: '/about', label: 'About Us' },
                   { path: '/careers', label: 'Careers' },
+                  { path: '/gallery', label: 'Gallery' },
                   { path: '/contact', label: 'Contact' },
                 ].map((item) => (
                   <Link
@@ -453,6 +462,7 @@ export default function App() {
         <Route path="/careers" element={<Careers />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/blog/:id" element={<Blog />} />
+        <Route path="/gallery" element={<Gallery />} />
         <Route path="/login" element={<LoginSignup />} />
         <Route path="/student" element={<Dashboard />} />
         <Route path="/student/profile" element={<StudentProfile />} />

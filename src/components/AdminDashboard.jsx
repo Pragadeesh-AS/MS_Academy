@@ -6,7 +6,7 @@ import {
   Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut,
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, ChevronDown, UserCheck, Database, BarChart2, Megaphone, Sparkles,
-  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck, Menu
+  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck, Menu, Images
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
@@ -31,6 +31,7 @@ import ReportCountBadge, { usePendingReportCount } from './shared/ReportCountBad
 import InvoiceGenerator from './admin/InvoiceGenerator';
 import WelcomeLetter from './admin/WelcomeLetter';
 import BlogManager from './admin/BlogManager';
+import GalleryManager from './admin/GalleryManager';
 import RoleSwitcher from './shared/RoleSwitcher';
 
 const loadImage = (src) => new Promise((resolve, reject) => {
@@ -991,6 +992,7 @@ export default function AdminDashboard() {
                   { key: 'reported', label: "Reported Q's", icon: ShieldCheck, danger: true },
                   { key: 'premium_questions', label: 'Premium Questions', icon: Database },
                   { key: 'blogs', label: 'Blogs', icon: FileText },
+                  { key: 'gallery', label: 'Gallery', icon: Images },
                   { key: 'popup', label: 'Popup', icon: Megaphone },
                   { key: 'ai', label: 'AI Generator', icon: Sparkles },
                 ].map(({ key, label, icon: Icon, danger }) => (
@@ -1201,6 +1203,14 @@ export default function AdminDashboard() {
               >
                 <FileText size={20} className={activeTab === 'blogs' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Blogs</span>}
+              </button>
+
+              <button 
+                onClick={() => setActiveTab('gallery')}
+                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'gallery' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+              >
+                <Images size={20} className={activeTab === 'gallery' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Gallery</span>}
               </button>
 
               <button 
@@ -2054,6 +2064,9 @@ export default function AdminDashboard() {
         
         {/* Blogs Tab */}
         {activeTab === 'blogs' && <BlogManager />}
+
+        {/* Gallery Tab */}
+        {activeTab === 'gallery' && <GalleryManager />}
 
         </div>
       </main>

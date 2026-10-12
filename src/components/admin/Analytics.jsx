@@ -780,11 +780,11 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
                   
                   {/* Left: Score Distribution Chart */}
-                  <div className="xl:col-span-5 flex flex-col bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+                  <div className="xl:col-span-5 xl:self-start flex flex-col bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
                     <h4 className="text-[15px] font-[900] text-slate-800 mb-8 flex items-center gap-2">
                       <BarChart2 size={18} className="text-blue-500"/> Score Distribution
                     </h4>
-                    <div className="w-full flex-1 min-h-[300px]">
+                    <div className="w-full h-[320px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={activeGlobalTest.distribution} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
