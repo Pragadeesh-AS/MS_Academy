@@ -871,6 +871,78 @@ export default function AIGenerator({ pairMode = false }) {
       let prose = part;
       if (i > 0) prose = prose.replace(/^\s*\n/, '');
       if (i < parts.length - 1) prose = prose.replace(/\n\s*$/, '');
+      return formatProseWithTables(prose);
+    }).join('');
+  };
+
+  // A Markdown table ("| a | b |" rows with a "|---|---|" line under the header) becomes a real
+  // <table> styled like the PDF's: blue-tinted header row and first column, bordered, centred cells
+  const TABLE_STYLE = 'border-collapse:collapse;table-layout:fixed;width:100%;margin:10px 0;font-size:0.95em;font-weight:normal;text-align:center';
+  const TABLE_CELL_STYLE = 'border:1px solid #cbd5e1;padding:6px 12px';
+  const TABLE_HEAD_BG = 'background:#e8f1fb';
+  const TABLE_ROW_RE = /^\s*\|.*\|\s*$/;
+  const TABLE_SEPARATOR_RE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+
+  // Cells of one "| a | b |" row; a "|" inside $...$ or `...` (e.g. $|x|$) doesn't split the cell
+  const splitTableRow = (line) => {
+    const cells = [];
+    let cell = '';
+    let inMath = false;
+    let inCode = false;
+    const body = line.trim().replace(/^\|/, '').replace(/\|$/, '');
+    for (let k = 0; k < body.length; k++) {
+      const ch = body[k];
+      if (ch === '\\' && body[k + 1] === '|') { cell += '|'; k++; continue; }
+      if (ch === '$' && !inCode) inMath = !inMath;
+      else if (ch === '`' && !inMath) inCode = !inCode;
+      if (ch === '|' && !inMath && !inCode) { cells.push(cell.trim()); cell = ''; continue; }
+      cell += ch;
+    }
+    cells.push(cell.trim());
+    return cells;
+  };
+
+  const tableToHTML = (headerLine, bodyLines) => {
+    const header = splitTableRow(headerLine);
+    const rows = bodyLines.map(splitTableRow);
+    const cols = Math.max(header.length, ...rows.map(r => r.length));
+    const cell = (tag, content, extra) => `<${tag} style="${TABLE_CELL_STYLE}${extra ? `;${extra}` : ''}">${formatProse(content || '')}</${tag}>`;
+    const head = `<tr>${Array.from({ length: cols }, (_, c) => cell('th', header[c], `${TABLE_HEAD_BG};font-weight:normal`)).join('')}</tr>`;
+    const body = rows.map(r => `<tr>${Array.from({ length: cols }, (_, c) => cell('td', r[c], c === 0 ? TABLE_HEAD_BG : '')).join('')}</tr>`).join('');
+    return `<div style="overflow-x:auto"><table style="${TABLE_STYLE}"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  };
+
+  // Formats prose, turning any Markdown tables in it into HTML tables
+  const formatProseWithTables = (prose) => {
+    const lines = prose.split('\n');
+    const out = [];
+    let text = [];
+    const flushText = (beforeTable) => {
+      if (!text.length) return;
+      let chunk = text.join('\n');
+      // The table is a block of its own, so drop the newlines that touch it
+      if (beforeTable) chunk = chunk.replace(/\n\s*$/, '');
+      if (out.length) chunk = chunk.replace(/^\s*\n/, '');
+      out.push(formatProse(chunk));
+      text = [];
+    };
+    for (let k = 0; k < lines.length; k++) {
+      if (TABLE_ROW_RE.test(lines[k]) && TABLE_SEPARATOR_RE.test(lines[k + 1] || '') && lines[k + 1].includes('|')) {
+        let end = k + 2;
+        while (end < lines.length && TABLE_ROW_RE.test(lines[end])) end++;
+        flushText(true);
+        out.push(tableToHTML(lines[k], lines.slice(k + 2, end)));
+        k = end - 1;
+      } else {
+        text.push(lines[k]);
+      }
+    }
+    flushText(false);
+    return out.join('');
+  };
+
+  // Inline code, $...$ maths, **bold** and line breaks of a piece of ordinary text
+  const formatProse = (prose) => {
       return prose.split(/(`[^`\n]+`)/g).map((seg, j) => {
         if (j % 2 === 1) return `<code style="${INLINE_CODE_STYLE}">${escapeHTML(seg.slice(1, -1))}</code>`;
         const pieces = repairMathDelimiters(seg).split(/(\$\$[^$]+\$\$|\$[^$]+\$)/g);
@@ -894,7 +966,6 @@ export default function AIGenerator({ pairMode = false }) {
           })
           .join('');
       }).join('');
-    }).join('');
   };
 
   const parseQuestionsFromText = (text) => {
@@ -1181,7 +1252,8 @@ IMPORTANT:
 - CODE: If a question or explanation contains a code snippet (Python, C, Java, SQL, shell, etc.), put it inside a fenced block: three backticks + language name, a newline, the code, a newline, three backticks (e.g. "Determine val:\\n\`\`\`python\\ndef f(x):\\n    return x\\n\`\`\`"). Keep every line break (as \\n) and every leading space of indentation exactly as printed. Never flatten code onto one line and never use $...$ inside code.
 - Short inline code such as identifiers, keywords or literals (e.g. __annotations__, 'return', None) goes in single backticks.
 - Copy option text exactly as printed, including angle brackets and quotes (e.g. <class 'dict'>). Options are plain text: use single backticks for code-like options, never HTML. Do not include the ✓ tick mark in the option text; use it only to set the correct answer.
-- DIAGRAMS: For every figure drawn as a graphic - diagram, graph, plot, circuit, tree, flowchart, geometric figure, chemical structure, photo, or a table - add one entry to "images" of the question it belongs to:
+- TABLES: Transcribe every table of text or numbers (cost matrices, data tables, truth tables, etc.) as a Markdown table on its own lines: a header row, then a separator row, then one row per table row, each cell between | characters (e.g. "\\n| Worker / Job | J1 | J2 |\\n|---|---|---|\\n| M1 | 13 | 8 |\\n"). Keep every row, column, header and value exactly as printed, use $...$ for maths inside cells, and put the table's caption on its own line just before it. Never make an image for such a table.
+- DIAGRAMS: For every figure drawn as a graphic - diagram, graph, plot, circuit, tree, flowchart, geometric figure, chemical structure or photo - add one entry to "images" of the question it belongs to:
   - "page": the 1-based index of the page within this PDF file (the file's first page is 1; ignore printed page numbers).
   - "box_2d": [ymin, xmin, ymax, xmax] normalized to 0-1000 of that page's height and width, drawn tightly around the whole figure including its labels and caption, but NOT the question text, options, code, or the question's header bar/border.
   - "target": "question" for a figure in the question body; "optionA"-"optionD" when that option is itself a figure (then its option text should be empty); "explanation" for a figure in the solution/explanation.
