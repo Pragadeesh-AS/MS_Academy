@@ -11,6 +11,7 @@ import {
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
+import { sendWebhookEmail } from '../utils/emailWebhook';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
@@ -32,6 +33,7 @@ import InvoiceGenerator from './admin/InvoiceGenerator';
 import WelcomeLetter from './admin/WelcomeLetter';
 import BlogManager from './admin/BlogManager';
 import GalleryManager from './admin/GalleryManager';
+import PopupManager from './admin/PopupManager';
 import RoleSwitcher from './shared/RoleSwitcher';
 
 const loadImage = (src) => new Promise((resolve, reject) => {
@@ -42,40 +44,10 @@ const loadImage = (src) => new Promise((resolve, reject) => {
   img.src = src;
 });
 
-const sendEmailViaGAS = async (to, subject, htmlMessage, attachment = null) => {
-  const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
-  if (!webhookUrl) {
-    console.warn("VITE_GAS_WEBHOOK_URL is not set. Skipping email.");
-    return;
-  }
-  
-  const payload = {
-    to_email: to,
-    subject: subject,
-    message_html: htmlMessage
-  };
-
-  if (attachment) {
-    if (Array.isArray(attachment)) {
-      payload.attachments = attachment;
-    } else {
-      payload.attachment = attachment;
-    }
-  }
-
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8",
-    },
-    body: JSON.stringify(payload)
-  });
-  
-  const result = await response.json();
-  if (result.status !== "success") {
-    throw new Error(result.message || "Failed to send email via Google Apps Script");
-  }
-};
+// Emails go through the shared sender (utils/emailWebhook - the Google Apps Script webhook).
+// Throws if the email didn't go out.
+const sendEmailViaGAS = (to, subject, htmlMessage, attachment = null) =>
+  sendWebhookEmail({ to, subject, html: htmlMessage, attachments: attachment ? [].concat(attachment) : undefined });
 
 const toDate = (v) => {
   if (!v) return null;
@@ -165,10 +137,6 @@ export default function AdminDashboard() {
   const [inviteForm, setInviteForm] = useState({ name: '', department: '', email: '' });
   const [isInviting, setIsInviting] = useState(false);
 
-  // Popup States
-  const [popupActive, setPopupActive] = useState(false);
-  const [popupImageUrl, setPopupImageUrl] = useState('');
-  const [isUploadingPopup, setIsUploadingPopup] = useState(false);
 
   // Auth Guard
   useEffect(() => {
@@ -432,22 +400,6 @@ export default function AdminDashboard() {
       </div>
     );
   };
-
-  useEffect(() => {
-    const fetchPopup = async () => {
-      try {
-        const docRef = doc(db, 'site_settings', 'popup');
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
-          setPopupActive(snap.data().isActive || false);
-          setPopupImageUrl(snap.data().imageUrl || '');
-        }
-      } catch (e) {
-        console.error("Popup fetch error:", e);
-      }
-    };
-    fetchPopup();
-  }, []);
 
   const handleLogout = () => {
     sessionStorage.removeItem('auth_role');
@@ -771,52 +723,6 @@ export default function AdminDashboard() {
       alert('Failed to send invite email. Please try again.');
     } finally {
       setIsInviting(false);
-    }
-  };
-
-  const handlePopupImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    if (file.size > 1048576) {
-      alert("Image is too large. Please upload an image under 1MB.");
-      return;
-    }
-    
-    setIsUploadingPopup(true);
-    try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const base64Url = reader.result;
-          setPopupImageUrl(base64Url);
-          
-          const docRef = doc(db, 'site_settings', 'popup');
-          await setDoc(docRef, { imageUrl: base64Url, isActive: popupActive }, { merge: true });
-        } catch (err) {
-          console.error("Firestore error:", err);
-          alert("Failed to save image to database.");
-        } finally {
-          setIsUploadingPopup(false);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error("FileReader error:", err);
-      setIsUploadingPopup(false);
-      alert("Failed to read image file.");
-    }
-  };
-
-  const handleTogglePopup = async () => {
-    const newStatus = !popupActive;
-    setPopupActive(newStatus);
-    try {
-      const docRef = doc(db, 'site_settings', 'popup');
-      await setDoc(docRef, { isActive: newStatus, imageUrl: popupImageUrl }, { merge: true });
-    } catch (err) {
-      console.error(err);
-      setPopupActive(!newStatus); 
     }
   };
 
@@ -1960,82 +1866,7 @@ export default function AdminDashboard() {
         )}
 
         {/* Popup Configuration Tab */}
-        {activeTab === 'popup' && (
-          <div className="max-w-4xl mx-auto flex flex-col gap-6 sm:gap-8 pb-12 animate-in fade-in duration-300">
-            <div className="flex flex-col gap-2">
-              <h2 className="text-2xl sm:text-3xl font-[900] text-slate-800 tracking-tight">Marketing Popup</h2>
-              <p className="text-slate-500 font-medium">Configure the global announcement popup that greets visitors on the home page.</p>
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm flex flex-col gap-6 sm:gap-8">
-              
-              {/* Status Toggle */}
-              <div className="flex items-center justify-between p-6 rounded-2xl bg-slate-50 border border-slate-100">
-                <div className="flex flex-col gap-1">
-                  <span className="text-lg font-[800] text-slate-800 flex items-center gap-2">
-                    Popup Status 
-                    {popupActive ? 
-                      <span className="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-md font-bold uppercase tracking-widest">Live</span> : 
-                      <span className="bg-slate-200 text-slate-500 text-xs px-2.5 py-1 rounded-md font-bold uppercase tracking-widest">Off</span>
-                    }
-                  </span>
-                  <span className="text-sm font-medium text-slate-500">Enable or disable the popup from appearing on the website.</span>
-                </div>
-                
-                <button 
-                  onClick={handleTogglePopup}
-                  className={`relative inline-flex h-8 w-14 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${popupActive ? 'bg-emerald-500' : 'bg-slate-300'}`}
-                >
-                  <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${popupActive ? 'translate-x-3' : '-translate-x-3'}`} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Upload Section */}
-                <div className="flex flex-col gap-4">
-                  <h3 className="text-[15px] font-[800] text-slate-800 uppercase tracking-widest">Upload Banner</h3>
-                  <label className="relative flex flex-col items-center justify-center w-full h-64 border-2 border-slate-300 border-dashed rounded-2xl cursor-pointer bg-slate-50 hover:bg-slate-100 hover:border-blue-400 transition-all group overflow-hidden">
-                    {isUploadingPopup ? (
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-sm font-bold text-slate-500">Uploading Image...</span>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                          <div className="w-16 h-16 mb-4 bg-white rounded-full flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
-                            <svg className="w-8 h-8 text-blue-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                                <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
-                            </svg>
-                          </div>
-                          <p className="mb-2 text-sm text-slate-500"><span className="font-bold text-blue-600">Click to upload</span> or drag and drop</p>
-                          <p className="text-xs text-slate-400 font-medium">SVG, PNG, JPG or GIF (MAX. 800x800px)</p>
-                        </div>
-                        <input type="file" className="hidden" accept="image/*" onChange={handlePopupImageUpload} disabled={isUploadingPopup} />
-                      </>
-                    )}
-                  </label>
-                </div>
-
-                {/* Preview Section */}
-                <div className="flex flex-col gap-4">
-                  <h3 className="text-[15px] font-[800] text-slate-800 uppercase tracking-widest flex justify-between items-center">
-                    Preview
-                    {popupImageUrl && <button onClick={() => setPopupImageUrl('')} className="text-xs text-red-500 hover:text-red-700 capitalize tracking-normal">Clear</button>}
-                  </h3>
-                  <div className="w-full h-64 border border-slate-200 rounded-2xl bg-slate-100 flex items-center justify-center overflow-hidden relative shadow-inner">
-                    {popupImageUrl ? (
-                      <img src={popupImageUrl} alt="Popup Preview" className="w-full h-full object-contain p-2" />
-                    ) : (
-                      <span className="text-slate-400 font-bold text-sm">No image uploaded</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        )}
+        {activeTab === 'popup' && <PopupManager />}
 
         {/* Active Tab: Course Bundles */}
         {activeTab === 'courses' && <CourseSetup />}

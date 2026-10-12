@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import AdmissionFormViewer from './AdmissionFormViewer';
 import { needsAdmissionForm, isAdmissionFormExempt } from '../../utils/admissionForm';
+import { tierKeyOf, fullBundleOf } from '../../utils/membership';
 
 const DEPARTMENT_OPTIONS = [
   'Computer Science (CSE)',
@@ -105,7 +106,7 @@ const StudentDirectory = ({
   };
   const [bundles, setBundles] = useState([]);
   const [editingStudent, setEditingStudent] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '', isPro: false, groupName: '' });
+  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '', groupName: '' });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const studentsPerPage = 10;
 
@@ -215,7 +216,6 @@ const StudentDirectory = ({
       batch: raw.batch || '',
       location: raw.location || '',
       skills: Array.isArray(raw.skills) ? raw.skills.join(', ') : '',
-      isPro: !!raw.isPro,
       groupName: raw.groupName || ''
     });
     setEditingStudent(raw);
@@ -235,7 +235,6 @@ const StudentDirectory = ({
         batch: editForm.batch.trim(),
         location: editForm.location.trim(),
         skills: editForm.skills.split(',').map(sk => sk.trim()).filter(Boolean),
-        isPro: !!editForm.isPro,
         groupName: editForm.groupName.trim()
       };
       await updateDoc(doc(db, 'joined_students', String(editingStudent.id)), updates);
@@ -302,8 +301,8 @@ const StudentDirectory = ({
 
     return matchesSearch && matchesDept && matchesYear && matchesStatus && matchesGroup;
   }).sort((a, b) => {
-    // Pro users first, then students with bundles, then normal users (original order kept within each group)
-    const rank = (st) => (st.purchasedBundles && st.purchasedBundles.length > 0 ? 1 : st.isPro ? 0 : 2);
+    // Elite first, then Prime, then Foundation (original order kept within each group)
+    const rank = (st) => ({ elite: 0, prime: 1, foundation: 2 })[getTier(st, bundles).key];
     return rank(a) - rank(b);
   });
 
@@ -643,12 +642,12 @@ const StudentDirectory = ({
                         <td className="px-4">
                           <div className="flex items-center gap-4">
                             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600 font-bold flex items-center justify-center shrink-0 border border-blue-100 group-hover:scale-105 transition-transform">
-                              <span className="text-[20px] leading-none">{getTier(student).icon}</span>
+                              <span className="text-[20px] leading-none">{getTier(student, bundles).icon}</span>
                             </div>
                             <div className="flex flex-col">
                               <span className="font-semibold text-[16px] text-[#0F172A] tracking-tight">{student.name}</span>
                               <div className="flex items-center gap-1.5">
-                                <TierPill tier={getTier(student)} />
+                                <TierPill tier={getTier(student, bundles)} />
                                 {needsAdmissionForm(student) && (
                                   <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-bold" title="Has not submitted the Admission Application Form yet">
                                     <FileSignature size={11} /> Form pending
@@ -768,7 +767,7 @@ const StudentDirectory = ({
             <div className="p-5 sm:p-8 space-y-6 overflow-y-auto">
               <div className="flex items-center gap-5">
                 <div className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-[#2563EB] border border-blue-100 font-bold text-[28px] flex items-center justify-center shrink-0 shadow-sm">
-                  {getTier(selectedStudent).icon}
+                  {getTier(selectedStudent, bundles).icon}
                 </div>
                 <div className="min-w-0">
                   <h4 className="text-[22px] font-bold text-[#0F172A] leading-tight truncate">{selectedStudent.name}</h4>
@@ -897,14 +896,12 @@ const StudentDirectory = ({
                                   setConfirmDialog(null);
                                   try {
                                     const updatedBundles = selectedStudent.purchasedBundles.filter((_, i) => i !== idx);
-                                    const isPro = updatedBundles.length > 0 ? !!selectedStudent.isPro : false;
-                                    
-                                    await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), { 
-                                      purchasedBundles: updatedBundles,
-                                      isPro: isPro
+                                    // Premium (Elite) is its own switch in Edit Student - removing a bundle doesn't change it
+                                    await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), {
+                                      purchasedBundles: updatedBundles
                                     });
-                                    
-                                    const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles, isPro: isPro };
+
+                                    const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles };
                                     setSelectedStudent(updatedStudent);
                                     setJoinedStudents(joinedStudents.map(s => 
                                       s.id === selectedStudent.id ? updatedStudent : s
@@ -935,11 +932,11 @@ const StudentDirectory = ({
                       if (!bundleId) return;
                       try {
                         const updatedBundles = [...(selectedStudent.purchasedBundles || []), bundleId];
-                        await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), { 
-                          purchasedBundles: updatedBundles,
-                          isPro: true
+                        // A bundle unlocks only what it includes; Premium (Elite) is turned on separately in Edit Student
+                        await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), {
+                          purchasedBundles: updatedBundles
                         });
-                        const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles, isPro: true };
+                        const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles };
                         setSelectedStudent(updatedStudent);
                         setJoinedStudents(joinedStudents.map(s => s.id === selectedStudent.id ? updatedStudent : s));
                       } catch (error) {
@@ -1071,24 +1068,24 @@ const StudentDirectory = ({
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-4 px-4 py-3 bg-amber-50/60 border border-amber-100 rounded-2xl">
-                <div className="flex items-center gap-3">
-                  <ShieldCheck size={20} className="text-amber-500 shrink-0" />
-                  <div>
-                    <p className="text-sm font-bold text-slate-800">Premium Access</p>
-                    <p className="text-[11px] text-slate-500 font-medium">{editForm.isPro ? 'Student has Premium (Elite) access.' : 'Turn on to upgrade this student to Premium.'}</p>
+              {(() => {
+                const owned = editingStudent.purchasedBundles || [];
+                const full = fullBundleOf({ purchasedBundles: owned, bundles, department: editForm.department });
+                const tier = getTier({ ...editingStudent, department: editForm.department }, bundles);
+                return (
+                  <div className="flex items-start gap-3 px-4 py-3 bg-amber-50/60 border border-amber-100 rounded-2xl">
+                    <ShieldCheck size={20} className="text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">Membership: {tier.icon} {tier.label}</p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        {full
+                          ? `Elite because they own "${full.name}", which includes every resource.`
+                          : 'Elite is automatic for students who own a bundle with Academy Tests, Live Classes, Recordings and Study Notes all ticked in Course Setup. Assign one under Bundles to make them Elite.'}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={editForm.isPro}
-                  onClick={() => setEditForm({ ...editForm, isPro: !editForm.isPro })}
-                  className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${editForm.isPro ? 'bg-amber-500' : 'bg-slate-300'}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${editForm.isPro ? 'translate-x-5' : ''}`}></span>
-                </button>
-              </div>
+                );
+              })()}
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Email Address</label>
@@ -1222,13 +1219,14 @@ const StudentDirectory = ({
   );
 };
 
-// Membership tier: Prime = has purchased bundles, Elite = Pro without bundles, Foundation = everyone else
-const getTier = (st) => {
-  const count = (st.purchasedBundles || []).length;
-  if (count > 0) return { key: 'prime', label: 'Prime', icon: '⭐', text: 'Prime' };
-  if (st.isPro) return { key: 'elite', label: 'Elite', icon: '👑', text: 'Elite' };
-  return { key: 'foundation', label: 'Foundation', icon: '🌱', text: 'Foundation' };
+// Membership tier (utils/membership): Elite = owns a bundle with every resource ticked, Prime = owns other
+// bundles, Foundation = no bundles
+const TIERS = {
+  elite: { key: 'elite', label: 'Elite', icon: '👑', text: 'Elite' },
+  prime: { key: 'prime', label: 'Prime', icon: '⭐', text: 'Prime' },
+  foundation: { key: 'foundation', label: 'Foundation', icon: '🌱', text: 'Foundation' },
 };
+const getTier = (st, bundles) => TIERS[tierKeyOf({ purchasedBundles: st.purchasedBundles || [], bundles, department: st.department })];
 // Foundation icon: green sprout on a brown soil mound
 const SproutOnSoil = ({ size = 16 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="tier-pill__icon">

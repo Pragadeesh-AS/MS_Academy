@@ -402,7 +402,7 @@ export default function Careers() {
       {/* Recrutement Contact Footer Link */}
       <section className="w-full max-w-[850px] mx-auto px-6 py-16 text-center">
         <p className="text-slate-500 text-xs md:text-sm leading-relaxed font-semibold">
-          Questions about our recruitment? Reach us at <a href="mailto:msacademics.edu@gmail.com" className="text-[#1d4ed8] hover:underline font-bold">msacademics.edu@gmail.com</a> or call <a href="tel:+918012052331" className="text-slate-800 hover:text-[#1d4ed8] font-bold">+91 80120 52331</a>.
+          Questions about our recruitment? Reach us at <a href="mailto:admin@msgateacademy.com" className="text-[#1d4ed8] hover:underline font-bold">admin@msgateacademy.com</a> or call <a href="tel:+918012052331" className="text-slate-800 hover:text-[#1d4ed8] font-bold">+91 80120 52331</a>.
         </p>
       </section>
 

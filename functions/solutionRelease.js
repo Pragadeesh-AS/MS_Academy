@@ -1,9 +1,10 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
+const { sendWebhookEmailToEach } = require('./emailWebhook');
 
-// Same Google Apps Script webhook the admin site uses for the manual unlock email
-// (VITE_GAS_WEBHOOK_URL). Set in functions/.env as GAS_WEBHOOK_URL=...
+// Emails go through the Google Apps Script email webhook (apps-script/EmailWebhook.gs), the same one the
+// website uses (VITE_GAS_WEBHOOK_URL). Set in functions/.env as GAS_WEBHOOK_URL=...
 const GAS_WEBHOOK_URL = defineString('GAS_WEBHOOK_URL', { default: '' });
 
 const escapeHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -25,27 +26,14 @@ const emailStudents = async (db, testId, testTitle) => {
   const emails = [...new Set(attempts.docs.map(d => d.data().studentEmail).filter(Boolean))];
   if (emails.length === 0) return 0;
 
+  const { subject, html } = solutionsEmail(testTitle);
+  // One email per student (no shared recipient list); only replies of { status: 'success' } count
   const webhookUrl = GAS_WEBHOOK_URL.value();
   if (!webhookUrl) {
     console.warn(`GAS_WEBHOOK_URL is not set - released test ${testId} without emailing ${emails.length} student(s).`);
     return 0;
   }
-
-  const { subject, html } = solutionsEmail(testTitle);
-  let sent = 0;
-  // One email per student (no shared recipient list), a few at a time so the webhook isn't flooded
-  for (let i = 0; i < emails.length; i += 10) {
-    const results = await Promise.allSettled(emails.slice(i, i + 10).map(email => fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ to_email: email, subject, message_html: html })
-    })));
-    results.forEach((r, k) => {
-      if (r.status === 'fulfilled' && r.value.ok) sent += 1;
-      else console.error('Solution email failed for', emails[i + k], r.reason || r.value?.status);
-    });
-  }
-  return sent;
+  return sendWebhookEmailToEach(webhookUrl, emails, { subject, html });
 };
 
 // Unlocks the solutions of every test whose scheduled release time has passed and emails the

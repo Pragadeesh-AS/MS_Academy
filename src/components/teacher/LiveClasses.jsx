@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { sendWebhookEmail } from '../../utils/emailWebhook';
 import { createPortal } from 'react-dom';
 import { db } from '../../firebase';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore';
@@ -85,40 +86,10 @@ const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) 
   return null;
 };
 
-const sendEmailViaGAS = async (to, subject, htmlMessage, attachment = null) => {
-  const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
-  if (!webhookUrl) {
-    console.warn("VITE_GAS_WEBHOOK_URL is not set. Skipping email.");
-    return;
-  }
-  
-  const payload = {
-    to_email: to,
-    subject: subject,
-    message_html: htmlMessage
-  };
-
-  if (attachment) {
-    if (Array.isArray(attachment)) {
-      payload.attachments = attachment;
-    } else {
-      payload.attachment = attachment;
-    }
-  }
-
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8",
-    },
-    body: JSON.stringify(payload)
-  });
-  
-  const result = await response.json();
-  if (result.status !== "success") {
-    throw new Error(result.message || "Failed to send email via Google Apps Script");
-  }
-};
+// Emails go through the shared sender (utils/emailWebhook - the Google Apps Script webhook).
+// Throws if the email didn't go out.
+const sendEmailViaGAS = (to, subject, htmlMessage, attachment = null) =>
+  sendWebhookEmail({ to, subject, html: htmlMessage, attachments: attachment ? [].concat(attachment) : undefined });
 
 // Extracted component to handle screen sharing as an independent client
 const ScreenShareClient = ({ appId, channel, token, onTrackEnded, onAudioTrackReady, onTrackReady }) => {

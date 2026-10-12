@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { MapPin, Phone, Mail, ChevronRight, Sparkle, BadgeCheck } from 'lucide-react';
 
 const PHONE = '+91 8012052331';
-const EMAIL = 'msacademics.edu@gmail.com';
+const EMAIL = 'admin@msgateacademy.com';
 const WHATSAPP_URL = 'https://wa.me/918012052331?text=Hello!%20I%20would%20like%20to%20inquire%20about%20the%20GATE%20coaching%20programs%20and%20admissions%20at%20MS%20Academy.%20Could%20you%20please%20share%20more%20details%3F';
 
 // Brand marks (lucide no longer ships logos) - same paths as SocialCard

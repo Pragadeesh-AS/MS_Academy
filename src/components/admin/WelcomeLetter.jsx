@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { Download, Send, Search, Mail, CheckCircle2, AlertCircle, UserRound, X } from 'lucide-react';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Download, Send, Search, Mail, CheckCircle2, AlertCircle, UserRound, X, RotateCcw } from 'lucide-react';
+import { doc, updateDoc, serverTimestamp, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
 import {
   INK, pageStyle, protectedImg, protectedImgStyle, useLetterheadFonts, useSignOffImages, LetterheadTop,
@@ -32,7 +32,7 @@ const Field = ({ label, value }) => (
   </div>
 );
 
-const emailHtml = ({ name, paper, department, college, refNo }) => `
+const emailHtml = ({ name, paper, department, college, refNo, course }) => `
   <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 620px; margin: 0 auto; border: 1px solid #dbe3f1; border-radius: 12px; overflow: hidden;">
     <div style="background: linear-gradient(135deg, #0b1d45 0%, #1a3a7c 100%); padding: 26px 24px; text-align: center; border-bottom: 3px solid #d4a43a;">
       <h1 style="color: #ffffff; margin: 0; font-size: 26px; letter-spacing: 0.5px;">Welcome to MS GATE Academy</h1>
@@ -41,6 +41,7 @@ const emailHtml = ({ name, paper, department, college, refNo }) => `
     <div style="padding: 30px 28px; background: #ffffff; color: #13285a; font-size: 16px; line-height: 1.65;">
       <p style="margin-top: 0;">Dear ${name},</p>
       <p>It gives us great pleasure to warmly welcome you to <b>MS GATE Academy</b> for your <b>GATE ${paper}</b> preparation.</p>
+      ${course ? `<p style="margin: 0 0 16px;"><b>Course enrolled:</b> ${course}</p>` : ''}
       <p>As a student of ${department} at ${college}, you have chosen to invest in your technical foundation and future career opportunities. Your association with MS GATE Academy marks the beginning of a structured preparation journey built around strong concepts, focused practice, regular assessment and continuous guidance.</p>
       <div style="background: #f4f8fe; border-left: 4px solid #d4a43a; padding: 14px 18px; margin: 22px 0; border-radius: 0 8px 8px 0;">
         <p style="margin: 0;">Your official <b>Welcome Letter</b> is attached to this email as a PDF${refNo ? ` (Ref. No. ${refNo})` : ''}. Please keep it for your records.</p>
@@ -57,6 +58,17 @@ const emailHtml = ({ name, paper, department, college, refNo }) => `
   </div>
 `;
 
+// What a student bought on the website, as one line for the letter: course bundles, notes bundles and
+// note subjects bought on their own ("Thermodynamics Notes")
+const purchasesText = (s, catalog) => {
+  const nameOf = (list, id) => list.find(x => x.id === id)?.name;
+  return [
+    ...(s.purchasedBundles || []).map(id => nameOf(catalog.bundles, id)),
+    ...(s.purchasedNoteBundles || []).map(id => nameOf(catalog.noteBundles, id)),
+    ...(s.purchasedSubjects || []).map(id => { const n = nameOf(catalog.subjects, id); return n && `${n} Notes`; }),
+  ].filter(Boolean).map(n => n.trim()).filter((n, i, all) => all.indexOf(n) === i).join(', ');
+};
+
 export default function WelcomeLetter({ students = [], sendEmail, onSent }) {
   useLetterheadFonts();
   const { stamp, signature } = useSignOffImages();
@@ -64,7 +76,16 @@ export default function WelcomeLetter({ students = [], sendEmail, onSent }) {
 
   const [search, setSearch] = useState('');
   const [studentId, setStudentId] = useState(null);
-  const [form, setForm] = useState({ refNo: '', date: todayIso(), name: '', email: '', department: '', college: '', paper: '' });
+  // course: null = take it from the student's purchases (updates when the catalog loads); a string = typed in
+  const [form, setForm] = useState({ refNo: '', date: todayIso(), name: '', email: '', department: '', college: '', paper: '', course: null });
+  const [catalog, setCatalog] = useState({ bundles: [], noteBundles: [], subjects: [] });
+
+  // Names of everything a student can buy, to turn their purchase ids into the "Course Enrolled" line
+  useEffect(() => {
+    const load = (name) => getDocs(collection(db, name)).then(snap => snap.docs.map(d => ({ id: d.id, ...d.data() }))).catch(err => { console.error(`Could not load ${name}`, err); return []; });
+    Promise.all([load('course_bundles'), load('note_bundles'), load('note_folders')])
+      .then(([bundles, noteBundles, folders]) => setCatalog({ bundles, noteBundles, subjects: folders.filter(f => !f.parentId) }));
+  }, []);
   const [busy, setBusy] = useState(null); // 'pdf' | 'email'
   const [notice, setNotice] = useState(null); // { type, text }
 
@@ -96,14 +117,19 @@ export default function WelcomeLetter({ students = [], sendEmail, onSent }) {
       department: s.department || '',
       college: s.collegeName || '',
       paper: s.welcomeLetterGatePaper || (s.department ? `${deptCode(s.department)} ${year}` : ''),
+      course: s.welcomeLetterCourse ?? null,
     });
   };
 
   const clearStudent = () => {
     setStudentId(null);
-    setForm({ refNo: nextRefNo, date: todayIso(), name: '', email: '', department: '', college: '', paper: '' });
+    setForm({ refNo: nextRefNo, date: todayIso(), name: '', email: '', department: '', college: '', paper: '', course: null });
   };
 
+  const profileCourse = selected ? purchasesText(selected, catalog) : '';
+  const course = form.course ?? profileCourse;
+  const hasCourse = !!course.trim();
+  const gap = hasCourse ? 18 : 23; // space between letter paragraphs
   const missing = ['name', 'department', 'college', 'paper'].filter(k => !form[k].trim());
   const fileName = `Welcome_Letter_${safeFilePart(form.name) || 'Student'}.pdf`;
 
@@ -137,11 +163,11 @@ export default function WelcomeLetter({ students = [], sendEmail, onSent }) {
       await sendEmail(
         form.email.trim(),
         `Welcome to MS GATE Academy - GATE ${form.paper.trim()} Preparation`,
-        emailHtml({ name: form.name.trim(), paper: form.paper.trim(), department: form.department.trim(), college: form.college.trim(), refNo: form.refNo.trim() }),
+        emailHtml({ name: form.name.trim(), paper: form.paper.trim(), department: form.department.trim(), college: form.college.trim(), refNo: form.refNo.trim(), course: course.trim() }),
         [{ filename: fileName, mimeType: 'application/pdf', base64Data }]
       );
       if (selected) {
-        const update = { welcomeLetterSentAt: serverTimestamp(), welcomeLetterRef: form.refNo.trim(), welcomeLetterGatePaper: form.paper.trim() };
+        const update = { welcomeLetterSentAt: serverTimestamp(), welcomeLetterRef: form.refNo.trim(), welcomeLetterGatePaper: form.paper.trim(), welcomeLetterCourse: course.trim() };
         try {
           await updateDoc(doc(db, 'joined_students', selected.id), update);
           onSent?.({ ...selected, ...update, welcomeLetterSentAt: new Date() });
@@ -262,6 +288,27 @@ export default function WelcomeLetter({ students = [], sendEmail, onSent }) {
                 <label className="block text-sm font-semibold text-[#334155] mb-1">UG College Name</label>
                 <input value={form.college} onChange={set('college')} className={inputCls} />
               </div>
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label className="block text-sm font-semibold text-[#334155]">Course Enrolled</label>
+                  {selected && form.course !== null && form.course !== profileCourse && (
+                    <button type="button" onClick={() => setForm(f => ({ ...f, course: null }))} className="flex items-center gap-1 text-xs font-bold text-[#2563eb] hover:underline">
+                      <RotateCcw size={12} /> Fill from profile
+                    </button>
+                  )}
+                </div>
+                <input
+                  value={course}
+                  onChange={(e) => setForm(f => ({ ...f, course: e.target.value }))}
+                  placeholder={selected ? 'No purchases on the website yet - type the course' : 'e.g. GATE ME 2027 Full Course'}
+                  className={inputCls}
+                />
+                <p className="mt-1 text-xs text-[#64748b]">
+                  {selected
+                    ? (form.course === null ? 'Filled from what the student bought on the website. You can change it.' : 'Edited for this letter.')
+                    : 'Choose a student to fill this from their purchases.'}
+                </p>
+              </div>
             </div>
             <p className="mt-4 text-xs text-[#64748b]">
               The email goes to the student with the subject "Welcome to MS GATE Academy - GATE {form.paper || '[Paper with Year]'} Preparation", a short welcome message and this letter attached as a PDF.
@@ -281,21 +328,22 @@ export default function WelcomeLetter({ students = [], sendEmail, onSent }) {
                 <Field label="Date" value={date ? `${date.d}/${date.m}/${date.y}` : ''} />
               </div>
 
-              {/* Student details */}
-              <div style={{ marginTop: 30, marginLeft: 43, fontSize: 17, lineHeight: 1.2, display: 'flex', flexDirection: 'column', gap: 11 }}>
+              {/* Student details - with the extra Course line the spacing tightens so the body still clears the stamp */}
+              <div style={{ marginTop: hasCourse ? 22 : 30, marginLeft: 43, fontSize: 17, lineHeight: 1.2, display: 'flex', flexDirection: 'column', gap: 11 }}>
                 <Field label="Student Name" value={form.name} />
                 <Field label="Department" value={form.department} />
                 <Field label="UG College Name" value={form.college} />
                 <Field label="GATE Paper with Year" value={form.paper} />
+                {hasCourse && <Field label="Course Enrolled" value={course.trim()} />}
               </div>
 
               {/* Letter body */}
-              <div style={{ marginTop: 34, marginLeft: 43, marginRight: 20, fontSize: 17.5, lineHeight: '27px' }}>
+              <div style={{ marginTop: hasCourse ? 24 : 34, marginLeft: 43, marginRight: 20, fontSize: 17.5, lineHeight: '27px' }}>
                 <p style={{ margin: 0 }}>Dear {p('name', '[Student Name]')},</p>
                 <p style={{ margin: '18px 0 0' }}>It gives us great pleasure to warmly welcome you to MS GATE Academy for your GATE {p('paper', '[Paper with Year]')} preparation.</p>
-                <p style={{ margin: '23px 0 0' }}>As a student of {p('department', '[Department]')} at {p('college', '[UG College Name]')}, you have chosen to invest in your technical foundation and future career opportunities. Your association with MS GATE Academy marks the beginning of a structured preparation journey built around strong concepts, focused practice, regular assessment and continuous guidance.</p>
-                <p style={{ margin: '23px 0 0' }}>We are glad to have you with us and look forward to supporting your progress at every stage of your preparation.</p>
-                <p style={{ margin: '26px 0 0' }}>Welcome to MS GATE Academy. <b><i>Ignite Your Dreams.</i></b></p>
+                <p style={{ margin: `${gap}px 0 0` }}>As a student of {p('department', '[Department]')} at {p('college', '[UG College Name]')}, you have chosen to invest in your technical foundation and future career opportunities. Your association with MS GATE Academy marks the beginning of a structured preparation journey built around strong concepts, focused practice, regular assessment and continuous guidance.</p>
+                <p style={{ margin: `${gap}px 0 0` }}>We are glad to have you with us and look forward to supporting your progress at every stage of your preparation.</p>
+                <p style={{ margin: `${gap + 3}px 0 0` }}>Welcome to MS GATE Academy. <b><i>Ignite Your Dreams.</i></b></p>
               </div>
 
               {/* Sign-off */}

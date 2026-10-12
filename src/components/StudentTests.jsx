@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { db, auth } from '../firebase';
 import { collection, getDocs, addDoc, updateDoc, query, where, doc, getDoc, serverTimestamp, documentId } from 'firebase/firestore';
-import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, ArrowLeft, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle, CalendarClock, Flag, Dumbbell } from 'lucide-react';
+import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle, CalendarClock, Flag, Dumbbell } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
 import { examSections } from '../utils/testShuffle';
 import logoImg from '../assets/msgate_logo.png';
@@ -10,7 +10,10 @@ import { RELEASE_MODES, releaseMode, releaseAtMillis, areSolutionsVisible, forma
 import { gradeAnswer, normalizeQuestion, correctAnswerText } from '../utils/testGrading';
 import { canAccessTest as canAccessTestFor } from '../utils/testAccess';
 import { sameDepartment } from '../utils/subjects';
-import { templateKeyOf, templateFoldersFor, folderName, templateMarks } from '../utils/testTemplates';
+import { templateKeyOf, templateFoldersFor, folderName, templateMarks, templateQuestions } from '../utils/testTemplates';
+import { TEMPLATE_META } from '../utils/templateStyles';
+import { paletteFor, monogramOf, NEUTRAL } from '../utils/departmentColors';
+import { FolderHero, FolderBreadcrumb, FolderCard } from './student/StudentFolderCards';
 import { AVAILABILITY, testAvailability, testStartMillis, testCloseMillis, minutesAvailable, formatTestTime, formatCountdown } from '../utils/testSchedule';
 import { loadTestProgress, saveTestProgress, clearTestProgress, inProgressTestIds } from '../utils/testProgress';
 
@@ -820,23 +823,33 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const studentFolders = templateFoldersFor(pendingTests);
   const visibleTests = openTemplateFolder ? pendingTests.filter(t => templateKeyOf(t) === openTemplateFolder) : pendingTests;
   const unfinishedTestIds = new Set(inProgressTestIds(currentEmail()));
+  // Header banner: department colour and how many tests are open / upcoming / done
+  const deptPalette = department ? paletteFor(department) : NEUTRAL;
+  const deptMonogram = department ? monogramOf(department) : 'MY';
+  const openNowCount = pendingTests.filter(t => testAvailability(t, nowTick) === AVAILABILITY.OPEN).length;
+  const upcomingCount = pendingTests.filter(t => testAvailability(t, nowTick) === AVAILABILITY.UPCOMING).length;
+  const completedCount = tests.filter(isTestCompleted).length;
+  const nextStartOf = (list) => list.map(testStartMillis).filter(ms => ms !== null && ms > nowTick).sort((a, b) => a - b)[0] ?? null;
 
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* Header section */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-        <div>
-          <h2 className="text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
-            {section === 'practice' ? <Dumbbell className="text-blue-600" size={28} /> : <Award className="text-blue-600" size={28} />}
-            {section === 'practice' ? 'Practice Tests' : 'Academy Tests'}
-          </h2>
-          <p className="text-slate-500 font-medium mt-1">
-            {section === 'practice' ? 'Build your own test from your topics and practise at your own pace.' : 'Take practice exams and review your key performance metrics.'}
-          </p>
-        </div>
-      </div>
+      <FolderHero
+        palette={deptPalette}
+        monogram={deptMonogram}
+        department={department}
+        title={section === 'practice' ? 'Practice Tests' : 'Academy Tests'}
+        subtitle={section === 'practice' ? 'Build your own test from your topics and practise at your own pace.' : 'Take practice exams and review your key performance metrics.'}
+        icon={section === 'practice' ? Dumbbell : Award}
+        stats={section === 'practice' || loading ? [] : [
+          { label: 'To take', value: pendingTests.length },
+          { label: 'Open now', value: openNowCount },
+          { label: 'Upcoming', value: upcomingCount },
+          { label: 'Completed', value: completedCount },
+        ]}
+      />
 
       {/* Tests Board */}
       {loading ? (
@@ -867,41 +880,38 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       ) : (
         <>
         {openTemplateFolder && (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setOpenTemplateFolder(null)}
-              className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 bg-white transition-colors"
-              title="Back to folders"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <h3 className="text-lg font-[900] text-slate-800">{folderName(openTemplateFolder)}</h3>
-          </div>
+          <FolderBreadcrumb crumbs={[{ label: 'All tests', onClick: () => setOpenTemplateFolder(null) }, { label: folderName(openTemplateFolder) }]} />
         )}
         {!openTemplateFolder ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 gap-5 ${studentFolders.length === 4 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}>
             {studentFolders.map(folder => {
-              const openNow = pendingTests.filter(t => templateKeyOf(t) === folder.key && testAvailability(t, nowTick) === AVAILABILITY.OPEN).length;
+              const folderTests = pendingTests.filter(t => templateKeyOf(t) === folder.key);
+              const openNow = folderTests.filter(t => testAvailability(t, nowTick) === AVAILABILITY.OPEN).length;
+              const meta = TEMPLATE_META[folder.key] || TEMPLATE_META.other;
+              const t = folder.template;
+              const chip = (text) => <span key={text} className={`px-2 py-1 rounded-lg border text-[11px] font-bold text-slate-600 ${meta.soft}`}>{text}</span>;
               return (
-                <button
+                <FolderCard
                   key={folder.key}
-                  onClick={() => setOpenTemplateFolder(folder.key)}
-                  className="text-left bg-white rounded-2xl border border-slate-200 p-5 hover:border-blue-300 hover:shadow-lg transition-all duration-200 group flex items-center gap-4"
-                >
-                  <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 border border-blue-100 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-colors">
-                    <FileText size={22} />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-[800] text-[15px] text-slate-800 truncate">{folder.name}</h3>
-                    <p className="text-[13px] font-semibold text-slate-400">
-                      {folder.count} {folder.count === 1 ? 'test' : 'tests'} to take{openNow ? ` · ${openNow} open now` : ''}
-                    </p>
-                    {folder.template && (
-                      <p className="text-[11px] font-semibold text-slate-400">{folder.template.duration} mins · {templateMarks(folder.template)} marks</p>
-                    )}
-                  </div>
-                  <ArrowRight size={16} className="ml-auto text-slate-300 group-hover:text-blue-500 shrink-0" />
-                </button>
+                  palette={meta}
+                  icon={meta.icon}
+                  title={folder.name}
+                  count={folder.count}
+                  countLabel={folder.count === 1 ? 'Test to take' : 'Tests to take'}
+                  corner={openNow > 0 && (
+                    <span className="text-[11px] font-[800] px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 whitespace-nowrap flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>{openNow} open now
+                    </span>
+                  )}
+                  chips={t
+                    ? [chip(`${t.duration} mins`), chip(`${templateMarks(t)} marks`), chip(`${templateQuestions(t)} Qs`)]
+                    : chip('Custom tests')}
+                  latest={nextStartOf(folderTests)}
+                  dateLabel="Next"
+                  formatDate={formatTestTime}
+                  emptyDate={openNow > 0 ? 'Ready to start now' : 'No upcoming tests'}
+                  onOpen={() => setOpenTemplateFolder(folder.key)}
+                />
               );
             })}
           </div>

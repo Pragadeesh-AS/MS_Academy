@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Loader from '../Loader';
-import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, FolderOpen, ArrowLeft, Upload, ClipboardPaste } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, ArrowLeft, Upload, ClipboardPaste } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore';
 import { questionFingerprint, isEmptyQuestion } from '../../utils/questionDuplicates';
@@ -11,6 +11,7 @@ import { sameDepartment } from '../../utils/subjects';
 import { answerKeyChanged } from '../../utils/testGrading';
 import { regradeAttemptsForQuestion } from '../../utils/regradeAttempts';
 import MatchColumns from '../shared/MatchColumns';
+import DepartmentFolderGrid from './DepartmentFolderGrid';
 
 // Engineering Mathematics and Aptitude banks are shared by every department.
 const isCommonDeptName = (name) => {
@@ -1119,82 +1120,33 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         </div>
 
           {!selectedFolder && lockedDepartment ? (
-            <div className="mt-4">
-              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200">
-                <span className="text-[13px] font-[700] text-slate-400 uppercase tracking-widest">Folders</span>
-                <div className="flex-1 h-px bg-slate-200"></div>
-              </div>
-              {loading ? (
-                <div className="py-12 flex justify-center"><Loader /></div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {(() => {
-                    // Shared banks, one folder each, named as stored on the questions (first spelling seen)
-                    const commonNames = [];
-                    filteredQuestions.forEach(q => {
-                      if (isCommonDeptName(q.department) && !commonNames.some(n => sameFolderName(n, q.department))) {
-                        commonNames.push(q.department.trim());
-                      }
-                    });
-                    const folders = [
-                      { name: lockedDepartment, label: lockedDepartment, tag: 'Your department', common: false, count: filteredQuestions.filter(isOwnDeptQuestion).length },
-                      ...commonNames.sort((a, b) => a.localeCompare(b)).map(name => ({
-                        name, label: toTitleCase(name), tag: 'Shared with all departments', common: true,
-                        count: filteredQuestions.filter(q => sameFolderName(q.department, name)).length
-                      }))
-                    ];
-                    return folders.map(f => (
-                      <div key={f.name} onClick={() => openFolder(f.name)} className={`bg-white rounded-2xl border p-5 cursor-pointer hover:shadow-lg transition-all duration-200 group flex items-center gap-4 ${f.common ? 'border-violet-200 hover:border-violet-400' : 'border-slate-200 hover:border-blue-300'}`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors border ${f.common ? 'bg-violet-50 text-violet-600 border-violet-100 group-hover:bg-violet-600 group-hover:text-white group-hover:border-violet-600' : 'bg-blue-50 text-blue-600 border-blue-100 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600'}`}>
-                          <FolderOpen size={22} strokeWidth={2} />
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <h3 className="font-[700] text-[15px] text-slate-800 truncate" title={f.label}>{f.label}</h3>
-                          <span className={`text-[10.5px] font-[800] uppercase tracking-wide mt-0.5 ${f.common ? 'text-violet-500' : 'text-blue-500'}`}>{f.tag}</span>
-                          <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[13px] mt-0.5">
-                            <FileText size={12} />
-                            {f.count} Questions
-                          </div>
-                        </div>
-                        <div className={`ml-auto text-slate-300 transition-colors ${f.common ? 'group-hover:text-violet-400' : 'group-hover:text-blue-400'}`}>
-                          <ArrowLeft size={16} className="rotate-180" />
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              )}
-            </div>
+            loading ? (
+              <div className="py-12 flex justify-center"><Loader /></div>
+            ) : (() => {
+              // Shared banks, one folder each, named as stored on the questions (first spelling seen)
+              const commonNames = [];
+              filteredQuestions.forEach(q => {
+                if (isCommonDeptName(q.department) && !commonNames.some(n => sameFolderName(n, q.department))) {
+                  commonNames.push(q.department.trim());
+                }
+              });
+              const folders = [
+                { name: lockedDepartment, label: lockedDepartment, tag: 'Your department', common: false, always: true, questions: filteredQuestions.filter(isOwnDeptQuestion) },
+                ...commonNames.sort((a, b) => a.localeCompare(b)).map(name => ({
+                  name, label: toTitleCase(name), tag: 'Shared with all departments', common: true,
+                  questions: filteredQuestions.filter(q => sameFolderName(q.department, name))
+                }))
+              ];
+              return <DepartmentFolderGrid departments={folders} onOpen={openFolder} title="Folders" countLabel="Folders" sortBySize={false} />;
+            })()
           ) : !selectedFolder ? (
-            <div className="mt-4">
-              {/* Folder grid header */}
-              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200">
-                <span className="text-[13px] font-[700] text-slate-400 uppercase tracking-widest">Departments</span>
-                <div className="flex-1 h-px bg-slate-200"></div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-              {[
-                ...departments.filter(d => d !== 'All Departments').map(dept => ({ name: dept, count: filteredQuestions.filter(q => q.department === dept).length })),
-                { name: 'Uncategorized', count: filteredQuestions.filter(q => !q.department || q.department.trim() === '').length }
-              ].filter(dept => dept.count > 0).map((dept, i) => (
-                  <div key={i} onClick={() => openFolder(dept.name)} className="bg-white rounded-2xl border border-slate-200 p-5 cursor-pointer hover:border-blue-300 hover:shadow-lg transition-all duration-200 group flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors border border-blue-100 group-hover:border-blue-600">
-                      <FolderOpen size={22} strokeWidth={2} />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <h3 className="font-[700] text-[15px] text-slate-800 truncate" title={dept.name}>{dept.name}</h3>
-                      <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[13px] mt-0.5">
-                        <FileText size={12} />
-                        {dept.count} Questions
-                      </div>
-                    </div>
-                    <div className="ml-auto text-slate-300 group-hover:text-blue-400 transition-colors">
-                      <ArrowLeft size={16} className="rotate-180" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <DepartmentFolderGrid
+              departments={[
+                ...departments.filter(d => d !== 'All Departments').map(dept => ({ name: dept, questions: filteredQuestions.filter(q => q.department === dept) })),
+                { name: 'Uncategorized', questions: filteredQuestions.filter(q => !q.department || q.department.trim() === '') }
+              ]}
+              onOpen={openFolder}
+            />
           ) : (
             <>
               {/* KPI CARDS */}

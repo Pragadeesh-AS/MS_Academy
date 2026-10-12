@@ -2,8 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db, storage } from '../../firebase';
 import { collection, query, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, onSnapshot, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { FileText, Plus, Trash2, UploadCloud, Link as LinkIcon, X, CheckCircle2, ChevronDown, ChevronRight, Book, Search, AlertCircle, ArrowUpRight, Save, Folder, FolderPlus, FolderOpen, Home, Users, Tag, Package, Pencil } from 'lucide-react';
+import { FileText, Plus, Trash2, UploadCloud, Link as LinkIcon, X, CheckCircle2, ChevronRight, Book, Search, AlertCircle, ArrowUpRight, Save, Folder, FolderPlus, Home, Users, Tag, Package, Pencil, BookOpen, Layers, Building2, CalendarClock, ArrowRight } from 'lucide-react';
 import Loader from '../Loader';
+import { BundleAccessPicker, BundleAccessModal } from '../shared/BundleAccessPicker';
+import { accessOf, accessFields, bundleNamesOf } from '../../utils/bundleAccess';
+import { paletteFor, monogramOf, NEUTRAL } from '../../utils/departmentColors';
 import { gateCoursesData } from '../GateCourses';
 
 // Folder depth: Department (fixed) -> Subject -> Topic. Topics cannot contain further folders.
@@ -30,7 +33,11 @@ export default function NotesManager() {
   const [uploadLabel, setUploadLabel] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [bundleId, setBundleId] = useState('');
+  const [bundleAccess, setBundleAccess] = useState({ mode: 'default', ids: [] }); // dept level or specific bundles
+  // Changing the bundles of a note that's already saved
+  const [accessNote, setAccessNote] = useState(null);
+  const [accessValue, setAccessValue] = useState({ mode: 'default', ids: [] });
+  const [isSavingAccess, setIsSavingAccess] = useState(false);
   const [uploadMode, setUploadMode] = useState('file'); // 'file' or 'url'
   const [fileUrl, setFileUrl] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -137,6 +144,12 @@ export default function NotesManager() {
   const nextLevelName = LEVEL_NAMES[stack.length]; // 'Subject' or 'Topic'
 
   const openDepartment = (dept) => { setDepartment(dept); setStack([]); setSearch(''); };
+
+  // Folder card helpers: department colour (utils/departmentColors), counts and dates
+  const deptPalette = (dept) => (dept === 'General' ? NEUTRAL : paletteFor(dept));
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const latestOf = (items) => items.reduce((m, n) => Math.max(m, n.createdAt?.toMillis?.() || 0), 0);
+  const formatDay = (ms) => (ms ? new Date(ms).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No uploads yet');
   const goRoot = () => { setDepartment(null); setStack([]); };
   const goToLevel = (idx) => setStack(stack.slice(0, idx + 1)); // idx -1 handled by department crumb
   const goDepartmentRoot = () => setStack([]);
@@ -144,7 +157,7 @@ export default function NotesManager() {
   const resetUploadForm = () => {
     setTitle('');
     setDescription('');
-    setBundleId('');
+    setBundleAccess({ mode: 'default', ids: [] });
     setFileUrl('');
     setSelectedFiles([]);
     setUploadProgress(0);
@@ -383,7 +396,7 @@ export default function NotesManager() {
           await addDoc(collection(db, 'notes'), {
             title: selectedFiles.length === 1 && title.trim() ? title.trim() : baseName,
             description,
-            bundleId,
+            ...accessFields(bundleAccess),
             url,
             type: 'pdf',
             fileName: file.name,
@@ -396,7 +409,7 @@ export default function NotesManager() {
         await addDoc(collection(db, 'notes'), {
           title: title.trim(),
           description,
-          bundleId,
+          ...accessFields(bundleAccess),
           url: fileUrl.trim(),
           type: 'link',
           fileName: 'External Link',
@@ -441,10 +454,28 @@ export default function NotesManager() {
     });
   };
 
-  const getBundleName = (bId) => {
-    if (!bId) return 'Any bundle (Dept-level)';
-    const b = bundles.find(x => x.id === bId);
-    return b ? b.name : bId;
+  const getBundleName = (note) => {
+    const names = bundleNamesOf(note, bundles);
+    return names.length ? names.join(', ') : 'Any bundle (Dept-level)';
+  };
+
+  const openAccessEditor = (note) => {
+    setAccessNote(note);
+    setAccessValue(accessOf(note));
+  };
+
+  const saveNoteAccess = async () => {
+    if (!accessNote) return;
+    setIsSavingAccess(true);
+    try {
+      await updateDoc(doc(db, 'notes', accessNote.id), accessFields(accessValue));
+      setAccessNote(null);
+    } catch (err) {
+      console.error('Failed to update note access', err);
+      alert('Failed to update access. Please try again.');
+    } finally {
+      setIsSavingAccess(false);
+    }
   };
 
   const locationLabel = (n) => [n.department || 'General', n.subject, n.topic].filter(Boolean).join(' / ');
@@ -466,7 +497,10 @@ export default function NotesManager() {
         <div className="space-y-2 mt-4 pt-3 border-t border-slate-100 text-sm">
           <div className="flex items-center justify-between gap-2">
             <span className="text-slate-400 font-medium flex items-center gap-1.5 shrink-0"><Book size={14} /> Access:</span>
-            <span className="text-slate-700 font-bold truncate" title={getBundleName(note.bundleId)}>{getBundleName(note.bundleId)}</span>
+            <button type="button" onClick={() => openAccessEditor(note)} className="min-w-0 flex items-center gap-1.5 text-slate-700 hover:text-blue-600 font-bold transition-colors" title={`${getBundleName(note)} - click to change`}>
+              <span className="truncate">{getBundleName(note)}</span>
+              <Pencil size={12} className="shrink-0 text-slate-400" />
+            </button>
           </div>
           {note.fileName && (
             <div className="flex items-center justify-between gap-2">
@@ -566,26 +600,124 @@ export default function NotesManager() {
         )
       ) : !department ? (
         /* Root: department folders */
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-          {departments.map(dept => {
-            const count = notesInDepartment(dept).length;
-            const subjectCount = folders.filter(f => f.department === dept && !f.parentId).length;
-            return (
-              <button
-                key={dept}
-                onClick={() => openDepartment(dept)}
-                className="text-left bg-white border border-slate-200 rounded-2xl p-5 hover:border-blue-300 hover:shadow-md transition-all group"
-              >
-                <Folder size={34} className="text-amber-500 mb-3 group-hover:hidden" />
-                <FolderOpen size={34} className="text-amber-500 mb-3 hidden group-hover:block" />
-                <div className="font-[900] text-slate-900 leading-tight line-clamp-2" title={dept}>{dept}</div>
-                <div className="text-xs font-bold text-slate-400 mt-2">
-                  {subjectCount} {subjectCount === 1 ? 'subject' : 'subjects'} &bull; {count} {count === 1 ? 'file' : 'files'}
+        (() => {
+          const deptStats = departments.map(dept => {
+            const files = notesInDepartment(dept);
+            const subjects = deptSubjects(dept);
+            return { dept, files, subjects };
+          });
+          const withNotes = deptStats.filter(d => d.files.length > 0 || d.subjects.length > 0);
+          const empty = deptStats.filter(d => d.files.length === 0 && d.subjects.length === 0);
+          const summary = [
+            { label: 'Files', value: notes.length, icon: FileText, tint: 'from-blue-500 to-indigo-600' },
+            { label: 'Departments with notes', value: withNotes.length, icon: Building2, tint: 'from-emerald-500 to-teal-600' },
+            { label: 'Subject folders', value: folders.filter(f => !f.parentId).length, icon: BookOpen, tint: 'from-violet-500 to-purple-600' },
+            { label: 'Notes bundles', value: noteBundles.length, icon: Package, tint: 'from-amber-500 to-orange-600' },
+          ];
+          return (
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                {summary.map(stat => (
+                  <div key={stat.label} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${stat.tint} text-white flex items-center justify-center shrink-0 shadow-md`}>
+                      <stat.icon size={22} strokeWidth={2.2} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-400 truncate">{stat.label}</div>
+                      <div className="text-[24px] font-[900] text-slate-900 leading-tight">{stat.value}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {withNotes.length > 0 && (
+                <div className="space-y-5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[13px] font-[800] text-slate-400 uppercase tracking-widest">Departments</span>
+                    <div className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent"></div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    {withNotes.map(({ dept, files, subjects }) => {
+                      const p = deptPalette(dept);
+                      const mono = dept === 'General' ? 'GN' : monogramOf(dept);
+                      const topSubjects = subjects
+                        .map(s => ({ name: s.name, count: notesInFolder(s.id).length }))
+                        .sort((a, b) => b.count - a.count);
+                      return (
+                        <button
+                          key={dept}
+                          type="button"
+                          onClick={() => openDepartment(dept)}
+                          className={`group relative overflow-hidden text-left bg-white rounded-[24px] border border-slate-200/80 p-6 shadow-[0_8px_24px_rgba(15,23,42,0.04)] hover:shadow-2xl ${p.glow} ${p.ring} hover:-translate-y-1 transition-all duration-300 focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-200`}
+                        >
+                          <span aria-hidden className={`pointer-events-none absolute -right-2 -top-5 text-[96px] font-[900] leading-none tracking-tighter select-none ${p.mark} group-hover:scale-110 transition-transform duration-500`}>{mono}</span>
+
+                          <div className="relative flex items-center gap-4">
+                            <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${p.badge} text-white flex items-center justify-center shrink-0 shadow-lg group-hover:rotate-[-4deg] group-hover:scale-105 transition-transform duration-300`}>
+                              <span className={`font-[900] tracking-tight ${mono.length > 2 ? 'text-[15px]' : 'text-[18px]'}`}>{mono}</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-[800] text-[16px] text-slate-900 leading-snug line-clamp-2 break-words" title={dept}>{dept}</h3>
+                              <div className="mt-0.5 text-[12.5px] font-semibold text-slate-500">{plural(subjects.length, 'subject')}</div>
+                            </div>
+                          </div>
+
+                          <div className="relative mt-5 flex items-baseline gap-2">
+                            <span className="text-[34px] font-[900] text-slate-900 leading-none tracking-tight">{files.length}</span>
+                            <span className="text-[12px] font-[800] uppercase tracking-wider text-slate-400">{files.length === 1 ? 'File' : 'Files'}</span>
+                          </div>
+
+                          <div className="relative mt-4 flex flex-wrap gap-1.5 min-h-[26px]">
+                            {topSubjects.slice(0, 3).map(s => (
+                              <span key={s.name} className={`px-2 py-1 rounded-lg border text-[11px] font-bold truncate max-w-[160px] ${p.soft}`} title={s.name}>{s.name} · {s.count}</span>
+                            ))}
+                            {topSubjects.length > 3 && <span className="px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">+{topSubjects.length - 3} more</span>}
+                            {topSubjects.length === 0 && <span className="px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 text-[11px] font-bold text-slate-500">No subject folders yet</span>}
+                          </div>
+
+                          <div className="relative mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                            <span className="flex items-center gap-2 text-[12.5px] font-semibold text-slate-500 min-w-0">
+                              <CalendarClock size={15} className="text-emerald-500 shrink-0" />
+                              <span className="truncate">Latest upload: <span className="text-slate-700 font-bold">{formatDay(latestOf(files))}</span></span>
+                            </span>
+                            <ArrowRight size={18} className={`${p.text} shrink-0 group-hover:translate-x-1.5 transition-transform duration-300`} />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </button>
-            );
-          })}
-        </div>
+              )}
+
+              {empty.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[13px] font-[800] text-slate-400 uppercase tracking-widest">{withNotes.length ? 'Departments without notes' : 'Departments'}</span>
+                    <div className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent"></div>
+                    <span className="text-[12px] font-bold text-slate-400">Open one to start adding notes</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2.5">
+                    {empty.map(({ dept }) => {
+                      const p = deptPalette(dept);
+                      const mono = dept === 'General' ? 'GN' : monogramOf(dept);
+                      return (
+                        <button
+                          key={dept}
+                          type="button"
+                          onClick={() => openDepartment(dept)}
+                          className={`group flex items-center gap-2.5 pl-1.5 pr-4 py-1.5 bg-white border border-slate-200 rounded-xl hover:shadow-md ${p.ring} transition-all`}
+                        >
+                          <span className={`w-8 h-8 rounded-lg bg-gradient-to-br ${p.badge} text-white flex items-center justify-center text-[11px] font-[900] shrink-0 opacity-80 group-hover:opacity-100 transition-opacity`}>{mono}</span>
+                          <span className="text-[13px] font-bold text-slate-600 group-hover:text-slate-900">{dept}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()
       ) : (
         <div className="space-y-8">
           {/* Subject access bar (shown inside a subject folder) */}
@@ -649,29 +781,44 @@ export default function NotesManager() {
               <h3 className="text-[12px] font-[800] uppercase tracking-wider text-slate-400 mb-3">
                 {stack.length === 0 ? 'Subjects' : stack.length === 1 ? 'Topics' : 'Folders'}
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
                 {childFolders.map(f => {
                   const fileCount = notesInFolder(f.id).length;
                   const subCount = folders.filter(x => x.parentId === f.id).length;
+                  const isSubject = stack.length === 0;
+                  const p = deptPalette(department);
+                  const FolderIcon = isSubject ? BookOpen : Layers;
                   return (
-                    <div key={f.id} className="relative bg-white border border-slate-200 rounded-2xl p-5 hover:border-blue-300 hover:shadow-md transition-all group">
-                      <button onClick={() => setStack([...stack, f])} className="text-left w-full">
-                        <Folder size={34} className="text-amber-500 mb-3" />
-                        <div className="font-[900] text-slate-900 leading-tight line-clamp-2" title={f.name}>{f.name}</div>
-                        <div className="text-xs font-bold text-slate-400 mt-2">
-                          {stack.length === 0 && `${subCount} ${subCount === 1 ? 'topic' : 'topics'} • `}{fileCount} {fileCount === 1 ? 'file' : 'files'}
+                    <div key={f.id} className={`group relative overflow-hidden bg-white rounded-[24px] border border-slate-200/80 shadow-[0_8px_24px_rgba(15,23,42,0.04)] hover:shadow-2xl ${p.glow} ${p.ring} hover:-translate-y-1 transition-all duration-300 flex flex-col`}>
+                      <FolderIcon aria-hidden size={110} strokeWidth={1.5} className={`pointer-events-none absolute -right-5 -top-5 opacity-[0.06] ${p.text} group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500`} />
+                      <button onClick={() => setStack([...stack, f])} className="relative text-left w-full p-6 pb-4 flex-1 focus:outline-none">
+                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${p.badge} text-white flex items-center justify-center shadow-lg group-hover:rotate-[-4deg] group-hover:scale-105 transition-transform duration-300`}>
+                          <FolderIcon size={22} strokeWidth={2.2} />
                         </div>
+                        <div className="mt-4 font-[800] text-[16px] text-slate-900 leading-snug line-clamp-2 break-words pr-6" title={f.name}>{f.name}</div>
+                        <div className="mt-3 flex items-baseline gap-2">
+                          <span className="text-[32px] font-[900] text-slate-900 leading-none tracking-tight">{fileCount}</span>
+                          <span className="text-[12px] font-[800] uppercase tracking-wider text-slate-400">{fileCount === 1 ? 'File' : 'Files'}</span>
+                        </div>
+                        {isSubject && (
+                          <span className={`inline-block mt-3 px-2 py-1 rounded-lg border text-[11px] font-bold ${p.soft}`}>{plural(subCount, 'topic')}</span>
+                        )}
                       </button>
-                      {stack.length === 0 && (
-                        <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                      {isSubject ? (
+                        <div className="relative mx-6 mb-5 pt-4 border-t border-slate-100 space-y-2.5">
                           <div className="flex items-center justify-between text-xs font-bold">
                             <span className={subjectPrice(f) ? 'text-emerald-600' : 'text-slate-400'}>{subjectPrice(f) ? `₹${subjectPrice(f)}` : 'Not for sale'}</span>
-                            <span className="text-slate-400">{studentsWithAccess(f.id).length} with access</span>
+                            <span className="text-slate-400 flex items-center gap-1"><Users size={12} /> {studentsWithAccess(f.id).length} with access</span>
                           </div>
                           <div className="flex gap-2">
                             <button onClick={() => openAssign(f)} className="flex-1 px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 flex items-center justify-center gap-1"><Users size={12} /> Assign</button>
                             <button onClick={() => openPrice(f)} className="flex-1 px-2 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 flex items-center justify-center gap-1"><Tag size={12} /> Price</button>
                           </div>
+                        </div>
+                      ) : (
+                        <div className={`relative mx-6 mb-5 pt-4 border-t border-slate-100 flex items-center justify-between text-[12.5px] font-[800] ${p.text}`}>
+                          <span>Open folder</span>
+                          <ArrowRight size={18} className="group-hover:translate-x-1.5 transition-transform duration-300" />
                         </div>
                       )}
                       <button
@@ -687,9 +834,11 @@ export default function NotesManager() {
                 {canCreateFolder && (
                   <button
                     onClick={() => { setFolderName(''); setFolderModalOpen(true); }}
-                    className="border-2 border-dashed border-slate-300 rounded-2xl p-5 flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50/40 transition-all min-h-[120px]"
+                    className="border-2 border-dashed border-slate-300 rounded-[24px] p-6 flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-400 hover:bg-blue-50/40 transition-all min-h-[200px]"
                   >
-                    <FolderPlus size={28} className="mb-2" />
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 group-hover:bg-blue-100 flex items-center justify-center mb-3">
+                      <FolderPlus size={24} />
+                    </div>
                     <span className="text-sm font-bold">New {nextLevelName}</span>
                   </button>
                 )}
@@ -986,16 +1135,10 @@ export default function NotesManager() {
 
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">Assign to Bundle (Optional)</label>
-                <div className="relative">
-                  <select value={bundleId} onChange={e => setBundleId(e.target.value)} className={inputCls + ' appearance-none cursor-pointer'}>
-                    <option value="">-- Apply to ANY bundle containing Notes for this dept --</option>
-                    {bundles.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                  <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                </div>
+                <BundleAccessPicker bundles={bundles} value={bundleAccess} onChange={setBundleAccess} defaultLabel="Any bundle with Notes for this dept" />
                 <p className="text-[13px] text-slate-500 font-medium mt-1.5 flex items-start gap-1.5">
                   <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-                  Leave blank to allow access for anyone who has bought a bundle for {department} that includes notes access.
+                  The default allows anyone who has bought a bundle for {department} that includes notes access. Pick specific bundles to limit it to buyers of any of those bundles.
                 </p>
               </div>
 
@@ -1037,6 +1180,19 @@ export default function NotesManager() {
       )}
 
       {/* Generic Confirmation Modal */}
+      {accessNote && (
+        <BundleAccessModal
+          subtitle={accessNote.title}
+          bundles={bundles}
+          value={accessValue}
+          onChange={setAccessValue}
+          onSave={saveNoteAccess}
+          onClose={() => setAccessNote(null)}
+          saving={isSavingAccess}
+          defaultLabel="Any bundle with Notes for this dept"
+        />
+      )}
+
       {confirmDialog && (
         <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black p-4">
           <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">

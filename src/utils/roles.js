@@ -9,7 +9,7 @@ import {
   collection, query, where, getDocs, doc, getDoc, updateDoc, serverTimestamp
 } from 'firebase/firestore';
 
-export const ADMIN_EMAILS = ['msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
+export const ADMIN_EMAILS = ['admin@msgateacademy.com', 'msgateacademy2026@gmail.com', 'msacademy2026@gmail.com', 'msgateacademy@gmail.com'];
 
 // 'reviewer' shares the /typist-dashboard route and the 'typist' sessionStorage
 // auth_role with 'typist' - only localStorage 'pair_role' tells them apart -

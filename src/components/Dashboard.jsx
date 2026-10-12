@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate, Link } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut, Folder, Package, ArrowLeft } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut, Package, Layers } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -21,6 +21,11 @@ import { buyBundle, buySubject, buyNoteBundle, verifyOrder } from '../cashfree';
 import Analytics from './admin/Analytics';
 import AdmissionGate from './admission/AdmissionGate';
 import { needsAdmissionForm, admissionFormBlocksPortal } from '../utils/admissionForm';
+import { bundleIdsOf } from '../utils/bundleAccess';
+import { isEliteStudent } from '../utils/membership';
+import { paletteFor, monogramOf, NEUTRAL } from '../utils/departmentColors';
+import { FolderHero, FolderBreadcrumb, FolderCard } from './student/StudentFolderCards';
+import { formatDay, latestOf } from '../utils/folderDates';
 import { TrendingUp, Dumbbell } from 'lucide-react';
 
 function VideoDuration({ url, storedDuration }) {
@@ -125,9 +130,10 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [studentName, setStudentName] = useState('Student');
   const [studentDepartment, setStudentDepartment] = useState('');
-  const [isPro, setIsPro] = useState(false);
   const [purchasedBundles, setPurchasedBundles] = useState([]);
   const [availableBundles, setAvailableBundles] = useState([]);
+  // Elite = owns a course bundle with every resource ticked (utils/membership); it unlocks the whole department
+  const isPro = isEliteStudent({ purchasedBundles, bundles: availableBundles, department: studentDepartment });
   // Membership tier: Elite (pro) > Prime (bought bundles) > Foundation (everyone else)
   const bundleCount = purchasedBundles.length;
   const tier = isPro
@@ -187,15 +193,14 @@ export default function Dashboard() {
   const canAccessRecording = (rec) => {
     if (isPro) return true;
 
-    // 1. EXCLUSIVE BUNDLE: If the recording is assigned to a specific paid bundle
-    if (rec.bundleId && rec.bundleId !== 'free') {
-      if (purchasedBundles && purchasedBundles.includes(rec.bundleId)) {
-        const bundle = (availableBundles || []).find(b => b.id === rec.bundleId);
-        if (!bundle || !bundle.permissions || bundle.permissions.includes('recordings')) {
-          return true;
-        }
-      }
-      return false; // Do not fall through
+    // 1. EXCLUSIVE BUNDLES: If the recording is assigned to specific paid bundles, any one of them unlocks it
+    const recBundles = bundleIdsOf(rec);
+    if (recBundles.length) {
+      return recBundles.some(id => {
+        if (!purchasedBundles || !purchasedBundles.includes(id)) return false;
+        const bundle = (availableBundles || []).find(b => b.id === id);
+        return !bundle || !bundle.permissions || bundle.permissions.includes('recordings');
+      }); // Do not fall through
     }
 
     // 2. GENERAL RECORDINGS (No specific bundleId):
@@ -243,8 +248,9 @@ export default function Dashboard() {
     
     // EXCLUSIVE BUNDLE: If a note is assigned to a specific bundle, 
     // it can ONLY be unlocked by purchasing that specific bundle.
-    if (note.bundleId) {
-      return purchasedBundles.includes(note.bundleId);
+    const onlyBundles = bundleIdsOf(note);
+    if (onlyBundles.length) {
+      return onlyBundles.some(id => purchasedBundles.includes(id));
     }
 
     // Notes inside a subject folder are unlocked per subject (checked above), not department-wide
@@ -509,9 +515,6 @@ export default function Dashboard() {
               setStudentDepartment(data.department);
               localStorage.setItem('student_department', data.department);
             }
-            if (data.isPro) {
-              setIsPro(true);
-            }
             if (data.purchasedBundles) {
               setPurchasedBundles(data.purchasedBundles);
             }
@@ -635,6 +638,9 @@ export default function Dashboard() {
     return notes.filter(n => n.folderId && ids.has(n.folderId));
   };
   const folderPrice = (f) => Number(String(f.discountedPrice || f.price || '').replace(/[^\d.]/g, '')) || 0;
+  // Notes / Recordings tabs use the department's fixed colour (utils/departmentColors)
+  const deptPalette = studentDepartment ? paletteFor(studentDepartment) : NEUTRAL;
+  const deptMonogram = studentDepartment ? monogramOf(studentDepartment) : 'MY';
 
   // 'owned' (bought/assigned) | 'included' (via Elite or a bundle) | 'locked'
   const subjectAccess = (subject) => {
@@ -1065,15 +1071,30 @@ export default function Dashboard() {
           <StudentLiveClasses department={studentDepartment} isPro={isPro} purchasedBundles={purchasedBundles} bundles={availableBundles} />
         )}
 
-        {activeTab === 'recordings' && (
-          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mt-6 relative overflow-hidden">
-            <h2 className="text-2xl font-[900] text-slate-900 mb-6 flex items-center gap-3">
-              <PlayCircle className="text-purple-500" size={28} /> Past Class Recordings
-            </h2>
-            
-            <div>
+        {activeTab === 'recordings' && (() => {
+          const subjectFolders = groupBySubject(recordings);
+          const openFolder = subjectFolders.length === 1
+            ? subjectFolders[0]
+            : subjectFolders.find(f => f.name === recordingSubject) || null;
+          const unlockedCount = recordings.filter(canAccessRecording).length;
+          return (
+          <div className="mt-6 space-y-6">
+            <FolderHero
+              palette={deptPalette}
+              monogram={deptMonogram}
+              department={studentDepartment}
+              title="Past Class Recordings"
+              icon={PlayCircle}
+              stats={[
+                { label: 'Recordings', value: recordings.length },
+                { label: 'Subjects', value: subjectFolders.filter(f => f.name !== NO_SUBJECT).length },
+                { label: 'Unlocked', value: unlockedCount },
+                { label: 'Latest', value: formatDay(latestOf(recordings)) || '-' },
+              ]}
+            />
+
               {recordings.length === 0 ? (
-                <div className="text-center py-12">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm text-center py-12 px-6">
                   <div className="w-20 h-20 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
                     <PlayCircle size={32} />
                   </div>
@@ -1082,51 +1103,43 @@ export default function Dashboard() {
                     Once live classes are completed, their recordings will automatically appear here for you to review.
                   </p>
                 </div>
-              ) : (() => {
-                const subjectFolders = groupBySubject(recordings);
-                const openFolder = subjectFolders.length === 1
-                  ? subjectFolders[0]
-                  : subjectFolders.find(f => f.name === recordingSubject) || null;
-
-                // Subject folders first; a folder opens into its videos
-                if (!openFolder) {
-                  return (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {subjectFolders.map(folder => (
-                        <button
-                          key={folder.name}
-                          onClick={() => setRecordingSubject(folder.name)}
-                          className="text-left bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:shadow-md hover:border-purple-200 transition-all flex items-center gap-4"
-                        >
-                          <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
-                            <Folder size={24} />
-                          </div>
-                          <div className="min-w-0">
-                            <h3 className={`font-bold text-lg truncate ${folder.name === NO_SUBJECT ? 'text-slate-500' : 'text-slate-800'}`}>{folder.name}</h3>
-                            <p className="text-sm text-slate-500 font-medium">{folder.items.length} recording{folder.items.length !== 1 ? 's' : ''}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  );
-                }
-
-                return (
-                <div className="space-y-4">
-                  {subjectFolders.length > 1 && (
-                    <button
-                      onClick={() => setRecordingSubject(null)}
-                      className="inline-flex items-center gap-2 text-sm font-bold text-purple-700 hover:text-purple-900"
-                    >
-                      <ArrowLeft size={16} /> All subjects
-                    </button>
-                  )}
-                  <h3 className="text-lg font-[900] text-slate-800 flex items-center gap-2">
-                    <Folder size={20} className="text-purple-500" /> {openFolder.name}
-                  </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              ) : !openFolder ? (
+                /* Subject folders first; a folder opens into its videos */
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {subjectFolders.map(folder => {
+                    const other = folder.name === NO_SUBJECT;
+                    const open = folder.items.filter(canAccessRecording).length;
+                    const all = open === folder.items.length;
+                    return (
+                      <FolderCard
+                        key={folder.name}
+                        palette={other ? NEUTRAL : deptPalette}
+                        icon={other ? Layers : BookOpen}
+                        muted={other}
+                        title={folder.name}
+                        count={folder.items.length}
+                        countLabel={folder.items.length === 1 ? 'Recording' : 'Recordings'}
+                        corner={
+                          <span className={`text-[11px] font-[800] px-2.5 py-1 rounded-full whitespace-nowrap ${all ? 'bg-emerald-50 text-emerald-600' : open === 0 ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-600'}`}>
+                            {all ? 'Unlocked' : open === 0 ? 'Locked' : `${open} of ${folder.items.length} unlocked`}
+                          </span>
+                        }
+                        latest={latestOf(folder.items)}
+                        onOpen={() => setRecordingSubject(folder.name)}
+                      />
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <FolderBreadcrumb
+                    crumbs={subjectFolders.length > 1
+                      ? [{ label: 'All subjects', onClick: () => setRecordingSubject(null) }, { label: openFolder.name }]
+                      : [{ label: openFolder.name }]}
+                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                   {openFolder.items.map(rec => (
-                    <div key={rec.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:shadow-md hover:border-purple-200 transition-all group">
+                    <div key={rec.id} className="bg-white border border-slate-200/80 rounded-[24px] p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] hover:shadow-xl hover:border-purple-200 transition-all group">
                       <div className="aspect-video bg-slate-200 rounded-xl mb-4 relative overflow-hidden group-cursor-pointer flex items-center justify-center">
                          {!canAccessRecording(rec) ? (
                             <Lock size={48} className="text-slate-400 drop-shadow-md z-10" />
@@ -1155,11 +1168,10 @@ export default function Dashboard() {
                   ))}
                 </div>
                 </div>
-                );
-              })()}
-            </div>
+              )}
           </div>
-        )}
+          );
+        })()}
 
         {activeTab === 'notes' && (() => {
           const currentNoteFolder = noteStack[noteStack.length - 1] || null;
@@ -1186,29 +1198,32 @@ export default function Dashboard() {
           };
 
           return (
-            <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm mt-6 relative overflow-hidden">
-              <h2 className="text-2xl font-[900] text-slate-900 mb-4 flex items-center gap-3">
-                <FileText className="text-blue-500" size={28} /> Study Notes
-              </h2>
+            <div className="mt-6 space-y-6">
+              <FolderHero
+                palette={deptPalette}
+                monogram={deptMonogram}
+                department={studentDepartment}
+                title="Study Notes"
+                icon={FileText}
+                stats={[
+                  { label: 'Notes', value: notes.length },
+                  { label: 'Subjects', value: noteFolders.filter(f => !f.parentId).length },
+                  { label: 'Unlocked subjects', value: noteFolders.filter(f => !f.parentId && subjectAccess(f) !== 'locked').length },
+                  { label: 'Latest', value: formatDay(latestOf(notes)) || '-' },
+                ]}
+              />
 
               {/* Breadcrumb */}
-              <div className="flex flex-wrap items-center gap-1.5 text-sm font-bold mb-6">
-                <button onClick={() => setNoteStack([])} className={`px-2.5 py-1 rounded-lg transition-colors ${noteStack.length === 0 ? 'text-blue-600 bg-blue-50' : 'text-slate-500 hover:bg-slate-100'}`}>
-                  {studentDepartment || 'My Department'}
-                </button>
-                {noteStack.map((f, i) => (
-                  <React.Fragment key={f.id}>
-                    <ChevronRight size={14} className="text-slate-300" />
-                    <button onClick={() => setNoteStack(noteStack.slice(0, i + 1))} className={`px-2.5 py-1 rounded-lg transition-colors ${i === noteStack.length - 1 ? 'text-blue-600 bg-blue-50' : 'text-slate-500 hover:bg-slate-100'}`}>
-                      {f.name}
-                    </button>
-                  </React.Fragment>
-                ))}
-              </div>
+              <FolderBreadcrumb
+                crumbs={[
+                  { label: studentDepartment || 'My Department', onClick: () => setNoteStack([]) },
+                  ...noteStack.map((f, i) => ({ label: f.name, onClick: () => setNoteStack(noteStack.slice(0, i + 1)) })),
+                ]}
+              />
 
               {/* Subject access banner */}
               {currentSubject && (
-                <div className={`mb-6 rounded-2xl border p-4 flex flex-wrap items-center justify-between gap-3 ${subjectStatus === 'locked' ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                <div className={`rounded-2xl border p-4 flex flex-wrap items-center justify-between gap-3 ${subjectStatus === 'locked' ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
                   <div className="text-sm font-bold text-slate-700 flex items-center gap-2">
                     {subjectStatus === 'locked' ? <Lock size={16} className="text-amber-600" /> : <CheckCircle size={16} className="text-emerald-600" />}
                     {subjectStatus === 'owned' && 'You own this subject. Every note inside is unlocked.'}
@@ -1221,7 +1236,7 @@ export default function Dashboard() {
 
               {/* Notes bundles for this department */}
               {noteStack.length === 0 && noteBundles.filter(b => purchasedNoteBundles.includes(b.id) || folderPrice(b)).length > 0 && (
-                <div className="mb-8">
+                <div>
                   <h3 className="text-[12px] font-[800] uppercase tracking-wider text-slate-400 mb-3">Notes Bundles</h3>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {noteBundles.filter(b => purchasedNoteBundles.includes(b.id) || folderPrice(b)).map(b => {
@@ -1259,7 +1274,7 @@ export default function Dashboard() {
               )}
 
               {childFolders.length === 0 && filesHere.length === 0 ? (
-                <div className="text-center py-12">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm text-center py-12 px-6">
                   <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
                     <FileText size={32} />
                   </div>
@@ -1273,33 +1288,35 @@ export default function Dashboard() {
                   {childFolders.length > 0 && (
                     <div>
                       <h3 className="text-[12px] font-[800] uppercase tracking-wider text-slate-400 mb-3">{noteStack.length === 0 ? 'Subjects' : 'Topics'}</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                         {childFolders.map(f => {
                           const isSubject = noteStack.length === 0;
                           const status = isSubject ? subjectAccess(f) : null;
-                          const count = notesUnder(f.id).length;
+                          const folderNotes = notesUnder(f.id);
+                          const topicCount = noteFolders.filter(x => x.parentId === f.id).length;
                           return (
-                            <div
+                            <FolderCard
                               key={f.id}
-                              onClick={() => setNoteStack([...noteStack, f])}
-                              className="cursor-pointer bg-white border border-slate-200 rounded-2xl p-5 hover:border-blue-300 hover:shadow-md transition-all flex flex-col gap-3"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0"><Folder size={26} /></div>
-                                {isSubject && (
-                                  <span className={`text-[11px] font-[800] px-2.5 py-1 rounded-full ${status === 'locked' ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-600'}`}>
-                                    {status === 'owned' ? 'Owned' : status === 'included' ? 'Unlocked' : 'Locked'}
-                                  </span>
-                                )}
-                              </div>
-                              <div>
-                                <h4 className="font-[900] text-slate-900 leading-tight line-clamp-2" title={f.name}>{f.name}</h4>
-                                <p className="text-xs font-bold text-slate-400 mt-1">{count} {count === 1 ? 'note' : 'notes'}</p>
-                              </div>
-                              {isSubject && status === 'locked' && (
+                              palette={deptPalette}
+                              icon={isSubject ? BookOpen : Layers}
+                              title={f.name}
+                              count={folderNotes.length}
+                              countLabel={folderNotes.length === 1 ? 'Note' : 'Notes'}
+                              corner={isSubject && (
+                                <span className={`text-[11px] font-[800] px-2.5 py-1 rounded-full flex items-center gap-1 ${status === 'locked' ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-600'}`}>
+                                  {status === 'locked' ? <Lock size={11} /> : <CheckCircle size={11} />}
+                                  {status === 'owned' ? 'Owned' : status === 'included' ? 'Unlocked' : 'Locked'}
+                                </span>
+                              )}
+                              chips={isSubject && topicCount > 0 && (
+                                <span className={`px-2 py-1 rounded-lg border text-[11px] font-bold ${deptPalette.soft}`}>{topicCount} {topicCount === 1 ? 'topic' : 'topics'}</span>
+                              )}
+                              footer={isSubject && status === 'locked' && (
                                 folderPrice(f) ? buyButton(f, true) : <p className="text-xs font-bold text-slate-400">Included in course bundles</p>
                               )}
-                            </div>
+                              latest={latestOf(folderNotes)}
+                              onOpen={() => setNoteStack([...noteStack, f])}
+                            />
                           );
                         })}
                       </div>

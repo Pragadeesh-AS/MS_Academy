@@ -1,9 +1,11 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
+const { sendWebhookEmailToEach } = require('./emailWebhook');
 
 // Same Google Apps Script email webhook as the solution-release emails (functions/.env GAS_WEBHOOK_URL)
 const GAS_WEBHOOK_URL = defineString('GAS_WEBHOOK_URL', { default: '' });
+
 // Optional link to the site in the emails, e.g. https://msgateacademy.web.app (functions/.env SITE_URL)
 const SITE_URL = defineString('SITE_URL', { default: '' });
 
@@ -29,13 +31,31 @@ const formatIst = (ms) => new Date(ms).toLocaleString('en-IN', {
   hour: 'numeric', minute: '2-digit', hour12: true,
 });
 
+// "Chemical (CH)" and "Chemical Engineering (CH)" are the same department: same name, or same (CODE)
+const deptCode = (name) => ((name || '').match(/\(([^)]+)\)/) || [])[1]?.trim().toLowerCase() || '';
+const sameDept = (a, b) => {
+  const x = (a || '').trim().toLowerCase();
+  const y = (b || '').trim().toLowerCase();
+  return !!x && !!y && (x === y || (!!deptCode(a) && deptCode(a) === deptCode(b)));
+};
+const FULL_BUNDLE_PERMISSIONS = ['tests', 'live_classes', 'recordings', 'notes'];
+// Elite: owns a bundle with every resource ticked (keep in sync with src/utils/membership.js)
+const isElite = (student, bundles) => {
+  const purchased = Array.isArray(student.purchasedBundles) ? student.purchasedBundles : [];
+  return bundles.some(b => purchased.includes(b.id)
+    && (b.department === 'General' || sameDept(b.department, student.department))
+    && (!b.permissions || FULL_BUNDLE_PERMISSIONS.every(p => b.permissions.includes(p))));
+};
+
 // Keep in sync with canAccessTest() in src/utils/testAccess.js
 const canAccessTest = (test, student, bundles) => {
   const purchased = Array.isArray(student.purchasedBundles) ? student.purchasedBundles : [];
   if (test.bundleId === 'free') return true;
   if (test.bundleId === undefined && (test.createdBy === 'Admin' || test.createdBy === 'MS Academy Admin')) return true;
-  if (test.bundleId && test.bundleId !== 'free') return purchased.includes(test.bundleId);
-  if (student.isPro) return true;
+  // Limited to specific bundles: bundleIds (any one unlocks it), or the older single bundleId
+  const onlyBundles = Array.isArray(test.bundleIds) && test.bundleIds.length ? test.bundleIds : (test.bundleId && test.bundleId !== 'free' ? [test.bundleId] : []);
+  if (onlyBundles.length) return onlyBundles.some(id => purchased.includes(id));
+  if (isElite(student, bundles)) return true;
   return bundles.some(b =>
     purchased.includes(b.id) && b.department === test.department && (!b.permissions || b.permissions.includes('tests'))
   );
@@ -75,25 +95,13 @@ const testEmail = (kind, test, startMs) => {
 };
 
 const sendEmails = async (emails, { subject, html }) => {
+  // One email per student (no shared recipient list); only replies of { status: 'success' } count
   const webhookUrl = GAS_WEBHOOK_URL.value();
   if (!webhookUrl) {
     console.warn(`GAS_WEBHOOK_URL is not set - skipped "${subject}" for ${emails.length} student(s).`);
     return 0;
   }
-  let sent = 0;
-  // One email per student (no shared recipient list), a few at a time so the webhook isn't flooded
-  for (let i = 0; i < emails.length; i += 10) {
-    const results = await Promise.allSettled(emails.slice(i, i + 10).map(email => fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ to_email: email, subject, message_html: html }),
-    })));
-    results.forEach((r, k) => {
-      if (r.status === 'fulfilled' && r.value.ok) sent += 1;
-      else console.error('Test notification email failed for', emails[i + k], r.reason || r.value?.status);
-    });
-  }
-  return sent;
+  return sendWebhookEmailToEach(webhookUrl, emails, { subject, html });
 };
 
 // Every 5 minutes: email the students who can take each upcoming test

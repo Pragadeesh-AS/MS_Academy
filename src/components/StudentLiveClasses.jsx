@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { sendWebhookEmail } from '../utils/emailWebhook';
 import { 
   Video, 
   VideoOff,
@@ -47,16 +48,8 @@ import { gradeAnswer, normalizeQuestion } from '../utils/testGrading';
 import { positiveMarkFor } from '../utils/marking';
 
 const sendEmailViaGAS = async (to, subject, htmlMessage) => {
-  const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
-  if (!webhookUrl) return;
-  
   try {
-    await fetch(webhookUrl, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to_email: to, subject: subject, message_html: htmlMessage })
-    });
+    await sendWebhookEmail({ to, subject, html: htmlMessage });
   } catch (err) {
     console.error("Error sending email:", err);
   }

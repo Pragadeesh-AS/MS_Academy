@@ -1,11 +1,13 @@
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { defineString } = require('firebase-functions/params');
+const { sendWebhookEmailToEach } = require('./emailWebhook');
 
 // Same Google Apps Script email webhook as the test and solution-release emails (functions/.env GAS_WEBHOOK_URL)
 const GAS_WEBHOOK_URL = defineString('GAS_WEBHOOK_URL', { default: '' });
+
 const SITE_URL = defineString('SITE_URL', { default: '' });
 // Who gets the enquiry emails - comma-separated (functions/.env ENQUIRY_NOTIFY_EMAILS)
-const ENQUIRY_NOTIFY_EMAILS = defineString('ENQUIRY_NOTIFY_EMAILS', { default: 'msacademy2026@gmail.com' });
+const ENQUIRY_NOTIFY_EMAILS = defineString('ENQUIRY_NOTIFY_EMAILS', { default: 'admin@msgateacademy.com' });
 
 const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -15,8 +17,8 @@ exports.notifyAdminOfEnquiry = onDocumentCreated('contact_queries/{queryId}', as
   if (!snap) return;
   const q = snap.data();
 
-  const webhookUrl = GAS_WEBHOOK_URL.value();
   const recipients = ENQUIRY_NOTIFY_EMAILS.value().split(',').map(e => e.trim()).filter(Boolean);
+  const webhookUrl = GAS_WEBHOOK_URL.value();
   if (!webhookUrl || recipients.length === 0) {
     console.warn(`GAS_WEBHOOK_URL or ENQUIRY_NOTIFY_EMAILS is not set - no email for enquiry ${event.params.queryId}.`);
     return;
@@ -46,19 +48,7 @@ exports.notifyAdminOfEnquiry = onDocumentCreated('contact_queries/{queryId}', as
     </div>
   `;
 
-  let sent = 0;
-  for (const email of recipients) {
-    try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ to_email: email, subject, message_html: html }),
-      });
-      if (res.ok) sent += 1;
-      else console.error('Enquiry email failed for', email, res.status);
-    } catch (err) {
-      console.error('Enquiry email failed for', email, err);
-    }
-  }
+  // Only replies of { status: 'success' } count as sent
+  const sent = await sendWebhookEmailToEach(webhookUrl, recipients, { subject, html });
   await snap.ref.update({ adminEmailed: sent > 0, adminEmailedAt: new Date().toISOString() });
 });

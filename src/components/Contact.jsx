@@ -44,7 +44,7 @@ export default function Contact() {
               </div>
               <div className="flex flex-col justify-center">
                 <span className="text-[16px] font-bold text-slate-400 uppercase tracking-wider mb-2">Email</span>
-                <span className="text-[18px] md:text-[24px] font-semibold text-slate-800 break-all">msacademics.edu@gmail.com</span>
+                <a href="mailto:admin@msgateacademy.com" className="text-[18px] md:text-[24px] font-semibold text-slate-800 break-all hover:text-[#1d4ed8] transition-colors">admin@msgateacademy.com</a>
               </div>
             </div>
 

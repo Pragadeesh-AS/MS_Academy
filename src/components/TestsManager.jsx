@@ -11,8 +11,12 @@ import {
 } from '../utils/solutionRelease';
 
 import TestScheduleCalendar from './tests/TestScheduleCalendar';
+import { DepartmentTestFolders, TemplateTestFolders } from './tests/TestFolderCards';
+import { sendWebhookEmailToEach } from '../utils/emailWebhook';
+import { BundleAccessPicker, BundleAccessModal } from './shared/BundleAccessPicker';
+import { accessOf, accessFields, bundleNamesOf } from '../utils/bundleAccess';
 import { sameDepartment, canonicalDepartment } from '../utils/subjects';
-import { TEST_TEMPLATES, templateByKey, templateMarks, templateQuestions, templateNumerical, subjectGroup, distributeAllocations, templateKeyOf, templateFoldersFor, folderName } from '../utils/testTemplates';
+import { TEST_TEMPLATES, TEMPLATE_FOLDERS, templateByKey, templateMarks, templateQuestions, templateNumerical, subjectGroup, distributeAllocations, templateKeyOf, templateFoldersFor, folderName } from '../utils/testTemplates';
 import { formatTestTime, testStartMillis, toDateTimeLocal } from '../utils/testSchedule';
 import { recentQuestionUse, pickRotated } from '../utils/questionRotation';
 import { QUESTION_TYPES, TYPE_KEYS, TYPE_PRESETS, presetLabel, questionTypeKey, typeCountsOf, sumCounts, pctOf, cellsCanSupply, planTypeMix, buildTypeSplit, defaultTypeSplit } from '../utils/questionTypeSplit';
@@ -52,7 +56,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [openFolder, setOpenFolder] = useState(null); // department folder (admin)
   const [openTemplateFolder, setOpenTemplateFolder] = useState(null); // 'topic' | 'subject' | 'full' | 'other'
   const [editBundleTest, setEditBundleTest] = useState(null);
-  const [editBundleValue, setEditBundleValue] = useState('');
+  const [editBundleValue, setEditBundleValue] = useState({ mode: 'default', ids: [] });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   const showToast = (message, type = 'success') => {
@@ -64,6 +68,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [step, setStep] = useState(1); // 1: Specs, 2: Hierarchy, 3: Topic Marks (allocations), 4: Question Types
   // Built-in blueprint the test was started from ('' = custom) - see utils/testTemplates
   const [templateKey, setTemplateKey] = useState('');
+  // Folder a custom test is filed under ('' = Other Tests); template tests go to their template's folder
+  const [customFolder, setCustomFolder] = useState('');
   const [templateShortages, setTemplateShortages] = useState([]);
 
   // Wizard Form State
@@ -81,7 +87,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [goLiveNow, setGoLiveNow] = useState(false); // new tests only: opens the moment it is saved
   const [view, setView] = useState('templates'); // 'templates' | 'schedule' (calendar)
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [bundleId, setBundleId] = useState(''); // '' means dept level, 'free' means free, 'specific_id' means exclusive
+  const [bundleAccess, setBundleAccess] = useState({ mode: 'default', ids: [] }); // dept level, free, or specific bundles (utils/bundleAccess)
   const [bundles, setBundles] = useState([]);
 
   const [selectedDept, setSelectedDept] = useState(department || '');
@@ -135,6 +141,11 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
         actual.theoryCount = found.length - actual.numericalCount;
       }
       if (Object.keys(actual).every(k => test[k] === actual[k])) return;
+      // Older custom tests are placed in a folder by their specs - pin that folder so correcting
+      // the specs doesn't move the test to another folder
+      if (!templateByKey(test.templateKey) && typeof test.folderKey !== 'string') {
+        actual.folderKey = templateKeyOf(test) === 'other' ? '' : templateKeyOf(test);
+      }
       syncingTotals.current.add(test.id);
       updateDoc(doc(db, 'tests', test.id), actual)
         .then(() => setTests(prev => prev.map(t => (t.id === test.id ? { ...t, ...actual } : t))))
@@ -672,6 +683,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       questions: finalQuestionIds,
       allocations,
       templateKey: templateKey || '',
+      folderKey: templateKey || customFolder || '',
       typeSplit: typeSplit ? {
         mode: typeSplit.mode,
         autoAdjusted: !!typeSplit.autoAdjusted,
@@ -679,7 +691,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
         pct: Object.fromEntries(TYPE_KEYS.map(k => [k, parseFloat(typeSplit.pct?.[k]) || 0])),
         count: Object.fromEntries(TYPE_KEYS.map(k => [k, parseInt(typeSplit.count?.[k]) || 0]))
       } : null,
-      bundleId: isTeacher ? '' : bundleId
+      ...(isTeacher ? { bundleId: '', bundleIds: [] } : accessFields(bundleAccess))
     };
 
     try {
@@ -717,6 +729,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const resetForm = () => {
     setEditingTestId(null);
     setTemplateKey('');
+    setCustomFolder('');
     setTemplateShortages([]);
     setTitle('');
     setDescription('');
@@ -737,7 +750,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setManualSelectedIds([]);
     setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
     setTypeSplit(null);
-    setBundleId('');
+    setBundleAccess({ mode: 'default', ids: [] });
     setStep(1);
   };
 
@@ -747,6 +760,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const handleEditTest = (test) => {
     setEditingTestId(test.id);
     setTemplateKey(test.templateKey || '');
+    // Keep a custom test in the folder it's shown in now (older tests were placed by their specs)
+    setCustomFolder(templateByKey(test.templateKey) || templateKeyOf(test) === 'other' ? '' : templateKeyOf(test));
     setTemplateShortages([]);
     setTitle(test.title || '');
     setDescription(test.description || '');
@@ -759,7 +774,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setScheduledTime(test.scheduledTime || '');
     setClosesAt(test.closesAt || '');
     setGoLiveNow(false);
-    setBundleId(test.bundleId || '');
+    setBundleAccess(accessOf(test));
     setSelectedDept(test.department || department || '');
     setSelectedSubjects(test.subject && test.subject !== 'General' ? test.subject.split(',').map(s => s.trim()).filter(Boolean) : []);
     setSelectedTopics(
@@ -786,8 +801,9 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const handleSaveBundle = async () => {
     if (!editBundleTest) return;
     try {
-      await updateDoc(doc(db, 'tests', editBundleTest.id), { bundleId: editBundleValue });
-      setTests(prev => prev.map(t => t.id === editBundleTest.id ? { ...t, bundleId: editBundleValue } : t));
+      const fields = accessFields(editBundleValue);
+      await updateDoc(doc(db, 'tests', editBundleTest.id), fields);
+      setTests(prev => prev.map(t => t.id === editBundleTest.id ? { ...t, ...fields } : t));
       setEditBundleTest(null);
       showToast("Access control updated successfully!", "success");
     } catch (err) {
@@ -833,21 +849,9 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     const uniqueEmails = [...new Set(attemptsSnapshot.docs.map(d => d.data().studentEmail).filter(Boolean))];
     if (uniqueEmails.length === 0) return 0;
 
-    const webhookUrl = import.meta.env.VITE_GAS_WEBHOOK_URL;
-    if (!webhookUrl) {
-      console.warn("VITE_GAS_WEBHOOK_URL is not set. Skipping email.");
-      return uniqueEmails.length;
-    }
     const { subject, html } = solutionsEmail(test.title);
-    // Send individual emails to protect student privacy (no group CCs)
-    uniqueEmails.forEach(email => {
-      fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ to_email: email, subject, message_html: html })
-      }).catch(e => console.error("Email fetch failed for", email, e));
-    });
-    return uniqueEmails.length;
+    // Send individual emails to protect student privacy (no group CCs); count only the ones that went out
+    return sendWebhookEmailToEach(uniqueEmails, { subject, html });
   };
 
   // Answer Release dialog: which option is picked and its inputs
@@ -1000,9 +1004,9 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   const getBundleLabel = (test) => {
     if (test.bundleId === 'free') return { text: 'Free', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
-    if (test.bundleId && test.bundleId !== '') {
-      const b = bundles.find(b => b.id === test.bundleId);
-      return { text: b ? b.name : 'Paid Bundle', color: 'bg-amber-100 text-amber-700 border-amber-200' };
+    const names = bundleNamesOf(test, bundles);
+    if (names.length) {
+      return { text: names.length === 1 ? names[0] : `${names.length} Bundles`, title: names.join(', '), color: 'bg-amber-100 text-amber-700 border-amber-200' };
     }
     return { text: 'Dept Bundle', color: 'bg-slate-100 text-slate-600 border-slate-200' };
   };
@@ -1122,50 +1126,12 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
           <p className="text-slate-500 max-w-md font-medium">Create a test module template and schedule it for your students to take directly from their dashboard.</p>
         </div>
       ) : showFolders ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-          {folders.map(folder => (
-            <div key={folder.name} onClick={() => setOpenFolder(folder.name)} className="bg-white rounded-2xl border border-slate-200 p-5 cursor-pointer hover:border-blue-300 hover:shadow-lg transition-all duration-200 group flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors border border-blue-100 group-hover:border-blue-600">
-                <FolderOpen size={22} strokeWidth={2} />
-              </div>
-              <div className="flex flex-col min-w-0">
-                <h3 className="font-[700] text-[15px] text-slate-800 truncate" title={folder.name}>{folder.name}</h3>
-                <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[13px] mt-0.5">
-                  <FileText size={12} />
-                  {folder.count} {folder.count === 1 ? 'Test' : 'Tests'}
-                </div>
-              </div>
-              <div className="ml-auto text-slate-300 group-hover:text-blue-400 transition-colors">
-                <ArrowLeft size={16} className="rotate-180" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <DepartmentTestFolders
+          folders={folders.map(f => ({ name: f.name, tests: tests.filter(t => folderOf(t) === f.name) }))}
+          onOpen={setOpenFolder}
+        />
       ) : showTemplateFolders ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {templateFolders.map(folder => (
-            <div key={folder.key} onClick={() => setOpenTemplateFolder(folder.key)} className="bg-white rounded-2xl border border-slate-200 p-5 cursor-pointer hover:border-blue-300 hover:shadow-lg transition-all duration-200 group flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-colors border ${folder.template ? 'bg-indigo-50 text-indigo-600 border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600' : 'bg-slate-100 text-slate-500 border-slate-200 group-hover:bg-slate-600 group-hover:text-white'}`}>
-                <FolderOpen size={22} strokeWidth={2} />
-              </div>
-              <div className="flex flex-col min-w-0">
-                <h3 className="font-[700] text-[15px] text-slate-800 truncate" title={folder.name}>{folder.name}</h3>
-                <div className="flex items-center gap-1.5 text-slate-400 font-semibold text-[13px] mt-0.5">
-                  <FileText size={12} />
-                  {folder.count} {folder.count === 1 ? 'Test' : 'Tests'}
-                </div>
-                {folder.template && (
-                  <div className="text-[11px] font-semibold text-slate-400 mt-0.5 truncate">
-                    {folder.template.duration} mins · {templateMarks(folder.template)} marks
-                  </div>
-                )}
-              </div>
-              <div className="ml-auto text-slate-300 group-hover:text-blue-400 transition-colors">
-                <ArrowLeft size={16} className="rotate-180" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <TemplateTestFolders folders={templateFolders} tests={deptTests} onOpen={setOpenTemplateFolder} />
       ) : visibleTests.length === 0 ? (
         <div className="bg-white border border-dashed border-slate-300 rounded-3xl text-center p-14 flex flex-col items-center justify-center">
           <FolderOpen size={36} className="text-slate-300 mb-3" />
@@ -1189,7 +1155,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                         {test.department || 'General'}
                       </span>
                       {!isTeacher && (
-                        <span className={`px-2.5 py-1 text-[10px] font-[800] rounded-full border ${lbl.color}`}>{lbl.text}</span>
+                        <span title={lbl.title} className={`px-2.5 py-1 text-[10px] font-[800] rounded-full border ${lbl.color}`}>{lbl.text}</span>
                       )}
                     </div>
                     <button
@@ -1313,7 +1279,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                     </button>
                     {!isTeacher && (
                       <button
-                        onClick={() => { setEditBundleTest(test); setEditBundleValue(test.bundleId || ''); }}
+                        onClick={() => { setEditBundleTest(test); setEditBundleValue(accessOf(test)); }}
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors inline-flex"
                         title="Edit Access Control"
                       >
@@ -1419,6 +1385,30 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                         <div className="mt-1 text-[11.5px] font-bold text-slate-500">Set everything yourself</div>
                       </button>
                     </div>
+                    {!templateKey && (
+                      <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                        <div className="text-[12.5px] font-[800] text-slate-700">Where should this test go?</div>
+                        <div className="flex flex-wrap gap-2">
+                          {TEMPLATE_FOLDERS.map(f => {
+                            const active = customFolder === f.key;
+                            return (
+                              <button
+                                key={f.key}
+                                type="button"
+                                onClick={() => setCustomFolder(active ? '' : f.key)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12.5px] font-bold transition-all ${active ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-100' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300'}`}
+                              >
+                                {active && <CheckCircle2 size={14} className="shrink-0" />}
+                                {f.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="text-[11.5px] font-semibold text-slate-500">
+                          {customFolder ? `This test will be listed under ${folderName(customFolder)}.` : 'Nothing selected - this test will be listed under Other Tests.'}
+                        </div>
+                      </div>
+                    )}
                     {templateByKey(templateKey)?.sections && (
                       <div className="flex flex-wrap gap-2 pt-1">
                         {templateByKey(templateKey).sections.map(sec => (
@@ -1482,17 +1472,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   {!isTeacher && (
                     <div className="space-y-1.5">
                       <label className="text-[12px] font-[900] text-slate-800 uppercase tracking-wide">Access Control (Admin Only)</label>
-                      <select 
-                        value={bundleId} 
-                        onChange={e => setBundleId(e.target.value)}
-                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm bg-white"
-                      >
-                        <option value="">Requires Department Bundle (Default)</option>
-                        <option value="free">Free for Everyone</option>
-                        {bundles.map(b => (
-                          <option key={b.id} value={b.id}>Require Specific Bundle: {b.name}</option>
-                        ))}
-                      </select>
+                      <BundleAccessPicker bundles={bundles} value={bundleAccess} onChange={setBundleAccess} allowFree />
                     </div>
                   )}
 
@@ -2451,39 +2431,15 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       })()}
 
       {editBundleTest && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 font-sans">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-[900] text-slate-900">Edit Access Control</h3>
-                <p className="text-xs text-slate-400 font-semibold mt-0.5">{editBundleTest.title}</p>
-              </div>
-              <button onClick={() => setEditBundleTest(null)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[12px] font-[900] text-slate-800 uppercase tracking-wide">Access Control</label>
-                <select 
-                  value={editBundleValue} 
-                  onChange={e => setEditBundleValue(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm bg-white"
-                >
-                  <option value="">Requires Department Bundle (Default)</option>
-                  <option value="free">Free for Everyone</option>
-                  {bundles.map(b => (
-                    <option key={b.id} value={b.id}>Require Specific Bundle: {b.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button onClick={() => setEditBundleTest(null)} className="px-5 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors text-sm">Cancel</button>
-                <button onClick={handleSaveBundle} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-md text-sm">Save Changes</button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <BundleAccessModal
+          subtitle={editBundleTest.title}
+          bundles={bundles}
+          value={editBundleValue}
+          onChange={setEditBundleValue}
+          onSave={handleSaveBundle}
+          onClose={() => setEditBundleTest(null)}
+          allowFree
+        />
       )}
 
     </div>

@@ -1,6 +1,8 @@
 // Whether a student may take a test, from its bundle settings and the student's plan.
 // The Cloud Function that emails test notifications (functions/testNotifications.js) has a copy
 // of this rule - keep the two in sync.
+import { bundleIdsOf } from './bundleAccess';
+
 export const canAccessTest = (test, { isPro = false, purchasedBundles = [], bundles = [] } = {}) => {
   // 1. Explicitly free
   if (test.bundleId === 'free') return true;
@@ -10,10 +12,9 @@ export const canAccessTest = (test, { isPro = false, purchasedBundles = [], bund
     return true;
   }
 
-  // 2. Exclusive bundle: only students who bought that bundle
-  if (test.bundleId && test.bundleId !== 'free') {
-    return purchasedBundles.includes(test.bundleId);
-  }
+  // 2. Exclusive bundles: only students who bought one of them
+  const onlyBundles = bundleIdsOf(test);
+  if (onlyBundles.length) return onlyBundles.some(id => purchasedBundles.includes(id));
 
   // 3. Pro users get every department test
   if (isPro) return true;

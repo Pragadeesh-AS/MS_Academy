@@ -3,33 +3,7 @@ import { db, storage } from '../../firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Upload, Trash2, X, Image as ImageIcon, Check } from 'lucide-react';
-
-const MAX_DIMENSION = 1920;
-
-// Shrink large phone photos before upload so visitors don't download multi-MB originals
-const resizeImage = (file) => new Promise((resolve) => {
-  if (file.type === 'image/gif') return resolve(file);
-  const img = new Image();
-  const objectUrl = URL.createObjectURL(file);
-  img.onload = () => {
-    URL.revokeObjectURL(objectUrl);
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(img.width * scale);
-    canvas.height = Math.round(img.height * scale);
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob(
-      (blob) => resolve(blob && blob.size < file.size ? blob : file),
-      'image/jpeg',
-      0.85
-    );
-  };
-  img.onerror = () => {
-    URL.revokeObjectURL(objectUrl);
-    resolve(file);
-  };
-  img.src = objectUrl;
-});
+import { resizeImage } from '../../utils/imageResize';
 
 const safeName = (name) => name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'photo';
 

@@ -110,10 +110,12 @@ export const TEMPLATE_FOLDERS = [
 ];
 export const OTHER_FOLDER = { key: 'other', name: 'Other Tests' };
 
-// Template a test belongs to. Tests saved before templates existed are matched by their specs
-// (duration + 1-mark / 2-mark counts); anything else is 'other'.
+// Template a test belongs to. A custom test goes to the folder the admin picked ('folderKey'), or
+// to 'other' when none was picked. Tests saved before folders could be picked are matched by their
+// specs (duration + 1-mark / 2-mark counts); anything else is 'other'.
 export const templateKeyOf = (test) => {
   if (templateByKey(test?.templateKey)) return test.templateKey;
+  if (typeof test?.folderKey === 'string') return templateByKey(test.folderKey) ? test.folderKey : OTHER_FOLDER.key;
   const match = TEST_TEMPLATES.find(t =>
     Number(test?.duration) === t.duration && Number(test?.total1Mark) === t.q1 && Number(test?.total2Mark) === t.q2);
   return match ? match.key : OTHER_FOLDER.key;
