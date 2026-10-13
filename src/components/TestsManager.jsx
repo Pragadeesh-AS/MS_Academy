@@ -45,7 +45,7 @@ const shortType = (type) => ({
   'Match': 'Match'
 }[type] || type);
 
-export default function TestsManager({ department = '', isTeacher = false, onEditQuestion = null }) {
+export default function TestsManager({ department = '', isTeacher = false, onEditQuestion = null, initialView = 'templates' }) {
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
@@ -85,7 +85,11 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [scheduledTime, setScheduledTime] = useState('');
   const [closesAt, setClosesAt] = useState(''); // optional - no new starts after this (see utils/testSchedule)
   const [goLiveNow, setGoLiveNow] = useState(false); // new tests only: opens the moment it is saved
-  const [view, setView] = useState('templates'); // 'templates' | 'schedule' (calendar)
+  const [view, setView] = useState(initialView || 'templates'); // 'templates' | 'schedule' (calendar)
+
+  useEffect(() => {
+    if (initialView) setView(initialView);
+  }, [initialView]);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [bundleAccess, setBundleAccess] = useState({ mode: 'default', ids: [] }); // dept level, free, or specific bundles (utils/bundleAccess)
   const [bundles, setBundles] = useState([]);

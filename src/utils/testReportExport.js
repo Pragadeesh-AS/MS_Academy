@@ -327,7 +327,8 @@ export const exportTestReportPdf = async (report) => {
       pdf.setFillColor(...LINE);
       pdf.roundedRect(barX, ry, barMaxW, 4.2, 1.5, 1.5, 'F');
       if (pct > 0) {
-        pdf.setFillColor(...(i < 3 ? MEDALS[i] : BLUE));
+        const barColor = pct >= 60 ? GREEN : pct >= 40 ? AMBER : RED;
+        pdf.setFillColor(...barColor);
         pdf.roundedRect(barX, ry, Math.max(3, (Math.min(pct, 100) / 100) * barMaxW), 4.2, 1.5, 1.5, 'F');
       }
       setFont(pdf, 8, 'bold', s.score < 0 ? RED : TEXT);
@@ -406,14 +407,14 @@ export const exportTestReportPdf = async (report) => {
           textAt(s.name, col, x, midY);
           break;
         case 'score': {
-          // Small bar + marks; green >= 70% of the total, amber >= 40%, red below
+          // Small bar + marks; green >= 60% of the total, amber >= 40% to 59%, red below 40%
           const barW = col.w - 30;
           const bx = x + pad;
           const by = y + rowH / 2 - 1.5;
           pdf.setFillColor(...LINE);
           pdf.roundedRect(bx, by, barW, 3, 1.2, 1.2, 'F');
           if (pct > 0) {
-            pdf.setFillColor(...(pct >= 70 ? GREEN : pct >= 40 ? AMBER : RED));
+            pdf.setFillColor(...(pct >= 60 ? GREEN : pct >= 40 ? AMBER : RED));
             pdf.roundedRect(bx, by, Math.max(2, (Math.min(pct, 100) / 100) * barW), 3, 1.2, 1.2, 'F');
           }
           setFont(pdf, 9, 'bold', s.score < 0 ? RED : TEXT);

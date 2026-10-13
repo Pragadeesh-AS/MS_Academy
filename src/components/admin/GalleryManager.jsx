@@ -145,24 +145,6 @@ export default function GalleryManager() {
             <Upload size={18} /> Upload Photos
           </button>
         </div>
-      ) : photos.length === 1 ? (
-        <div className="flex justify-center py-4">
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group flex flex-col w-full max-w-md">
-            <div className="aspect-square w-full overflow-hidden bg-slate-100 relative">
-              <img src={photos[0].url} alt={photos[0].caption || 'Gallery photo'} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              <button
-                onClick={() => handleDelete(photos[0])}
-                className="absolute top-2 right-2 p-2 bg-white/90 backdrop-blur-sm text-slate-500 hover:text-red-600 hover:bg-white rounded-lg shadow-sm transition-colors"
-                title="Delete"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-            {photos[0].caption && (
-              <p className="px-3 py-2.5 text-sm font-semibold text-slate-600 line-clamp-2">{photos[0].caption}</p>
-            )}
-          </div>
-        </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {photos.map(photo => (

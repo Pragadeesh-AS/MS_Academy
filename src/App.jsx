@@ -3,7 +3,7 @@ import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import './index.css';
 import { ShinyButton } from "./components/ui/shiny-button";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, Menu, X } from 'lucide-react';
+import { Sparkles, Menu, X, Phone } from 'lucide-react';
 import { auth, db } from './firebase';
 import { collection, query, where, getDocs, doc, onSnapshot } from 'firebase/firestore';
 import { identifyClarityUser, setClarityTag } from './utils/clarity';
@@ -514,21 +514,23 @@ export default function App() {
 
       {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student') && <Footer />}
 
-      {/* Floating Quote Badge */}
+      {/* Floating Phone Badge */}
       {location.pathname !== '/login' && location.pathname !== '/admin' && location.pathname !== '/teacher-dashboard' && location.pathname !== '/typist-dashboard' && !location.pathname.startsWith('/student') && (
       <motion.div 
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 1, duration: 0.8 }}
-        className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] pointer-events-none"
+        className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[100]"
       >
-        <div className="w-max px-4 py-2 md:px-5 md:py-2.5 rounded-full bg-white/70 backdrop-blur-md border border-[#1d4ed8]/20 shadow-[0_8px_30px_rgba(29,78,216,0.15)] flex items-center gap-2">
-          <Sparkles size={14} className="text-[#1d4ed8] animate-pulse" />
-          <span className="whitespace-nowrap text-[11px] md:text-[13px] font-black tracking-[0.15em] md:tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-[#1d4ed8] to-blue-500">
-            Ignite your dreams
+        <a 
+          href="tel:+918012052331"
+          className="w-max px-4 py-2 md:px-5 md:py-2.5 rounded-full bg-white/95 hover:bg-white backdrop-blur-md border border-blue-700/35 shadow-[0_8px_30px_rgba(30,58,138,0.20)] hover:shadow-[0_8px_30px_rgba(30,58,138,0.30)] flex items-center gap-2 transition-all duration-300 group cursor-pointer"
+        >
+          <Phone size={15} className="text-blue-800 shrink-0 group-hover:scale-110 transition-transform stroke-[2.2]" />
+          <span className="whitespace-nowrap text-[12px] md:text-[13.5px] font-black tracking-wider text-blue-950">
+            +91 8012052331
           </span>
-          <Sparkles size={14} className="text-[#1d4ed8] animate-pulse" />
-        </div>
+        </a>
       </motion.div>
       )}
 

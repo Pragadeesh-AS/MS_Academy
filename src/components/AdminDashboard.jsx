@@ -57,6 +57,13 @@ const toDate = (v) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
+const formatTestOctDate = (test) => {
+  const raw = test?.scheduledTime || test?.createdAt || test?.date;
+  const d = toDate(raw);
+  if (!d) return '—';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Percentage change between two periods; null when there is no baseline to compare against
@@ -65,6 +72,7 @@ const pctChange = (curr, prev) => (prev > 0 ? Math.round(((curr - prev) / prev) 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
+  const [testsView, setTestsView] = useState('templates'); // 'templates' | 'schedule'
   // Open reported questions across all departments - red badge on "Reported Q's"
   const pendingReports = usePendingReportCount();
   const [editQuestionId, setEditQuestionId] = useState(null);
@@ -1438,56 +1446,68 @@ export default function AdminDashboard() {
                   </div>
 
                   {/* Test List */}
-                  <div className="flex flex-col gap-[14px] overflow-x-auto">
+                  <div className="flex flex-col gap-2.5 overflow-x-auto">
                     {overview.recentTests.length === 0 && (
-                      <div className="text-center py-12 text-[14px] font-medium text-[#94A3B8]">No tests created yet. Use "Create Test" to add your first one.</div>
+                      <div className="text-center py-10 text-[14px] font-medium text-[#94A3B8]">No tests created yet. Use "Create Test" to add your first one.</div>
                     )}
                     {overview.recentTests.map((test) => {
                       return (
-                        <div key={test.id} className="group flex flex-col bg-white border border-[#EEF2F7] rounded-[18px] px-5 py-4 shadow-[0_3px_12px_rgba(15,23,42,0.04)] hover:bg-[#F8FAFF] hover:-translate-y-1 hover:shadow-[0_16px_35px_rgba(37,99,235,0.12)] transition-all duration-300 z-10 hover:z-20 overflow-hidden min-w-[640px]">
+                        <div key={test.id} className="group flex flex-col bg-white border border-[#EEF2F7] rounded-[16px] px-3.5 py-3 sm:px-4 sm:py-3 shadow-[0_2px_10px_rgba(15,23,42,0.04)] hover:bg-[#F8FAFF] hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(37,99,235,0.10)] transition-all duration-300 z-10 hover:z-20 overflow-hidden min-w-[620px]">
                           
                           {/* Main Row Content (Always visible) */}
                           <div className="flex items-center justify-between">
                             
                             {/* Left Side */}
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-full bg-blue-50/50 border border-blue-100 flex items-center justify-center text-[#2563EB]">
-                                <FileText size={18} strokeWidth={2.5} />
+                            <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
+                              <div className="w-9 h-9 rounded-full bg-blue-50/50 border border-blue-100 flex items-center justify-center text-[#2563EB] shrink-0">
+                                <FileText size={17} strokeWidth={2.5} />
                               </div>
-                              <div className="flex flex-col w-[240px]">
-                                <h4 className="font-[600] text-[17px] text-[#0F172A] font-sans leading-tight whitespace-nowrap overflow-hidden text-ellipsis">{test.title || 'Untitled Test'}</h4>
-                                <span className="text-[13px] font-medium text-[#64748B] font-sans mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{[test.subject, test.department].filter(Boolean).join(' • ') || 'General'}</span>
+                              <div className="flex flex-col min-w-0">
+                                <h4 className="font-[600] text-[16px] text-[#0F172A] font-sans leading-tight truncate">{test.title || 'Untitled Test'}</h4>
+                                <span className="text-[12.5px] font-medium text-[#64748B] font-sans mt-0.5 truncate">{[test.subject, test.department].filter(Boolean).join(' • ') || 'General'}</span>
                               </div>
-                              <span className="ml-2 px-3 py-1 rounded-full text-[12px] font-bold tracking-wide shadow-sm whitespace-nowrap text-[#2563EB] bg-gradient-to-r from-blue-50 to-blue-100/50">
-                                {test.attemptCount} {test.attemptCount === 1 ? 'attempt' : 'attempts'}
-                              </span>
                             </div>
 
-                            {/* Metadata */}
-                            <div className="flex items-center gap-8 text-[#64748B] flex-1 justify-end">
-                              <div className="flex items-center gap-2 text-[14px] font-medium whitespace-nowrap">
-                                <Clock size={16} className="opacity-70" /> {test.duration || "—"} mins
+                            {/* Metadata - Fixed width columns so all rows align straight */}
+                            <div className="flex items-center gap-2.5 text-[#64748B] shrink-0">
+                              <span className="w-[88px] text-[13px] font-bold text-[#2563EB] whitespace-nowrap text-left">
+                                {test.attemptCount} {test.attemptCount === 1 ? 'attempt' : 'attempts'}
+                              </span>
+                              <span className="text-slate-300 font-light select-none">|</span>
+                              <div className="w-[78px] flex items-center gap-1.5 text-[13px] font-medium whitespace-nowrap">
+                                <Calendar size={14} className="opacity-70 text-[#2563EB] shrink-0" />
+                                <span>{formatTestOctDate(test)}</span>
                               </div>
-                              <div className="flex items-center gap-2 text-[14px] font-medium whitespace-nowrap">
-                                <Trophy size={16} className="opacity-70" /> {test.targetMarks || "—"} Marks
+                              <span className="text-slate-300 font-light select-none">|</span>
+                              <div className="w-[76px] flex items-center gap-1.5 text-[13px] font-medium whitespace-nowrap">
+                                <Clock size={14} className="opacity-70 shrink-0" />
+                                <span>{test.duration || "—"} mins</span>
                               </div>
-                              <ChevronRight size={18} className="opacity-40 group-hover:opacity-100 group-hover:text-[#2563EB] transition-all ml-2 shrink-0" />
+                              <span className="text-slate-300 font-light select-none">|</span>
+                              <div className="w-[56px] flex items-center gap-1.5 text-[13px] font-medium whitespace-nowrap">
+                                <Trophy size={14} className="opacity-70 shrink-0" />
+                                <span>{test.targetMarks || "—"} M</span>
+                              </div>
+                              <ChevronRight size={17} className="opacity-40 group-hover:opacity-100 group-hover:text-[#2563EB] transition-all shrink-0 ml-1" />
                             </div>
                           </div>
 
                           {/* Hover Action Buttons (Expands downwards) */}
                           <div className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-all duration-300 ease-in-out opacity-0 group-hover:opacity-100">
                             <div className="overflow-hidden">
-                              <div className="flex items-center gap-3 pt-4 mt-4 border-t border-[#EEF2F7]">
-                                <button onClick={() => setActiveTab('tests')} className="h-[40px] px-5 bg-white border border-[#E5E7EB] rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#2563EB] font-semibold text-[14px] flex items-center gap-2 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
-                                  <Edit2 size={16} strokeWidth={2.5} /> Edit Test
+                              <div className="flex items-center gap-2.5 pt-3 mt-3 border-t border-[#EEF2F7]">
+                                <button onClick={() => { setTestsView('templates'); setActiveTab('tests'); }} className="h-[36px] px-4 bg-white border border-[#E5E7EB] rounded-[12px] shadow-[0_4px_12px_rgba(15,23,42,0.06)] text-[#2563EB] font-semibold text-[13px] flex items-center gap-1.5 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
+                                  <Edit2 size={15} strokeWidth={2.5} /> Edit Test
                                 </button>
-                                <button onClick={() => setActiveTab('analytics')} className="h-[40px] px-5 bg-white border border-[#E5E7EB] rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#2563EB] font-semibold text-[14px] flex items-center gap-2 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
-                                  <BarChart2 size={16} strokeWidth={2.5} /> Analytics
+                                <button onClick={() => setActiveTab('analytics')} className="h-[36px] px-4 bg-white border border-[#E5E7EB] rounded-[12px] shadow-[0_4px_12px_rgba(15,23,42,0.06)] text-[#2563EB] font-semibold text-[13px] flex items-center gap-1.5 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
+                                  <BarChart2 size={15} strokeWidth={2.5} /> Analytics
+                                </button>
+                                <button onClick={() => { setTestsView('schedule'); setActiveTab('tests'); }} className="h-[36px] px-4 bg-white border border-[#E5E7EB] rounded-[12px] shadow-[0_4px_12px_rgba(15,23,42,0.06)] text-[#2563EB] font-semibold text-[13px] flex items-center gap-1.5 hover:border-[#2563EB]/40 hover:shadow-[0_0_15px_rgba(37,99,235,0.15)] transition-all">
+                                  <Calendar size={15} strokeWidth={2.5} /> Calendar
                                 </button>
                                 <div className="flex-1"></div>
-                                <button onClick={() => deleteTest(test)} className="h-[40px] px-5 bg-[#FEF2F2] border border-red-100 rounded-[14px] shadow-[0_6px_16px_rgba(15,23,42,0.08)] text-[#EF4444] font-semibold text-[14px] flex items-center gap-2 hover:bg-red-100 transition-all">
-                                  <Trash2 size={16} strokeWidth={2.5} /> Delete
+                                <button onClick={() => deleteTest(test)} className="h-[36px] px-4 bg-[#FEF2F2] border border-red-100 rounded-[12px] shadow-[0_4px_12px_rgba(15,23,42,0.06)] text-[#EF4444] font-semibold text-[13px] flex items-center gap-1.5 hover:bg-red-100 transition-all">
+                                  <Trash2 size={15} strokeWidth={2.5} /> Delete
                                 </button>
                               </div>
                             </div>
@@ -1871,20 +1891,18 @@ export default function AdminDashboard() {
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-50 text-[11px] font-bold text-slate-400">
                       <span>Received: {q.date}</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleQueryStatus(q.id);
-                        }}
-                        className={`px-3 py-1.5 rounded-xl border flex items-center gap-1 transition-all ${
-                          q.status === 'Resolved' 
-                            ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100' 
-                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-100'
-                        }`}
-                      >
-                        <Check size={12} />
-                        <span>Mark as {q.status === 'Resolved' ? 'Pending' : 'Resolved'}</span>
-                      </button>
+                      {q.status !== 'Resolved' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleQueryStatus(q.id);
+                          }}
+                          className="px-3 py-1.5 rounded-xl border flex items-center gap-1 transition-all bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-100"
+                        >
+                          <Check size={12} />
+                          <span>Mark as Resolved</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
@@ -1965,6 +1983,7 @@ export default function AdminDashboard() {
           <TestsManager
             department=""
             isTeacher={false}
+            initialView={testsView}
             onEditQuestion={(qId) => { setEditQuestionId(qId); setActiveTab('questions'); }}
           />
         )}
@@ -2212,21 +2231,19 @@ export default function AdminDashboard() {
             )}
 
             {/* Modal Actions */}
-            <div className="flex gap-3 pt-4 border-t border-slate-50">
-              <button
-                onClick={() => {
-                  toggleQueryStatus(selectedQuery.id);
-                }}
-                className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                  selectedQuery.status === 'Resolved' 
-                    ? 'bg-red-50 hover:bg-red-100 text-red-600 border-red-100 border' 
-                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-100 border'
-                }`}
-              >
-                <Check size={14} />
-                <span>Mark as {selectedQuery.status === 'Resolved' ? 'Pending' : 'Resolved'}</span>
-              </button>
-            </div>
+            {selectedQuery.status !== 'Resolved' && (
+              <div className="flex gap-3 pt-4 border-t border-slate-50">
+                <button
+                  onClick={() => {
+                    toggleQueryStatus(selectedQuery.id);
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-100 border"
+                >
+                  <Check size={14} />
+                  <span>Mark as Resolved</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -452,10 +452,10 @@ export default function Analytics({ joinedStudents = [], department = null, stud
     setStudentSearch(e.target.value);
   };
 
-  // Helper to color percentage rings
+  // Helper to color percentage rings (>=60% green, 40-59% yellow, <40% red)
   const getScoreColor = (percent) => {
-    if (percent >= 80) return 'text-emerald-500 bg-emerald-500';
-    if (percent >= 50) return 'text-amber-500 bg-amber-500';
+    if (percent >= 60) return 'text-emerald-500 bg-emerald-500';
+    if (percent >= 40) return 'text-amber-500 bg-amber-500';
     return 'text-rose-500 bg-rose-500';
   };
 
@@ -601,7 +601,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                   const n = attemptsOf(tests);
                   return n ? Math.round(tests.reduce((a, t) => a + (t.avgScore || 0) * (t.participants || 0), 0) / n) : 0;
                 };
-                const scoreTone = (pct) => (pct >= 70 ? { bar: 'bg-emerald-500', text: 'text-emerald-600', soft: 'bg-emerald-50' } : pct >= 40 ? { bar: 'bg-amber-500', text: 'text-amber-600', soft: 'bg-amber-50' } : { bar: 'bg-rose-500', text: 'text-rose-600', soft: 'bg-rose-50' });
+                const scoreTone = (pct) => (pct >= 60 ? { bar: 'bg-emerald-500', text: 'text-emerald-600', soft: 'bg-emerald-50' } : pct >= 40 ? { bar: 'bg-amber-500', text: 'text-amber-600', soft: 'bg-amber-50' } : { bar: 'bg-rose-500', text: 'text-rose-600', soft: 'bg-rose-50' });
 
                 const overview = [
                   { label: 'Tests', value: allTests.length, icon: FileText, tile: 'bg-blue-50/70 border-blue-100', iconBg: 'from-blue-500 to-indigo-600' },
@@ -1009,7 +1009,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                     filteredStudentNames.map(name => {
                       const data = computedStudentHistory[name];
                       const totalTests = data.length;
-                      const avgScore = totalTests > 0 ? Math.round(data.reduce((acc, t) => acc + t.score, 0) / totalTests) : 0;
+                      const avgScore = totalTests > 0 ? Math.round((data.reduce((acc, t) => acc + (t.score || 0), 0) / totalTests) * 100) / 100 : 0;
                       
                       return (
                         <div 
@@ -1026,7 +1026,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                               <div className="flex items-center gap-2 text-xs font-bold text-slate-500 mt-1">
                                 <span className="bg-slate-100 px-2 py-0.5 rounded-md">{totalTests} Tests</span>
                                 <span>•</span>
-                                <span className="text-emerald-600">Avg {avgScore}%</span>
+                                <span className="text-emerald-600">Avg {avgScore} Marks</span>
                               </div>
                             </div>
                           </div>
@@ -1066,7 +1066,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                       </div>
                       <div>
                         <h4 className="text-2xl font-[900] text-slate-800">{selectedStudentName}</h4>
-                        <p className="text-sm font-bold text-indigo-500 mt-0.5">Historical Test Trajectory</p>
+                        <p className="text-sm font-bold text-indigo-500 mt-0.5">Historical Test Trajectory (Marks Scored)</p>
                       </div>
                     </div>
 
@@ -1075,8 +1075,11 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                         <LineChart data={activeStudentData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                           <XAxis dataKey="testName" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }} />
-                          <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }} />
-                          <RechartsTooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)', padding: '12px 16px' }} />
+                          <YAxis domain={[0, 'auto']} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }} />
+                          <RechartsTooltip 
+                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)', padding: '12px 16px' }} 
+                            formatter={(value) => [`${value} Marks`, 'Score']}
+                          />
                           <Line type="monotone" dataKey="score" stroke="#4f46e5" strokeWidth={5} dot={{ r: 5, fill: '#4f46e5', strokeWidth: 3, stroke: '#fff' }} activeDot={{ r: 8, stroke: '#e0e7ff', strokeWidth: 4 }} />
                         </LineChart>
                       </ResponsiveContainer>
@@ -1095,7 +1098,12 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                             <div className="p-5 flex items-center justify-between">
                               <div className="flex flex-col">
                                 <span className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors">{test.testName}</span>
-                                <span className="text-sm font-bold text-slate-500 mt-0.5">Score: <span className="text-blue-600">{test.score}%</span></span>
+                                <span className="text-sm font-bold text-slate-500 mt-0.5">
+                                  Score: <span className="text-blue-600 font-bold">{test.score}</span>
+                                  {test.totalMarks || test.maxScore ? (
+                                    <span className="text-slate-400 font-semibold"> / {test.totalMarks || test.maxScore}</span>
+                                  ) : ''}
+                                </span>
                               </div>
                               <div className="flex items-center gap-5 text-slate-400">
                                 <div className="flex items-center gap-1.5 text-sm font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg">

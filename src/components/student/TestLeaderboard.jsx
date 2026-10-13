@@ -11,8 +11,8 @@ const formatTime = (seconds) => {
 };
 
 const getScoreColor = (percentage) => {
-  if (percentage >= 80) return 'text-emerald-600 bg-emerald-500';
-  if (percentage >= 50) return 'text-amber-500 bg-amber-400';
+  if (percentage >= 60) return 'text-emerald-600 bg-emerald-500';
+  if (percentage >= 40) return 'text-amber-500 bg-amber-400';
   return 'text-rose-500 bg-rose-500';
 };
 

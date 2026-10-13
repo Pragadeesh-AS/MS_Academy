@@ -84,31 +84,8 @@ export default function Gallery() {
           <h3 className="text-xl font-bold text-slate-800 mb-1">No photos yet</h3>
           <p className="text-slate-500">Check back soon for new photos.</p>
         </div>
-      ) : photos.length === 1 ? (
-        <div className="flex justify-center w-full">
-          <motion.button
-            key={photos[0].id}
-            type="button"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            onClick={() => setActiveIndex(0)}
-            className="group relative block w-full max-w-sm rounded-3xl overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-xl transition-all duration-300 cursor-zoom-in"
-          >
-            <img
-              src={photos[0].url}
-              alt={photos[0].caption || 'MS GATE Academy gallery photo'}
-              loading="lazy"
-              className="w-full h-auto block group-hover:scale-105 transition-transform duration-500"
-            />
-            {photos[0].caption && (
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 pb-3 text-left opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <p className="text-white text-sm font-semibold line-clamp-2">{photos[0].caption}</p>
-              </div>
-            )}
-          </motion.button>
-        </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="columns-1 sm:columns-2 lg:columns-3 gap-5">
           {photos.map((photo, i) => (
             <motion.button
               key={photo.id}
@@ -117,7 +94,7 @@ export default function Gallery() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i, 8) * 0.05 }}
               onClick={() => setActiveIndex(i)}
-              className="group relative block w-full rounded-3xl overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-xl transition-all duration-300 cursor-zoom-in"
+              className="group relative block w-full mb-5 break-inside-avoid rounded-3xl overflow-hidden border border-slate-200 bg-white shadow-sm hover:shadow-xl transition-shadow duration-300 cursor-zoom-in"
             >
               <img
                 src={photo.url}
