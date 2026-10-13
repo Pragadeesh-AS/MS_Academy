@@ -33,6 +33,7 @@ import { needsAdmissionForm, isAdmissionFormExempt } from '../../utils/admission
 import { tierKeyOf, fullBundleOf } from '../../utils/membership';
 import { hasUnlimitedPractice } from '../../utils/practiceTests';
 import StudentPracticeStats from './StudentPracticeStats';
+import AdmissionFormsArchive from './AdmissionFormsArchive';
 
 const DEPARTMENT_OPTIONS = [
   'Computer Science (CSE)',
@@ -397,6 +398,12 @@ const StudentDirectory = ({
           >
             <UserPlus size={15} /> Recently Joined
           </button>
+          <button
+            onClick={() => setActiveSubTab('forms')}
+            className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap flex items-center justify-center gap-1.5 ${activeSubTab === 'forms' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A] hover:bg-white/80'}`}
+          >
+            <FileSignature size={15} /> Admission Forms
+          </button>
           <button 
             onClick={() => setActiveSubTab('queries')}
             className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap flex items-center justify-center gap-1.5 ${activeSubTab === 'queries' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A] hover:bg-white/80'}`}
@@ -406,7 +413,9 @@ const StudentDirectory = ({
         </div>
       </div>
 
-      {activeSubTab === 'recent' ? (
+      {activeSubTab === 'forms' ? (
+        <AdmissionFormsArchive joinedStudents={joinedStudents} onView={setViewingForm} />
+      ) : activeSubTab === 'recent' ? (
         <div className="space-y-5 relative z-10">
           <div className="flex items-center gap-3">
             <span className="text-[13px] font-[800] text-slate-400 uppercase tracking-widest">Last {RECENT_COUNT} students to join</span>

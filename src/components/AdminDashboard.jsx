@@ -6,13 +6,13 @@ import {
   Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut,
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, ChevronDown, UserCheck, Database, BarChart2, Megaphone, Sparkles,
-  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck, Menu, Images
+  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck, Menu, Images, MessageSquareText
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { sendWebhookEmail } from '../utils/emailWebhook';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot, serverTimestamp, arrayUnion } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
 import NotesManager from './admin/NotesManager';
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
   
   // Joined students dataset and subtab state
   const [joinedStudents, setJoinedStudents] = useState([]);
-  const [studentSubTab, setStudentSubTab] = useState('joined'); // 'joined', 'recent' or 'queries'
+  const [studentSubTab, setStudentSubTab] = useState('joined'); // 'joined', 'recent', 'forms' or 'queries'
 
   // Invited teachers dataset
   const [invitedTeachers, setInvitedTeachers] = useState([]);
@@ -652,22 +652,66 @@ export default function AdminDashboard() {
     }
   };
 
+  // Resolving an enquiry needs a note of what was discussed with the person (resolveDialog);
+  // reopening one (back to Pending) is a single click and keeps the earlier notes.
+  const [resolveDialog, setResolveDialog] = useState(null); // the query being resolved
+  const [resolveNote, setResolveNote] = useState('');
+  const [isSavingResolve, setIsSavingResolve] = useState(false);
+  const MIN_RESOLVE_NOTE = 10;
+
+  const setQueryFields = (id, fields) => {
+    setQueries(prev => prev.map(q => (q.id === id ? { ...q, ...fields } : q)));
+    setSelectedQuery(prev => (prev && prev.id === id ? { ...prev, ...fields } : prev));
+  };
+
   const toggleQueryStatus = async (id) => {
     const query = queries.find(q => q.id === id);
     if (!query) return;
-    const newStatus = query.status === 'Pending' ? 'Resolved' : 'Pending';
-
-    const updated = queries.map(q => 
-      q.id === id ? { ...q, status: newStatus } : q
-    );
-    setQueries(updated);
+    if (query.status !== 'Resolved') {
+      setResolveNote('');
+      setResolveDialog(query);
+      return;
+    }
+    setQueryFields(id, { status: 'Pending' });
     try {
-      await updateDoc(doc(db, 'contact_queries', id), { status: newStatus });
-      if (selectedQuery && selectedQuery.id === id) {
-        setSelectedQuery({ ...selectedQuery, status: newStatus });
-      }
+      await updateDoc(doc(db, 'contact_queries', id), { status: 'Pending' });
     } catch (e) {
       console.error(e);
+      setQueryFields(id, { status: 'Resolved' });
+      alert('Could not reopen the enquiry. Please try again.');
+    }
+  };
+
+  const confirmResolve = async () => {
+    const query = resolveDialog;
+    const note = resolveNote.trim();
+    if (!query || note.length < MIN_RESOLVE_NOTE) return;
+    setIsSavingResolve(true);
+    const entry = {
+      note,
+      by: sessionStorage.getItem('auth_name') || sessionStorage.getItem('auth_email') || 'Admin',
+      at: new Date().toISOString(),
+    };
+    try {
+      await updateDoc(doc(db, 'contact_queries', query.id), {
+        status: 'Resolved',
+        resolutionNote: note,
+        resolvedBy: entry.by,
+        resolvedAt: serverTimestamp(),
+        resolutionNotes: arrayUnion(entry),
+      });
+      setQueryFields(query.id, {
+        status: 'Resolved',
+        resolutionNote: note,
+        resolvedBy: entry.by,
+        resolutionNotes: [...(query.resolutionNotes || []), entry],
+      });
+      setResolveDialog(null);
+    } catch (e) {
+      console.error(e);
+      alert('Could not mark the enquiry as resolved. Please try again.');
+    } finally {
+      setIsSavingResolve(false);
     }
   };
 
@@ -1213,7 +1257,11 @@ export default function AdminDashboard() {
                 >
                   <Bell size={18} className="text-[#64748B] group-hover:text-[#2563EB] group-hover:animate-pulse" />
                   {pendingInbox > 0 && (
-                    <span className="absolute -top-1 -right-0.5 min-w-[16px] h-[16px] px-1 bg-[#EF4444] rounded-full border-[1.5px] border-white flex items-center justify-center text-[9px] font-bold text-white shadow-sm">{pendingInbox > 99 ? '99+' : pendingInbox}</span>
+                    <span className="absolute -top-1.5 -right-1.5 flex">
+                      {/* soft pulsing halo so a pending item is noticed straight away */}
+                      <span className="absolute inset-0 rounded-full bg-[#DC2626] opacity-60 animate-ping" />
+                      <span className="relative min-w-[20px] h-[20px] px-1.5 bg-[#B91C1C] rounded-full border-2 border-white flex items-center justify-center text-[11px] font-black text-white leading-none tabular-nums shadow-[0_2px_8px_rgba(185,28,28,0.55)]">{pendingInbox > 99 ? '99+' : pendingInbox}</span>
+                    </span>
                   )}
                 </button>
                 {showInbox && (
@@ -1792,6 +1840,14 @@ export default function AdminDashboard() {
                       <p className="whitespace-pre-wrap text-slate-600 text-[13.5px] leading-relaxed italic bg-slate-50/50 p-4 border border-slate-100/50 rounded-2xl line-clamp-3 overflow-hidden">
                         "{q.message}"
                       </p>
+                      {q.status === 'Resolved' && q.resolutionNote && (
+                        <div className="flex gap-2 p-3 rounded-2xl bg-emerald-50/60 border border-emerald-100">
+                          <MessageSquareText size={15} className="text-emerald-600 shrink-0 mt-0.5" />
+                          <p className="text-[12.5px] text-emerald-900 font-medium leading-snug line-clamp-2">
+                            <span className="font-bold">{q.resolvedBy || 'Admin'}:</span> {q.resolutionNote}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-50 text-[11px] font-bold text-slate-400">
@@ -2085,12 +2141,26 @@ export default function AdminDashboard() {
               </p>
             </div>
 
+            {/* What was discussed each time it was resolved */}
+            {(selectedQuery.resolutionNotes || []).length > 0 && (
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Conversation Notes</span>
+                {[...selectedQuery.resolutionNotes].reverse().map((n, i) => (
+                  <div key={i} className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100">
+                    <p className="whitespace-pre-wrap text-[13.5px] text-emerald-950 font-medium leading-relaxed">{n.note}</p>
+                    <p className="text-[11px] font-bold text-emerald-700/80 mt-2">
+                      {n.by || 'Admin'} · {n.at ? new Date(n.at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Modal Actions */}
             <div className="flex gap-3 pt-4 border-t border-slate-50">
               <button
                 onClick={() => {
                   toggleQueryStatus(selectedQuery.id);
-                  setSelectedQuery(null);
                 }}
                 className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
                   selectedQuery.status === 'Resolved' 
@@ -2100,6 +2170,52 @@ export default function AdminDashboard() {
               >
                 <Check size={14} />
                 <span>Mark as {selectedQuery.status === 'Resolved' ? 'Pending' : 'Resolved'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resolveDialog && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[210] flex items-center justify-center p-4" onClick={() => !isSavingResolve && setResolveDialog(null)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-[520px] shadow-2xl p-6 sm:p-7 space-y-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="text-xl font-[900] text-slate-900">Resolve enquiry</h3>
+                <p className="text-sm font-medium text-slate-500 mt-1 truncate">{resolveDialog.fullName} · {resolveDialog.phone || resolveDialog.email}</p>
+              </div>
+              <button onClick={() => setResolveDialog(null)} disabled={isSavingResolve} className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors shrink-0">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700">What did you discuss with {resolveDialog.fullName || 'them'}? *</label>
+              <textarea
+                autoFocus
+                rows={5}
+                value={resolveNote}
+                onChange={e => setResolveNote(e.target.value)}
+                placeholder="e.g. Called on 13 Oct - explained the GATE EE course and fees, sent the brochure on WhatsApp. They will join the next batch."
+                className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 outline-none text-sm font-medium text-slate-800 resize-y"
+              />
+              <p className={`text-xs font-semibold ${resolveNote.trim().length >= MIN_RESOLVE_NOTE ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {resolveNote.trim().length >= MIN_RESOLVE_NOTE
+                  ? 'This note is saved with the enquiry.'
+                  : `Write at least ${MIN_RESOLVE_NOTE} characters about the conversation to mark it as resolved.`}
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setResolveDialog(null)} disabled={isSavingResolve} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={confirmResolve}
+                disabled={isSavingResolve || resolveNote.trim().length < MIN_RESOLVE_NOTE}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white font-bold text-sm flex items-center gap-2 transition-colors shadow-sm"
+              >
+                <Check size={16} /> {isSavingResolve ? 'Saving...' : 'Mark as Resolved'}
               </button>
             </div>
           </div>
