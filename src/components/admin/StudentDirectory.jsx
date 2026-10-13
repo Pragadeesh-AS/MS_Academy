@@ -23,11 +23,16 @@ import {
   UsersRound,
   Pencil,
   FileSignature,
-  Send
+  Send,
+  UserPlus,
+  CalendarDays,
+  Mail
 } from 'lucide-react';
 import AdmissionFormViewer from './AdmissionFormViewer';
 import { needsAdmissionForm, isAdmissionFormExempt } from '../../utils/admissionForm';
 import { tierKeyOf, fullBundleOf } from '../../utils/membership';
+import { hasUnlimitedPractice } from '../../utils/practiceTests';
+import StudentPracticeStats from './StudentPracticeStats';
 
 const DEPARTMENT_OPTIONS = [
   'Computer Science (CSE)',
@@ -82,9 +87,11 @@ const StudentDirectory = ({
   const [filterDepartment, setFilterDepartment] = useState('');
   const [filterYear, setFilterYear] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterTier, setFilterTier] = useState(''); // '' | 'elite' | 'prime' | 'foundation'
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [viewingForm, setViewingForm] = useState(null); // student whose admission form is open
+  const [detailTab, setDetailTab] = useState('overview'); // Student Details tab: overview | practice | bundles
   const [sendingForm, setSendingForm] = useState(false);
 
   // Sends the admission form to a student who skipped it (e.g. joined offline on instalments): the
@@ -275,6 +282,21 @@ const StudentDirectory = ({
     }));
   }, [joinedStudents]);
 
+  // Recently Joined tab: newest students first. joinedAt is the exact time (saved for new students);
+  // older records only have the day ("Oct 04, 2026"), so same-day students keep their list order.
+  useEffect(() => { setDetailTab('overview'); }, [selectedStudent?.id]);
+
+  const RECENT_COUNT = 5;
+  const joinedMs = (st) => st.joinedAt?.toMillis?.() ?? (Date.parse(st.joinedDate) || 0);
+  const recentStudents = [...enhancedStudents].sort((a, b) => joinedMs(b) - joinedMs(a)).slice(0, RECENT_COUNT);
+  const joinedAgo = (st) => {
+    const ms = joinedMs(st);
+    if (!ms) return 'Date unknown';
+    const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+    const days = Math.round((startOfDay(Date.now()) - startOfDay(ms)) / 86400000);
+    return days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : `${days} days ago`;
+  };
+
   const activeCount = enhancedStudents.filter(s => s.status === 'Active').length;
   const invitedCount = enhancedStudents.filter(s => s.status === 'Invited').length;
   const loggedInPct = enhancedStudents.length > 0 ? Math.round((enhancedStudents.filter(s => s.lastLogin).length / enhancedStudents.length) * 100) : 0;
@@ -299,7 +321,9 @@ const StudentDirectory = ({
     const studentGroup = (student.groupName || '').trim();
     const matchesGroup = !filterGroup || studentGroup === filterGroup;
 
-    return matchesSearch && matchesDept && matchesYear && matchesStatus && matchesGroup;
+    const matchesTier = !filterTier || getTier(student, bundles).key === filterTier;
+
+    return matchesSearch && matchesDept && matchesYear && matchesStatus && matchesGroup && matchesTier;
   }).sort((a, b) => {
     // Elite first, then Prime, then Foundation (original order kept within each group)
     const rank = (st) => ({ elite: 0, prime: 1, foundation: 2 })[getTier(st, bundles).key];
@@ -339,44 +363,89 @@ const StudentDirectory = ({
   return (
     <div className="bg-[#F8FAFC] min-h-full rounded-[2rem] px-4 sm:px-6 lg:px-8 pb-8 pt-0 relative overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.03) 0%, transparent 70%)' }}>
 
-      {/* Page Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 relative z-10">
-        <div>
-          <h2 className="text-[26px] sm:text-[30px] lg:text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
-            Student Directory
-          </h2>
-          <p className="text-[#64748B] text-[15px] font-medium mt-1">
-            Manage enrolled students and support inquiries across all departments.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex bg-white/60 backdrop-blur-md border border-[#EEF2F7] p-1.5 rounded-2xl shadow-sm">
-            <button 
-              onClick={() => setActiveSubTab('joined')}
-              className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap ${activeSubTab === 'joined' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A]'}`}
-            >
-              Enrolled Students
-            </button>
-            <button 
-              onClick={() => setActiveSubTab('queries')}
-              className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap ${activeSubTab === 'queries' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A]'}`}
-            >
-              Support Queries
-            </button>
+      {/* Page Header: title and Invite on one row, the tabs on their own row below */}
+      <div className="mb-8 relative z-10 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-[26px] sm:text-[30px] lg:text-[36px] font-bold text-[#0F172A] tracking-tight leading-tight font-sans">
+              Student Directory
+            </h2>
+            <p className="text-[#64748B] text-[15px] font-medium mt-1">
+              Manage enrolled students and support inquiries across all departments.
+            </p>
           </div>
 
           <button 
             onClick={onInvite}
-            className="bg-gradient-to-r from-[#2563EB] to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white px-5 py-2.5 rounded-[16px] text-[15px] font-semibold shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2 whitespace-nowrap"
+            className="self-start sm:self-center shrink-0 bg-gradient-to-r from-[#2563EB] to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white px-5 py-2.5 rounded-[16px] text-[15px] font-semibold shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2 whitespace-nowrap"
           >
             <MailPlus size={18} strokeWidth={2.5} />
             <span>Invite Student</span>
           </button>
         </div>
+
+        <div className="flex w-full sm:w-fit max-w-full overflow-x-auto bg-white/70 backdrop-blur-md border border-[#EEF2F7] p-1.5 rounded-2xl shadow-sm gap-1">
+          <button 
+            onClick={() => setActiveSubTab('joined')}
+            className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap flex items-center justify-center gap-1.5 ${activeSubTab === 'joined' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A] hover:bg-white/80'}`}
+          >
+            <Users size={15} /> Enrolled Students
+          </button>
+          <button
+            onClick={() => setActiveSubTab('recent')}
+            className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap flex items-center justify-center gap-1.5 ${activeSubTab === 'recent' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A] hover:bg-white/80'}`}
+          >
+            <UserPlus size={15} /> Recently Joined
+          </button>
+          <button 
+            onClick={() => setActiveSubTab('queries')}
+            className={`px-4 py-2 rounded-xl text-[14px] font-semibold transition-all duration-300 whitespace-nowrap flex items-center justify-center gap-1.5 ${activeSubTab === 'queries' ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md' : 'text-[#64748B] hover:text-[#0F172A] hover:bg-white/80'}`}
+          >
+            <Mail size={15} /> Support Queries
+          </button>
+        </div>
       </div>
 
-      {activeSubTab === 'joined' ? (
+      {activeSubTab === 'recent' ? (
+        <div className="space-y-5 relative z-10">
+          <div className="flex items-center gap-3">
+            <span className="text-[13px] font-[800] text-slate-400 uppercase tracking-widest">Last {RECENT_COUNT} students to join</span>
+            <div className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent"></div>
+            <span className="text-[12px] font-bold text-slate-400">Newest first</span>
+          </div>
+          {recentStudents.length === 0 ? (
+            <div className="bg-white rounded-[22px] border border-[#EEF2F7] p-12 text-center text-slate-500 font-semibold">No students have joined yet.</div>
+          ) : (
+            <div className="space-y-3">
+              {recentStudents.map((student, i) => (
+                <button
+                  key={student.id}
+                  type="button"
+                  onClick={() => setSelectedStudent(student)}
+                  className="w-full text-left bg-white rounded-[20px] border border-[#EEF2F7] p-4 sm:p-5 shadow-[0_10px_28px_rgba(15,23,42,0.04)] hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(37,99,235,0.10)] hover:border-blue-200 transition-all duration-300 flex items-center gap-4 group"
+                >
+                  <span className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 text-[13px] font-black flex items-center justify-center shrink-0">{i + 1}</span>
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-black text-[16px] flex items-center justify-center shrink-0 shadow-md">
+                    {(student.name || student.email || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-[15px] text-[#0F172A] truncate">{student.name || 'Unnamed student'}</span>
+                      <TierPill tier={getTier(student, bundles)} />
+                    </div>
+                    <p className="text-[13px] font-medium text-[#64748B] truncate mt-0.5">{student.email}{student.department ? ` · ${student.department}` : ''}</p>
+                  </div>
+                  <div className="text-right shrink-0 hidden sm:block">
+                    <div className={`text-[13px] font-bold ${joinedAgo(student) === 'Today' ? 'text-emerald-600' : 'text-[#0F172A]'}`}>{joinedAgo(student)}</div>
+                    <div className="text-[12px] font-medium text-[#94A3B8] flex items-center justify-end gap-1 mt-0.5"><CalendarDays size={12} /> {student.joinedDate || '-'}</div>
+                  </div>
+                  <ChevronRight size={18} className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : activeSubTab === 'joined' ? (
         <div className="space-y-8 relative z-10">
           {/* KPI Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -450,8 +519,8 @@ const StudentDirectory = ({
           </div>
 
           {/* Search & Filter Toolbar */}
-          <div className="flex flex-col xl:flex-row xl:items-start gap-4">
-            <div className="relative group flex-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative group flex-1 basis-[280px] min-w-[240px]">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] group-focus-within:text-[#2563EB] transition-colors" size={20} />
               <input 
                 type="text" 
@@ -462,11 +531,11 @@ const StudentDirectory = ({
               />
             </div>
             
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="contents">
               <select 
                 value={filterDepartment} 
                 onChange={e => { setFilterDepartment(e.target.value); setCurrentPage(1); }}
-                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+                className="h-[48px] w-[calc(50%-0.375rem)] sm:w-[190px] min-w-0 truncate pl-4 pr-8 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
               >
                 <option value="">All Departments</option>
                 {Array.from(new Set(enhancedStudents.map(s => s.department).filter(Boolean))).sort().map(dept => (
@@ -477,7 +546,7 @@ const StudentDirectory = ({
               <select 
                 value={filterYear} 
                 onChange={e => { setFilterYear(e.target.value); setCurrentPage(1); }}
-                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+                className="h-[48px] w-[calc(50%-0.375rem)] sm:w-[190px] min-w-0 truncate pl-4 pr-8 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
               >
                 <option value="">All Colleges</option>
                 {Array.from(new Set(enhancedStudents.map(s => s.college).filter(Boolean))).sort().map(college => (
@@ -485,10 +554,24 @@ const StudentDirectory = ({
                 ))}
               </select>
 
+              <select
+                value={filterTier}
+                onChange={e => { setFilterTier(e.target.value); setCurrentPage(1); }}
+                className="h-[48px] w-[calc(50%-0.375rem)] sm:w-[180px] min-w-0 truncate pl-4 pr-8 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+                title="Filter by membership"
+              >
+                <option value="">All Memberships</option>
+                {['elite', 'prime', 'foundation'].map(key => {
+                  const count = enhancedStudents.filter(st => getTier(st, bundles).key === key).length;
+                  const label = { elite: '👑 Elite', prime: '⭐ Prime', foundation: '🌱 Foundation' }[key];
+                  return <option key={key} value={key}>{label} ({count})</option>;
+                })}
+              </select>
+
               <select 
                 value={filterStatus} 
                 onChange={e => { setFilterStatus(e.target.value); setCurrentPage(1); }}
-                className="h-[48px] px-4 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+                className="h-[48px] w-[calc(50%-0.375rem)] sm:w-[150px] min-w-0 truncate pl-4 pr-8 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
               >
                 <option value="">All Statuses</option>
                 {Array.from(new Set(enhancedStudents.map(s => s.status).filter(Boolean))).sort().map(status => (
@@ -502,9 +585,10 @@ const StudentDirectory = ({
                   setFilterDepartment('');
                   setFilterYear('');
                   setFilterStatus('');
+                  setFilterTier('');
                   setCurrentPage(1);
                 }}
-                className="h-[48px] w-[48px] flex items-center justify-center ml-auto text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 rounded-full transition-colors"
+                className="h-[48px] w-[48px] shrink-0 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 rounded-full transition-colors"
                 title="Reset Filters"
               >
                 <RotateCcw size={20} />
@@ -755,213 +839,233 @@ const StudentDirectory = ({
       {/* Student Details Modal */}
       {viewingForm && <AdmissionFormViewer student={viewingForm} onClose={() => setViewingForm(null)} />}
 
-      {selectedStudent && (
+      {selectedStudent && (() => {
+        const tier = getTier(selectedStudent, bundles);
+        const bundleCount = (selectedStudent.purchasedBundles || []).length;
+        const fields = [
+          { label: 'Department', value: selectedStudent.department },
+          { label: 'College', value: selectedStudent.collegeName },
+          { label: 'CGPA', value: selectedStudent.cgpa },
+          { label: 'Batch', value: selectedStudent.batch },
+          { label: 'Location', value: selectedStudent.location },
+          { label: 'Group', value: selectedStudent.groupName },
+        ];
+        const tabs = [
+          { key: 'overview', label: 'Overview' },
+          { key: 'practice', label: 'Practice Tests' },
+          { key: 'bundles', label: 'Bundles', count: bundleCount },
+        ];
+        return (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setSelectedStudent(null)}>
-          <div className="bg-white rounded-[24px] w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="p-6 border-b border-[#EEF2F7] flex justify-between items-center shrink-0">
-              <h3 className="text-[20px] font-bold text-[#0F172A]">Student Details</h3>
-              <button onClick={() => setSelectedStudent(null)} className="text-[#64748B] hover:text-[#0F172A] transition-colors bg-slate-100 hover:bg-slate-200 p-2 rounded-full">
-                <X size={20} />
+          <div className="bg-white rounded-[24px] w-full max-w-4xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* Header: who it is, at a glance */}
+            <div className="relative shrink-0 bg-gradient-to-br from-blue-50 via-white to-indigo-50/60 border-b border-[#EEF2F7] px-5 sm:px-8 pt-6 pb-0">
+              <button onClick={() => setSelectedStudent(null)} className="absolute top-5 right-5 text-[#64748B] hover:text-[#0F172A] transition-colors bg-white/80 hover:bg-white border border-[#EEF2F7] p-2 rounded-full shadow-sm" title="Close">
+                <X size={18} />
               </button>
-            </div>
-            <div className="p-5 sm:p-8 space-y-6 overflow-y-auto">
-              <div className="flex items-center gap-5">
-                <div className="w-[72px] h-[72px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-[#2563EB] border border-blue-100 font-bold text-[28px] flex items-center justify-center shrink-0 shadow-sm">
-                  {getTier(selectedStudent, bundles).icon}
+              <div className="flex items-center gap-4 pr-12">
+                <div className="w-16 h-16 rounded-2xl bg-white text-[#2563EB] border border-blue-100 font-bold text-[28px] flex items-center justify-center shrink-0 shadow-sm">
+                  {tier.icon}
                 </div>
                 <div className="min-w-0">
                   <h4 className="text-[22px] font-bold text-[#0F172A] leading-tight truncate">{selectedStudent.name}</h4>
-                  <p className="text-[15px] font-medium text-[#64748B] mt-1 truncate">{selectedStudent.email}</p>
-                </div>
-              </div>
-
-              {selectedStudent.admissionFormSubmitted ? (
-                <button
-                  onClick={() => setViewingForm(selectedStudent)}
-                  className="w-full flex items-center justify-between gap-3 p-4 rounded-[16px] border border-emerald-100 bg-emerald-50/60 hover:bg-emerald-50 transition-colors text-left"
-                >
-                  <span className="flex items-center gap-3 min-w-0">
-                    <FileSignature size={20} className="text-emerald-600 shrink-0" />
-                    <span className="min-w-0">
-                      <span className="block text-[14px] font-bold text-[#0F172A]">Admission Application Form</span>
-                      <span className="block text-[12.5px] font-medium text-[#64748B] truncate">Signed · {selectedStudent.admissionFormNo || 'Form submitted'}</span>
-                    </span>
-                  </span>
-                  <span className="text-[13px] font-bold text-emerald-700 shrink-0">View</span>
-                </button>
-              ) : isAdmissionFormExempt(selectedStudent) ? (
-                <div className="flex items-center gap-3 p-4 rounded-[16px] border border-slate-200 bg-slate-50">
-                  <FileSignature size={20} className="text-slate-400 shrink-0" />
-                  <span className="text-[13.5px] font-medium text-slate-600">Admission form not required for the {selectedStudent.groupName.trim()} group.</span>
-                </div>
-              ) : selectedStudent.admissionFormRequested ? (
-                <div className="flex flex-wrap items-center gap-3 p-4 rounded-[16px] border border-blue-100 bg-blue-50/60">
-                  <FileSignature size={20} className="text-blue-600 shrink-0" />
-                  <span className="flex-1 min-w-[200px] text-[13.5px] font-medium text-blue-800">Admission form sent - they must fill it in before they can use the portal.</span>
-                  <button
-                    onClick={() => setAdmissionFormRequested(selectedStudent, false)}
-                    disabled={sendingForm}
-                    className="px-4 py-2 rounded-[12px] border border-blue-200 bg-white text-[13px] font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors shrink-0"
-                  >
-                    {sendingForm ? 'Saving…' : 'Cancel request'}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center gap-3 p-4 rounded-[16px] border border-amber-100 bg-amber-50/60">
-                  <FileSignature size={20} className="text-amber-600 shrink-0" />
-                  <span className="flex-1 min-w-[200px] text-[13.5px] font-medium text-amber-800">Admission form not submitted yet - they'll be asked to fill it in before their first payment. Send it to make them fill it in now.</span>
-                  <button
-                    onClick={() => setAdmissionFormRequested(selectedStudent, true)}
-                    disabled={sendingForm}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[12px] bg-amber-500 hover:bg-amber-600 text-white text-[13px] font-bold disabled:opacity-50 transition-colors shrink-0"
-                  >
-                    <Send size={14} /> {sendingForm ? 'Sending…' : 'Send form'}
-                  </button>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-[#EEF2F7]">
-                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
-                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Department</span>
-                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.department || '—'}</p>
-                </div>
-                {[
-                  { label: 'College', value: selectedStudent.collegeName },
-                  { label: 'CGPA', value: selectedStudent.cgpa },
-                  { label: 'Batch', value: selectedStudent.batch },
-                  { label: 'Location', value: selectedStudent.location },
-                  { label: 'Group', value: selectedStudent.groupName }
-                ].map(f => (
-                  <div key={f.label} className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
-                    <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">{f.label}</span>
-                    <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{f.value || '—'}</p>
-                  </div>
-                ))}
-                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7] sm:col-span-2">
-                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Skills</span>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {Array.isArray(selectedStudent.skills) && selectedStudent.skills.length > 0
-                      ? selectedStudent.skills.map(sk => (
-                          <span key={sk} className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-[12px] font-semibold">{sk}</span>
-                        ))
-                      : <span className="font-semibold text-[#0F172A] text-[15px]">—</span>}
-                  </div>
-                </div>
-                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
-                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Status</span>
-                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">
+                  <p className="text-[14px] font-medium text-[#64748B] mt-0.5 truncate">{selectedStudent.email}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <TierPill tier={tier} />
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold ${selectedStudent.status === 'Active' ? 'bg-emerald-100 text-[#10B981]' : 'bg-slate-200 text-[#64748B]'}`}>
                       {selectedStudent.status}
                     </span>
-                  </p>
-                </div>
-                <div className="bg-[#F8FAFC] p-4 rounded-[16px] border border-[#EEF2F7]">
-                  <span className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Joined</span>
-                  <p className="font-semibold text-[#0F172A] mt-1.5 text-[15px]">{selectedStudent.joinedDate}</p>
+                    {selectedStudent.department && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold bg-white border border-[#EEF2F7] text-[#475569]">{selectedStudent.department}</span>}
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-semibold bg-white border border-[#EEF2F7] text-[#475569]"><CalendarDays size={12} /> Joined {selectedStudent.joinedDate || '-'}</span>
+                  </div>
                 </div>
               </div>
-              
-              <div className="pt-6 border-t border-[#EEF2F7]">
-                <div className="flex items-center justify-between mb-4">
-                  <h5 className="text-[12px] font-bold text-[#94A3B8] uppercase tracking-wider">Purchased Bundles</h5>
-                  {(selectedStudent.purchasedBundles || []).length > 0 && (
-                    <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{(selectedStudent.purchasedBundles || []).length}</span>
-                  )}
-                </div>
-                
-                {(!selectedStudent.purchasedBundles || selectedStudent.purchasedBundles.length === 0) ? (
-                  <p className="text-[13px] font-medium text-[#64748B] mb-4">No active bundles for this student.</p>
-                ) : (
-                  <div className="space-y-2.5 max-h-[160px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-200 [&::-webkit-scrollbar-thumb]:rounded-full mb-4">
-                    {selectedStudent.purchasedBundles.map((bundle, idx) => {
-                      const b = bundles.find(bItem => bItem.id === bundle);
-                      const bundleName = b ? b.name : (typeof bundle === 'string' ? bundle : (bundle.title || bundle.name || `Bundle ${idx + 1}`));
-                      
-                      return (
-                        <div key={idx} className="flex items-center justify-between bg-white border border-[#EEF2F7] p-3 rounded-[12px] transition-all hover:border-blue-200 hover:shadow-sm">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                              <Package size={16} />
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-[14px] font-semibold text-[#0F172A] leading-tight">{bundleName}</span>
-                              <span className="text-[11px] font-medium text-[#64748B]">Active Plan</span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setConfirmDialog({
-                                message: `Are you sure you want to cancel ${bundleName} for ${selectedStudent.name}?`,
-                                onConfirm: async () => {
-                                  setConfirmDialog(null);
-                                  try {
-                                    const updatedBundles = selectedStudent.purchasedBundles.filter((_, i) => i !== idx);
-                                    // Premium (Elite) is its own switch in Edit Student - removing a bundle doesn't change it
-                                    await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), {
-                                      purchasedBundles: updatedBundles
-                                    });
 
-                                    const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles };
-                                    setSelectedStudent(updatedStudent);
-                                    setJoinedStudents(joinedStudents.map(s => 
-                                      s.id === selectedStudent.id ? updatedStudent : s
-                                    ));
-                                  } catch (error) {
-                                    console.error('Error canceling bundle:', error);
-                                    alert(`Failed to cancel bundle. Error: ${error.message}`);
-                                  }
-                                }
-                              });
-                            }}
-                            className="p-1.5 text-[#94A3B8] hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Cancel Bundle"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                
-                <div className="mt-2">
-                  <select 
-                    className="w-full border border-[#EEF2F7] rounded-[12px] px-4 py-2.5 text-[14px] font-medium text-[#0F172A] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-[#F8FAFC]"
-                    onChange={async (e) => {
-                      const bundleId = e.target.value;
-                      if (!bundleId) return;
-                      try {
-                        const updatedBundles = [...(selectedStudent.purchasedBundles || []), bundleId];
-                        // A bundle unlocks only what it includes; Premium (Elite) is turned on separately in Edit Student
-                        await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), {
-                          purchasedBundles: updatedBundles
-                        });
-                        const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles };
-                        setSelectedStudent(updatedStudent);
-                        setJoinedStudents(joinedStudents.map(s => s.id === selectedStudent.id ? updatedStudent : s));
-                      } catch (error) {
-                        console.error('Error adding bundle:', error);
-                        alert(`Failed to add bundle. Error: ${error.message}`);
-                      }
-                      e.target.value = '';
-                    }}
+              {/* Tabs */}
+              <div className="flex gap-1 mt-5 -mb-px overflow-x-auto">
+                {tabs.map(t => (
+                  <button
+                    key={t.key}
+                    onClick={() => setDetailTab(t.key)}
+                    className={`px-4 py-2.5 text-[14px] font-semibold border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${detailTab === t.key ? 'border-[#2563EB] text-[#2563EB]' : 'border-transparent text-[#64748B] hover:text-[#0F172A]'}`}
                   >
-                    <option value="">+ Assign New Bundle...</option>
-                    {bundles.filter(b => !(selectedStudent.purchasedBundles || []).includes(b.id)).map(b => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
-                </div>
+                    {t.label}
+                    {t.count > 0 && <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${detailTab === t.key ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{t.count}</span>}
+                  </button>
+                ))}
               </div>
             </div>
-            <div className="p-6 bg-[#F8FAFC] border-t border-[#EEF2F7] flex justify-end shrink-0">
-              <button onClick={() => setSelectedStudent(null)} className="px-6 py-2.5 bg-white border border-[#E5E7EB] hover:bg-slate-50 hover:text-[#0F172A] text-[#64748B] font-semibold rounded-[14px] transition-colors shadow-sm">
-                Close
-              </button>
+
+            <div className="p-5 sm:p-8 overflow-y-auto min-h-[440px]">
+              {detailTab === 'overview' && (
+                <div className="space-y-5">
+                  {selectedStudent.admissionFormSubmitted ? (
+                    <button
+                      onClick={() => setViewingForm(selectedStudent)}
+                      className="w-full flex items-center justify-between gap-3 p-4 rounded-[16px] border border-emerald-100 bg-emerald-50/60 hover:bg-emerald-50 transition-colors text-left"
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <FileSignature size={20} className="text-emerald-600 shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block text-[14px] font-bold text-[#0F172A]">Admission Application Form</span>
+                          <span className="block text-[12.5px] font-medium text-[#64748B] truncate">Signed · {selectedStudent.admissionFormNo || 'Form submitted'}</span>
+                        </span>
+                      </span>
+                      <span className="text-[13px] font-bold text-emerald-700 shrink-0">View</span>
+                    </button>
+                  ) : isAdmissionFormExempt(selectedStudent) ? (
+                    <div className="flex items-center gap-3 p-4 rounded-[16px] border border-slate-200 bg-slate-50">
+                      <FileSignature size={20} className="text-slate-400 shrink-0" />
+                      <span className="text-[13.5px] font-medium text-slate-600">Admission form not required for the {selectedStudent.groupName.trim()} group.</span>
+                    </div>
+                  ) : selectedStudent.admissionFormRequested ? (
+                    <div className="flex flex-wrap items-center gap-3 p-4 rounded-[16px] border border-blue-100 bg-blue-50/60">
+                      <FileSignature size={20} className="text-blue-600 shrink-0" />
+                      <span className="flex-1 min-w-[200px] text-[13.5px] font-medium text-blue-800">Admission form sent - they must fill it in before they can use the portal.</span>
+                      <button
+                        onClick={() => setAdmissionFormRequested(selectedStudent, false)}
+                        disabled={sendingForm}
+                        className="px-4 py-2 rounded-[12px] border border-blue-200 bg-white text-[13px] font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors shrink-0"
+                      >
+                        {sendingForm ? 'Saving…' : 'Cancel request'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-3 p-4 rounded-[16px] border border-amber-100 bg-amber-50/60">
+                      <FileSignature size={20} className="text-amber-600 shrink-0" />
+                      <span className="flex-1 min-w-[200px] text-[13.5px] font-medium text-amber-800">Admission form not submitted yet - they'll be asked to fill it in before their first payment. Send it to make them fill it in now.</span>
+                      <button
+                        onClick={() => setAdmissionFormRequested(selectedStudent, true)}
+                        disabled={sendingForm}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[12px] bg-amber-500 hover:bg-amber-600 text-white text-[13px] font-bold disabled:opacity-50 transition-colors shrink-0"
+                      >
+                        <Send size={14} /> {sendingForm ? 'Sending…' : 'Send form'}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {fields.map(f => (
+                      <div key={f.label} className="bg-[#F8FAFC] px-4 py-3 rounded-[14px] border border-[#EEF2F7] min-w-0">
+                        <span className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider">{f.label}</span>
+                        <p className="font-semibold text-[#0F172A] mt-1 text-[14.5px] truncate" title={f.value || ''}>{f.value || '—'}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="bg-[#F8FAFC] px-4 py-3 rounded-[14px] border border-[#EEF2F7]">
+                    <span className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider">Skills</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {Array.isArray(selectedStudent.skills) && selectedStudent.skills.length > 0
+                        ? selectedStudent.skills.map(sk => (
+                            <span key={sk} className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-[12px] font-semibold">{sk}</span>
+                          ))
+                        : <span className="font-semibold text-[#0F172A] text-[14.5px]">—</span>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {detailTab === 'practice' && (
+                <StudentPracticeStats
+                  embedded
+                  email={selectedStudent.email}
+                  unlimited={hasUnlimitedPractice({ purchasedBundles: selectedStudent.purchasedBundles || [], bundles, department: selectedStudent.department })}
+                />
+              )}
+
+              {detailTab === 'bundles' && (
+                <div>
+                  {(!selectedStudent.purchasedBundles || selectedStudent.purchasedBundles.length === 0) ? (
+                    <p className="text-[13px] font-medium text-[#64748B] mb-4">No active bundles for this student.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 mb-4">
+                      {selectedStudent.purchasedBundles.map((bundle, idx) => {
+                        const b = bundles.find(bItem => bItem.id === bundle);
+                        const bundleName = b ? b.name : (typeof bundle === 'string' ? bundle : (bundle.title || bundle.name || `Bundle ${idx + 1}`));
+                      
+                        return (
+                          <div key={idx} className="flex items-center justify-between bg-white border border-[#EEF2F7] p-3 rounded-[12px] transition-all hover:border-blue-200 hover:shadow-sm">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                <Package size={16} />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-[14px] font-semibold text-[#0F172A] leading-tight">{bundleName}</span>
+                                <span className="text-[11px] font-medium text-[#64748B]">Active Plan</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setConfirmDialog({
+                                  message: `Are you sure you want to cancel ${bundleName} for ${selectedStudent.name}?`,
+                                  onConfirm: async () => {
+                                    setConfirmDialog(null);
+                                    try {
+                                      const updatedBundles = selectedStudent.purchasedBundles.filter((_, i) => i !== idx);
+                                      // Premium (Elite) is its own switch in Edit Student - removing a bundle doesn't change it
+                                      await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), {
+                                        purchasedBundles: updatedBundles
+                                      });
+
+                                      const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles };
+                                      setSelectedStudent(updatedStudent);
+                                      setJoinedStudents(joinedStudents.map(s => 
+                                        s.id === selectedStudent.id ? updatedStudent : s
+                                      ));
+                                    } catch (error) {
+                                      console.error('Error canceling bundle:', error);
+                                      alert(`Failed to cancel bundle. Error: ${error.message}`);
+                                    }
+                                  }
+                                });
+                              }}
+                              className="p-1.5 text-[#94A3B8] hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Cancel Bundle"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                
+                  <div className="mt-2">
+                    <select 
+                      className="w-full border border-[#EEF2F7] rounded-[12px] px-4 py-2.5 text-[14px] font-medium text-[#0F172A] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-[#F8FAFC]"
+                      onChange={async (e) => {
+                        const bundleId = e.target.value;
+                        if (!bundleId) return;
+                        try {
+                          const updatedBundles = [...(selectedStudent.purchasedBundles || []), bundleId];
+                          // A bundle unlocks only what it includes; Premium (Elite) is turned on separately in Edit Student
+                          await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), {
+                            purchasedBundles: updatedBundles
+                          });
+                          const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles };
+                          setSelectedStudent(updatedStudent);
+                          setJoinedStudents(joinedStudents.map(s => s.id === selectedStudent.id ? updatedStudent : s));
+                        } catch (error) {
+                          console.error('Error adding bundle:', error);
+                          alert(`Failed to add bundle. Error: ${error.message}`);
+                        }
+                        e.target.value = '';
+                      }}
+                    >
+                      <option value="">+ Assign New Bundle...</option>
+                      {bundles.filter(b => !(selectedStudent.purchasedBundles || []).includes(b.id)).map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Edit Student Modal */}
       {editingStudent && (

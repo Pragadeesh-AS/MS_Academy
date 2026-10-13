@@ -12,7 +12,7 @@ import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { sendWebhookEmail } from '../utils/emailWebhook';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
 import NotesManager from './admin/NotesManager';
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
   
   // Joined students dataset and subtab state
   const [joinedStudents, setJoinedStudents] = useState([]);
-  const [studentSubTab, setStudentSubTab] = useState('joined'); // 'joined' or 'queries'
+  const [studentSubTab, setStudentSubTab] = useState('joined'); // 'joined', 'recent' or 'queries'
 
   // Invited teachers dataset
   const [invitedTeachers, setInvitedTeachers] = useState([]);
@@ -705,6 +705,7 @@ export default function AdminDashboard() {
         email: inviteForm.email,
         department: inviteForm.department,
         joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+        joinedAt: serverTimestamp(), // exact time, for the Recently Joined list
         status: "Invited",
         isPro: false
       };
@@ -894,7 +895,7 @@ export default function AdminDashboard() {
                   { key: 'attributes', label: 'Attributes', icon: Tag },
                   { key: 'analytics', label: 'Analytics', icon: BarChart2 },
                   { key: 'questions', label: 'Question Bank', icon: Database },
-                  { key: 'tests', label: 'Tests Manager', icon: Trophy },
+                  { key: 'tests', label: 'Create Test', icon: Trophy },
                   { key: 'reported', label: "Reported Q's", icon: ShieldCheck, danger: true },
                   { key: 'premium_questions', label: 'Premium Questions', icon: Database },
                   { key: 'blogs', label: 'Blogs', icon: FileText },
@@ -1080,7 +1081,7 @@ export default function AdminDashboard() {
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'tests' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
                 <Trophy size={20} className={activeTab === 'tests' ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>Tests Manager</span>}
+                {!isCollapsed && <span>Create Test</span>}
               </button>
 
               <button

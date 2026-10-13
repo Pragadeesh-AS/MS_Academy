@@ -362,6 +362,7 @@ export const submitAdmissionForm = async (studentId, form, { existingAvatar } = 
       ...studentUpdate,
       email: record.loginEmail || record.email,
       joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+      joinedAt: serverTimestamp(), // exact time, for the Recently Joined list
       status: 'Active',
       lastLogin: serverTimestamp(),
     });
