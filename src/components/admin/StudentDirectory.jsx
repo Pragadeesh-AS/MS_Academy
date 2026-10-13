@@ -34,6 +34,7 @@ import { tierKeyOf, fullBundleOf } from '../../utils/membership';
 import { hasUnlimitedPractice } from '../../utils/practiceTests';
 import StudentPracticeStats from './StudentPracticeStats';
 import AdmissionFormsArchive from './AdmissionFormsArchive';
+import { paletteFor } from '../../utils/departmentColors';
 
 const DEPARTMENT_OPTIONS = [
   'Computer Science (CSE)',
@@ -456,87 +457,61 @@ const StudentDirectory = ({
         </div>
       ) : activeSubTab === 'joined' ? (
         <div className="space-y-8 relative z-10">
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Total Students */}
-            <div className="bg-white rounded-[22px] p-6 border border-[#EEF2F7] shadow-[0_10px_28px_rgba(15,23,42,0.04)] hover:-translate-y-1 transition-transform duration-300 flex flex-col justify-between h-[130px]">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-[#64748B] mb-2">
-                    <span className="text-[13px] font-medium">Total Students</span>
-                  </div>
-                  <h3 className="text-[32px] font-bold text-[#0F172A] leading-none">
-                    {enhancedStudents.length}
-                  </h3>
+          {/* Overview: the numbers at a glance, plus how the students split across memberships */}
+          {(() => {
+            const tierCounts = { elite: 0, prime: 0, foundation: 0 };
+            enhancedStudents.forEach(st => { tierCounts[getTier(st, bundles).key] += 1; });
+            const stats = [
+              { label: 'Total Students', value: enhancedStudents.length, icon: Users, tile: 'bg-blue-50/70 border-blue-100', iconBg: 'from-blue-500 to-indigo-600' },
+              { label: 'Active', value: activeCount, icon: UserCheck, tile: 'bg-emerald-50/70 border-emerald-100', iconBg: 'from-emerald-500 to-teal-600' },
+              { label: 'Invited (not logged in)', value: invitedCount, icon: Clock, tile: 'bg-amber-50/70 border-amber-100', iconBg: 'from-amber-500 to-orange-600' },
+              { label: 'Logged in', value: `${loggedInPct}%`, icon: ShieldCheck, tile: 'bg-violet-50/70 border-violet-100', iconBg: 'from-violet-500 to-purple-600' },
+            ];
+            const tiers = [
+              { key: 'elite', label: 'Elite', icon: '👑', chip: 'bg-amber-50 border-amber-200 text-amber-800' },
+              { key: 'prime', label: 'Prime', icon: '⭐', chip: 'bg-indigo-50 border-indigo-200 text-indigo-800' },
+              { key: 'foundation', label: 'Foundation', icon: '🌱', chip: 'bg-emerald-50 border-emerald-200 text-emerald-800' },
+            ];
+            return (
+              <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_10px_28px_rgba(15,23,42,0.04)] p-4 sm:p-5">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {stats.map(st => (
+                    <div key={st.label} className={`rounded-[18px] border px-4 py-3.5 flex items-center gap-3 ${st.tile}`}>
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${st.iconBg} text-white flex items-center justify-center shrink-0 shadow-md`}><st.icon size={20} /></div>
+                      <div className="min-w-0">
+                        <div className="text-[24px] font-bold text-[#0F172A] leading-none">{st.value}</div>
+                        <div className="text-[12.5px] font-medium text-[#64748B] mt-1 truncate">{st.label}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-[#2563EB]">
-                  <Users size={24} strokeWidth={2} />
+
+                <div className="mt-4 pt-4 border-t border-[#EEF2F7] flex flex-wrap items-center gap-3">
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-[#94A3B8] mr-1">Membership</span>
+                  {tiers.map(t => (
+                    <span key={t.key} className={`inline-flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full border text-[13px] font-semibold ${t.chip}`}>
+                      <span className="text-[14px] leading-none">{t.icon}</span>
+                      {t.label}
+                      <span className="text-[15px] font-bold text-[#0F172A]">{tierCounts[t.key]}</span>
+                    </span>
+                  ))}
                 </div>
               </div>
-            </div>
+            );
+          })()}
 
-            {/* Active Students */}
-            <div className="bg-white rounded-[22px] p-6 border border-[#EEF2F7] shadow-[0_10px_28px_rgba(15,23,42,0.04)] hover:-translate-y-1 transition-transform duration-300 flex flex-col justify-between h-[130px]">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-[#64748B] mb-2">
-                    <span className="text-[13px] font-medium">Active Students</span>
-                  </div>
-                  <h3 className="text-[32px] font-bold text-[#0F172A] leading-none">
-                    {activeCount}
-                  </h3>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center text-[#10B981]">
-                  <UserCheck size={24} strokeWidth={2} />
-                </div>
-              </div>
-            </div>
-
-            {/* Pending Approval */}
-            <div className="bg-white rounded-[22px] p-6 border border-[#EEF2F7] shadow-[0_10px_28px_rgba(15,23,42,0.04)] hover:-translate-y-1 transition-transform duration-300 flex flex-col justify-between h-[130px]">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-[#64748B] mb-2">
-                    <span className="text-[13px] font-medium">Invited (Not Logged In)</span>
-                  </div>
-                  <h3 className="text-[32px] font-bold text-[#0F172A] leading-none">
-                    {invitedCount}
-                  </h3>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center text-[#F59E0B]">
-                  <Clock size={24} strokeWidth={2} />
-                </div>
-              </div>
-            </div>
-
-            {/* Verified Students */}
-            <div className="bg-white rounded-[22px] p-6 border border-[#EEF2F7] shadow-[0_10px_28px_rgba(15,23,42,0.04)] hover:-translate-y-1 transition-transform duration-300 flex flex-col justify-between h-[130px]">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-[#64748B] mb-2">
-                    <span className="text-[13px] font-medium">Logged-in Students</span>
-                  </div>
-                  <h3 className="text-[32px] font-bold text-[#0F172A] leading-none">
-                    {loggedInPct}%
-                  </h3>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center text-[#8B5CF6]">
-                  <ShieldCheck size={24} strokeWidth={2} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Search & Filter Toolbar */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative group flex-1 basis-[280px] min-w-[240px]">
+          {/* Control panel: search, filters and groups together */}
+          <div className="@container bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_10px_28px_rgba(15,23,42,0.04)] p-4 sm:p-5 space-y-4">
+          {/* Search & Filter Toolbar - one row when the panel is wide, search on top with the filters below otherwise */}
+          <div className="grid grid-cols-2 @3xl:grid-cols-4 @5xl:grid-cols-[minmax(240px,1.5fr)_repeat(4,minmax(0,1fr))] items-center gap-3">
+            <div className="relative group col-span-2 @3xl:col-span-4 @5xl:col-span-1 min-w-0">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] group-focus-within:text-[#2563EB] transition-colors" size={20} />
               <input 
                 type="text" 
                 placeholder="Search students by name, email or ID..."
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                className="w-full h-[48px] pl-12 pr-6 bg-white border border-[#EEF2F7] rounded-[14px] text-[14px] text-[#0F172A] placeholder:text-[#94A3B8] shadow-[0_4px_12px_rgba(15,23,42,0.02)] outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all"
+                className="w-full h-[48px] pl-12 pr-4 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium outline-none focus:bg-white focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all text-[#0F172A] placeholder:text-[#94A3B8] placeholder:font-normal"
               />
             </div>
             
@@ -544,7 +519,7 @@ const StudentDirectory = ({
               <select 
                 value={filterDepartment} 
                 onChange={e => { setFilterDepartment(e.target.value); setCurrentPage(1); }}
-                className="h-[48px] w-[calc(50%-0.375rem)] sm:w-[190px] min-w-0 truncate pl-4 pr-8 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+                className="h-[48px] w-full min-w-0 truncate pl-4 pr-8 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium outline-none focus:bg-white focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all text-[#475569] hover:text-[#0F172A] cursor-pointer"
               >
                 <option value="">All Departments</option>
                 {Array.from(new Set(enhancedStudents.map(s => s.department).filter(Boolean))).sort().map(dept => (
@@ -555,7 +530,7 @@ const StudentDirectory = ({
               <select 
                 value={filterYear} 
                 onChange={e => { setFilterYear(e.target.value); setCurrentPage(1); }}
-                className="h-[48px] w-[calc(50%-0.375rem)] sm:w-[190px] min-w-0 truncate pl-4 pr-8 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+                className="h-[48px] w-full min-w-0 truncate pl-4 pr-8 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium outline-none focus:bg-white focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all text-[#475569] hover:text-[#0F172A] cursor-pointer"
               >
                 <option value="">All Colleges</option>
                 {Array.from(new Set(enhancedStudents.map(s => s.college).filter(Boolean))).sort().map(college => (
@@ -566,7 +541,7 @@ const StudentDirectory = ({
               <select
                 value={filterTier}
                 onChange={e => { setFilterTier(e.target.value); setCurrentPage(1); }}
-                className="h-[48px] w-[calc(50%-0.375rem)] sm:w-[180px] min-w-0 truncate pl-4 pr-8 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+                className="h-[48px] w-full min-w-0 truncate pl-4 pr-8 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium outline-none focus:bg-white focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all text-[#475569] hover:text-[#0F172A] cursor-pointer"
                 title="Filter by membership"
               >
                 <option value="">All Memberships</option>
@@ -580,7 +555,7 @@ const StudentDirectory = ({
               <select 
                 value={filterStatus} 
                 onChange={e => { setFilterStatus(e.target.value); setCurrentPage(1); }}
-                className="h-[48px] w-[calc(50%-0.375rem)] sm:w-[150px] min-w-0 truncate pl-4 pr-8 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] rounded-[14px] flex items-center gap-2 text-[14px] font-medium text-[#475569] hover:text-[#0F172A] transition-colors shadow-sm focus:outline-none"
+                className="h-[48px] w-full min-w-0 truncate pl-4 pr-8 bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium outline-none focus:bg-white focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all text-[#475569] hover:text-[#0F172A] cursor-pointer"
               >
                 <option value="">All Statuses</option>
                 {Array.from(new Set(enhancedStudents.map(s => s.status).filter(Boolean))).sort().map(status => (
@@ -588,25 +563,11 @@ const StudentDirectory = ({
                 ))}
               </select>
 
-              <button 
-                onClick={() => {
-                  setSearchQuery('');
-                  setFilterDepartment('');
-                  setFilterYear('');
-                  setFilterStatus('');
-                  setFilterTier('');
-                  setCurrentPage(1);
-                }}
-                className="h-[48px] w-[48px] shrink-0 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 rounded-full transition-colors"
-                title="Reset Filters"
-              >
-                <RotateCcw size={20} />
-              </button>
             </div>
           </div>
 
           {/* Student Groups - click a group to show just its students */}
-          <div className="bg-white rounded-[20px] border border-[#EEF2F7] shadow-[0_4px_12px_rgba(15,23,42,0.03)] p-4">
+          <div className="pt-4 border-t border-[#EEF2F7]">
             <div className="flex flex-wrap items-center gap-2">
               <span className="flex items-center gap-1.5 text-[13px] font-bold text-[#0F172A] mr-1">
                 <UsersRound size={16} className="text-[#2563EB]" /> Groups
@@ -629,8 +590,9 @@ const StudentDirectory = ({
               {groups.length === 0 && (
                 <span className="text-[12.5px] text-[#94A3B8] font-medium">Tick students in the list below and use "Add to group" to create one.</span>
               )}
+              <div className="flex flex-wrap items-center gap-2 ml-auto">
               {filterGroup && (
-                <div className="flex items-center gap-2 ml-auto">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => { setGroupInput(filterGroup); setGroupDialog({ mode: 'rename', from: filterGroup }); }}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-semibold text-[#475569] hover:text-[#0F172A] hover:bg-slate-100 transition-colors"
@@ -646,7 +608,23 @@ const StudentDirectory = ({
                   </button>
                 </div>
               )}
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setFilterDepartment('');
+                    setFilterYear('');
+                    setFilterStatus('');
+                    setFilterTier('');
+                    setCurrentPage(1);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-semibold text-[#475569] hover:text-[#0F172A] hover:bg-slate-100 transition-colors"
+                  title="Reset Filters"
+                >
+                  <RotateCcw size={14} /> Reset filters
+                </button>
+              </div>
             </div>
+          </div>
           </div>
 
           {/* Bulk actions for the ticked students */}
@@ -677,54 +655,54 @@ const StudentDirectory = ({
             </div>
           )}
 
-          {/* Student Table */}
+          {/* Student Table - sized to the page (no sideways scrolling): email sits under the name and the
+              college under the department, and the actions are always visible */}
           <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_12px_30px_rgba(15,23,42,0.05)] overflow-hidden">
-            <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <table className="w-full text-left border-collapse whitespace-nowrap">
-                <thead>
-                  <tr className="border-b border-[#EEF2F7]">
-                    <th className="py-5 pl-5 pr-0 w-[36px]">
-                      <input
-                        type="checkbox"
-                        checked={paginatedStudents.length > 0 && paginatedStudents.every(s => selectedIds.includes(s.id))}
-                        onChange={() => {
-                          const pageIds = paginatedStudents.map(s => s.id);
-                          const allOn = pageIds.every(id => selectedIds.includes(id));
-                          setSelectedIds(prev => (allOn ? prev.filter(id => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]));
-                        }}
-                        disabled={paginatedStudents.length === 0}
-                        title="Select all students on this page"
-                        className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
-                      />
-                    </th>
-                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Student</th>
-                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Department</th>
-                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">College</th>
-                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Email</th>
-                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220]">Status</th>
-                    <th className="py-5 px-4 text-[14px] font-bold text-[#0B1220] text-center w-[160px]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#EEF2F7]/60">
-                  {paginatedStudents.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" className="py-16 text-center">
-                        <div className="flex flex-col items-center justify-center">
-                          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                            <Search className="text-slate-300" size={32} />
-                          </div>
-                          <h4 className="text-[16px] font-semibold text-[#0F172A] mb-1">No students found</h4>
-                          <p className="text-[14px] text-[#64748B]">Try adjusting your search or filters.</p>
+            <table className="w-full table-fixed text-left border-collapse">
+              <thead>
+                <tr className="bg-[#F8FAFC] border-b border-[#EEF2F7]">
+                  <th className="py-3.5 pl-5 pr-0 w-[44px]">
+                    <input
+                      type="checkbox"
+                      checked={paginatedStudents.length > 0 && paginatedStudents.every(s => selectedIds.includes(s.id))}
+                      onChange={() => {
+                        const pageIds = paginatedStudents.map(s => s.id);
+                        const allOn = pageIds.every(id => selectedIds.includes(id));
+                        setSelectedIds(prev => (allOn ? prev.filter(id => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]));
+                      }}
+                      disabled={paginatedStudents.length === 0}
+                      title="Select all students on this page"
+                      className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
+                    />
+                  </th>
+                  <th className="py-3.5 px-4 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider">Student</th>
+                  <th className="py-3.5 px-4 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider hidden lg:table-cell w-[30%]">Department &amp; College</th>
+                  <th className="py-3.5 px-4 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider w-[112px]">Status</th>
+                  <th className="py-3.5 pl-2 pr-5 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider text-right w-[136px]">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#EEF2F7]">
+                {paginatedStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="py-16 text-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                          <Search className="text-slate-300" size={32} />
                         </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedStudents.map((student) => (
-                      <tr 
-                        key={student.id} 
-                        className={`group h-[82px] transition-colors duration-200 ${selectedIds.includes(student.id) ? 'bg-blue-50/60 hover:bg-blue-50' : 'hover:bg-[#F8FAFF]'}`}
+                        <h4 className="text-[16px] font-semibold text-[#0F172A] mb-1">No students found</h4>
+                        <p className="text-[14px] text-[#64748B]">Try adjusting your search or filters.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedStudents.map((student) => {
+                    const tier = getTier(student, bundles);
+                    return (
+                      <tr
+                        key={student.id}
+                        className={`group transition-colors duration-200 ${selectedIds.includes(student.id) ? 'bg-blue-50/60 hover:bg-blue-50' : 'hover:bg-[#F8FAFF]'}`}
                       >
-                        <td className="pl-5 pr-0">
+                        <td className="pl-5 pr-0 py-4 align-middle">
                           <input
                             type="checkbox"
                             checked={selectedIds.includes(student.id)}
@@ -732,15 +710,20 @@ const StudentDirectory = ({
                             className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
                           />
                         </td>
-                        <td className="px-4">
-                          <div className="flex items-center gap-4">
-                            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600 font-bold flex items-center justify-center shrink-0 border border-blue-100 group-hover:scale-105 transition-transform">
-                              <span className="text-[20px] leading-none">{getTier(student, bundles).icon}</span>
+                        <td className="px-4 py-4 align-middle">
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="relative shrink-0 group-hover:scale-105 transition-transform">
+                              <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${TIER_AVATAR[tier.key] || TIER_AVATAR.foundation} text-white font-bold text-[15px] flex items-center justify-center shadow-md ring-2 ring-white`}>
+                                {initialsOf(student.name || student.email)}
+                              </div>
+                              <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white shadow flex items-center justify-center text-[11px] leading-none" title={tier.label}>{tier.icon}</span>
                             </div>
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-[16px] text-[#0F172A] tracking-tight">{student.name}</span>
-                              <div className="flex items-center gap-1.5">
-                                <TierPill tier={getTier(student, bundles)} />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-[15px] text-[#0F172A] tracking-tight truncate" title={student.name}>{student.name}</div>
+                              <div className="text-[13px] text-[#64748B] font-medium truncate" title={student.email}>{student.email}</div>
+                              <div className="text-[12.5px] text-[#475569] font-medium truncate lg:hidden" title={student.department}>{student.department || '—'}</div>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                <TierPill tier={tier} />
                                 {needsAdmissionForm(student) && (
                                   <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-bold" title="Has not submitted the Admission Application Form yet">
                                     <FileSignature size={11} /> Form pending
@@ -752,52 +735,49 @@ const StudentDirectory = ({
                                   </span>
                                 )}
                               </div>
-
                             </div>
                           </div>
                         </td>
-                        <td className="px-4">
-                          <span className="text-[14px] text-[#475569] font-medium">{student.department || '—'}</span>
+                        <td className="px-4 py-4 align-middle hidden lg:table-cell">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {student.department && <span className={`w-2.5 h-2.5 rounded-full shrink-0 bg-gradient-to-br ${paletteFor(student.department).badge}`} />}
+                            <span className="text-[14px] text-[#0F172A] font-medium truncate" title={student.department}>{student.department || '—'}</span>
+                          </div>
+                          <div className={`text-[12.5px] text-[#64748B] font-medium truncate mt-0.5 ${student.department ? 'pl-[18px]' : ''}`} title={student.college}>{student.college || 'College not added'}</div>
                         </td>
-                        <td className="px-4">
-                          <span className="text-[14px] text-[#475569] font-medium block max-w-[240px] truncate" title={student.college}>{student.college || '—'}</span>
-                        </td>
-                        <td className="px-4">
-                          <span className="text-[14px] text-[#475569] font-medium">{student.email}</span>
-                        </td>
-                        <td className="px-4">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold tracking-wide ${
-                            student.status === 'Active' 
-                              ? 'bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-[#10B981] border border-emerald-100' 
+                        <td className="px-4 py-4 align-middle">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold tracking-wide whitespace-nowrap ${
+                            student.status === 'Active'
+                              ? 'bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-[#10B981] border border-emerald-100'
                               : 'bg-gradient-to-r from-slate-50 to-slate-100/50 text-[#64748B] border border-slate-200'
                           }`}>
                             {student.status === 'Active' && <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] mr-1.5 animate-pulse"></span>}
                             {student.status}
                           </span>
                         </td>
-                        <td className="px-4 text-center relative">
-                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                            <button onClick={() => setSelectedStudent(student)} className="p-2 text-[#64748B] hover:text-[#2563EB] hover:bg-blue-50 rounded-[10px] transition-colors" title="View Details">
-                              <Eye size={18} />
+                        <td className="pl-2 pr-5 py-4 align-middle">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button onClick={() => setSelectedStudent(student)} className="w-9 h-9 flex items-center justify-center text-[#64748B] bg-[#F8FAFC] border border-[#EEF2F7] hover:text-[#2563EB] hover:bg-blue-50 hover:border-blue-100 rounded-[10px] transition-colors" title="View Details">
+                              <Eye size={17} />
                             </button>
-                            <button onClick={() => openEditStudent(student)} className="p-2 text-[#64748B] hover:text-amber-500 hover:bg-amber-50 rounded-[10px] transition-colors" title="Edit Student">
-                              <Edit size={18} />
+                            <button onClick={() => openEditStudent(student)} className="w-9 h-9 flex items-center justify-center text-[#64748B] bg-[#F8FAFC] border border-[#EEF2F7] hover:text-amber-600 hover:bg-amber-50 hover:border-amber-100 rounded-[10px] transition-colors" title="Edit Student">
+                              <Edit size={17} />
                             </button>
-                            <button 
+                            <button
                               onClick={() => handleDeleteStudent(student.id)}
-                              className="p-2 text-[#64748B] hover:text-red-500 hover:bg-red-50 rounded-[10px] transition-colors" title="Delete Student"
+                              className="w-9 h-9 flex items-center justify-center text-[#64748B] bg-[#F8FAFC] border border-[#EEF2F7] hover:text-red-600 hover:bg-red-50 hover:border-red-100 rounded-[10px] transition-colors" title="Delete Student"
                             >
-                              <Trash2 size={18} />
+                              <Trash2 size={17} />
                             </button>
                           </div>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+
             {/* Pagination */}
             {totalPages > 0 && (
               <div className="px-4 sm:px-6 py-4 border-t border-[#EEF2F7] flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/50">
@@ -1339,6 +1319,13 @@ const TIERS = {
   prime: { key: 'prime', label: 'Prime', icon: '⭐', text: 'Prime' },
   foundation: { key: 'foundation', label: 'Foundation', icon: '🌱', text: 'Foundation' },
 };
+// Avatar colours per tier, and the student's initials ("Muthu Raman L" -> "MR")
+const TIER_AVATAR = {
+  elite: 'from-amber-400 to-orange-500',
+  prime: 'from-indigo-500 to-violet-600',
+  foundation: 'from-emerald-500 to-teal-600',
+};
+const initialsOf = (name) => String(name || '?').replace(/[^A-Za-z\s.@]/g, ' ').split(/[\s.@]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
 const getTier = (st, bundles) => TIERS[tierKeyOf({ purchasedBundles: st.purchasedBundles || [], bundles, department: st.department })];
 // Foundation icon: green sprout on a brown soil mound
 const SproutOnSoil = ({ size = 16 }) => (
