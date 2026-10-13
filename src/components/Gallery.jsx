@@ -70,9 +70,9 @@ export default function Gallery() {
     <div className="w-full max-w-[1200px] mx-auto px-6 pt-4 pb-20">
       <div className="text-center max-w-2xl mx-auto mb-14">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-[#1d4ed8] font-semibold text-sm border border-blue-100 mb-5">
-          <Sparkles size={16} /> <span>MS Academy Gallery</span>
+          <Sparkles size={16} /> <span>MS GATE Academy Gallery</span>
         </div>
-        <h1 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tight mb-4">Moments at MS Academy</h1>
+        <h1 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tight mb-4">Moments at MS GATE Academy</h1>
         <p className="text-lg text-slate-500">Classes, events and celebrations from our campus.</p>
       </div>
 
@@ -98,7 +98,7 @@ export default function Gallery() {
             >
               <img
                 src={photo.url}
-                alt={photo.caption || 'MS Academy gallery photo'}
+                alt={photo.caption || 'MS GATE Academy gallery photo'}
                 loading="lazy"
                 className="w-full h-auto block group-hover:scale-105 transition-transform duration-500"
               />
@@ -158,7 +158,7 @@ export default function Gallery() {
                 initial={{ opacity: 0, scale: 0.97 }}
                 animate={{ opacity: 1, scale: 1 }}
                 src={active.url}
-                alt={active.caption || 'MS Academy gallery photo'}
+                alt={active.caption || 'MS GATE Academy gallery photo'}
                 className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl"
               />
               <figcaption className="mt-4 text-center text-white/90 text-sm font-semibold">

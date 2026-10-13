@@ -12,7 +12,7 @@ import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { sendWebhookEmail } from '../utils/emailWebhook';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot, serverTimestamp, arrayUnion } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot, serverTimestamp, arrayUnion, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
 import NotesManager from './admin/NotesManager';
@@ -75,6 +75,8 @@ export default function AdminDashboard() {
   // Core datasets states
   const [applications, setApplications] = useState([]);
   const [selectedApp, setSelectedApp] = useState(null);
+  const [purchases, setPurchases] = useState([]); // paid orders from the 'payments' collection
+  const [selectedPurchase, setSelectedPurchase] = useState(null);
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [isProcessingApp, setIsProcessingApp] = useState(false);
@@ -312,18 +314,24 @@ export default function AdminDashboard() {
     enquiry: { label: 'New enquiry', icon: Mail, tint: 'bg-blue-50 text-[#2563EB]' },
     report: { label: 'Question reported', icon: ShieldCheck, tint: 'bg-red-50 text-red-600' },
     application: { label: 'New job application', icon: Users, tint: 'bg-amber-50 text-amber-600' },
+    purchase: { label: 'New purchase', icon: IndianRupee, tint: 'bg-emerald-50 text-emerald-600' },
   };
+  const PURCHASE_LABELS = { bundle: 'Bundle purchased', notebundle: 'Notes bundle purchased', subject: 'Subject purchased' };
+  const formatRupees = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
   const toNotification = {
     enquiry: (q) => ({ kind: 'enquiry', id: q.id, title: q.fullName || 'Enquiry', detail: [q.course, q.phone].filter(Boolean).join(' · ') || q.email, ms: msOf(q.createdAt, q.date), dateText: q.date }),
     report: (r) => ({ kind: 'report', id: r.id, title: r.studentName || 'Student', detail: [r.testTitle, r.reason && `"${r.reason}"`].filter(Boolean).join(' · '), ms: msOf(r.timestamp), dateText: '' }),
     application: (a) => ({ kind: 'application', id: a.id, title: a.fullName || 'Applicant', detail: [a.role, a.phone].filter(Boolean).join(' · ') || a.email, ms: msOf(a.createdAt, a.date), dateText: a.date }),
+    purchase: (p) => ({ kind: 'purchase', id: p.id, label: PURCHASE_LABELS[p.itemType || 'bundle'] || 'New purchase', title: p.studentName || p.studentEmail || 'Student', detail: [p.itemName || p.bundleName, formatRupees(p.amount)].filter(Boolean).join(' · '), ms: msOf(p.paidAt || p.createdAt), dateText: '' }),
   };
-  const isPendingItem = { enquiry: (q) => q.status === 'Pending', report: (r) => r.status !== 'resolved', application: (a) => a.status === 'Pending' };
+  // A purchase stays in the bell until the admin opens it (adminSeen)
+  const isPendingItem = { enquiry: (q) => q.status === 'Pending', report: (r) => r.status !== 'resolved', application: (a) => a.status === 'Pending', purchase: (p) => p.status === 'PAID' && !p.adminSeen };
 
   useEffect(() => {
-    const watch = (name, kind, setList) => {
+    const watch = (source, kind, setList) => {
       let first = true;
-      return onSnapshot(collection(db, name), (snap) => {
+      const name = typeof source === 'string' ? source : kind;
+      return onSnapshot(typeof source === 'string' ? collection(db, source) : source, (snap) => {
         setList(snap.docs.map(d => ({ ...d.data(), id: d.id })));
         if (first) { first = false; return; } // what was already there when the page opened
         const added = snap.docChanges()
@@ -338,6 +346,8 @@ export default function AdminDashboard() {
       watch('contact_queries', 'enquiry', setQueries),
       watch('reported_questions', 'report', setReportedList),
       watch('career_applications', 'application', setApplications),
+      // only confirmed payments - a student who opened checkout but didn't pay isn't a purchase
+      watch(query(collection(db, 'payments'), where('status', '==', 'PAID')), 'purchase', setPurchases),
     ];
     return () => unsubs.forEach(u => u());
   }, []);
@@ -358,6 +368,7 @@ export default function AdminDashboard() {
     ...queries.filter(isPendingItem.enquiry).map(toNotification.enquiry),
     ...reportedList.filter(isPendingItem.report).map(toNotification.report),
     ...applications.filter(isPendingItem.application).map(toNotification.application),
+    ...purchases.filter(isPendingItem.purchase).map(toNotification.purchase),
   ].sort((a, b) => b.ms - a.ms);
   const pendingInbox = pendingNotifications.length;
   const timeAgo = (n) => {
@@ -374,6 +385,14 @@ export default function AdminDashboard() {
     setAlerts(prev => prev.filter(a => !(a.kind === n.kind && a.id === n.id)));
     if (n.kind === 'enquiry') setSelectedQuery(queries.find(x => x.id === n.id) || null);
     else if (n.kind === 'application') setSelectedApp(applications.find(x => x.id === n.id) || null);
+    else if (n.kind === 'purchase') {
+      const p = purchases.find(x => x.id === n.id);
+      setSelectedPurchase(p || null);
+      if (p && !p.adminSeen) {
+        setPurchases(prev => prev.map(x => (x.id === p.id ? { ...x, adminSeen: true } : x)));
+        updateDoc(doc(db, 'payments', p.id), { adminSeen: true, adminSeenAt: serverTimestamp() }).catch(err => console.error('Could not mark purchase as seen', err));
+      }
+    }
     else setActiveTab('reported');
   };
 
@@ -1252,7 +1271,7 @@ export default function AdminDashboard() {
                 {/* Notification Button - opens the list of pending enquiries */}
                 <button
                   onClick={() => setShowInbox(v => !v)}
-                  title={pendingInbox > 0 ? `${pendingInbox} pending queries/applications` : 'No pending items'}
+                  title={pendingInbox > 0 ? `${pendingInbox} new notifications (enquiries, purchases, reports, applications)` : 'No pending items'}
                   className="relative flex items-center justify-center w-[42px] h-[42px] bg-[#FFFFFF] border border-[#EEF2F7] rounded-full shadow-[0_2px_12px_rgba(15,23,42,0.03)] hover:bg-[#F8FAFF] hover:border-blue-200 transition-all group"
                 >
                   <Bell size={18} className="text-[#64748B] group-hover:text-[#2563EB] group-hover:animate-pulse" />
@@ -1285,7 +1304,7 @@ export default function AdminDashboard() {
                             <span className={`mt-0.5 w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${kind.tint}`}><Icon size={15} /></span>
                             <span className="min-w-0 flex-1">
                               <span className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8]">{kind.label}</span>
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8]">{n.label || kind.label}</span>
                                 <span className="text-[11px] font-semibold text-[#94A3B8] shrink-0">{timeAgo(n)}</span>
                               </span>
                               <span className="block text-[13.5px] font-bold text-[#0F172A] truncate">{n.title}</span>
@@ -2098,7 +2117,7 @@ export default function AdminDashboard() {
               <div key={`${n.kind}:${n.id}`} className="bg-white border border-slate-200 rounded-[18px] shadow-[0_20px_50px_rgba(15,23,42,0.18)] p-4 flex items-start gap-3">
                 <span className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${kind.tint}`}><Icon size={18} /></span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-bold uppercase tracking-wider text-[#2563EB]">{kind.label}</div>
+                  <div className={`text-[11px] font-bold uppercase tracking-wider ${n.kind === 'purchase' ? 'text-emerald-600' : 'text-[#2563EB]'}`}>{n.label || kind.label}</div>
                   <div className="text-[14px] font-bold text-[#0F172A] truncate">{n.title}</div>
                   <div className="text-[12.5px] font-medium text-[#64748B] truncate">{n.detail}</div>
                   <button onClick={() => openNotification(n)} className="mt-2 text-[12.5px] font-bold text-[#2563EB] hover:underline">View</button>
@@ -2109,6 +2128,42 @@ export default function AdminDashboard() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {selectedPurchase && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setSelectedPurchase(null)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-[480px] shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-emerald-50 via-white to-teal-50 px-6 pt-6 pb-5 border-b border-emerald-100 relative">
+              <button onClick={() => setSelectedPurchase(null)} className="absolute right-5 top-5 p-2 bg-white/80 hover:bg-white border border-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors">
+                <X size={16} />
+              </button>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10.5px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700">
+                <CheckCircle2 size={12} /> {PURCHASE_LABELS[selectedPurchase.itemType || 'bundle'] || 'Purchase'}
+              </span>
+              <div className="mt-3 text-[30px] font-[900] text-slate-900 leading-none">{formatRupees(selectedPurchase.amount)}</div>
+              <div className="mt-1.5 text-[15px] font-bold text-slate-700">{selectedPurchase.itemName || selectedPurchase.bundleName || 'Item'}</div>
+            </div>
+            <div className="p-6 space-y-3">
+              {[
+                { label: 'Student', value: selectedPurchase.studentName || '-' },
+                { label: 'Email', value: selectedPurchase.studentEmail || '-' },
+                { label: 'Paid on', value: (() => { const ms = msOf(selectedPurchase.paidAt || selectedPurchase.createdAt); return ms ? new Date(ms).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '-'; })() },
+                { label: 'Order ID', value: selectedPurchase.orderId || selectedPurchase.id },
+              ].map(row => (
+                <div key={row.label} className="flex items-center justify-between gap-4 text-[14px]">
+                  <span className="font-semibold text-slate-400">{row.label}</span>
+                  <span className="font-bold text-slate-800 text-right truncate" title={row.value}>{row.value}</span>
+                </div>
+              ))}
+              {selectedPurchase.env === 'sandbox' && (
+                <p className="text-[12px] font-semibold text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">Test payment (Cashfree sandbox) - no real money was collected.</p>
+              )}
+            </div>
+            <div className="px-6 pb-6">
+              <button onClick={() => setSelectedPurchase(null)} className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm transition-colors">Done</button>
+            </div>
+          </div>
         </div>
       )}
 

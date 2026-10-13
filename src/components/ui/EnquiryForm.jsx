@@ -8,6 +8,7 @@ import { db } from '../../firebase'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 
 import { Button } from "./button"
+import { upgradeClaritySession, trackClarityEvent } from "../../utils/clarity"
 
 const SPEED_FACTOR = 1
 
@@ -184,6 +185,12 @@ const InputForm = React.forwardRef(({ onSuccess, formWidth, formHeight }, ref) =
       };
       
       await addDoc(collection(db, 'contact_queries'), newQuery);
+      try {
+        upgradeClaritySession('enquiry_submitted');
+        trackClarityEvent('enquiry_submission');
+      } catch (e) {
+        console.warn('Clarity upgrade error:', e);
+      }
     } catch (err) {
       console.error("Firestore database error", err);
     }

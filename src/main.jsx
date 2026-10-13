@@ -5,6 +5,10 @@ import './index.css'
 import 'katex/dist/katex.min.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import { initClarity } from './utils/clarity.js'
+
+// Initialize Microsoft Clarity tracking
+initClarity();
 
 const root = createRoot(document.getElementById('root'));
 

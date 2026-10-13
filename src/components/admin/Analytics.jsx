@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart2, TrendingUp, Users, Award, Search, Clock, CheckCircle2, XCircle, AlertCircle, ChevronRight, MinusCircle, UserCircle2, Globe2, Filter, ArrowLeft, Target, Folder, FolderOpen, FileText, Download, FileSpreadsheet } from 'lucide-react';
+import { BarChart2, TrendingUp, Users, Award, Search, Clock, CheckCircle2, XCircle, AlertCircle, ChevronRight, MinusCircle, UserCircle2, Globe2, Filter, ArrowLeft, Target, FileText, Download, FileSpreadsheet } from 'lucide-react';
 import { exportTestReportCsv, exportTestReportPdf } from '../../utils/testReportExport';
 import { findMsqNatNegativeFixes, applyMsqNatNegativeFixes } from '../../utils/regradeAttempts';
 import { 
@@ -12,6 +12,7 @@ import { areSolutionsVisible } from '../../utils/solutionRelease';
 import { positiveMarkFor, negativeMarkFor } from '../../utils/marking';
 import TestReport from '../analytics/TestReport';
 import MatchColumns from '../shared/MatchColumns';
+import { paletteFor, monogramOf } from '../../utils/departmentColors';
 import { collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
 
 // Helper
@@ -36,6 +37,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
   const [filterStatus, setFilterStatus] = useState('All'); 
   const [expandedFolders, setExpandedFolders] = useState({});
   const toggleFolder = (folder) => setExpandedFolders(prev => ({ ...prev, [folder]: !prev[folder] }));
+  const [testSearch, setTestSearch] = useState(''); // Global Tests list search
   
   // Enforce student view
   useEffect(() => {
@@ -575,126 +577,162 @@ export default function Analytics({ joinedStudents = [], department = null, stud
             {/* GLOBAL TEST ANALYTICS */}
             {/* ============================================================== */}
         {activeInnerTab === 'global' && (
-          <div className="max-w-5xl mx-auto flex flex-col gap-8 pb-12">
+          <div className="max-w-6xl mx-auto flex flex-col gap-8 pb-12">
             {!detailedGlobalTestId ? (
-              // LIST VIEW
-              <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm flex flex-col">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30">
-                    <Target size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-800">Global Test Database</h3>
-                    <p className="text-sm font-semibold text-slate-500">Select a test to view detailed performance metrics.</p>
-                  </div>
-                </div>
+              // LIST VIEW - overview, then one card per department with its tests grouped by subject
+              (() => {
+                const allTests = Object.values(computedTestAnalytics);
+                const q = testSearch.trim().toLowerCase();
+                const shown = q ? allTests.filter(t => [t.title, t.subject, t.department].some(v => String(v || '').toLowerCase().includes(q))) : allTests;
+                const tree = shown.reduce((acc, test) => {
+                  const d = test.department || 'General';
+                  const s = test.subject || 'General';
+                  if (!acc[d]) acc[d] = {};
+                  if (!acc[d][s]) acc[d][s] = [];
+                  acc[d][s].push(test);
+                  return acc;
+                }, {});
+                const depts = Object.keys(tree).sort();
+                const allExpanded = depts.length > 0 && depts.every(d => expandedFolders[d]);
 
-                    {(() => {
-                      const tree = Object.values(computedTestAnalytics).reduce((acc, test) => {
-                        const d = test.department || 'General';
-                        const s = test.subject || 'General';
-                        if (!acc[d]) acc[d] = {};
-                        if (!acc[d][s]) acc[d][s] = [];
-                        acc[d][s].push(test);
-                        return acc;
-                      }, {});
-                      const depts = Object.keys(tree).sort();
-                      const allKeys = depts.flatMap(d => [d, ...Object.keys(tree[d]).map(s => `${d}-${s}`)]);
-                      const allExpanded = allKeys.length > 0 && allKeys.every(k => expandedFolders[k]);
+                const attemptsOf = (tests) => tests.reduce((a, t) => a + (t.participants || 0), 0);
+                // average of the tests' average scores, weighted by how many students took each
+                const avgOf = (tests) => {
+                  const n = attemptsOf(tests);
+                  return n ? Math.round(tests.reduce((a, t) => a + (t.avgScore || 0) * (t.participants || 0), 0) / n) : 0;
+                };
+                const scoreTone = (pct) => (pct >= 70 ? { bar: 'bg-emerald-500', text: 'text-emerald-600', soft: 'bg-emerald-50' } : pct >= 40 ? { bar: 'bg-amber-500', text: 'text-amber-600', soft: 'bg-amber-50' } : { bar: 'bg-rose-500', text: 'text-rose-600', soft: 'bg-rose-50' });
 
-                      if (depts.length === 0) {
-                        return (
-                          <div className="text-center py-12 text-slate-400 font-bold bg-slate-50 rounded-2xl">
-                            No tests found.
+                const overview = [
+                  { label: 'Tests', value: allTests.length, icon: FileText, tile: 'bg-blue-50/70 border-blue-100', iconBg: 'from-blue-500 to-indigo-600' },
+                  { label: 'Total attempts', value: attemptsOf(allTests), icon: Users, tile: 'bg-violet-50/70 border-violet-100', iconBg: 'from-violet-500 to-purple-600' },
+                  { label: 'Average score', value: `${avgOf(allTests)}%`, icon: TrendingUp, tile: 'bg-emerald-50/70 border-emerald-100', iconBg: 'from-emerald-500 to-teal-600' },
+                  { label: 'Best score', value: `${allTests.reduce((m, t) => Math.max(m, t.highestScore || 0), 0)}%`, icon: Award, tile: 'bg-amber-50/70 border-amber-100', iconBg: 'from-amber-500 to-orange-600' },
+                ];
+
+                return (
+                  <div className="flex flex-col gap-6">
+                    {/* Overview */}
+                    <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_10px_28px_rgba(15,23,42,0.04)] p-4 sm:p-5">
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        {overview.map(st => (
+                          <div key={st.label} className={`rounded-[18px] border px-4 py-3.5 flex items-center gap-3 ${st.tile}`}>
+                            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${st.iconBg} text-white flex items-center justify-center shrink-0 shadow-md`}><st.icon size={20} /></div>
+                            <div className="min-w-0">
+                              <div className="text-[24px] font-bold text-[#0F172A] leading-none">{st.value}</div>
+                              <div className="text-[12.5px] font-medium text-[#64748B] mt-1 truncate">{st.label}</div>
+                            </div>
                           </div>
-                        );
-                      }
+                        ))}
+                      </div>
+                    </div>
 
+                    {/* Search + expand */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="relative group flex-1 min-w-[240px]">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] group-focus-within:text-[#2563EB] transition-colors" size={19} />
+                        <input
+                          value={testSearch}
+                          onChange={e => setTestSearch(e.target.value)}
+                          placeholder="Search tests by name, subject or department..."
+                          className="w-full h-[46px] pl-11 pr-4 bg-white border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium text-[#0F172A] placeholder:text-[#94A3B8] placeholder:font-normal outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all"
+                        />
+                      </div>
+                      {depts.length > 0 && (
+                        <button
+                          onClick={() => setExpandedFolders(allExpanded ? {} : Object.fromEntries(depts.map(d => [d, true])))}
+                          className="h-[46px] px-4 rounded-[14px] bg-white border border-[#E2E8F0] hover:border-[#CBD5E1] text-[13px] font-bold text-[#2563EB] hover:bg-blue-50 transition-colors"
+                        >
+                          {allExpanded ? 'Collapse all' : 'Expand all'}
+                        </button>
+                      )}
+                    </div>
+
+                    {depts.length === 0 ? (
+                      <div className="bg-white rounded-[24px] border border-[#EEF2F7] p-12 text-center text-slate-400 font-bold">
+                        {allTests.length === 0 ? 'No tests found.' : 'No tests match your search.'}
+                      </div>
+                    ) : depts.map(dept => {
+                      const subjects = tree[dept];
+                      const deptTests = Object.values(subjects).flat();
+                      const expanded = !!expandedFolders[dept] || !!q;
+                      const p = paletteFor(dept);
+                      const mono = dept === 'General' ? 'GN' : monogramOf(dept);
+                      const deptAvg = avgOf(deptTests);
                       return (
-                        <div className="border border-slate-200 rounded-2xl bg-white p-3">
-                          <div className="flex justify-end px-2 pb-2 mb-1 border-b border-slate-100">
-                            <button
-                              onClick={() => setExpandedFolders(allExpanded ? {} : Object.fromEntries(allKeys.map(k => [k, true])))}
-                              className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
-                            >
-                              {allExpanded ? 'Collapse all' : 'Expand all'}
-                            </button>
-                          </div>
+                        <div key={dept} className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_10px_28px_rgba(15,23,42,0.04)] overflow-hidden">
+                          <button
+                            onClick={() => toggleFolder(dept)}
+                            className="w-full text-left px-5 py-4 flex items-center gap-4 hover:bg-[#F8FAFF] transition-colors"
+                          >
+                            <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${p.badge} text-white flex items-center justify-center shrink-0 shadow-md`}>
+                              <span className={`font-[900] tracking-tight ${mono.length > 2 ? 'text-[13px]' : 'text-[16px]'}`}>{mono}</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="font-bold text-[16px] text-[#0F172A] truncate">{dept}</h4>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[12.5px] font-semibold text-[#64748B]">
+                                <span>{deptTests.length} {deptTests.length === 1 ? 'test' : 'tests'}</span>
+                                <span className="text-slate-300">•</span>
+                                <span>{attemptsOf(deptTests)} attempts</span>
+                                <span className="text-slate-300">•</span>
+                                <span className={scoreTone(deptAvg).text}>avg {deptAvg}%</span>
+                              </div>
+                            </div>
+                            <ChevronRight size={20} className={`text-slate-400 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
+                          </button>
 
-                          <div className="flex flex-col gap-0.5">
-                            {depts.map(dept => {
-                              const subjects = tree[dept];
-                              const isDeptExpanded = !!expandedFolders[dept];
-                              const totalDeptTests = Object.values(subjects).reduce((sum, arr) => sum + arr.length, 0);
-
-                              return (
-                                <div key={dept}>
-                                  <div
-                                    onClick={() => toggleFolder(dept)}
-                                    className="flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors select-none"
-                                  >
-                                    <ChevronRight size={16} className={`text-slate-400 shrink-0 transition-transform duration-200 ${isDeptExpanded ? 'rotate-90' : ''}`} />
-                                    {isDeptExpanded ? <FolderOpen size={18} className="text-blue-600 shrink-0" /> : <Folder size={18} className="text-blue-500 shrink-0" />}
-                                    <span className="font-bold text-slate-800 truncate">{dept}</span>
-                                    <span className="bg-slate-100 text-slate-500 text-[11px] px-2 py-0.5 rounded-full font-bold shrink-0">{totalDeptTests}</span>
+                          {expanded && (
+                            <div className="px-5 pb-5 pt-1 space-y-5 border-t border-[#EEF2F7]">
+                              {Object.keys(subjects).sort().map(subj => (
+                                <div key={subj} className="pt-4">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <span className={`w-1.5 h-4 rounded-full bg-gradient-to-b ${p.badge}`} />
+                                    <span className="text-[12px] font-bold uppercase tracking-wider text-[#475569]">{subj}</span>
+                                    <span className="text-[11px] font-bold text-[#94A3B8]">{subjects[subj].length}</span>
                                   </div>
-
-                                  {isDeptExpanded && (
-                                    <div className="ml-[15px] pl-4 border-l border-slate-200 flex flex-col gap-0.5">
-                                      {Object.keys(subjects).sort().map(subj => {
-                                        const subjKey = `${dept}-${subj}`;
-                                        const isSubjExpanded = !!expandedFolders[subjKey];
-                                        const tests = subjects[subj];
-
-                                        return (
-                                          <div key={subjKey} className="relative">
-                                            <span className="absolute -left-4 top-[18px] w-4 border-t border-slate-200" />
-                                            <div
-                                              onClick={() => toggleFolder(subjKey)}
-                                              className="flex items-center gap-2.5 px-2 py-2 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors select-none"
-                                            >
-                                              <ChevronRight size={15} className={`text-slate-400 shrink-0 transition-transform duration-200 ${isSubjExpanded ? 'rotate-90' : ''}`} />
-                                              {isSubjExpanded ? <FolderOpen size={16} className="text-indigo-500 shrink-0" /> : <Folder size={16} className="text-indigo-400 shrink-0" />}
-                                              <span className="font-semibold text-slate-700 truncate">{subj}</span>
-                                              <span className="bg-slate-100 text-slate-500 text-[11px] px-2 py-0.5 rounded-full font-bold shrink-0">{tests.length}</span>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                                    {subjects[subj].map(test => {
+                                      const tone = scoreTone(test.avgScore || 0);
+                                      return (
+                                        <button
+                                          key={test.id}
+                                          onClick={() => openGlobalTestDetail(test.id)}
+                                          className="group text-left rounded-[18px] border border-[#EEF2F7] bg-[#FBFCFE] hover:bg-white hover:border-blue-200 hover:shadow-[0_12px_28px_rgba(37,99,235,0.10)] hover:-translate-y-0.5 transition-all duration-200 p-4 flex flex-col gap-3"
+                                        >
+                                          <div className="flex items-start justify-between gap-3">
+                                            <span className="font-bold text-[14px] text-[#0F172A] group-hover:text-[#2563EB] leading-snug line-clamp-2">{test.title}</span>
+                                            <ChevronRight size={16} className="text-slate-300 group-hover:text-[#2563EB] shrink-0 mt-0.5 group-hover:translate-x-0.5 transition-all" />
+                                          </div>
+                                          <div className="flex items-center gap-3 text-[12px] font-semibold text-[#64748B]">
+                                            <span className="flex items-center gap-1"><Clock size={13} /> {test.date || '-'}</span>
+                                            <span className="flex items-center gap-1"><Users size={13} /> {test.participants || 0} {test.participants === 1 ? 'attempt' : 'attempts'}</span>
+                                          </div>
+                                          <div>
+                                            <div className="flex items-center justify-between text-[12px] font-bold mb-1.5">
+                                              <span className="text-[#94A3B8] uppercase tracking-wider text-[10.5px]">Avg score</span>
+                                              <span className={tone.text}>{test.participants ? `${test.avgScore || 0}%` : 'No attempts'}</span>
                                             </div>
-
-                                            {isSubjExpanded && (
-                                              <div className="ml-[14px] pl-4 border-l border-slate-200 flex flex-col">
-                                                {tests.map(test => (
-                                                  <div
-                                                    key={test.id}
-                                                    onClick={() => openGlobalTestDetail(test.id)}
-                                                    className="group relative flex items-center justify-between gap-3 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors"
-                                                  >
-                                                    <span className="absolute -left-4 top-1/2 w-4 border-t border-slate-200" />
-                                                    <div className="flex items-center gap-2.5 min-w-0">
-                                                      <FileText size={14} className="text-slate-400 group-hover:text-blue-600 shrink-0" />
-                                                      <span className="font-semibold text-[14px] text-slate-700 group-hover:text-blue-700 truncate">{test.title}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 uppercase tracking-wide shrink-0">
-                                                      <span className="hidden sm:inline">{test.date}</span>
-                                                      <span className="hidden sm:inline">•</span>
-                                                      <span>{test.participants} Attempts</span>
-                                                      <ChevronRight size={14} className="text-slate-300 group-hover:text-blue-600" />
-                                                    </div>
-                                                  </div>
-                                                ))}
-                                              </div>
+                                            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                              <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${Math.min(100, test.avgScore || 0)}%` }} />
+                                            </div>
+                                            {test.participants > 0 && (
+                                              <div className="mt-2 text-[11.5px] font-semibold text-[#64748B]">Highest <span className="text-[#0F172A] font-bold">{test.highestScore || 0}%</span></div>
                                             )}
                                           </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              );
-                            })}
-                          </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
-                    })()}
-              </div>
+                    })}
+                  </div>
+                );
+              })()
             ) : (
               // DRILLED-DOWN VIEW
               <div className="flex flex-col">

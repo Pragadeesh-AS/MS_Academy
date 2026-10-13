@@ -20,6 +20,7 @@ import { loadTestProgress, saveTestProgress, clearTestProgress, inProgressTestId
 import TestLeaderboard from './student/TestLeaderboard';
 import PracticeTests from './student/PracticeTests';
 import { hasUnlimitedPractice } from '../utils/practiceTests';
+import { upgradeClaritySession, setClarityTag, trackClarityEvent } from '../utils/clarity';
 
 // The signed-in student (sessionStorage survives a refresh, before Firebase Auth has restored the user)
 const currentEmail = () => auth.currentUser?.email || sessionStorage.getItem('auth_email') || '';
@@ -231,6 +232,14 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       startTimeRef.current = saved ? saved.startedAt : Date.now();
       setResumeProgress(saved);
       setTestMode('taking');
+
+      try {
+        upgradeClaritySession('test_started');
+        setClarityTag('test_title', timedTest.title || 'Untitled Test');
+        trackClarityEvent('test_started');
+      } catch (e) {
+        console.warn('Clarity tracking error:', e);
+      }
     } catch (err) {
       console.error("Error loading test questions:", err);
       alert("Failed to start test. Please try again.");

@@ -7,6 +7,7 @@ import { collection, getDocs, query, where, updateDoc, doc, setDoc, serverTimest
 import { useNavigate } from 'react-router-dom';
 import { resolveUserRoles, pickPrimaryRole, switchToRole, ADMIN_EMAILS } from '../utils/roles';
 import academyLogo from '../assets/msgate_logo_small.webp';
+import { identifyClarityUser, upgradeClaritySession } from '../utils/clarity';
 
 export default function LoginSignup() {
   const [isLogin, setIsLogin] = useState(true);
@@ -85,6 +86,14 @@ export default function LoginSignup() {
     sessionStorage.setItem('auth_email', user.email);
     sessionStorage.setItem('auth_name', userName);
     sessionStorage.setItem('auth_roles', JSON.stringify(roles));
+
+    // Microsoft Clarity: Identify user & prioritize session recording
+    try {
+      identifyClarityUser(user.email, undefined, undefined, userName);
+      upgradeClaritySession('user_login');
+    } catch (e) {
+      console.warn('Clarity identification error:', e);
+    }
 
     const primary = pickPrimaryRole(roles);
     switchToRole(primary, navigate);
