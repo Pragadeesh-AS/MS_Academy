@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Menu, X } from 'lucide-react';
 import { auth, db } from './firebase';
 import { collection, query, where, getDocs, doc, onSnapshot } from 'firebase/firestore';
+import { identifyClarityUser, setClarityTag } from './utils/clarity';
 import Home from './components/Home';
 import AboutUs from './components/AboutUs';
 import Contact from './components/Contact';
@@ -91,11 +92,43 @@ export default function App() {
 
   useEffect(() => {
     const handleStorageChange = () => {
-      setUserRole(sessionStorage.getItem('auth_role'));
-      setUserName(sessionStorage.getItem('auth_name'));
+      const role = sessionStorage.getItem('auth_role');
+      const name = sessionStorage.getItem('auth_name');
+      const email = sessionStorage.getItem('auth_email');
+      setUserRole(role);
+      setUserName(name);
+      if (email || name) {
+        identifyClarityUser(email || name, undefined, undefined, name || email);
+        if (role) setClarityTag('role', role);
+      }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // Sync user identification to Clarity on initial app mount and whenever auth changes
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      const storedName = sessionStorage.getItem('auth_name');
+      const storedRole = sessionStorage.getItem('auth_role');
+      if (user) {
+        const displayName = storedName || user.displayName || user.email?.split('@')[0] || 'User';
+        identifyClarityUser(user.email || user.uid, undefined, undefined, displayName);
+        setClarityTag('user_name', displayName);
+        if (user.email) setClarityTag('user_email', user.email);
+        if (storedRole) setClarityTag('user_role', storedRole);
+      } else {
+        const fallbackEmail = sessionStorage.getItem('auth_email');
+        if (fallbackEmail || storedName) {
+          const name = storedName || fallbackEmail?.split('@')[0] || 'User';
+          identifyClarityUser(fallbackEmail || name, undefined, undefined, name);
+          setClarityTag('user_name', name);
+          if (storedRole) setClarityTag('user_role', storedRole);
+        }
+      }
+    });
+
+    return () => unsubscribeAuth();
   }, []);
 
   // Idle Timeout Logic
