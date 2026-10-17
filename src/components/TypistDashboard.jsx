@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { BookOpen, FileEdit, ClipboardCheck, Sparkles, LogOut, ChevronLeft, ChevronRight, Menu, X, CheckCircle2, Clock, Tag } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
@@ -9,11 +9,28 @@ import AIGenerator from './admin/AIGenerator';
 import AttributesManager from './admin/AttributesManager';
 import RoleSwitcher from './shared/RoleSwitcher';
 
+const VALID_TYPIST_TABS = ['all', 'draft', 'review', 'ai', 'attributes'];
+
 export default function TypistDashboard() {
   const navigate = useNavigate();
   const [typistName, setTypistName] = useState('Typist');
   const pairRole = localStorage.getItem('pair_role') || 'typist';
-  const [activeTab, setActiveTab] = useState(pairRole === 'reviewer' ? 'review' : 'all');
+  const defaultTab = pairRole === 'reviewer' ? 'review' : 'all';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get('tab');
+  const activeTab = (rawTab && VALID_TYPIST_TABS.includes(rawTab)) ? rawTab : defaultTab;
+
+  const setActiveTab = (newTab) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (!newTab || newTab === defaultTab || newTab === 'assigned') {
+        next.delete('tab');
+      } else {
+        next.set('tab', newTab);
+      }
+      return next;
+    });
+  };
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [pair, setPair] = useState(null);
@@ -65,16 +82,6 @@ export default function TypistDashboard() {
     setIsAccepting(false);
   };
 
-  useEffect(() => {
-    // Prevent back button from leaving the dashboard
-    window.history.pushState(null, "", window.location.href);
-    const handlePopState = () => {
-      window.history.pushState(null, "", window.location.href);
-      setActiveTab('assigned'); // take to main dashboard view
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
 
   useEffect(() => {
     const role = sessionStorage.getItem('auth_role');
@@ -273,6 +280,8 @@ export default function TypistDashboard() {
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="absolute -right-3 top-6 bg-white border border-slate-200 rounded-full p-1.5 text-slate-400 hover:text-[#1D4ED8] hover:border-[#1D4ED8] shadow-sm z-50 transition-colors"
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>

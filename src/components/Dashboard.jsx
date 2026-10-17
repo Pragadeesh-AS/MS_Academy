@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut, Package, Layers } from 'lucide-react';
+
+const VALID_STUDENT_TABS = [
+  'learning', 'live', 'recordings', 'notes', 'schedule', 'analytics', 'tests', 'practice', 'upgrade'
+];
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { collection, query, where, getDocs, updateDoc, doc, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -141,8 +145,22 @@ export default function Dashboard() {
     : bundleCount > 0
       ? { tier: 'prime', label: 'MS GATE PRIME', icon: '⭐' }
       : { tier: 'foundation', label: 'MS GATE FOUNDATION', icon: '🌱' };
-  // Back on the Academy / Practice Tests tab if a test was left mid-way (refresh / crash), where it reopens
-  const [activeTab, setActiveTab] = useState(() => unfinishedTestTab(sessionStorage.getItem('auth_email')) || 'learning');
+  const defaultTab = unfinishedTestTab(sessionStorage.getItem('auth_email')) || 'learning';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get('tab');
+  const activeTab = (rawTab && VALID_STUDENT_TABS.includes(rawTab)) ? rawTab : defaultTab;
+
+  const setActiveTab = (newTab) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (!newTab || newTab === defaultTab || newTab === 'learning') {
+        next.delete('tab');
+      } else {
+        next.set('tab', newTab);
+      }
+      return next;
+    });
+  };
   // Finished practice test -> its report in Analytics; "Review Solutions" there -> the test's review
   const [analyticsTestId, setAnalyticsTestId] = useState(null);
   const [reviewTestId, setReviewTestId] = useState(null);
@@ -171,17 +189,6 @@ export default function Dashboard() {
   const [purchasedNoteBundles, setPurchasedNoteBundles] = useState([]);
   const [noteBundles, setNoteBundles] = useState([]);
   const [payingNoteBundleId, setPayingNoteBundleId] = useState(null);
-  
-  useEffect(() => {
-    // Prevent back button from leaving the dashboard
-    window.history.pushState(null, "", window.location.href);
-    const handlePopState = () => {
-      window.history.pushState(null, "", window.location.href);
-      setActiveTab('learning'); // Optionally take them to learning tab
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
 
   const [recordings, setRecordings] = useState([]);
   const [recordingSubject, setRecordingSubject] = useState(null); // open subject folder (null = folder list)
@@ -839,6 +846,8 @@ export default function Dashboard() {
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="absolute -right-3 top-6 bg-white border border-slate-200 rounded-full p-1.5 text-slate-400 hover:text-[#1D4ED8] hover:border-[#1D4ED8] shadow-sm z-50 transition-colors"
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -1560,6 +1569,17 @@ export default function Dashboard() {
                 })()
               )}
             </div>
+          </div>
+        )}
+
+        {/* Fallback to Learning if tab is unknown (never allow a blank page) */}
+        {!VALID_STUDENT_TABS.includes(activeTab) && (
+          <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 p-8">
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Section not found</h3>
+            <p className="text-slate-500 mb-6 font-medium">The requested section does not exist.</p>
+            <button onClick={() => setActiveTab('learning')} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">
+              Return to Learning
+            </button>
           </div>
         )}
       </main>

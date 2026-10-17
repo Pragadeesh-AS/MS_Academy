@@ -15,9 +15,8 @@ import { DepartmentTestFolders, TemplateTestFolders } from './tests/TestFolderCa
 import { sendWebhookEmailToEach } from '../utils/emailWebhook';
 import { BundleAccessPicker, BundleAccessModal } from './shared/BundleAccessPicker';
 import { accessOf, accessFields, bundleNamesOf } from '../utils/bundleAccess';
-import { sameDepartment, canonicalDepartment } from '../utils/subjects';
+import { sameDepartment } from '../utils/subjects';
 import { TEST_TEMPLATES, TEMPLATE_FOLDERS, templateByKey, templateMarks, templateQuestions, templateNumerical, subjectGroup, distributeAllocations, templateKeyOf, templateFoldersFor, folderName } from '../utils/testTemplates';
-import { formatTestTime, testStartMillis, toDateTimeLocal } from '../utils/testSchedule';
 import { recentQuestionUse, pickRotated } from '../utils/questionRotation';
 import { QUESTION_TYPES, TYPE_KEYS, TYPE_PRESETS, presetLabel, questionTypeKey, typeCountsOf, sumCounts, pctOf, cellsCanSupply, planTypeMix, buildTypeSplit, defaultTypeSplit } from '../utils/questionTypeSplit';
 import { DIFFICULTIES, DIFFICULTY_KEYS, difficultyKey, hasDifficultyMix, difficultyTotal, splitByDifficulty } from '../utils/questionDifficulty';
@@ -45,7 +44,7 @@ const shortType = (type) => ({
   'Match': 'Match'
 }[type] || type);
 
-export default function TestsManager({ department = '', isTeacher = false, onEditQuestion = null, initialView = 'templates' }) {
+export default function TestsManager({ department = '', isTeacher = false, onEditQuestion = null, initialView = 'templates', onBack = null }) {
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
@@ -180,12 +179,12 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const fetchTests = async () => {
     setLoading(true);
     try {
-      let q = collection(db, 'tests');
-      if (isTeacher && department) {
-        q = query(collection(db, 'tests'), where('department', '==', department));
-      }
+      const q = collection(db, 'tests');
       const snapshot = await getDocs(q);
-      const testsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let testsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (isTeacher && department) {
+        testsList = testsList.filter(t => sameDepartment(t.department, department));
+      }
       setTests(testsList);
     } catch (err) {
       console.error("Error fetching tests:", err);
@@ -229,13 +228,11 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   const commonDeptObjs = attributes.filter(a => a.type === 'department' && isCommonDeptName(a.name) && a.id !== selectedDeptObj?.id);
 
-  // Target department buttons: the departments set up in the Attributes tab (not the shared
-  // Maths / Aptitude banks), labelled as the admin named them. A test is saved under the matching
-  // student-side name ("CHEMICAL ENGINEERING" -> "Chemical Engineering (CH)") so it reaches the
-  // students of that department.
+  // Target department buttons: use the departments set up in the Attributes tab (not the shared
+  // Maths / Aptitude banks).
   const targetDepartments = attributes
     .filter(a => a.type === 'department' && !isCommonDeptName(a.name))
-    .map(a => ({ id: a.id, label: a.name, value: canonicalDepartment(a.name) }))
+    .map(a => ({ id: a.id, label: a.name, value: a.name }))
     .filter((d, i, all) => all.findIndex(x => sameDepartment(x.value, d.value)) === i)
     .sort((a, b) => a.label.localeCompare(b.label));
 
@@ -1016,8 +1013,25 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   };
 
   // Admin sees tests grouped into department folders; teachers are already scoped to one department.
+  // Tests of the same department (e.g. "ECE" and "Electronics (ECE)") are merged into a single folder.
   const showFolders = !isTeacher && !openFolder;
-  const folderOf = (t) => (t.department || '').trim() || 'Uncategorized';
+  const folderOf = (t) => {
+    const raw = (t.department || '').trim();
+    if (!raw) return 'Uncategorized';
+    const attr = attributes.find(a => a.type === 'department' && !isCommonDeptName(a.name) && sameDepartment(a.name, raw));
+    if (attr) {
+      if (raw === attr.name) return attr.name;
+      const hasExactAttrTest = tests.some(x => (x.department || '').trim() === attr.name);
+      if (hasExactAttrTest) return attr.name;
+      const variant = tests.find(x => {
+        const d = (x.department || '').trim();
+        return d && sameDepartment(d, raw);
+      });
+      if (variant) return (variant.department || '').trim();
+      return attr.name;
+    }
+    return raw;
+  };
   // Inside a department (or a teacher's own list): one folder per test template
   const deptTests = isTeacher ? tests : tests.filter(t => folderOf(t) === openFolder);
   const templateFolders = templateFoldersFor(deptTests);
@@ -1054,7 +1068,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4 min-w-0">
-          {(openTemplateFolder || (!isTeacher && openFolder)) && (
+          {openTemplateFolder || (!isTeacher && openFolder) ? (
             <button
               onClick={() => (openTemplateFolder ? setOpenTemplateFolder(null) : setOpenFolder(null))}
               className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors shrink-0"
@@ -1062,7 +1076,15 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
             >
               <ArrowLeft size={18} />
             </button>
-          )}
+          ) : onBack ? (
+            <button
+              onClick={onBack}
+              className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors shrink-0"
+              title="Back to Dashboard"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          ) : null}
           <div className="min-w-0">
             <h2 className="text-2xl font-[900] text-slate-900 tracking-tight flex items-center gap-2">
               <FileText className="text-blue-600 animate-pulse" size={28} />

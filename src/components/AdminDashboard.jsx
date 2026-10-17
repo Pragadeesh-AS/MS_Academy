@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import CreateTestButton from './CreateTestButton';
 import { 
   Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut,
@@ -69,9 +69,30 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Percentage change between two periods; null when there is no baseline to compare against
 const pctChange = (curr, prev) => (prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null);
 
+const VALID_ADMIN_TABS = [
+  'overview', 'teachers', 'typists', 'queries', 'questions', 'premium_questions',
+  'reported', 'notes', 'recordings', 'attributes', 'analytics', 'popup',
+  'courses', 'invoice', 'welcome_letter', 'fees', 'salary', 'ai', 'tests',
+  'blogs', 'gallery'
+];
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get('tab');
+  const activeTab = (rawTab && VALID_ADMIN_TABS.includes(rawTab)) ? rawTab : 'overview';
+
+  const setActiveTab = (newTab) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (!newTab || newTab === 'overview' || newTab === 'dashboard') {
+        next.delete('tab');
+      } else {
+        next.set('tab', newTab);
+      }
+      return next;
+    });
+  };
   const [testsView, setTestsView] = useState('templates'); // 'templates' | 'schedule'
   // Open reported questions across all departments - red badge on "Reported Q's"
   const pendingReports = usePendingReportCount();
@@ -149,16 +170,6 @@ export default function AdminDashboard() {
 
 
   // Auth Guard
-  useEffect(() => {
-    // Prevent back button from leaving the dashboard
-    window.history.pushState(null, "", window.location.href);
-    const handlePopState = () => {
-      window.history.pushState(null, "", window.location.href);
-      setActiveTab('dashboard'); // take to main dashboard view
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
   useEffect(() => {
     const role = sessionStorage.getItem('auth_role');
     const name = sessionStorage.getItem('auth_name');
@@ -1016,6 +1027,8 @@ export default function AdminDashboard() {
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="hidden md:flex absolute -right-3.5 top-9 w-7 h-7 bg-white border border-slate-200 rounded-full items-center justify-center shadow-sm text-slate-500 hover:text-slate-800 transition-colors z-30 hover:shadow-md"
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -1984,6 +1997,7 @@ export default function AdminDashboard() {
             department=""
             isTeacher={false}
             initialView={testsView}
+            onBack={() => setActiveTab('overview')}
             onEditQuestion={(qId) => { setEditQuestionId(qId); setActiveTab('questions'); }}
           />
         )}
@@ -1993,6 +2007,17 @@ export default function AdminDashboard() {
 
         {/* Gallery Tab */}
         {activeTab === 'gallery' && <GalleryManager />}
+
+        {/* Fallback to Overview if no tab matched (never allow a blank page) */}
+        {!VALID_ADMIN_TABS.includes(activeTab) && (
+          <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 p-8">
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Section not found</h3>
+            <p className="text-slate-500 mb-6 font-medium">The requested section does not exist.</p>
+            <button onClick={() => setActiveTab('overview')} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">
+              Return to Dashboard
+            </button>
+          </div>
+        )}
 
         </div>
       </main>

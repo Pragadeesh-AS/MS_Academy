@@ -13,6 +13,7 @@ import { positiveMarkFor, negativeMarkFor } from '../../utils/marking';
 import TestReport from '../analytics/TestReport';
 import MatchColumns from '../shared/MatchColumns';
 import { paletteFor, monogramOf } from '../../utils/departmentColors';
+import { sameDepartment, isCommonDeptName } from '../../utils/subjects';
 import { collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
 
 // Helper
@@ -57,31 +58,50 @@ export default function Analytics({ joinedStudents = [], department = null, stud
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        let testsQuery = collection(db, 'tests');
-        if (department) {
-          testsQuery = query(collection(db, 'tests'), where('department', '==', department));
-        }
-        
         let attemptsQuery = collection(db, 'test_attempts');
         if (studentViewOnlyEmail) {
           attemptsQuery = query(collection(db, 'test_attempts'), where('studentEmail', '==', studentViewOnlyEmail));
         }
 
-        const [testsSnap, attemptsSnap, questionsSnap] = await Promise.all([
-          getDocs(testsQuery),
+        const [testsSnap, attemptsSnap, questionsSnap, attributesSnap] = await Promise.all([
+          getDocs(collection(db, 'tests')),
           getDocs(attemptsQuery),
-          getDocs(collection(db, 'question_bank'))
+          getDocs(collection(db, 'question_bank')),
+          getDocs(collection(db, 'question_attributes'))
         ]);
 
-        const fetchedTests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        let fetchedTests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        if (department) {
+          fetchedTests = fetchedTests.filter(t => sameDepartment(t.department, department));
+        }
         const fetchedAttempts = attemptsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
         const questionsMap = {};
         questionsSnap.docs.forEach(d => { questionsMap[d.id] = { id: d.id, ...d.data() }; });
-        
+        const fetchedAttributes = attributesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const deptAttrs = fetchedAttributes.filter(a => a.type === 'department' && !isCommonDeptName(a.name));
+
+        const resolveDept = (rawDept) => {
+          const raw = (rawDept || '').trim();
+          if (!raw) return 'General';
+          const attr = deptAttrs.find(a => sameDepartment(a.name, raw));
+          if (attr) {
+            if (raw === attr.name) return attr.name;
+            const hasExactAttrTest = fetchedTests.some(x => (x.department || '').trim() === attr.name);
+            if (hasExactAttrTest) return attr.name;
+            const variant = fetchedTests.find(x => {
+              const d = (x.department || '').trim();
+              return d && sameDepartment(d, raw);
+            });
+            if (variant) return (variant.department || '').trim();
+            return attr.name;
+          }
+          return raw;
+        };
+
         // Allowed emails for this department/global view
         let validEmails = null;
         if (department && joinedStudents) {
-           const departmentStudents = joinedStudents.filter(s => s.department?.toLowerCase() === department.toLowerCase());
+           const departmentStudents = joinedStudents.filter(s => sameDepartment(s.department, department));
            validEmails = departmentStudents.map(s => s.email?.toLowerCase()).filter(Boolean);
         }
 
@@ -89,11 +109,12 @@ export default function Analytics({ joinedStudents = [], department = null, stud
         const sHistory = {};
 
         fetchedTests.forEach(test => {
+          const normalizedDept = resolveDept(test.department);
           tAnalytics[test.id] = {
             id: test.id,
             title: test.title || 'Untitled Test',
-            category: test.subject || test.department || 'General',
-            department: test.department || 'General',
+            category: test.subject || normalizedDept || 'General',
+            department: normalizedDept,
             subject: test.subject || 'General',
             date: test.createdAt ? new Date(test.createdAt.seconds * 1000).toLocaleDateString() : 'Unknown Date',
             avgScore: 0,

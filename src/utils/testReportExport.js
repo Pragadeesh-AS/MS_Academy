@@ -189,7 +189,7 @@ export const exportTestReportPdf = async (report) => {
     // No logo - the text header still works
   }
   setFont(pdf, 18, 'bold', WHITE);
-  pdf.text('MS ACADEMY', titleX, 13);
+  pdf.text('MS GATE ACADEMY', titleX, 13);
   setFont(pdf, 9, 'normal', [191, 219, 254]);
   pdf.text('Test Performance Report', titleX, 19.5);
   pdf.text(`Exported ${today()}`, pageW - margin, 13, { align: 'right' });
@@ -453,7 +453,7 @@ export const exportTestReportPdf = async (report) => {
     pdf.setLineWidth(0.2);
     pdf.line(margin, pageH - 10, pageW - margin, pageH - 10);
     setFont(pdf, 7.5, 'normal', MUTED);
-    pdf.text(fit(pdf, `MS Academy  |  ${report.title}`, contentW - 40), margin, pageH - 6);
+    pdf.text(fit(pdf, `MS GATE Academy  |  ${report.title}`, contentW - 40), margin, pageH - 6);
     pdf.text(`Page ${p} of ${pages}`, pageW - margin, pageH - 6, { align: 'right' });
   }
 

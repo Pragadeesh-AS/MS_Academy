@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { BookOpen, LogOut, Settings, Users, Video, Calendar, ChevronLeft, ChevronRight, Menu, X, FileText, ArrowRight, Clock, Sparkles } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
@@ -17,6 +17,10 @@ import AttributesManager from './admin/AttributesManager';
 import { gateCoursesData } from './GateCourses';
 import RoleSwitcher from './shared/RoleSwitcher';
 import ReportCountBadge, { usePendingReportCount } from './shared/ReportCountBadge';
+
+const VALID_TEACHER_TABS = [
+  'courses', 'live', 'students', 'questions', 'attributes', 'tests', 'analytics', 'reported'
+];
 
 const sidebarNavItems = [
   { key: 'courses', label: 'My Courses', icon: BookOpen },
@@ -66,7 +70,21 @@ export default function TeacherDashboard() {
   const [teacherDepartment, setTeacherDepartment] = useState('');
   // Open reports for this teacher's department - shown as a red badge on "Reported Q's"
   const pendingReports = usePendingReportCount(teacherDepartment || null, !!teacherDepartment);
-  const [activeTab, setActiveTab] = useState('courses');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get('tab');
+  const activeTab = (rawTab && VALID_TEACHER_TABS.includes(rawTab)) ? rawTab : 'courses';
+
+  const setActiveTab = (newTab) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (!newTab || newTab === 'courses' || newTab === 'classes') {
+        next.delete('tab');
+      } else {
+        next.set('tab', newTab);
+      }
+      return next;
+    });
+  };
   const [editQuestionId, setEditQuestionId] = useState(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [joinedStudents, setJoinedStudents] = useState([]);
@@ -75,17 +93,6 @@ export default function TeacherDashboard() {
   const [recentTests, setRecentTests] = useState([]);
   const [upcomingClasses, setUpcomingClasses] = useState([]);
   const [authChecked, setAuthChecked] = useState(false);
-
-  useEffect(() => {
-    // Prevent back button from leaving the dashboard
-    window.history.pushState(null, "", window.location.href);
-    const handlePopState = () => {
-      window.history.pushState(null, "", window.location.href);
-      setActiveTab('classes'); // take to main dashboard view
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
 
   useEffect(() => {
     const role = sessionStorage.getItem('auth_role');
@@ -281,6 +288,8 @@ export default function TeacherDashboard() {
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="absolute -right-3 top-6 bg-white border border-slate-200 rounded-full p-1.5 text-slate-400 hover:text-[#1D4ED8] hover:border-[#1D4ED8] shadow-sm z-50 transition-colors"
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -519,6 +528,7 @@ export default function TeacherDashboard() {
           <TestsManager
             department={teacherDepartment}
             isTeacher={true}
+            onBack={() => setActiveTab('courses')}
             onEditQuestion={(qId) => { setEditQuestionId(qId); setActiveTab('questions'); }}
           />
         )}
@@ -534,6 +544,16 @@ export default function TeacherDashboard() {
               setActiveTab('questions');
             }}
           />
+        )}
+        {/* Fallback to Courses if tab is unknown (never allow a blank page) */}
+        {!VALID_TEACHER_TABS.includes(activeTab) && (
+          <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 p-8">
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Section not found</h3>
+            <p className="text-slate-500 mb-6 font-medium">The requested section does not exist.</p>
+            <button onClick={() => setActiveTab('courses')} className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">
+              Return to Courses
+            </button>
+          </div>
         )}
       </main>
     </div>

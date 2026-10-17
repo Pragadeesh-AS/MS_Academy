@@ -2,6 +2,7 @@
 // The Cloud Function that emails test notifications (functions/testNotifications.js) has a copy
 // of this rule - keep the two in sync.
 import { bundleIdsOf } from './bundleAccess';
+import { sameDepartment } from './subjects';
 
 export const canAccessTest = (test, { isPro = false, purchasedBundles = [], bundles = [] } = {}) => {
   // 1. Explicitly free
@@ -22,7 +23,7 @@ export const canAccessTest = (test, { isPro = false, purchasedBundles = [], bund
   // 4. General tests: any purchased bundle for this department that includes tests
   return (bundles || []).some(b =>
     purchasedBundles.includes(b.id) &&
-    b.department === test.department &&
+    sameDepartment(b.department, test.department) &&
     (!b.permissions || b.permissions.includes('tests'))
   );
 };
