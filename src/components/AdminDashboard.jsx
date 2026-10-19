@@ -6,12 +6,14 @@ import {
   Users, FileText, LayoutDashboard, LayoutGrid, Settings, Mail, LogOut,
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, ChevronDown, UserCheck, Database, BarChart2, Megaphone, Sparkles,
-  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck, Menu, Images, MessageSquareText
+  Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck, Menu, Images, MessageSquareText,
+  PhoneCall, Phone, MessageCircle
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
 import { db, storage } from '../firebase';
 import { sendWebhookEmail } from '../utils/emailWebhook';
+import { STUDENT_DEPARTMENTS } from '../utils/subjects';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot, serverTimestamp, arrayUnion, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
@@ -158,6 +160,20 @@ export default function AdminDashboard() {
   const [appSearch, setAppSearch] = useState('');
   const [appFilter, setAppFilter] = useState('All');
   const [queryFilter, setQueryFilter] = useState('All');
+  const [querySearch, setQuerySearch] = useState('');
+  const [isAddQueryModalOpen, setIsAddQueryModalOpen] = useState(false);
+  const [manualQueryForm, setManualQueryForm] = useState({
+    fullName: '',
+    phone: '',
+    email: '',
+    source: 'Direct Phone Call',
+    department: '',
+    course: '',
+    college: '',
+    notes: '',
+    status: 'Pending'
+  });
+  const [isSavingManualQuery, setIsSavingManualQuery] = useState(false);
 
   // Modal detail states
   const [selectedQuery, setSelectedQuery] = useState(null);
@@ -753,6 +769,84 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleSaveManualQuery = async (e) => {
+    e.preventDefault();
+    if (!manualQueryForm.fullName.trim()) {
+      alert('Please enter caller / student name.');
+      return;
+    }
+    if (!manualQueryForm.phone.trim()) {
+      alert('Please enter a contact phone number.');
+      return;
+    }
+    if (!manualQueryForm.notes.trim()) {
+      alert('Please enter discussion notes or query details.');
+      return;
+    }
+    setIsSavingManualQuery(true);
+    try {
+      const callerName = manualQueryForm.fullName.trim();
+      const phone = manualQueryForm.phone.trim();
+      const email = (manualQueryForm.email || '').trim().toLowerCase();
+      const source = manualQueryForm.source || 'Direct Phone Call';
+      const dept = manualQueryForm.department || '';
+      const course = manualQueryForm.course || '';
+      const college = manualQueryForm.college.trim();
+      const notes = manualQueryForm.notes.trim();
+
+      const newQuery = {
+        fullName: callerName,
+        phone,
+        email,
+        source,
+        department: dept,
+        course,
+        college,
+        description: notes,
+        message: `Source: ${source}${course ? `\nCourse: ${course}` : ''}${dept ? `\nDept: ${dept}` : ''}${college ? `\nCollege: ${college}` : ''}\n\nCall / Query Notes:\n${notes}`,
+        date: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+        createdAt: serverTimestamp(),
+        status: manualQueryForm.status || 'Pending',
+        isManual: true,
+        loggedBy: sessionStorage.getItem('auth_name') || 'Admin'
+      };
+
+      await addDoc(collection(db, 'contact_queries'), newQuery);
+
+      setIsAddQueryModalOpen(false);
+      setManualQueryForm({
+        fullName: '',
+        phone: '',
+        email: '',
+        source: 'Direct Phone Call',
+        department: '',
+        course: '',
+        college: '',
+        notes: '',
+        status: 'Pending'
+      });
+      alert('Support query logged successfully!');
+    } catch (err) {
+      console.error('Failed to log query:', err);
+      alert('Failed to log query. Error: ' + err.message);
+    } finally {
+      setIsSavingManualQuery(false);
+    }
+  };
+
+  const handleDeleteQuery = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this query record?')) return;
+    try {
+      await deleteDoc(doc(db, 'contact_queries', id));
+      setSelectedQuery(null);
+      setQueries(prev => prev.filter(q => q.id !== id));
+      alert('Query record deleted.');
+    } catch (err) {
+      console.error('Failed to delete query:', err);
+      alert('Failed to delete query. Error: ' + err.message);
+    }
+  };
+
   const handleInviteSubmit = async (e) => {
     e.preventDefault();
     setIsInviting(true);
@@ -927,8 +1021,21 @@ export default function AdminDashboard() {
   });
 
   const filteredQueries = queries.filter(q => {
-    if (queryFilter === 'All') return true;
-    return q.status === queryFilter;
+    const matchesStatus = queryFilter === 'All' || q.status === queryFilter;
+    if (!matchesStatus) return false;
+    if (!querySearch.trim()) return true;
+    const term = querySearch.toLowerCase();
+    return (
+      (q.fullName || '').toLowerCase().includes(term) ||
+      (q.phone || '').includes(term) ||
+      (q.email || '').toLowerCase().includes(term) ||
+      (q.source || '').toLowerCase().includes(term) ||
+      (q.course || '').toLowerCase().includes(term) ||
+      (q.department || '').toLowerCase().includes(term) ||
+      (q.message || '').toLowerCase().includes(term) ||
+      (q.description || '').toLowerCase().includes(term) ||
+      (q.college || '').toLowerCase().includes(term)
+    );
   });
 
   return (
@@ -1852,8 +1959,8 @@ export default function AdminDashboard() {
           >
             {studentSubTab === 'queries' && (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-                  <div className="flex flex-wrap gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                  <div className="flex flex-wrap items-center gap-2">
                     {['All', 'Pending', 'Resolved'].map((status) => (
                       <button
                         key={status}
@@ -1867,15 +1974,34 @@ export default function AdminDashboard() {
                         {status} Queries
                       </button>
                     ))}
+                    
+                    {/* Search box for queries */}
+                    <div className="relative min-w-[180px] sm:min-w-[220px]">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={querySearch}
+                        onChange={(e) => setQuerySearch(e.target.value)}
+                        placeholder="Search caller, phone, dept..."
+                        className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:border-blue-500 shadow-sm"
+                      />
+                    </div>
                   </div>
-                  
+
+                  <button
+                    onClick={() => setIsAddQueryModalOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/20 transition-all shrink-0 active:scale-95"
+                  >
+                    <PhoneCall size={14} />
+                    <span>Log Call / Query</span>
+                  </button>
                 </div>
 
             {/* Queries Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredQueries.length === 0 ? (
                 <div className="bg-white border border-slate-100 p-6 sm:p-8 md:p-10 text-center text-slate-400 font-semibold rounded-3xl md:col-span-2">
-                  No inquiries found.
+                  No inquiries found matching your filters.
                 </div>
               ) : (
                 filteredQueries.map((q) => (
@@ -1885,12 +2011,45 @@ export default function AdminDashboard() {
                     className="bg-white border border-slate-100 p-6 rounded-[2rem] shadow-sm flex flex-col justify-between space-y-4 hover:shadow-md transition-all hover:scale-[1.01] cursor-pointer"
                   >
                     <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-bold text-slate-900">{q.fullName}</h4>
-                          <span className="text-xs text-slate-400 font-medium">{q.email} • {q.phone}</span>
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-bold text-slate-900 truncate">{q.fullName}</h4>
+                            {q.source && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold border ${
+                                q.source.includes('Call') || q.source.includes('Phone')
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : q.source.includes('WhatsApp')
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-purple-50 text-purple-700 border-purple-200'
+                              }`}>
+                                {q.source.includes('Call') || q.source.includes('Phone') ? <PhoneCall size={10} /> : q.source.includes('WhatsApp') ? <MessageCircle size={10} /> : <Tag size={10} />}
+                                {q.source}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 font-medium flex-wrap">
+                            {q.phone && (
+                              <a
+                                href={`tel:${q.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="hover:text-blue-600 flex items-center gap-1 font-semibold"
+                                title="Click to call"
+                              >
+                                <Phone size={11} className="text-slate-400" /> {q.phone}
+                              </a>
+                            )}
+                            {q.phone && q.email && <span>•</span>}
+                            {q.email && <span className="truncate">{q.email}</span>}
+                          </div>
+                          {(q.course || q.department) && (
+                            <div className="flex items-center gap-1.5 mt-1.5 text-[11px] font-semibold flex-wrap">
+                              {q.department && <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">{q.department}</span>}
+                              {q.course && <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">{q.course}</span>}
+                            </div>
+                          )}
                         </div>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 border ${
                           q.status === 'Resolved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100 animate-pulse'
                         }`}>
                           {q.status}
@@ -1898,7 +2057,7 @@ export default function AdminDashboard() {
                       </div>
                       
                       <p className="whitespace-pre-wrap text-slate-600 text-[13.5px] leading-relaxed italic bg-slate-50/50 p-4 border border-slate-100/50 rounded-2xl line-clamp-3 overflow-hidden">
-                        "{q.message}"
+                        "{q.description || q.message}"
                       </p>
                       {q.status === 'Resolved' && q.resolutionNote && (
                         <div className="flex gap-2 p-3 rounded-2xl bg-emerald-50/60 border border-emerald-100">
@@ -2229,22 +2388,61 @@ export default function AdminDashboard() {
               <X size={16} />
             </button>
 
-            {/* Modal Title */}
+            {/* Modal Title & Contact Channels */}
             <div>
-              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                selectedQuery.status === 'Resolved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100 animate-pulse'
-              }`}>
-                {selectedQuery.status}
-              </span>
-              <h3 className="text-2xl font-[900] text-slate-900 mt-3">{selectedQuery.fullName}</h3>
-              <p className="text-xs text-slate-400 font-semibold mt-1">{selectedQuery.email} • {selectedQuery.phone}</p>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                  selectedQuery.status === 'Resolved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100 animate-pulse'
+                }`}>
+                  {selectedQuery.status}
+                </span>
+                {selectedQuery.source && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                    <PhoneCall size={10} /> {selectedQuery.source}
+                  </span>
+                )}
+                {selectedQuery.loggedBy && (
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    Logged by {selectedQuery.loggedBy}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-2xl font-[900] text-slate-900">{selectedQuery.fullName}</h3>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {selectedQuery.phone && (
+                  <a
+                    href={`tel:${selectedQuery.phone}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    <Phone size={12} /> Call: {selectedQuery.phone}
+                  </a>
+                )}
+                {selectedQuery.phone && (
+                  <a
+                    href={`https://wa.me/${selectedQuery.phone.replace(/[^0-9]/g, '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    <MessageCircle size={12} /> WhatsApp
+                  </a>
+                )}
+                {selectedQuery.email && (
+                  <a
+                    href={`mailto:${selectedQuery.email}`}
+                    className="text-xs text-slate-500 font-semibold hover:text-blue-600 truncate max-w-[220px]"
+                  >
+                    {selectedQuery.email}
+                  </a>
+                )}
+              </div>
             </div>
 
             {/* Query Content */}
             <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 shadow-inner">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-3">Enquiry Details</span>
               <p className="whitespace-pre-wrap text-slate-700 text-sm leading-relaxed font-medium">
-                {selectedQuery.message}
+                {selectedQuery.message || selectedQuery.description}
               </p>
             </div>
 
@@ -2264,19 +2462,223 @@ export default function AdminDashboard() {
             )}
 
             {/* Modal Actions */}
-            {selectedQuery.status !== 'Resolved' && (
-              <div className="flex gap-3 pt-4 border-t border-slate-50">
+            <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-50">
+              <button
+                type="button"
+                onClick={() => handleDeleteQuery(selectedQuery.id)}
+                className="px-3.5 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                title="Delete query record"
+              >
+                <Trash2 size={13} />
+                <span>Delete</span>
+              </button>
+
+              {selectedQuery.status !== 'Resolved' && (
                 <button
                   onClick={() => {
                     toggleQueryStatus(selectedQuery.id);
                   }}
-                  className="flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-100 border"
+                  className="flex-1 py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-100 border shadow-sm"
                 >
                   <Check size={14} />
                   <span>Mark as Resolved</span>
                 </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Log Manual / Direct Call Support Query Modal */}
+      {isAddQueryModalOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-3 sm:p-4"
+          onClick={() => !isSavingManualQuery && setIsAddQueryModalOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-[2rem] w-full max-w-[620px] max-h-[92vh] overflow-hidden flex flex-col shadow-2xl border border-slate-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 bg-gradient-to-r from-blue-50/60 via-indigo-50/30 to-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+                  <PhoneCall size={18} />
+                </div>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-tight">Log Call / Support Query</h3>
+                  <p className="text-xs text-slate-500 font-medium">Record inquiries from phone calls, WhatsApp, or walk-ins</p>
+                </div>
               </div>
-            )}
+              <button
+                type="button"
+                onClick={() => !isSavingManualQuery && setIsAddQueryModalOpen(false)}
+                className="p-2 bg-white hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors border border-slate-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveManualQuery} className="p-5 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm">
+              {/* Row 1: Caller Name & Phone */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Caller / Student Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={manualQueryForm.fullName}
+                    onChange={(e) => setManualQueryForm({ ...manualQueryForm, fullName: e.target.value })}
+                    placeholder="e.g. Arun Kumar"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Phone Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={manualQueryForm.phone}
+                    onChange={(e) => setManualQueryForm({ ...manualQueryForm, phone: e.target.value })}
+                    placeholder="e.g. 9876543210"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Email & Channel / Source */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Email Address <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={manualQueryForm.email}
+                    onChange={(e) => setManualQueryForm({ ...manualQueryForm, email: e.target.value })}
+                    placeholder="e.g. student@gmail.com"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Source / Channel
+                  </label>
+                  <select
+                    value={manualQueryForm.source}
+                    onChange={(e) => setManualQueryForm({ ...manualQueryForm, source: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="Direct Phone Call">📞 Direct Phone Call</option>
+                    <option value="WhatsApp Enquiry">💬 WhatsApp Enquiry</option>
+                    <option value="Office Walk-in">🏢 Office Walk-in</option>
+                    <option value="Instagram / Social">📱 Instagram / Social</option>
+                    <option value="Website Enquiry">🌐 Website Enquiry</option>
+                    <option value="Other">📌 Other</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 3: Department & Course */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Department / GATE Paper
+                  </label>
+                  <select
+                    value={manualQueryForm.department}
+                    onChange={(e) => setManualQueryForm({ ...manualQueryForm, department: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">Select Department (Optional)...</option>
+                    {STUDENT_DEPARTMENTS.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Course / Requirement
+                  </label>
+                  <input
+                    type="text"
+                    value={manualQueryForm.course}
+                    onChange={(e) => setManualQueryForm({ ...manualQueryForm, course: e.target.value })}
+                    placeholder="e.g. GATE 2027 Full Course, Test Series..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: College & Initial Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    College / City <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={manualQueryForm.college}
+                    onChange={(e) => setManualQueryForm({ ...manualQueryForm, college: e.target.value })}
+                    placeholder="e.g. PSG Tech, Coimbatore"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Initial Status
+                  </label>
+                  <select
+                    value={manualQueryForm.status}
+                    onChange={(e) => setManualQueryForm({ ...manualQueryForm, status: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="Pending">⏳ Pending (Needs follow-up)</option>
+                    <option value="Resolved">✅ Resolved (Inquiry answered / completed)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Call Notes / Query Details */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Call Discussion / Query Notes <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={manualQueryForm.notes}
+                  onChange={(e) => setManualQueryForm({ ...manualQueryForm, notes: e.target.value })}
+                  placeholder="Record what was discussed during the call, specific student concerns, fees discussed, follow-up date..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 text-xs focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddQueryModalOpen(false)}
+                  disabled={isSavingManualQuery}
+                  className="px-4 py-2.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-bold text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingManualQuery}
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs transition-all shadow-md shadow-blue-500/20 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSavingManualQuery ? 'Saving…' : 'Save & Log Query'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
