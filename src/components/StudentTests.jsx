@@ -852,6 +852,28 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     return { hasDiscount: false, saveAmount: 0, percent: 0 };
   };
 
+  const getBundleInclusions = (bundle) => {
+    if (!bundle) return [];
+    // 1. Only actual admin-specified features for this exact bundle
+    const features = (bundle.features || [])
+      .map(f => typeof f === 'string' ? f.trim() : '')
+      .filter(Boolean);
+    if (features.length > 0) return features;
+
+    // 2. Otherwise only the explicit permissions this bundle actually has
+    const perms = bundle.permissions;
+    if (Array.isArray(perms) && perms.length > 0) {
+      const items = [];
+      if (perms.includes('tests')) items.push('Academy Tests');
+      if (perms.includes('live_classes')) items.push('Live Classes');
+      if (perms.includes('recordings')) items.push('Class Recordings');
+      if (perms.includes('notes')) items.push('Study Notes');
+      return items;
+    }
+
+    return [];
+  };
+
   const getAvailableBundlesForTest = (test) => {
     if (!test) return [];
     const onlyBundles = bundleIdsOf(test);
@@ -1213,14 +1235,14 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
             <div className="p-6 sm:p-7 pb-4 text-center relative z-10 border-b border-slate-800/80">
               <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-black uppercase tracking-wider mb-3 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
                 <Sparkles size={13} className="text-amber-400" />
-                <span>VIP Test Pass · Pro Required</span>
+                <span>Unlock Test Access</span>
               </div>
 
               <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-snug">
                 Unlock {unlockModalTest.title}
               </h3>
               <p className="text-xs sm:text-sm text-slate-400 font-medium max-w-lg mx-auto mt-1.5 leading-relaxed">
-                Enroll in an official course bundle below to immediately unlock this test, all full-length mock exams, and in-depth solution explanations.
+                Choose an available bundle below to unlock access to this test.
               </p>
 
               {/* Compact Test Details Pill */}
@@ -1279,6 +1301,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                       const finalPrice = bundle.discountedPrice || bundle.price;
                       const { hasDiscount, saveAmount, percent } = getDiscountInfo(bundle);
                       const isAlreadyPurchased = purchasedBundles.includes(bundle.id);
+                      const inclusions = getBundleInclusions(bundle);
 
                       return (
                         <div 
@@ -1288,9 +1311,11 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-slate-800 text-amber-400 border border-slate-700">
-                                  {bundle.department || department || 'All Departments'}
-                                </span>
+                                {bundle.department && (
+                                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-slate-800 text-amber-400 border border-slate-700">
+                                    {bundle.department}
+                                  </span>
+                                )}
                                 {(bundle.tier === 'elite' || bundle.isElite || /elite/i.test(bundle.name || '')) && (
                                   <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                                     <Crown size={10} /> ELITE COURSE
@@ -1300,7 +1325,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                               <h4 className="font-black text-white text-base sm:text-lg leading-tight group-hover:text-amber-300 transition-colors">
                                 {bundle.name}
                               </h4>
-                              {bundle.tagline && (
+                              {bundle.tagline && bundle.tagline.trim() !== '' && (
                                 <p className="text-xs text-slate-400 font-medium line-clamp-2 mt-1">
                                   {bundle.tagline}
                                 </p>
@@ -1325,25 +1350,17 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                             </div>
                           </div>
 
-                          {/* Perks preview */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-800/70 text-[11px] text-slate-300">
-                            <div className="flex items-center gap-1.5 truncate">
-                              <Zap size={12} className="text-amber-400 shrink-0" />
-                              <span className="truncate">Full Test Series & Mock Exams</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 truncate">
-                              <Award size={12} className="text-blue-400 shrink-0" />
-                              <span className="truncate">Solutions & Detailed Analytics</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 truncate">
-                              <BookOpen size={12} className="text-emerald-400 shrink-0" />
-                              <span className="truncate">Complete Study Notes & Materials</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 truncate">
-                              <Video size={12} className="text-purple-400 shrink-0" />
-                              <span className="truncate">Live Masterclasses & HD Vault</span>
-                            </div>
-                          </div>
+                          {/* Only actual inclusions of this particular bundle */}
+                          {inclusions.length > 0 && (
+                            <ul className="space-y-1.5 pt-2 border-t border-slate-800/70 text-xs text-slate-300">
+                              {inclusions.map((featureText, idx) => (
+                                <li key={idx} className="flex items-start gap-2">
+                                  <span className="text-amber-400 font-black shrink-0 mt-0.5">✓</span>
+                                  <span className="leading-snug">{featureText}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
 
                           {/* Action Button */}
                           <div className="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
@@ -1383,7 +1400,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
             <div className="p-4 sm:p-5 bg-slate-950/90 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left relative z-10">
               <div className="flex items-center gap-2 text-xs text-slate-400">
                 <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
-                <span>Instant access upon checkout · 100% verified syllabus</span>
+                <span>Instant access upon successful enrollment</span>
               </div>
 
               <button
