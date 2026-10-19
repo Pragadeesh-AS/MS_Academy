@@ -23,6 +23,7 @@ export const DEPARTMENT_PALETTES = {
   ES: { badge: 'from-sky-500 to-cyan-600', glow: 'group-hover:shadow-sky-500/15', ring: 'group-hover:border-sky-300', text: 'text-sky-600', soft: 'bg-sky-50 text-sky-700 border-sky-100', mark: 'text-sky-500/[0.08]' }, // Environmental Science
   XL: { badge: 'from-purple-500 to-fuchsia-600', glow: 'group-hover:shadow-purple-500/15', ring: 'group-hover:border-purple-300', text: 'text-purple-600', soft: 'bg-purple-50 text-purple-700 border-purple-100', mark: 'text-purple-500/[0.08]' }, // Life Sciences
   AE: { badge: 'from-slate-500 to-blue-600', glow: 'group-hover:shadow-slate-500/15', ring: 'group-hover:border-slate-300', text: 'text-slate-600', soft: 'bg-slate-50 text-slate-700 border-slate-100', mark: 'text-slate-500/[0.08]' }, // Aerospace
+  ST: { badge: 'from-blue-600 to-cyan-600', glow: 'group-hover:shadow-blue-500/15', ring: 'group-hover:border-blue-300', text: 'text-blue-600', soft: 'bg-blue-50 text-blue-700 border-blue-100', mark: 'text-blue-500/[0.08]' }, // Statistics
   MATHS: { badge: 'from-sky-500 to-indigo-600', glow: 'group-hover:shadow-sky-500/15', ring: 'group-hover:border-sky-300', text: 'text-sky-600', soft: 'bg-sky-50 text-sky-700 border-sky-100', mark: 'text-sky-500/[0.08]' }, // Engineering Mathematics
   APTITUDE: { badge: 'from-amber-500 to-orange-600', glow: 'group-hover:shadow-amber-500/15', ring: 'group-hover:border-amber-300', text: 'text-amber-600', soft: 'bg-amber-50 text-amber-700 border-amber-100', mark: 'text-amber-500/[0.08]' }, // Aptitude
 };

@@ -28,6 +28,7 @@ import MtCourse from './components/courses/Mt';
 import EsCourse from './components/courses/Es';
 import XlCourse from './components/courses/Xl';
 import AeCourse from './components/courses/Ae';
+import StCourse from './components/courses/St';
 import MorphPanel from './components/ui/ai-input';
 import EnquiryForm from './components/ui/EnquiryForm';
 import ProgrammingCourses from './components/ProgrammingCourses';
@@ -490,6 +491,7 @@ export default function App() {
         <Route path="/courses/es" element={<EsCourse />} />
         <Route path="/courses/xl" element={<XlCourse />} />
         <Route path="/courses/ae" element={<AeCourse />} />
+        <Route path="/courses/st" element={<StCourse />} />
         <Route path="/gate-courses" element={<GateCourses />} />
         <Route path="/programming" element={<ProgrammingCourses />} />
         <Route path="/careers" element={<Careers />} />

@@ -4,7 +4,7 @@ import {
   Monitor, Cpu, Cog, Building2, Zap, Settings, Database, Gauge, 
   Dna, FlaskConical, HeartPulse, Atom, DraftingCompass, Sprout, 
   Anvil, Leaf, Microscope, Plane, ArrowRight, BookOpen, 
-  GraduationCap, Award, Briefcase, Globe, Sparkles, Clock 
+  GraduationCap, Award, Briefcase, Globe, Sparkles, Clock, BarChart3 
 } from 'lucide-react';
 
 // The first frame of each video (public/posters), shown instantly while the video loads
@@ -301,6 +301,16 @@ export const gateCoursesData = [
     highlights: ["Water & Wastewater Engg", "Air & Noise Pollution", "Solid & Hazardous Waste"],
     video: "/Environment.mp4",
     theme: themes.emerald
+  },
+  {
+    code: "ST",
+    name: "Statistics (ST)",
+    icon: BarChart3,
+    path: "/courses/st",
+    desc: "Specialized training in calculus, linear algebra, probability theory, distributions, estimation, testing of hypotheses, stochastic processes, and regression.",
+    highlights: ["Probability & Distributions", "Estimation & Hypothesis Testing", "Stochastic & Regression"],
+    video: "/AIDS.mp4",
+    theme: themes.blue
   }
 ];
 

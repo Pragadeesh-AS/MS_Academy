@@ -29,7 +29,7 @@ const DEPARTMENT_OPTIONS = [
   "Data Science & AI (DS)", "Production & Industrial Engg (PI)", "Instrumentation Engg (IN)",
   "Biotechnology (BT)", "Chemical Engineering (CH)", "Biomedical Engineering (BM)", "Physics (PH)",
   "Architecture & Planning (AR)", "Agricultural Engineering (AG)", "Metallurgical Engineering (MT)",
-  "Environmental Science (ES)", "Life Sciences (XL)", "Aerospace Engineering (AE)", "Other"
+  "Environmental Science (ES)", "Life Sciences (XL)", "Aerospace Engineering (AE)", "Statistics (ST)", "Other"
 ];
 
 const YEAR_OPTIONS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Graduated / Working"];

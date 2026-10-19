@@ -2378,6 +2378,7 @@ export default function AdminDashboard() {
                   <option value="Environmental Science (ES)">Environmental Science (ES)</option>
                   <option value="Life Sciences (XL)">Life Sciences (XL)</option>
                   <option value="Aerospace Engineering (AE)">Aerospace Engineering (AE)</option>
+                  <option value="Statistics (ST)">Statistics (ST)</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
@@ -2477,6 +2478,7 @@ export default function AdminDashboard() {
                   <option value="Environmental Science (ES)">Environmental Science (ES)</option>
                   <option value="Life Sciences (XL)">Life Sciences (XL)</option>
                   <option value="Aerospace Engineering (AE)">Aerospace Engineering (AE)</option>
+                  <option value="Statistics (ST)">Statistics (ST)</option>
                   <option value="Other">Other</option>
                 </select>
               </div>

@@ -55,6 +55,7 @@ const DEPARTMENT_OPTIONS = [
   'Environmental Science (ES)',
   'Life Sciences (XL)',
   'Aerospace Engineering (AE)',
+  'Statistics (ST)',
   'Other'
 ];
 

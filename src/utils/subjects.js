@@ -47,6 +47,7 @@ export const STUDENT_DEPARTMENTS = [
   'Environmental Science (ES)',
   'Life Sciences (XL)',
   'Aerospace Engineering (AE)',
+  'Statistics (ST)',
 ];
 
 // Other common ways admins name a department in the Attributes tab
@@ -60,6 +61,9 @@ const DEPARTMENT_ALIASES = {
   eee: 'Electrical (EE)',
   chemical: 'Chemical Engineering (CH)',
   civil: 'Civil (CE)',
+  statistics: 'Statistics (ST)',
+  stats: 'Statistics (ST)',
+  st: 'Statistics (ST)',
 };
 
 // An attribute department name ("CHEMICAL ENGINEERING", "ECE", "AIDS") as the student-side name
