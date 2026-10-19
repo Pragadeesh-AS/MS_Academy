@@ -42,9 +42,14 @@ const amountToWords = (amount) => {
 };
 
 // Rupee sign: the serif font has no ₹ glyph, so draw it in a font that does
+import Toast from '../shared/Toast';
+
 const Rs = () => <span style={{ fontFamily: '"Segoe UI", "Noto Sans", Arial, sans-serif' }}>₹</span>;
 
 export default function InvoiceGenerator() {
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+
   const [toAddress, setToAddress] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('GATE TEST SERIES - 001');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -78,7 +83,7 @@ export default function InvoiceGenerator() {
       return await renderPagePdf(element);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert(`Failed to generate PDF: ${error.message || error}`);
+      showToast(`Failed to generate PDF: ${error.message || error}`, 'error');
       return null;
     }
   };
@@ -87,7 +92,10 @@ export default function InvoiceGenerator() {
     setBusy(true);
     const pdf = await generatePDF();
     setBusy(false);
-    if (pdf) pdf.save(`Invoice_${safeFilePart(invoiceNo) || 'MS-GATE'}_${date}.pdf`);
+    if (pdf) {
+      pdf.save(`Invoice_${safeFilePart(invoiceNo) || 'MS-GATE'}_${date}.pdf`);
+      showToast('Invoice PDF downloaded successfully.', 'success');
+    }
   };
 
   const handlePrint = async () => {
@@ -316,6 +324,14 @@ export default function InvoiceGenerator() {
           </A4Preview>
         </div>
       </div>
+
+      {/* In-App Toast */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }

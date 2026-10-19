@@ -79,6 +79,8 @@ const groupColor = (name) => {
   return GROUP_COLORS[h % GROUP_COLORS.length];
 };
 
+import Toast from '../shared/Toast';
+
 const StudentDirectory = ({
   joinedStudents,
   setJoinedStudents,
@@ -87,6 +89,9 @@ const StudentDirectory = ({
   setActiveSubTab,
   children
 }) => {
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('');
   const [filterYear, setFilterYear] = useState('');
@@ -149,16 +154,17 @@ const StudentDirectory = ({
         } catch (mailErr) {
           console.warn('Admission form requested in database, but email notification failed:', mailErr);
         }
-        alert(emailSent
-          ? `Admission form requested! Notification email has been sent to ${student.email}.`
-          : `Admission form requested! (Email notification could not be sent to ${student.email}).`
-        );
+        if (emailSent) {
+          showToast(`Admission form requested! Notification email has been sent to ${student.email}.`, 'success');
+        } else {
+          showToast(`Admission form requested! (Email notification could not be sent to ${student.email}).`, 'warning');
+        }
       } else {
-        alert('Admission form request cancelled.');
+        showToast('Admission form request cancelled.', 'info');
       }
     } catch (error) {
       console.error('Error updating admission form request:', error);
-      alert(`Failed to ${requested ? 'send' : 'cancel'} the admission form. Error: ${error.message}`);
+      showToast(`Failed to ${requested ? 'send' : 'cancel'} the admission form: ${error.message}`, 'error');
     } finally {
       setSendingForm(false);
     }
@@ -205,9 +211,10 @@ const StudentDirectory = ({
         setGroupDialog(null);
         setGroupInput('');
       }
+      showToast('Group updated successfully.', 'success');
     } catch (err) {
       console.error('Failed to update student groups', err);
-      alert('Failed to update the group. Please try again.');
+      showToast('Failed to update the group. Please try again.', 'error');
     }
     setIsSavingGroup(false);
   };
@@ -301,9 +308,10 @@ const StudentDirectory = ({
         String(s.id) === String(editingStudent.id) ? { ...s, ...updates } : s
       ));
       setEditingStudent(null);
+      showToast('Student updated successfully.', 'success');
     } catch (err) {
       console.error('Failed to update student', err);
-      alert('Failed to update student. Please try again.');
+      showToast('Failed to update student. Please try again.', 'error');
     } finally {
       setIsSavingEdit(false);
     }
@@ -396,9 +404,10 @@ const StudentDirectory = ({
       const idString = String(studentId);
       await deleteDoc(doc(db, 'joined_students', idString));
       setJoinedStudents(joinedStudents.filter(s => s.id !== studentId));
+      showToast('Student removed from directory.', 'success');
     } catch (error) {
       console.error("Error deleting student:", error);
-      alert("Failed to delete student from the database.");
+      showToast("Failed to delete student from the database.", 'error');
     }
   };
 
@@ -1058,10 +1067,10 @@ const StudentDirectory = ({
                                       setJoinedStudents(joinedStudents.map(s => 
                                         s.id === selectedStudent.id ? updatedStudent : s
                                       ));
-                                      alert('Bundle cancelled successfully.');
+                                      showToast('Bundle cancelled successfully.', 'success');
                                     } catch (error) {
                                       console.error('Error canceling bundle:', error);
-                                      alert(`Failed to cancel bundle. Error: ${error.message}`);
+                                      showToast(`Failed to cancel bundle: ${error.message}`, 'error');
                                     }
                                   }
                                 });
@@ -1094,10 +1103,10 @@ const StudentDirectory = ({
                           const updatedStudent = { ...selectedStudent, ...bundleUpdates };
                           setSelectedStudent(updatedStudent);
                           setJoinedStudents(joinedStudents.map(s => s.id === selectedStudent.id ? updatedStudent : s));
-                          alert(`Bundle assigned successfully!${full ? ' Student is now Elite.' : ''}`);
+                          showToast(`Bundle assigned successfully!${full ? ' Student is now Elite.' : ''}`, 'success');
                         } catch (error) {
                           console.error('Error adding bundle:', error);
-                          alert(`Failed to add bundle. Error: ${error.message}`);
+                          showToast(`Failed to add bundle: ${error.message}`, 'error');
                         }
                         e.target.value = '';
                       }}
@@ -1352,22 +1361,47 @@ const StudentDirectory = ({
         </div>
       )}
 
-      {/* Generic Confirmation Modal */}
+      {/* Generic In-App Confirmation Modal */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black p-4">
-          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
-            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Action</div>
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
             <div className="p-6">
-              <p className="text-gray-800 text-base mb-6">{confirmDialog.message}</p>
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">Confirm Action</h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                {confirmDialog.message}
+              </p>
               
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
-                <button onClick={confirmDialog.onConfirm} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Confirm</button>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDialog(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDialog.onConfirm}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  Confirm
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* In-App Toast Feedback */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 };

@@ -739,8 +739,9 @@ export default function AIGenerator({ pairMode = false }) {
     const selectedFile = e.target.files[0];
     if (selectedFile && selectedFile.type === 'application/pdf') {
       setFile(selectedFile);
+      setErrorMsg('');
     } else {
-      alert("Please upload a valid PDF file.");
+      setErrorMsg("Please upload a valid PDF file.");
     }
   };
 
@@ -753,8 +754,9 @@ export default function AIGenerator({ pairMode = false }) {
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile && droppedFile.type === 'application/pdf') {
       setFile(droppedFile);
+      setErrorMsg('');
     } else {
-      alert("Please upload a valid PDF file.");
+      setErrorMsg("Please upload a valid PDF file.");
     }
   };
 

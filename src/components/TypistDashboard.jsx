@@ -8,11 +8,14 @@ import QuestionBank from './admin/QuestionBank';
 import AIGenerator from './admin/AIGenerator';
 import AttributesManager from './admin/AttributesManager';
 import RoleSwitcher from './shared/RoleSwitcher';
+import Toast from './shared/Toast';
 
 const VALID_TYPIST_TABS = ['all', 'draft', 'review', 'ai', 'attributes'];
 
 export default function TypistDashboard() {
   const navigate = useNavigate();
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'info') => setToast({ message, type });
   const [typistName, setTypistName] = useState('Typist');
   const pairRole = localStorage.getItem('pair_role') || 'typist';
   const defaultTab = pairRole === 'reviewer' ? 'review' : 'all';
@@ -75,9 +78,10 @@ export default function TypistDashboard() {
           ? { ...p, reviewerAccepted: true, reviewerAcceptedAt: acceptedAt, status: hasAccepted(p, 'typist') ? 'Accepted' : 'Pending' }
           : p));
       }
+      showToast('Invitation accepted successfully!', 'success');
     } catch (e) {
       console.error('Failed to accept invitation', e);
-      alert('Failed to accept the invitation. Please try again.');
+      showToast('Failed to accept the invitation. Please try again.', 'error');
     }
     setIsAccepting(false);
   };
@@ -418,6 +422,7 @@ export default function TypistDashboard() {
           )}
         </div>
       </main>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

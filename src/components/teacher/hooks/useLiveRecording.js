@@ -9,7 +9,8 @@ export const useLiveRecording = ({
   screenShareAudioTrack, 
   remoteUsers, 
   activeQuestionState,
-  onUploadComplete
+  onUploadComplete,
+  onError
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -17,6 +18,7 @@ export const useLiveRecording = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [pendingRecording, setPendingRecording] = useState(null);
+  const [recordingError, setRecordingError] = useState(null);
   
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
@@ -324,7 +326,9 @@ export const useLiveRecording = ({
 
     } catch (err) {
       console.error("Error starting recording:", err);
-      alert("Error starting recording: " + err.message);
+      const msg = "Error starting recording: " + err.message;
+      setRecordingError(msg);
+      if (onError) onError(msg);
     }
   };
 
@@ -347,7 +351,9 @@ export const useLiveRecording = ({
       }, 
       (error) => {
         console.error("Upload error:", error);
-        alert("Error uploading recording: " + error.message);
+        const msg = "Error uploading recording: " + error.message;
+        setRecordingError(msg);
+        if (onError) onError(msg);
         setIsUploading(false);
       }, 
       async () => {
@@ -461,6 +467,7 @@ export const useLiveRecording = ({
     startRecording,
     togglePauseRecording,
     stopRecording,
-    compositeCanvasRef
+    compositeCanvasRef,
+    recordingError
   };
 };

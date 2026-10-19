@@ -8,8 +8,11 @@ import { ShinyButton } from "./ui/shiny-button";
 import { db, storage } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import Toast from './shared/Toast';
 
 export default function Careers() {
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'info') => setToast({ message, type });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState('GATE Coaching Teacher');
   
@@ -217,7 +220,7 @@ export default function Careers() {
       removeFile();
     } catch (err) {
       console.error('Failed to save career application', err);
-      alert(`Failed to submit application${err?.code ? ` (${err.code})` : ''}. Please check your internet connection and try again.`);
+      showToast(`Failed to submit application${err?.code ? ` (${err.code})` : ''}. Please check your internet connection and try again.`, 'error');
       setPanelState('form');
     }
   };
@@ -752,6 +755,7 @@ export default function Careers() {
         )}
       </AnimatePresence>
 
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

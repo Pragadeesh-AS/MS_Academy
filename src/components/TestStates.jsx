@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import EmptyState from './ui/EmptyState';
 import NoSearchResults from './ui/NoSearchResults';
 import ErrorState from './ui/ErrorState';
 import SuccessState from './ui/SuccessState';
+import Toast from './shared/Toast';
 
 export default function TestStates() {
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'info') => setToast({ message, type });
   return (
     <div className="flex-1 bg-transparent p-8">
       <div className="max-w-6xl mx-auto space-y-12">
@@ -27,7 +30,7 @@ export default function TestStates() {
             <h2 className="text-lg font-bold text-slate-700 mb-6 border-b border-slate-100 pb-3">No Search Results</h2>
             <NoSearchResults 
               query="Advanced React Patterns" 
-              onClear={() => alert('Search cleared!')}
+              onClear={() => showToast('Search cleared!', 'info')}
             />
           </section>
 
@@ -36,7 +39,7 @@ export default function TestStates() {
             <ErrorState 
               title="Failed to load dashboard"
               message="We couldn't fetch your profile data because the server took too long to respond."
-              onRetry={() => alert('Retrying fetch...')}
+              onRetry={() => showToast('Retrying fetch...', 'info')}
             />
           </section>
 
@@ -50,6 +53,7 @@ export default function TestStates() {
           </section>
         </div>
       </div>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

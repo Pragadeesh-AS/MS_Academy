@@ -4,10 +4,15 @@ import { collection, getDocs, addDoc, deleteDoc, doc, serverTimestamp } from 'fi
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Upload, Trash2, X, Image as ImageIcon, Check } from 'lucide-react';
 import { resizeImage } from '../../utils/imageResize';
+import Toast from '../shared/Toast';
 
 const safeName = (name) => name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'photo';
 
 export default function GalleryManager() {
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+  const [confirmDeleteObj, setConfirmDeleteObj] = useState(null);
+
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -71,7 +76,10 @@ export default function GalleryManager() {
   });
 
   const handleUpload = async () => {
-    if (files.length === 0) return alert("Please select at least one photo.");
+    if (files.length === 0) {
+      showToast("Please select at least one photo.", 'warning');
+      return;
+    }
     setIsUploading(true);
     setUploadStatus({ done: 0, total: files.length, progress: 0 });
     const added = [];
@@ -85,31 +93,38 @@ export default function GalleryManager() {
         setUploadStatus(s => ({ ...s, done: s.done + 1, progress: 0 }));
       }
       setShowModal(false);
+      showToast(`Uploaded ${added.length} photo${added.length === 1 ? '' : 's'} successfully!`, 'success');
     } catch (error) {
       console.error("Error uploading photo:", error);
-      alert(`Upload failed after ${added.length} of ${files.length} photo(s): ${error.message}`);
+      showToast(`Upload failed after ${added.length} of ${files.length} photo(s): ${error.message}`, 'error');
     } finally {
       if (added.length) setPhotos(prev => [...added, ...prev]);
       setIsUploading(false);
     }
   };
 
-  const handleDelete = async (photo) => {
-    if (!window.confirm("Are you sure you want to delete this photo from the gallery?")) return;
-    try {
-      if (photo.storagePath) {
+  const handleDelete = (photo) => {
+    setConfirmDeleteObj({
+      title: 'Delete Photo',
+      message: 'Are you sure you want to delete this photo from the gallery?',
+      onConfirm: async () => {
         try {
-          await deleteObject(ref(storage, photo.storagePath));
-        } catch (storageErr) {
-          console.warn('Could not delete from storage (might already be deleted):', storageErr);
+          if (photo.storagePath) {
+            try {
+              await deleteObject(ref(storage, photo.storagePath));
+            } catch (storageErr) {
+              console.warn('Could not delete from storage (might already be deleted):', storageErr);
+            }
+          }
+          await deleteDoc(doc(db, 'gallery', photo.id));
+          setPhotos(photos.filter(p => p.id !== photo.id));
+          showToast('Photo deleted from gallery.', 'success');
+        } catch (error) {
+          console.error("Error deleting photo:", error);
+          showToast("Failed to delete photo.", 'error');
         }
       }
-      await deleteDoc(doc(db, 'gallery', photo.id));
-      setPhotos(photos.filter(p => p.id !== photo.id));
-    } catch (error) {
-      console.error("Error deleting photo:", error);
-      alert("Failed to delete photo.");
-    }
+    });
   };
 
   return (
@@ -261,6 +276,54 @@ export default function GalleryManager() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      {confirmDeleteObj && (
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">
+                {confirmDeleteObj.title || 'Confirm Deletion'}
+              </h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                {confirmDeleteObj.message}
+              </p>
+              
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteObj(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const action = confirmDeleteObj.onConfirm;
+                    setConfirmDeleteObj(null);
+                    if (action) await action();
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Toast */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }

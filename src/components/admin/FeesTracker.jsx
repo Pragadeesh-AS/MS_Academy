@@ -19,7 +19,13 @@ import {
   Trash2
 } from 'lucide-react';
 
+import Toast from '../shared/Toast';
+
 export default function FeesTracker() {
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+  const [confirmDeleteObj, setConfirmDeleteObj] = useState(null);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -72,25 +78,32 @@ export default function FeesTracker() {
       setFeesData(prev => prev.map(s => s.id === selectedStudent.id ? updatedStudent : s));
       setIsRecordPaymentOpen(false);
       setPaymentData({ amount: '', date: new Date().toISOString().split('T')[0], method: 'Cash' });
+      showToast('Payment recorded successfully!', 'success');
     } catch (e) {
       console.error('Failed to record payment', e);
-      alert('Failed to record payment. Please try again.');
+      showToast('Failed to record payment. Please try again.', 'error');
     }
   };
 
-  const handleDeleteStudent = async (e, id) => {
+  const handleDeleteStudent = (e, id) => {
     e.stopPropagation();
-    if (!window.confirm("Are you sure you want to delete this student from the fees tracker?")) return;
-    try {
-      await deleteDoc(doc(db, 'fee_records', id));
-      setFeesData(prev => prev.filter(s => s.id !== id));
-      if (selectedStudent && selectedStudent.id === id) {
-        setSelectedStudent(null);
+    setConfirmDeleteObj({
+      title: 'Remove from Fees Tracker',
+      message: 'Are you sure you want to delete this student from the fees tracker?',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'fee_records', id));
+          setFeesData(prev => prev.filter(s => s.id !== id));
+          if (selectedStudent && selectedStudent.id === id) {
+            setSelectedStudent(null);
+          }
+          showToast('Student removed from fees tracker.', 'success');
+        } catch (e) {
+          console.error('Failed to delete fee record', e);
+          showToast('Failed to delete this record. Please try again.', 'error');
+        }
       }
-    } catch (e) {
-      console.error('Failed to delete fee record', e);
-      alert('Failed to delete this record. Please try again.');
-    }
+    });
   };
 
   // Calculate KPIs
@@ -431,10 +444,10 @@ export default function FeesTracker() {
                   const docRef = await addDoc(collection(db, 'fee_records'), payload);
                   setFeesData([{ ...payload, id: docRef.id }, ...feesData]);
                   setIsAddStudentOpen(false);
-                  setNewStudent({name: '', course: '', totalFee: '', paid: 0, status: 'Pending'});
+                  showToast('Student added to fees tracker.', 'success');
                 } catch (e) {
                   console.error('Failed to add fee record', e);
-                  alert('Failed to add student. Please try again.');
+                  showToast('Failed to add student. Please try again.', 'error');
                 }
               }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-[14px] font-bold shadow-sm transition-colors">Add Student</button>
             </div>
@@ -482,6 +495,54 @@ export default function FeesTracker() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      {confirmDeleteObj && (
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">
+                {confirmDeleteObj.title || 'Confirm Deletion'}
+              </h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                {confirmDeleteObj.message}
+              </p>
+              
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteObj(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const action = confirmDeleteObj.onConfirm;
+                    setConfirmDeleteObj(null);
+                    if (action) await action();
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Toast */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }

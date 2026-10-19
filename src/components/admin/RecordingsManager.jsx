@@ -6,6 +6,7 @@ import { Video, Trash2, Search, Clock, Users, BookOpen, ChevronRight, Package, P
 import Loader from '../Loader';
 import RecordingPlayerModal from '../shared/RecordingPlayerModal';
 import { BundleAccessModal } from '../shared/BundleAccessPicker';
+import Toast from '../shared/Toast';
 import { accessOf, accessFields, bundleNamesOf } from '../../utils/bundleAccess';
 import { groupBySubject, subjectOptionsFor, NO_SUBJECT } from '../../utils/subjects';
 import { paletteFor, monogramOf, NEUTRAL } from '../../utils/departmentColors';
@@ -85,6 +86,9 @@ function VideoDuration({ url, storedDuration }) {
   );
 }
 export default function RecordingsManager() {
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+
   const [recordings, setRecordings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -133,9 +137,10 @@ export default function RecordingsManager() {
       
       // 2. Delete Firestore document
       await deleteDoc(doc(db, 'recordings', recording.id));
+      showToast('Recording deleted successfully.', 'success');
     } catch (err) {
       console.error("Error deleting recording document:", err);
-      alert("Failed to delete recording metadata.");
+      showToast("Failed to delete recording metadata.", 'error');
     }
   };
 
@@ -151,9 +156,10 @@ export default function RecordingsManager() {
   const handleSetSubject = async (recording, subject) => {
     try {
       await updateDoc(doc(db, 'recordings', recording.id), { subject });
+      showToast('Recording moved to subject successfully.', 'success');
     } catch (err) {
       console.error('Failed to move recording to subject:', err);
-      alert('Failed to move the recording. Please try again.');
+      showToast('Failed to move the recording. Please try again.', 'error');
     }
   };
 
@@ -184,9 +190,10 @@ export default function RecordingsManager() {
     try {
       await updateDoc(doc(db, 'recordings', accessRecording.id), accessFields(accessValue));
       setAccessRecording(null);
+      showToast('Recording access updated successfully.', 'success');
     } catch (err) {
       console.error('Failed to update recording access:', err);
-      alert('Failed to update access. Please try again.');
+      showToast('Failed to update access. Please try again.', 'error');
     } finally {
       setIsSavingAccess(false);
     }
@@ -533,20 +540,45 @@ export default function RecordingsManager() {
 
       {/* Generic Confirmation Modal */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black p-4">
-          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
-            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Action</div>
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
             <div className="p-6">
-              <p className="text-gray-800 text-base mb-6">{confirmDialog.message}</p>
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">Confirm Action</h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                {confirmDialog.message}
+              </p>
               
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
-                <button onClick={confirmDialog.onConfirm} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Confirm</button>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDialog(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDialog.onConfirm}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  Confirm
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* In-App Toast */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }

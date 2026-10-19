@@ -37,6 +37,7 @@ import BlogManager from './admin/BlogManager';
 import GalleryManager from './admin/GalleryManager';
 import PopupManager from './admin/PopupManager';
 import RoleSwitcher from './shared/RoleSwitcher';
+import Toast from './shared/Toast';
 
 const loadImage = (src) => new Promise((resolve, reject) => {
   const img = new Image();
@@ -153,6 +154,9 @@ export default function AdminDashboard() {
       return false;
     }
   };
+
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
 
   const [confirmDeleteObj, setConfirmDeleteObj] = useState(null);
 
@@ -431,15 +435,21 @@ export default function AdminDashboard() {
     else setActiveTab('reported');
   };
 
-  const deleteTest = async (test) => {
-    if (!window.confirm(`Delete "${test.title || 'this test'}"? Student attempts already recorded will remain.`)) return;
-    try {
-      await deleteDoc(doc(db, 'tests', test.id));
-      setTests(prev => prev.filter(t => t.id !== test.id));
-    } catch (err) {
-      console.error('Failed to delete test', err);
-      alert('Failed to delete test. Please try again.');
-    }
+  const deleteTest = (test) => {
+    setConfirmDeleteObj({
+      title: 'Delete Test',
+      message: `Delete "${test.title || 'this test'}"? Student attempts already recorded will remain.`,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'tests', test.id));
+          setTests(prev => prev.filter(t => t.id !== test.id));
+          showToast('Test deleted successfully.', 'success');
+        } catch (err) {
+          console.error('Failed to delete test', err);
+          showToast('Failed to delete test. Please try again.', 'error');
+        }
+      }
+    });
   };
 
   const renderDelta = (delta, suffix = 'vs last 30 days') => {
@@ -694,13 +704,13 @@ export default function AdminDashboard() {
       }
       
       if (emailFailed) {
-        alert(`Application status updated to ${status}, but failed to send email. Error: ${emailErrorMsg}`);
+        showToast(`Application status updated to ${status}, but email failed: ${emailErrorMsg}`, 'warning');
       } else {
-        alert(`Application ${status} successfully and email sent.`);
+        showToast(`Application ${status.toLowerCase()} successfully and email sent.`, 'success');
       }
     } catch (e) {
       console.error(e);
-      alert('Error updating status or sending email. Please try again.');
+      showToast('Error updating status or sending email. Please try again.', 'error');
     } finally {
       setIsProcessingApp(false);
     }
@@ -729,10 +739,11 @@ export default function AdminDashboard() {
     setQueryFields(id, { status: 'Pending' });
     try {
       await updateDoc(doc(db, 'contact_queries', id), { status: 'Pending' });
+      showToast('Enquiry reopened and set to Pending.', 'info');
     } catch (e) {
       console.error(e);
       setQueryFields(id, { status: 'Resolved' });
-      alert('Could not reopen the enquiry. Please try again.');
+      showToast('Could not reopen the enquiry. Please try again.', 'error');
     }
   };
 
@@ -761,9 +772,10 @@ export default function AdminDashboard() {
         resolutionNotes: [...(query.resolutionNotes || []), entry],
       });
       setResolveDialog(null);
+      showToast('Enquiry marked as resolved.', 'success');
     } catch (e) {
       console.error(e);
-      alert('Could not mark the enquiry as resolved. Please try again.');
+      showToast('Could not mark the enquiry as resolved. Please try again.', 'error');
     } finally {
       setIsSavingResolve(false);
     }
@@ -772,15 +784,15 @@ export default function AdminDashboard() {
   const handleSaveManualQuery = async (e) => {
     e.preventDefault();
     if (!manualQueryForm.fullName.trim()) {
-      alert('Please enter caller / student name.');
+      showToast('Please enter caller / student name.', 'warning');
       return;
     }
     if (!manualQueryForm.phone.trim()) {
-      alert('Please enter a contact phone number.');
+      showToast('Please enter a contact phone number.', 'warning');
       return;
     }
     if (!manualQueryForm.notes.trim()) {
-      alert('Please enter discussion notes or query details.');
+      showToast('Please enter discussion notes or query details.', 'warning');
       return;
     }
     setIsSavingManualQuery(true);
@@ -825,26 +837,31 @@ export default function AdminDashboard() {
         notes: '',
         status: 'Pending'
       });
-      alert('Support query logged successfully!');
+      showToast('Support query logged successfully!', 'success');
     } catch (err) {
       console.error('Failed to log query:', err);
-      alert('Failed to log query. Error: ' + err.message);
+      showToast(`Failed to log query: ${err.message}`, 'error');
     } finally {
       setIsSavingManualQuery(false);
     }
   };
 
-  const handleDeleteQuery = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this query record?')) return;
-    try {
-      await deleteDoc(doc(db, 'contact_queries', id));
-      setSelectedQuery(null);
-      setQueries(prev => prev.filter(q => q.id !== id));
-      alert('Query record deleted.');
-    } catch (err) {
-      console.error('Failed to delete query:', err);
-      alert('Failed to delete query. Error: ' + err.message);
-    }
+  const handleDeleteQuery = (id) => {
+    setConfirmDeleteObj({
+      title: 'Delete Query Record',
+      message: 'Are you sure you want to delete this query record? This action cannot be undone.',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'contact_queries', id));
+          setSelectedQuery(null);
+          setQueries(prev => prev.filter(q => q.id !== id));
+          showToast('Query record deleted.', 'success');
+        } catch (err) {
+          console.error('Failed to delete query:', err);
+          showToast(`Failed to delete query: ${err.message}`, 'error');
+        }
+      }
+    });
   };
 
   const handleInviteSubmit = async (e) => {
@@ -877,7 +894,7 @@ export default function AdminDashboard() {
       const cleanEmail = (inviteForm.email || '').trim().toLowerCase();
       const existingSnap = await getDocs(query(collection(db, 'joined_students'), where('email', '==', cleanEmail)));
       if (!existingSnap.empty) {
-        alert(`A student with email ${cleanEmail} already exists in the directory.`);
+        showToast(`A student with email ${cleanEmail} already exists in the directory.`, 'warning');
         setIsInviting(false);
         return;
       }
@@ -902,10 +919,11 @@ export default function AdminDashboard() {
       
       setIsInviteModalOpen(false);
       setInviteForm({ name: '', department: '', email: '' });
+      showToast(`Invitation sent successfully to ${cleanEmail}.`, 'success');
       
     } catch (error) {
       console.error('Error sending invite:', error);
-      alert('Failed to send invite email. Please try again.');
+      showToast('Failed to send invite email. Please try again.', 'error');
     } finally {
       setIsInviting(false);
     }
@@ -947,10 +965,11 @@ export default function AdminDashboard() {
 
       setIsTeacherInviteModalOpen(false);
       setTeacherInviteForm({ name: '', department: '', qualification: '', experience: '', email: '' });
+      showToast(`Teacher invitation sent successfully to ${newTeacher.email}.`, 'success');
       
     } catch (error) {
       console.error('Failed to send teacher invite:', error);
-      alert(`Failed to send teacher invite email: ${error.message || 'email service unreachable'}. Check that the Google Apps Script email webhook (VITE_GAS_WEBHOOK_URL) is deployed and working.`);
+      showToast(`Failed to send teacher invite email: ${error.message || 'email service unreachable'}`, 'error');
     } finally {
       setIsTeacherInviting(false);
     }
@@ -960,6 +979,7 @@ export default function AdminDashboard() {
     setConfirmDeleteObj({
       type: 'teacher',
       id: teacherId,
+      title: 'Remove Faculty Member',
       message: 'Are you sure you want to remove this teacher? They will lose access to the Faculty portal.'
     });
   };
@@ -968,10 +988,11 @@ export default function AdminDashboard() {
     try {
       await updateDoc(doc(db, 'invited_teachers', teacherId), updates);
       setInvitedTeachers(prev => prev.map(t => t.id === teacherId ? { ...t, ...updates } : t));
+      showToast('Faculty member updated successfully.', 'success');
       return true;
     } catch (e) {
       console.error('Failed to update teacher', e);
-      alert('Failed to update teacher. Please try again.');
+      showToast('Failed to update teacher. Please try again.', 'error');
       return false;
     }
   };
@@ -980,32 +1001,43 @@ export default function AdminDashboard() {
     try {
       await updateDoc(doc(db, 'invited_typists', pairId), updates);
       setInvitedTypists(prev => prev.map(t => t.id === pairId ? { ...t, ...updates } : t));
+      showToast('Typist pair updated successfully.', 'success');
       return true;
     } catch (e) {
       console.error('Failed to update pair', e);
-      alert('Failed to update pair. Please try again.');
+      showToast('Failed to update pair. Please try again.', 'error');
       return false;
     }
   };
 
   const confirmDeleteAction = async () => {
     if (!confirmDeleteObj) return;
-    const { type, id } = confirmDeleteObj;
+    const { type, id, onConfirm } = confirmDeleteObj;
     
+    if (onConfirm) {
+      await onConfirm();
+      setConfirmDeleteObj(null);
+      return;
+    }
+
     if (type === 'teacher') {
       const updatedTeachers = invitedTeachers.filter(t => t.id !== id);
       setInvitedTeachers(updatedTeachers);
       try {
         await deleteDoc(doc(db, 'invited_teachers', id));
+        showToast('Teacher removed from Faculty.', 'success');
       } catch (e) {
         console.error("Failed to delete teacher", e);
+        showToast('Failed to delete teacher.', 'error');
       }
     } else if (type === 'typist') {
       setInvitedTypists(prev => prev.filter(t => t.id !== id));
       try {
         await deleteDoc(doc(db, 'invited_typists', id));
+        showToast('Typist pair removed.', 'success');
       } catch (e) {
         console.error("Failed to delete pair", e);
+        showToast('Failed to delete pair.', 'error');
       }
     }
     setConfirmDeleteObj(null);
@@ -2992,8 +3024,10 @@ export default function AdminDashboard() {
                   setIsTypistInviteModalOpen(false);
                   setTypistInviteForm({ typistName: '', typistEmail: '', reviewerName: '', reviewerEmail: '' });
                   setTypistInviteReviewerMode('new');
+                  showToast('Typist pair invitation sent successfully!', 'success');
                 } catch (err) {
                   console.error("Failed to invite pair", err);
+                  showToast(`Failed to invite pair: ${err.message}`, 'error');
                 }
                 setIsTypistInviting(false);
               }} className="space-y-4">
@@ -3068,20 +3102,47 @@ export default function AdminDashboard() {
 
       {/* Generic Confirmation Modal */}
       {confirmDeleteObj && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 font-sans text-black">
-          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
-            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Deletion</div>
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
             <div className="p-6">
-              <p className="text-gray-800 text-base mb-6">{confirmDeleteObj.message}</p>
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">
+                {confirmDeleteObj.title || 'Confirm Deletion'}
+              </h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                {confirmDeleteObj.message}
+              </p>
               
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setConfirmDeleteObj(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
-                <button onClick={confirmDeleteAction} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Remove</button>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteObj(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteAction}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  Remove
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* In-App Toast Feedback */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
 
     </div>
   );

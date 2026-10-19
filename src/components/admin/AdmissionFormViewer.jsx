@@ -3,10 +3,14 @@ import { X, Download, Loader2, FileSignature, AlertCircle } from 'lucide-react';
 import { AdmissionPageOne, AdmissionPageTwo } from '../admission/AdmissionFormSheet';
 import { A4Preview, renderPagesPdf, safeFilePart } from './letterhead/Letterhead';
 import { fetchAdmissionForm, formatFormDate } from '../../utils/admissionForm';
+import Toast from '../shared/Toast';
 
 // Admin view of a student's signed Admission Application Form: both pages exactly as the student
 // filled them in, with a PDF download.
 export default function AdmissionFormViewer({ student, onClose }) {
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+
   const [form, setForm] = useState(null);
   const [status, setStatus] = useState('loading'); // loading | ready | missing | error
   const [downloading, setDownloading] = useState(false);
@@ -33,9 +37,10 @@ export default function AdmissionFormViewer({ student, onClose }) {
     try {
       const pdf = await renderPagesPdf([pageOne.current, pageTwo.current], { scale: 3 });
       pdf.save(`Admission_Form_${safeFilePart(form.formNo)}_${safeFilePart(form.fullName)}.pdf`);
+      showToast('Admission form PDF downloaded successfully.', 'success');
     } catch (e) {
       console.error('PDF export failed', e);
-      alert('Could not create the PDF. Please try again.');
+      showToast('Could not create the PDF. Please try again.', 'error');
     } finally {
       setDownloading(false);
     }
@@ -117,6 +122,14 @@ export default function AdmissionFormViewer({ student, onClose }) {
           )}
         </div>
       </div>
+
+      {/* In-App Toast */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }

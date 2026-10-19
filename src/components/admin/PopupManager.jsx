@@ -5,12 +5,17 @@ import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebas
 import { Upload, Trash2, ChevronLeft, ChevronRight, Timer, Image as ImageIcon } from 'lucide-react';
 import { resizeImage } from '../../utils/imageResize';
 import { popupImagesOf, popupIntervalOf, POPUP_INTERVAL_OPTIONS } from '../../utils/popupSettings';
+import Toast from '../shared/Toast';
 
 const POPUP_DOC = () => doc(db, 'site_settings', 'popup');
 const safeName = (name) => name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'poster';
 
 // Admin tab for the website's marketing popup: on/off, several posters in order, and how often they change
 export default function PopupManager() {
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+  const [confirmDeleteObj, setConfirmDeleteObj] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [isActive, setIsActive] = useState(false);
   const [images, setImages] = useState([]);
@@ -70,9 +75,10 @@ export default function PopupManager() {
       const next = [...kept, ...added];
       await saveImages(next);
       setImages(next);
+      showToast(`Poster${added.length > 1 ? 's' : ''} uploaded successfully!`, 'success');
     } catch (err) {
       console.error('Popup upload failed:', err);
-      alert('Failed to upload the poster(s). Please try again.');
+      showToast('Failed to upload the poster(s). Please try again.', 'error');
     } finally {
       setUploadLabel('');
     }
@@ -84,23 +90,36 @@ export default function PopupManager() {
     [next[from], next[to]] = [next[to], next[from]];
     const previous = images;
     setImages(next);
-    try { await saveImages(next); } catch (err) { console.error(err); setImages(previous); alert('Failed to reorder posters.'); }
-  };
-
-  const remove = async (index) => {
-    if (!window.confirm('Remove this poster from the popup?')) return;
-    const item = images[index];
-    const next = images.filter((_, i) => i !== index);
     try {
       await saveImages(next);
-      setImages(next);
-      if (item.storagePath) {
-        deleteObject(ref(storage, item.storagePath)).catch(err => console.warn('Could not delete poster file:', err));
-      }
+      showToast('Posters reordered successfully.', 'success');
     } catch (err) {
       console.error(err);
-      alert('Failed to remove the poster.');
+      setImages(previous);
+      showToast('Failed to reorder posters.', 'error');
     }
+  };
+
+  const remove = (index) => {
+    setConfirmDeleteObj({
+      title: 'Remove Poster',
+      message: 'Are you sure you want to remove this poster from the popup?',
+      onConfirm: async () => {
+        const item = images[index];
+        const next = images.filter((_, i) => i !== index);
+        try {
+          await saveImages(next);
+          setImages(next);
+          if (item.storagePath) {
+            deleteObject(ref(storage, item.storagePath)).catch(err => console.warn('Could not delete poster file:', err));
+          }
+          showToast('Poster removed from popup.', 'success');
+        } catch (err) {
+          console.error(err);
+          showToast('Failed to remove the poster.', 'error');
+        }
+      }
+    });
   };
 
   const toggleActive = async () => {
@@ -232,6 +251,54 @@ export default function PopupManager() {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {confirmDeleteObj && (
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">
+                {confirmDeleteObj.title || 'Confirm Deletion'}
+              </h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                {confirmDeleteObj.message}
+              </p>
+              
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteObj(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const action = confirmDeleteObj.onConfirm;
+                    setConfirmDeleteObj(null);
+                    if (action) await action();
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Toast */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }

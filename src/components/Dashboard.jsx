@@ -31,6 +31,7 @@ import { paletteFor, monogramOf, NEUTRAL } from '../utils/departmentColors';
 import { FolderHero, FolderBreadcrumb, FolderCard } from './student/StudentFolderCards';
 import { formatDay, latestOf } from '../utils/folderDates';
 import { TrendingUp, Dumbbell } from 'lucide-react';
+import Toast from './shared/Toast';
 
 function VideoDuration({ url, storedDuration }) {
   const [duration, setDuration] = useState('Loading...');
@@ -132,6 +133,9 @@ const isStartingSoon = (timeStr) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+
   const [studentName, setStudentName] = useState('Student');
   const [studentDepartment, setStudentDepartment] = useState('');
   const [purchasedBundles, setPurchasedBundles] = useState([]);
@@ -600,17 +604,17 @@ export default function Dashboard() {
       const { status, message } = await buyBundle(bundleId);
       if (status === 'PAID') {
         setPurchasedBundles(prev => (prev.includes(bundleId) ? prev : [...prev, bundleId]));
-        alert('Payment successful! Your bundle is now unlocked. 🎉');
+        showToast('Payment successful! Your bundle is now unlocked. 🎉', 'success');
       } else if (status === 'PENDING') {
-        alert('Your payment is still being processed. The bundle will unlock automatically once it is confirmed.');
+        showToast('Your payment is still being processed. The bundle will unlock automatically once confirmed.', 'info');
       } else if (status === 'FAILED') {
-        alert('Payment failed. You have not been charged. Please try again.');
+        showToast('Payment failed. You have not been charged. Please try again.', 'error');
       } else if (message) {
         console.warn('Checkout closed:', message);
       }
     } catch (e) {
       console.error('Payment error', e);
-      alert(e.message || 'Could not start the payment. Please try again.');
+      showToast(e.message || 'Could not start the payment. Please try again.', 'error');
     } finally {
       setPayingBundleId(null);
     }
@@ -625,17 +629,17 @@ export default function Dashboard() {
       const { status, message } = await buySubject(subjectId);
       if (status === 'PAID') {
         setPurchasedSubjects(prev => (prev.includes(subjectId) ? prev : [...prev, subjectId]));
-        alert('Payment successful! The subject is now unlocked. 🎉');
+        showToast('Payment successful! The subject is now unlocked. 🎉', 'success');
       } else if (status === 'PENDING') {
-        alert('Your payment is still being processed. The subject will unlock automatically once it is confirmed.');
+        showToast('Your payment is still being processed. The subject will unlock automatically once confirmed.', 'info');
       } else if (status === 'FAILED') {
-        alert('Payment failed. You have not been charged. Please try again.');
+        showToast('Payment failed. You have not been charged. Please try again.', 'error');
       } else if (message) {
         console.warn('Checkout closed:', message);
       }
     } catch (e) {
       console.error('Payment error', e);
-      alert(e.message || 'Could not start the payment. Please try again.');
+      showToast(e.message || 'Could not start the payment. Please try again.', 'error');
     } finally {
       setPayingSubjectId(null);
     }
@@ -650,17 +654,17 @@ export default function Dashboard() {
       const { status, message } = await buyNoteBundle(bundleId);
       if (status === 'PAID') {
         setPurchasedNoteBundles(prev => (prev.includes(bundleId) ? prev : [...prev, bundleId]));
-        alert('Payment successful! Your notes bundle is now unlocked. 🎉');
+        showToast('Payment successful! Your notes bundle is now unlocked. 🎉', 'success');
       } else if (status === 'PENDING') {
-        alert('Your payment is still being processed. The bundle will unlock automatically once it is confirmed.');
+        showToast('Your payment is still being processed. The bundle will unlock automatically once confirmed.', 'info');
       } else if (status === 'FAILED') {
-        alert('Payment failed. You have not been charged. Please try again.');
+        showToast('Payment failed. You have not been charged. Please try again.', 'error');
       } else if (message) {
         console.warn('Checkout closed:', message);
       }
     } catch (e) {
       console.error('Payment error', e);
-      alert(e.message || 'Could not start the payment. Please try again.');
+      showToast(e.message || 'Could not start the payment. Please try again.', 'error');
     } finally {
       setPayingNoteBundleId(null);
     }
@@ -744,7 +748,7 @@ export default function Dashboard() {
             setPurchasedSubjects(snap.docs[0].data().purchasedSubjects || []);
             setPurchasedNoteBundles(snap.docs[0].data().purchasedNoteBundles || []);
           }
-          alert('Payment successful! Your bundle is now unlocked. 🎉');
+          showToast('Payment successful! Your bundle is now unlocked. 🎉', 'success');
         }
       })
       .catch((e) => console.error('Order verification failed', e));
@@ -1639,6 +1643,14 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* In-App Toast */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }

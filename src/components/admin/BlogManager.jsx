@@ -2,8 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { Plus, Edit2, Trash2, X, Image as ImageIcon, Check, FileText } from 'lucide-react';
+import Toast from '../shared/Toast';
 
 export default function BlogManager() {
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+  const [confirmDeleteObj, setConfirmDeleteObj] = useState(null);
+
   const [blogs, setBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -63,20 +68,29 @@ export default function BlogManager() {
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this blog post?")) return;
-    try {
-      await deleteDoc(doc(db, 'blogs', id));
-      setBlogs(blogs.filter(b => b.id !== id));
-    } catch (error) {
-      console.error("Error deleting blog:", error);
-      alert("Failed to delete blog post.");
-    }
+  const handleDelete = (id) => {
+    setConfirmDeleteObj({
+      title: 'Delete Blog Post',
+      message: 'Are you sure you want to delete this blog post? This cannot be undone.',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'blogs', id));
+          setBlogs(blogs.filter(b => b.id !== id));
+          showToast('Blog post deleted successfully.', 'success');
+        } catch (error) {
+          console.error("Error deleting blog:", error);
+          showToast("Failed to delete blog post.", 'error');
+        }
+      }
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.content) return alert("Title and Content are required.");
+    if (!formData.title || !formData.content) {
+      showToast("Title and Content are required.", 'warning');
+      return;
+    }
     
     try {
       if (editingBlog) {
@@ -86,6 +100,7 @@ export default function BlogManager() {
           updatedAt: serverTimestamp()
         });
         setBlogs(blogs.map(b => b.id === editingBlog.id ? { ...b, ...formData } : b));
+        showToast('Blog post updated successfully.', 'success');
       } else {
         const docRef = await addDoc(collection(db, 'blogs'), {
           ...formData,
@@ -93,11 +108,12 @@ export default function BlogManager() {
           updatedAt: serverTimestamp()
         });
         setBlogs([{ id: docRef.id, ...formData, createdAt: { seconds: Date.now() / 1000 } }, ...blogs]);
+        showToast('Blog post published successfully.', 'success');
       }
       setShowModal(false);
     } catch (error) {
       console.error("Error saving blog:", error);
-      alert("Failed to save blog post.");
+      showToast("Failed to save blog post.", 'error');
     }
   };
 
@@ -293,6 +309,54 @@ export default function BlogManager() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      {confirmDeleteObj && (
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">
+                {confirmDeleteObj.title || 'Confirm Deletion'}
+              </h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                {confirmDeleteObj.message}
+              </p>
+              
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteObj(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const action = confirmDeleteObj.onConfirm;
+                    setConfirmDeleteObj(null);
+                    if (action) await action();
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Toast */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebas
 import { FileText, Plus, Trash2, UploadCloud, Link as LinkIcon, X, CheckCircle2, ChevronRight, Book, Search, AlertCircle, ArrowUpRight, Save, Folder, FolderPlus, Home, Users, Tag, Package, Pencil, BookOpen, Layers, Building2, CalendarClock, ArrowRight } from 'lucide-react';
 import Loader from '../Loader';
 import { BundleAccessPicker, BundleAccessModal } from '../shared/BundleAccessPicker';
+import Toast from '../shared/Toast';
 import { accessOf, accessFields, bundleNamesOf } from '../../utils/bundleAccess';
 import { paletteFor, monogramOf, NEUTRAL } from '../../utils/departmentColors';
 import { gateCoursesData } from '../GateCourses';
@@ -16,6 +17,9 @@ const MAX_FOLDER_DEPTH = LEVEL_NAMES.length;
 const safeSegment = (s) => String(s || '').replace(/[^\w.\- ]/g, '_').trim() || 'untitled';
 
 export default function NotesManager() {
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+
   const [notes, setNotes] = useState([]);
   const [folders, setFolders] = useState([]);
   const [bundles, setBundles] = useState([]);
@@ -178,7 +182,7 @@ export default function NotesManager() {
     const price = Number(priceForm.price) || 0;
     const discounted = Number(priceForm.discountedPrice) || 0;
     if (discounted && price && discounted > price) {
-      alert('Discounted price cannot be higher than the price.');
+      showToast('Discounted price cannot be higher than the price.', 'warning');
       return;
     }
     setIsSavingPrice(true);
@@ -187,9 +191,10 @@ export default function NotesManager() {
       // keep the open breadcrumb copy in sync
       setStack(prev => prev.map(f => (f.id === priceFolder.id ? { ...f, price, discountedPrice: discounted } : f)));
       setPriceFolder(null);
+      showToast('Price updated successfully.', 'success');
     } catch (err) {
       console.error(err);
-      alert('Failed to save price: ' + err.message);
+      showToast('Failed to save price: ' + err.message, 'error');
     } finally {
       setIsSavingPrice(false);
     }
@@ -221,9 +226,10 @@ export default function NotesManager() {
       toRemove.forEach(id => batch.update(doc(db, 'joined_students', id), { [assignField]: arrayRemove(assignFolder.id) }));
       await batch.commit();
       setAssignFolder(null);
+      showToast('Access updated successfully.', 'success');
     } catch (err) {
       console.error(err);
-      alert('Failed to update access: ' + err.message);
+      showToast('Failed to update access: ' + err.message, 'error');
     } finally {
       setIsSavingAssign(false);
     }
@@ -262,11 +268,11 @@ export default function NotesManager() {
     const discounted = Number(bundleForm.discountedPrice) || 0;
     if (!name) return;
     if (!bundleForm.includeAll && bundleForm.subjectIds.length === 0) {
-      alert('Select at least one subject, or include all subjects.');
+      showToast('Select at least one subject, or include all subjects.', 'warning');
       return;
     }
     if (discounted && price && discounted > price) {
-      alert('Offer price cannot be higher than the price.');
+      showToast('Offer price cannot be higher than the price.', 'warning');
       return;
     }
     setIsSavingBundle(true);
@@ -278,9 +284,10 @@ export default function NotesManager() {
         await addDoc(collection(db, 'note_bundles'), { ...data, createdAt: serverTimestamp() });
       }
       setBundleModal(null);
+      showToast('Bundle saved successfully.', 'success');
     } catch (err) {
       console.error(err);
-      alert('Failed to save bundle: ' + err.message);
+      showToast('Failed to save bundle: ' + err.message, 'error');
     } finally {
       setIsSavingBundle(false);
     }
@@ -296,9 +303,10 @@ export default function NotesManager() {
         setConfirmDialog(null);
         try {
           await deleteDoc(doc(db, 'note_bundles', bundle.id));
+          showToast('Bundle deleted successfully.', 'success');
         } catch (err) {
           console.error(err);
-          alert('Failed to delete bundle');
+          showToast('Failed to delete bundle.', 'error');
         }
       }
     });
@@ -310,7 +318,7 @@ export default function NotesManager() {
     if (!name) return;
     const duplicate = childFolders.some(f => f.name.toLowerCase() === name.toLowerCase());
     if (duplicate) {
-      alert(`A ${nextLevelName.toLowerCase()} folder named "${name}" already exists here.`);
+      showToast(`A ${nextLevelName.toLowerCase()} folder named "${name}" already exists here.`, 'warning');
       return;
     }
     setIsCreatingFolder(true);
@@ -324,9 +332,10 @@ export default function NotesManager() {
       });
       setFolderName('');
       setFolderModalOpen(false);
+      showToast('Folder created successfully.', 'success');
     } catch (err) {
       console.error(err);
-      alert('Failed to create folder: ' + err.message);
+      showToast('Failed to create folder: ' + err.message, 'error');
     } finally {
       setIsCreatingFolder(false);
     }
@@ -336,7 +345,7 @@ export default function NotesManager() {
     const hasChildren = folders.some(f => f.parentId === folder.id);
     const fileCount = notesInFolder(folder.id).length;
     if (hasChildren || fileCount > 0) {
-      alert(`"${folder.name}" is not empty. Delete or move its ${hasChildren ? 'folders and ' : ''}files first.`);
+      showToast(`"${folder.name}" is not empty. Delete or move its ${hasChildren ? 'folders and ' : ''}files first.`, 'warning');
       return;
     }
     setConfirmDialog({
@@ -345,9 +354,10 @@ export default function NotesManager() {
         setConfirmDialog(null);
         try {
           await deleteDoc(doc(db, 'note_folders', folder.id));
+          showToast('Folder deleted successfully.', 'success');
         } catch (err) {
           console.error(err);
-          alert('Failed to delete folder');
+          showToast('Failed to delete folder.', 'error');
         }
       }
     });
@@ -376,11 +386,11 @@ export default function NotesManager() {
   const handleAddNote = async (e) => {
     e.preventDefault();
     if (uploadMode === 'file' && selectedFiles.length === 0) {
-      alert('Please select at least one file to upload');
+      showToast('Please select at least one file to upload', 'warning');
       return;
     }
     if (uploadMode === 'url' && (!fileUrl.trim() || !title.trim())) {
-      alert('Please provide a title and a valid URL');
+      showToast('Please provide a title and a valid URL', 'warning');
       return;
     }
 
@@ -420,9 +430,10 @@ export default function NotesManager() {
       }
       setIsModalOpen(false);
       resetUploadForm();
+      showToast('Note added successfully.', 'success');
     } catch (err) {
       console.error(err);
-      alert('Failed to add note: ' + err.message);
+      showToast('Failed to add note: ' + err.message, 'error');
     } finally {
       setIsUploading(false);
     }
@@ -438,9 +449,10 @@ export default function NotesManager() {
         }
       }
       await deleteDoc(doc(db, 'notes', note.id));
+      showToast('Note deleted successfully.', 'success');
     } catch (err) {
       console.error(err);
-      alert('Failed to delete note');
+      showToast('Failed to delete note.', 'error');
     }
   };
 
@@ -470,9 +482,10 @@ export default function NotesManager() {
     try {
       await updateDoc(doc(db, 'notes', accessNote.id), accessFields(accessValue));
       setAccessNote(null);
+      showToast('Note access updated successfully.', 'success');
     } catch (err) {
       console.error('Failed to update note access', err);
-      alert('Failed to update access. Please try again.');
+      showToast('Failed to update access. Please try again.', 'error');
     } finally {
       setIsSavingAccess(false);
     }
@@ -1194,19 +1207,44 @@ export default function NotesManager() {
       )}
 
       {confirmDialog && (
-        <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center font-sans text-black p-4">
-          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
-            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Confirm Action</div>
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
             <div className="p-6">
-              <p className="text-gray-800 text-base mb-6">{confirmDialog.message}</p>
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
-                <button onClick={confirmDialog.onConfirm} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Confirm</button>
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">Confirm Action</h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                {confirmDialog.message}
+              </p>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDialog(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDialog.onConfirm}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  Confirm
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* In-App Toast */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }

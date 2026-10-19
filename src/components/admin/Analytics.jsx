@@ -24,7 +24,12 @@ const formatTime = (seconds) => {
   return `${m}m ${s}s`;
 };
 
+import Toast from '../shared/Toast';
+
 export default function Analytics({ joinedStudents = [], department = null, studentViewOnlyEmail = null, studentViewOnlyName = null, openTestId = null, onOpenedTest = null, onReviewSolutions = null }) {
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => setToast({ show: true, message, type });
+
   const [activeInnerTab, setActiveInnerTab] = useState('global'); // 'global' or 'student'
   
   // Drill-down states for Global
@@ -443,9 +448,10 @@ export default function Analytics({ joinedStudents = [], department = null, stud
     setIsExportingPdf(true);
     try {
       await exportTestReportPdf(activeGlobalTest);
+      showToast('Test report PDF downloaded successfully.', 'success');
     } catch (err) {
       console.error('Failed to export test report PDF', err);
-      alert('Could not create the PDF. Please try again.');
+      showToast('Could not create the PDF. Please try again.', 'error');
     }
     setIsExportingPdf(false);
   };
@@ -1364,6 +1370,14 @@ export default function Analytics({ joinedStudents = [], department = null, stud
         )}
 
       </div>
+
+      {/* In-App Toast */}
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, show: false }))}
+      />
     </div>
   );
 }

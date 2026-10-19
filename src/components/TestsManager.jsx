@@ -56,6 +56,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [openTemplateFolder, setOpenTemplateFolder] = useState(null); // 'topic' | 'subject' | 'full' | 'other'
   const [editBundleTest, setEditBundleTest] = useState(null);
   const [editBundleValue, setEditBundleValue] = useState({ mode: 'default', ids: [] });
+  const [confirmModal, setConfirmModal] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   const showToast = (message, type = 'success') => {
@@ -663,7 +664,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     }
 
     if (finalQuestionIds.length === 0) {
-      alert("No matching questions found in the database. Please add questions under this subject/topic first.");
+      showToast("No matching questions found in the database. Please add questions under this subject/topic first.", 'error');
       return;
     }
 
@@ -794,9 +795,15 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   const handleEditQuestionFromTest = (questionId) => {
     if (!onEditQuestion) return;
-    const proceed = window.confirm("This opens the question in Question Bank to edit it. Any unsaved changes to this test will be lost. Continue?");
-    if (!proceed) return;
-    onEditQuestion(questionId);
+    setConfirmModal({
+      title: 'Edit in Question Bank',
+      message: 'This opens the question in Question Bank to edit it. Any unsaved changes to this test will be lost. Continue?',
+      confirmText: 'Continue',
+      onConfirm: () => {
+        setConfirmModal(null);
+        onEditQuestion(questionId);
+      }
+    });
   };
 
   const handleSaveBundle = async () => {
@@ -2326,15 +2333,68 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center font-sans text-black p-4">
-          <div className="bg-white rounded-md shadow-xl w-full max-w-sm overflow-hidden">
-            <div className="bg-red-600 text-white px-4 py-3 font-bold text-lg border-b">Delete Test</div>
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
             <div className="p-6">
-              <p className="text-gray-800 text-base mb-6">Are you sure you want to delete this test? This action cannot be undone.</p>
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">Delete Test</h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                Are you sure you want to delete this test? This action cannot be undone.
+              </p>
               
-              <div className="flex justify-end gap-3">
-                <button onClick={() => setDeleteConfirmId(null)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 font-bold hover:bg-gray-100 transition">Cancel</button>
-                <button onClick={confirmDelete} className="px-4 py-2 bg-red-600 text-white font-bold rounded hover:bg-red-700 transition">Delete</button>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generic Confirmation Modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
+                <Edit2 size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">
+                {confirmModal.title || 'Confirm Action'}
+              </h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                {confirmModal.message}
+              </p>
+              
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmModal.onConfirm}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  {confirmModal.confirmText || 'Confirm'}
+                </button>
               </div>
             </div>
           </div>

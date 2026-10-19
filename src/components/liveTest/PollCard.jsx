@@ -148,6 +148,7 @@ export function PollComposer({ sessionId, onClose }) {
   const [options, setOptions] = useState(['', '']);
   const [duration, setDuration] = useState(60);
   const [posting, setPosting] = useState(false);
+  const [error, setError] = useState('');
 
   const cleanOptions = options.map(o => o.trim()).filter(Boolean);
   const canPost = question.trim() && cleanOptions.length >= 2 && !posting;
@@ -155,6 +156,7 @@ export function PollComposer({ sessionId, onClose }) {
   const post = async () => {
     if (!canPost) return;
     setPosting(true);
+    setError('');
     try {
       await addDoc(collection(db, 'live_chats'), {
         sessionId,
@@ -169,7 +171,7 @@ export function PollComposer({ sessionId, onClose }) {
       onClose();
     } catch (e) {
       console.error('Failed to post poll', e);
-      alert('Could not post the poll. Please try again.');
+      setError('Could not post the poll. Please try again.');
     }
     setPosting(false);
   };
@@ -180,6 +182,11 @@ export function PollComposer({ sessionId, onClose }) {
         <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-indigo-300"><BarChart3 size={14} /> New Poll</span>
         <button type="button" onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800"><X size={15} /></button>
       </div>
+      {error && (
+        <div className="mb-2 p-2 bg-red-950/80 border border-red-800/80 rounded-lg text-xs font-semibold text-red-200">
+          {error}
+        </div>
+      )}
       <input
         type="text"
         value={question}

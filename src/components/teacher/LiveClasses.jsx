@@ -44,6 +44,7 @@ import { subjectOptionsFor, groupBySubject } from '../../utils/subjects';
 import MatchColumns from '../shared/MatchColumns';
 import QuestionExplainPanel from '../liveTest/QuestionExplainPanel';
 import TeacherSolutionCard from '../liveTest/TeacherSolutionCard';
+import Toast from '../shared/Toast';
 import { QUIZ_KEEP_DAYS, isQuizExpired, quizTimeLeft, deletePostClassQuiz } from '../../utils/postClassQuiz';
 // Extracted component to handle whiteboard sharing as an independent client
 const WhiteboardShareClient = ({ appId, channel, token, stream, uid = 999998 }) => {
@@ -263,6 +264,8 @@ const LeaderboardView = ({ participantNames, participantScores, participantRoles
 }
 
 const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOpen, toggleChat, chatToast, setChatToast, unreadChatCount = 0, departmentQuestions, department }) => {
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'info') => setToast({ message, type });
   const [activeTab, setActiveTab] = useState('chat');
   const [isRevealing, setIsRevealing] = useState(false);
   const [micOn, setMicOn] = useState(false);
@@ -501,7 +504,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
       } catch (err) {
         console.error("Error saving recording metadata", err);
       }
-    }
+    },
+    onError: (msg) => showToast(msg, 'error')
   });
 
   const remoteUserStyle = { width: '100%', height: '100%' };
@@ -541,7 +545,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
 
   const handleStartQB = async () => {
     if (!departmentQuestions || selectedQBIds.length === 0) {
-      alert("Please select at least one question.");
+      showToast("Please select at least one question.", "warning");
       return;
     }
 
@@ -549,11 +553,11 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
     const selectedQList = departmentQuestions.filter(q => selectedQBIds.includes(q.id));
 
     if (selectedQList.length === 0) {
-      alert("Selected questions not found.");
+      showToast("Selected questions not found.", "warning");
       return;
     }
     if (qbMode === 'live' && !liveTestName.trim()) {
-      alert("Please enter a name for the live test.");
+      showToast("Please enter a name for the live test.", "warning");
       return;
     }
 
@@ -568,7 +572,7 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
         setLiveTestName('');
       } catch (err) {
         console.error('Failed to start live test', err);
-        alert('Could not start the live test. Try selecting fewer questions.');
+        showToast('Could not start the live test. Try selecting fewer questions.', 'error');
       }
       return;
     }
@@ -1353,6 +1357,8 @@ const TeacherCall = ({ appId, channel, token, handleEndMeet, sessionId, isChatOp
         </div>
       )}
 
+      {/* Toast notification */}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 };

@@ -6,6 +6,7 @@ import { sameDepartment, isCommonDeptName } from '../../utils/subjects';
 import {
   FREE_PRACTICE_QUESTIONS, practiceQuestionsUsed, isPracticeQuestionFor, pickPracticeQuestions, markOf
 } from '../../utils/practiceTests';
+import Toast from '../shared/Toast';
 
 const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 const sameName = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
@@ -18,6 +19,8 @@ const MINUTES_PER_QUESTION = 3; // GATE: 180 minutes for 65 questions
 //   onStart(test)  a new practice test was created - start it
 //   onResume(test) / onReview(test)  continue an unfinished one / see a finished one's results
 export default function PracticeTests({ department, studentEmail, studentName, practiceTests = [], unlimited = false, onStart, onResume, onReview, onUpgrade }) {
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'info') => setToast({ message, type });
   const [attributes, setAttributes] = useState([]);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
   const [selectedTopics, setSelectedTopics] = useState([]);
@@ -143,7 +146,7 @@ export default function PracticeTests({ department, studentEmail, studentName, p
       onStart({ ...test, id: ref.id, createdAt: null });
     } catch (err) {
       console.error('Failed to create practice test', err);
-      alert('Could not create the practice test. Please try again.');
+      showToast('Could not create the practice test. Please try again.', 'error');
     }
     setCreating(false);
   };
@@ -314,6 +317,7 @@ export default function PracticeTests({ department, studentEmail, studentName, p
           </div>
         </div>
       )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

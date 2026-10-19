@@ -4,6 +4,7 @@ import { db, auth } from '../firebase';
 import { collection, getDocs, addDoc, updateDoc, query, where, doc, getDoc, serverTimestamp, documentId } from 'firebase/firestore';
 import { FileText, Clock, Award, CheckCircle, XCircle, ArrowRight, RefreshCw, AlertTriangle, Eye, ShieldAlert, Lock, HelpCircle, Target, MinusCircle, CalendarClock, Flag, Dumbbell } from 'lucide-react';
 import GateTestInterface from './student/GateTestInterface';
+import Toast from './shared/Toast';
 import { examSections } from '../utils/testShuffle';
 import logoImg from '../assets/msgate_logo.png';
 import { RELEASE_MODES, releaseMode, releaseAtMillis, areSolutionsVisible, formatReleaseTime } from '../utils/solutionRelease';
@@ -45,6 +46,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   const [loading, setLoading] = useState(true);
   const [openTemplateFolder, setOpenTemplateFolder] = useState(null); // 'topic' | 'subject' | 'full' | 'other'
   const [practiceTests, setPracticeTests] = useState([]);
+  const [toast, setToast] = useState(null);
+  const showToast = (message, type = 'info') => setToast({ message, type });
 
   // Active Test States
   const [activeTest, setActiveTest] = useState(null);
@@ -120,9 +123,10 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       setReportingQuestion(null);
       setReportText('');
       setReportType(REPORT_TYPES[0]);
+      showToast('Question reported successfully. Thank you for your feedback.', 'success');
     } catch (err) {
       console.error('Failed to report question', err);
-      alert('Could not send the report. Please try again.');
+      showToast('Could not send the report. Please try again.', 'error');
     }
     setReportSubmitting(false);
   };
@@ -189,12 +193,12 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       // Re-checked at the click - the list may have been open since before the test opened/closed
       const availability = testAvailability(test);
       if (availability === AVAILABILITY.UPCOMING) {
-        alert(`This test opens on ${formatTestTime(testStartMillis(test))}.`);
+        showToast(`This test opens on ${formatTestTime(testStartMillis(test))}.`, 'info');
         return;
       }
       const minutesLeft = minutesAvailable(test);
       if (availability === AVAILABILITY.CLOSED || minutesLeft <= 0) {
-        alert('This test has closed and can no longer be started.');
+        showToast('This test has closed and can no longer be started.', 'warning');
         return;
       }
       // Starting close to the closing time: the timer only runs until the test closes
@@ -220,7 +224,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       setActiveTest(timedTest);
       if (saved && saved.deadline <= Date.now()) {
         // Time ran out while the student was away - submit what they had saved
-        alert('Time ran out for this test while you were away. Your saved answers will now be submitted.');
+        showToast('Time ran out for this test while you were away. Your saved answers will now be submitted.', 'warning');
         startTimeRef.current = saved.startedAt;
         await handleSubmitTest(matchedQuestions, timedTest, saved.answers, {
           timeSpent: saved.timeSpent,
@@ -242,7 +246,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       }
     } catch (err) {
       console.error("Error loading test questions:", err);
-      alert("Failed to start test. Please try again.");
+      showToast("Failed to start test. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -356,7 +360,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       }
     } catch (err) {
       console.error("Failed to save attempt:", err);
-      alert("Test graded but failed to save logs. Score: " + attemptPayload.score + "/" + totalMarks);
+      showToast("Test graded but failed to save logs. Score: " + attemptPayload.score + "/" + totalMarks, "warning");
     } finally {
       setLoading(false);
     }
@@ -451,7 +455,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       setTestMode('result');
     } catch (err) {
       console.error('Error loading practice results:', err);
-      alert('Failed to load the results. Please try again.');
+      showToast('Failed to load the results. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
@@ -482,15 +486,18 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
   if (testMode === 'taking' && activeTest) {
     return (
-      <GateTestInterface 
-        test={activeTest}
-        testQuestions={testQuestions}
-        studentName={sessionStorage.getItem('auth_name') || 'Student'}
-        onSubmit={(answers, meta) => handleSubmitTest(testQuestions, activeTest, answers, meta)}
-        onCancel={() => setTestMode('list')}
-        savedProgress={resumeProgress}
-        onProgress={(progress) => saveTestProgress(currentEmail(), activeTest.id, { ...progress, practice: !!activeTest.isPractice })}
-      />
+      <>
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+        <GateTestInterface 
+          test={activeTest}
+          testQuestions={testQuestions}
+          studentName={sessionStorage.getItem('auth_name') || 'Student'}
+          onSubmit={(answers, meta) => handleSubmitTest(testQuestions, activeTest, answers, meta)}
+          onCancel={() => setTestMode('list')}
+          savedProgress={resumeProgress}
+          onProgress={(progress) => saveTestProgress(currentEmail(), activeTest.id, { ...progress, practice: !!activeTest.isPractice })}
+        />
+      </>
     );
   }
 
@@ -814,6 +821,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           </button>
         </div>
 
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       </div>
     );
   }
@@ -1096,6 +1104,8 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           </div>
         </div>
       )}
+      {/* In-app Toast Notification */}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

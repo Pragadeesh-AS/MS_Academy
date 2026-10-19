@@ -88,6 +88,7 @@ export default function WelcomeLetter({ students = [], sendEmail, onSent }) {
   }, []);
   const [busy, setBusy] = useState(null); // 'pdf' | 'email'
   const [notice, setNotice] = useState(null); // { type, text }
+  const [showResendConfirm, setShowResendConfirm] = useState(false);
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
 
@@ -149,11 +150,14 @@ export default function WelcomeLetter({ students = [], sendEmail, onSent }) {
     setBusy(null);
   };
 
-  const handleSend = async () => {
+  const handleSend = async (bypassConfirm = false) => {
     if (!form.email.trim()) { setNotice({ type: 'error', text: 'Enter the student\'s email address.' }); return; }
     if (missing.length) { setNotice({ type: 'error', text: 'Fill in every field of the letter before sending.' }); return; }
     if (!sendEmail) { setNotice({ type: 'error', text: 'Email service is not available.' }); return; }
-    if (selected?.welcomeLetterSentAt && !window.confirm(`A welcome letter was already sent to ${form.name} on ${sentOn(selected)}. Send it again?`)) return;
+    if (selected?.welcomeLetterSentAt && !bypassConfirm) {
+      setShowResendConfirm(true);
+      return;
+    }
 
     setBusy('email');
     setNotice(null);
@@ -361,6 +365,43 @@ export default function WelcomeLetter({ students = [], sendEmail, onSent }) {
           </A4Preview>
         </div>
       </div>
+
+      {/* In-App Resend Confirmation Modal */}
+      {showResendConfirm && (
+        <div className="fixed inset-0 z-[999999] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4">
+                <Mail size={24} />
+              </div>
+              <h3 className="text-[17px] font-[800] text-slate-800 mb-2">Welcome Letter Already Sent</h3>
+              <p className="text-[14px] font-[500] text-slate-500 leading-relaxed mb-6">
+                A welcome letter was already sent to {form.name} on {sentOn(selected)}. Would you like to send it again?
+              </p>
+              
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowResendConfirm(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-[13px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResendConfirm(false);
+                    handleSend(true);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[13px] shadow-sm transition-colors"
+                >
+                  Send Again
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
