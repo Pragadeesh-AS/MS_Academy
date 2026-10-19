@@ -206,7 +206,6 @@ export default function Dashboard() {
   const [playingRecording, setPlayingRecording] = useState(null); // { id, url, duration? }
   const [viewingNoteUrl, setViewingNoteUrl] = useState(null);
   const [viewingNoteAccess, setViewingNoteAccess] = useState(false);
-  const [viewingNoteObj, setViewingNoteObj] = useState(null);
 
   const canAccessRecording = (rec) => {
     if (isPro) return true;
@@ -722,12 +721,12 @@ export default function Dashboard() {
 
         <div className="mt-auto pt-4 border-t border-slate-100">
           {hasAccess ? (
-            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteObj(note); setViewingNoteAccess(true); }} className="w-full py-2.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
+            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(true); }} className="w-full py-2.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
               <Eye size={16} /> View Full Note
             </button>
           ) : (
-            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteObj(note); setViewingNoteAccess(false); }} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
-              <Eye size={16} /> Preview Note
+            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(false); }} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
+              <Eye size={16} /> Preview (3 Pages)
             </button>
           )}
         </div>
@@ -1092,12 +1091,12 @@ export default function Dashboard() {
                             </div>
                           </div>
                           {hasAccess ? (
-                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteObj(note); setViewingNoteAccess(true); }} className="px-4 py-2.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
+                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(true); }} className="px-4 py-2.5 bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
                               <Eye size={16} /> <span className="hidden sm:inline">View Full</span>
                             </button>
                           ) : (
-                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteObj(note); setViewingNoteAccess(false); }} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
-                              <Eye size={16} /> <span className="hidden sm:inline">Preview Note</span>
+                            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteAccess(false); }} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-sm font-bold transition-colors flex items-center gap-2">
+                              <Eye size={16} /> <span className="hidden sm:inline">Preview</span>
                             </button>
                           )}
                         </div>
@@ -1633,25 +1632,18 @@ export default function Dashboard() {
 
       {/* Note Viewer Modal */}
       {viewingNoteUrl && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4">
           <button 
-            onClick={() => { setViewingNoteUrl(null); setViewingNoteObj(null); }}
-            className="absolute top-3 right-3 sm:top-5 sm:right-5 w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-colors z-20 cursor-pointer shadow-lg"
-            aria-label="Close"
+            onClick={() => setViewingNoteUrl(null)}
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-colors z-10"
           >
             ✕
           </button>
-          <div className="w-full max-w-5xl h-[90vh] sm:h-[88vh] bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col relative">
+          <div className="w-full max-w-5xl h-[85vh] bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col relative">
             <PDFViewer 
                url={viewingNoteUrl} 
-               isLocked={!viewingNoteAccess} 
-               note={viewingNoteObj}
-               department={studentDepartment}
-               bundles={availableBundles}
-               onBuyBundle={handleUpgradeToPro}
-               payingBundleId={payingBundleId}
-               onUpgrade={() => { setViewingNoteUrl(null); setViewingNoteObj(null); setActiveTab('upgrade'); }} 
-               onClose={() => { setViewingNoteUrl(null); setViewingNoteObj(null); }}
+               previewLimit={viewingNoteAccess ? null : 3} 
+               onUpgrade={() => { setViewingNoteUrl(null); setActiveTab('upgrade'); }} 
             />
           </div>
         </div>
