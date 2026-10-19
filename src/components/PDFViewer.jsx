@@ -21,11 +21,8 @@ const PdfPage = ({ page, scale }) => {
       viewport: viewport,
     };
     
-    // Check if there is an ongoing render task, we shouldn't overlap them, 
-    // but React 18 strict mode might double mount.
     const renderTask = page.render(renderContext);
     
-    // Handle render errors (including cancellation)
     renderTask.promise.catch(err => {
       if (err.name !== 'RenderingCancelledException' && err.name !== 'AbortException') {
         console.error('PDF render error:', err);
@@ -33,9 +30,10 @@ const PdfPage = ({ page, scale }) => {
     });
     
     return () => {
-      // Cancel the render task if the component unmounts
       if (renderTask) {
-        renderTask.cancel();
+        try {
+          renderTask.cancel();
+        } catch (e) {}
       }
     };
   }, [page, scale]);
@@ -62,10 +60,17 @@ const BlurredLockedPage = ({
   onUpgrade 
 }) => {
   const canvasRef = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 750, height: 950 });
 
   useEffect(() => {
-    if (!page || !canvasRef.current) return;
+    if (!page) return;
     const viewport = page.getViewport({ scale });
+    setDimensions({ 
+      width: Math.round(viewport.width), 
+      height: Math.round(viewport.height) 
+    });
+
+    if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     canvas.height = viewport.height;
     canvas.width = viewport.width;
@@ -85,7 +90,9 @@ const BlurredLockedPage = ({
     
     return () => {
       if (renderTask) {
-        renderTask.cancel();
+        try {
+          renderTask.cancel();
+        } catch (e) {}
       }
     };
   }, [page, scale]);
@@ -94,33 +101,38 @@ const BlurredLockedPage = ({
 
   return (
     <div 
-      className="relative bg-white shadow-2xl mb-8 group rounded-2xl overflow-hidden border border-slate-200 w-full"
-      style={{ maxWidth: '100%' }}
+      className="relative bg-white shadow-2xl mb-12 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-amber-200/90 mx-auto w-full"
+      style={{ 
+        width: dimensions.width ? `${dimensions.width}px` : '100%', 
+        minHeight: dimensions.height ? `${dimensions.height}px` : '650px',
+        maxWidth: '100%' 
+      }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Real canvas of the next page rendered with blur filter */}
-      <canvas 
-        ref={canvasRef} 
-        className="max-w-full h-auto pointer-events-none select-none block mx-auto filter blur-[6px] opacity-75"
-      />
+      {/* Blurred Next Page Canvas in background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none select-none bg-slate-100">
+        <canvas 
+          ref={canvasRef} 
+          className="w-full h-full object-cover filter blur-[7px] opacity-65 scale-105"
+        />
+        {/* Soft dark frosted tint */}
+        <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px]" />
+      </div>
 
       {/* Page indicator pill */}
-      <div className="absolute top-3 right-3 z-20 pointer-events-none flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/80 text-white backdrop-blur-md shadow-md text-[11px] font-black uppercase tracking-wider">
+      <div className="absolute top-4 right-4 z-20 pointer-events-none flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-slate-900/85 text-white backdrop-blur-md shadow-lg text-[11px] font-black uppercase tracking-wider">
         <Lock size={12} className="text-amber-400" />
         <span>Page {pageNumber} Locked</span>
       </div>
 
-      {/* Blurred frosted overlay covering the page with the bundle suggestions */}
-      <div 
-        className="absolute inset-0 z-20 flex flex-col items-center justify-center p-3 sm:p-6 text-center select-none overflow-y-auto bg-slate-900/25 backdrop-blur-[3px]"
-        onContextMenu={(e) => e.preventDefault()}
-      >
-        <div className="w-full max-w-xl bg-white/95 rounded-2xl sm:rounded-3xl border-2 border-amber-200/90 shadow-2xl p-5 sm:p-7 relative overflow-hidden backdrop-blur-xl animate-in zoom-in-95 duration-200 pointer-events-auto my-auto text-left">
+      {/* Suggested Bundles Card in normal document flow over the blur */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-[580px] p-4 sm:p-8">
+        <div className="w-full max-w-xl bg-white/95 rounded-2xl sm:rounded-3xl border-2 border-amber-200 shadow-2xl p-5 sm:p-7 backdrop-blur-xl animate-in zoom-in-95 duration-200 text-left my-auto pointer-events-auto">
           {/* Top accent bar */}
-          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500" />
+          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 rounded-t-2xl sm:rounded-t-3xl" />
 
           {/* Header */}
-          <div className="text-center mb-4">
+          <div className="text-center mb-4 pt-1">
             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
               <Lock size={28} className="text-amber-600 drop-shadow-sm" />
             </div>
@@ -136,13 +148,13 @@ const BlurredLockedPage = ({
             <p className="text-slate-600 text-xs sm:text-sm font-medium leading-relaxed max-w-md mx-auto mt-1">
               You've reached the end of the free preview. {remainingAfterThis > 0 ? (
                 <>There are <strong className="text-slate-900 font-bold">{remainingAfterThis} more pages</strong> waiting for you!</>
-              ) : null} Purchase a course bundle below to instantly unlock this entire high-quality document:
+              ) : null} Purchase a bundle below to instantly unlock this entire high-quality document:
             </p>
           </div>
 
           {/* Suggested Bundles List */}
           <div className="space-y-3 mb-4 max-h-[38vh] overflow-y-auto pr-1">
-            {suggestedBundles.map(bundle => {
+            {suggestedBundles.filter(Boolean).map(bundle => {
               const isPaying = payingBundleId === bundle.id;
               const price = bundle.discountedPrice || bundle.price;
               const hasDiscount = bundle.discountedPrice && bundle.discountedPrice !== bundle.price;
@@ -197,7 +209,7 @@ const BlurredLockedPage = ({
             })}
 
             {/* If there are specific Notes Bundles (e.g. Civil Full Notes) */}
-            {suggestedNoteBundles.map(nb => {
+            {suggestedNoteBundles.filter(Boolean).map(nb => {
               const isPaying = payingBundleId === nb.id;
               const price = nb.discountedPrice || nb.price;
               const hasDiscount = nb.discountedPrice && nb.discountedPrice !== nb.price;
@@ -308,8 +320,8 @@ export default function PDFViewer({
   // Compute matching suggested bundles where the notes are available
   const noteBundleIds = note?.bundleAccess?.bundleIds || note?.bundleIds || [];
   
-  let suggestedBundles = bundles.filter(b => {
-    if (b.isHidden) return false;
+  let suggestedBundles = (bundles || []).filter(b => {
+    if (!b || b.isHidden) return false;
     // If note is explicitly assigned to specific bundles:
     if (noteBundleIds.length > 0) {
       return noteBundleIds.includes(b.id);
@@ -322,13 +334,20 @@ export default function PDFViewer({
   });
 
   if (suggestedBundles.length === 0) {
-    suggestedBundles = bundles.filter(b => 
-      !b.isHidden && (sameDepartment(b.department, department) || b.department === 'General' || b.department === 'All')
+    suggestedBundles = (bundles || []).filter(b => 
+      b && !b.isHidden && (sameDepartment(b.department, department) || b.department === 'General' || b.department === 'All')
+    );
+  }
+
+  // Fallback to any Elite bundle if department match yielded none
+  if (suggestedBundles.length === 0) {
+    suggestedBundles = (bundles || []).filter(b => 
+      b && !b.isHidden && (b.tier === 'elite' || b.isElite || /elite/i.test(b.name || ''))
     );
   }
 
   const suggestedNoteBundles = (noteBundles || []).filter(nb => 
-    !nb.isHidden && (sameDepartment(nb.department, department) || nb.department === 'General' || nb.department === 'All')
+    nb && !nb.isHidden && (sameDepartment(nb.department, department) || nb.department === 'General' || nb.department === 'All')
   );
 
   useEffect(() => {
@@ -482,7 +501,7 @@ export default function PDFViewer({
         ))}
 
         {/* Instead of plain white card, render next page in blurred form with suggested bundles */}
-        {!loading && isLocked && blurredPage && (
+        {!loading && isLocked && (
           <BlurredLockedPage
             page={blurredPage}
             scale={scale}
