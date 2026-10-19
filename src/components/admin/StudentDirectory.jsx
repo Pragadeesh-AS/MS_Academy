@@ -35,6 +35,7 @@ import { hasUnlimitedPractice } from '../../utils/practiceTests';
 import StudentPracticeStats from './StudentPracticeStats';
 import AdmissionFormsArchive from './AdmissionFormsArchive';
 import { paletteFor } from '../../utils/departmentColors';
+import { sendWebhookEmail } from '../../utils/emailWebhook';
 
 const DEPARTMENT_OPTIONS = [
   'Computer Science (CSE)',
@@ -107,6 +108,54 @@ const StudentDirectory = ({
       const updatedStudent = { ...student, ...updates };
       setSelectedStudent(updatedStudent);
       setJoinedStudents(prev => prev.map(s => (s.id === student.id ? updatedStudent : s)));
+
+      if (requested) {
+        let emailSent = false;
+        try {
+          const originUrl = window.location.origin;
+          const loginLink = `${originUrl}/student`;
+          const html = `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
+              <div style="text-align: center; margin-bottom: 24px;">
+                <h1 style="color: #1e3a8a; font-size: 24px; margin: 0 0 8px 0; font-weight: 800;">MS GATE ACADEMY</h1>
+                <p style="color: #64748b; font-size: 14px; margin: 0;">Official Admission Portal</p>
+              </div>
+              <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid #e2e8f0;">
+                <h2 style="color: #0f172a; font-size: 18px; margin: 0 0 12px 0;">Hello ${student.name || 'Student'}, 👋</h2>
+                <p style="color: #334155; font-size: 15px; line-height: 1.6; margin: 0 0 12px 0;">
+                  Your <strong>MS GATE Academy Admission Application Form</strong> is ready for you to fill and submit.
+                </p>
+                <p style="color: #334155; font-size: 15px; line-height: 1.6; margin: 0 0 16px 0;">
+                  Please log in to your student portal, complete the application form with your details, upload your passport photograph and signature, and accept the academy rules.
+                </p>
+                <div style="text-align: center; margin: 24px 0;">
+                  <a href="${loginLink}" style="display: inline-block; background: #2563eb; color: #ffffff; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-size: 15px;">Complete Admission Form 📝</a>
+                </div>
+                <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin: 0;">
+                  Note: This form is mandatory to complete your course admission and unlock full access to tests, classes, and materials.
+                </p>
+              </div>
+              <div style="text-align: center; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+                <p style="color: #94a3b8; font-size: 12px; margin: 0;">MS GATE Academy · Education with Excellence</p>
+              </div>
+            </div>
+          `;
+          await sendWebhookEmail({
+            to: student.email,
+            subject: 'Action Required: Complete Admission Application Form - MS GATE Academy',
+            html
+          });
+          emailSent = true;
+        } catch (mailErr) {
+          console.warn('Admission form requested in database, but email notification failed:', mailErr);
+        }
+        alert(emailSent
+          ? `Admission form requested! Notification email has been sent to ${student.email}.`
+          : `Admission form requested! (Email notification could not be sent to ${student.email}).`
+        );
+      } else {
+        alert('Admission form request cancelled.');
+      }
     } catch (error) {
       console.error('Error updating admission form request:', error);
       alert(`Failed to ${requested ? 'send' : 'cancel'} the admission form. Error: ${error.message}`);
@@ -846,8 +895,8 @@ const StudentDirectory = ({
           { key: 'bundles', label: 'Bundles', count: bundleCount },
         ];
         return (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setSelectedStudent(null)}>
-          <div className="bg-white rounded-[24px] w-full max-w-4xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4" onClick={() => setSelectedStudent(null)}>
+          <div className="bg-white rounded-[24px] w-full max-w-4xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* Header: who it is, at a glance */}
             <div className="relative shrink-0 bg-gradient-to-br from-blue-50 via-white to-indigo-50/60 border-b border-[#EEF2F7] px-5 sm:px-8 pt-6 pb-0">
               <button onClick={() => setSelectedStudent(null)} className="absolute top-5 right-5 text-[#64748B] hover:text-[#0F172A] transition-colors bg-white/80 hover:bg-white border border-[#EEF2F7] p-2 rounded-full shadow-sm" title="Close">
@@ -886,7 +935,7 @@ const StudentDirectory = ({
               </div>
             </div>
 
-            <div className="p-5 sm:p-8 overflow-y-auto min-h-[440px]">
+            <div className="p-4 sm:p-8 overflow-y-auto min-h-0 flex-1">
               {detailTab === 'overview' && (
                 <div className="space-y-5">
                   {selectedStudent.admissionFormSubmitted ? (
@@ -909,25 +958,29 @@ const StudentDirectory = ({
                       <span className="text-[13.5px] font-medium text-slate-600">Admission form not required for the {selectedStudent.groupName.trim()} group.</span>
                     </div>
                   ) : selectedStudent.admissionFormRequested ? (
-                    <div className="flex flex-wrap items-center gap-3 p-4 rounded-[16px] border border-blue-100 bg-blue-50/60">
-                      <FileSignature size={20} className="text-blue-600 shrink-0" />
-                      <span className="flex-1 min-w-[200px] text-[13.5px] font-medium text-blue-800">Admission form sent - they must fill it in before they can use the portal.</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-[16px] border border-blue-100 bg-blue-50/60">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <FileSignature size={20} className="text-blue-600 shrink-0 mt-0.5" />
+                        <span className="text-[13.5px] font-medium text-blue-800">Admission form sent - they must fill it in before they can use the portal.</span>
+                      </div>
                       <button
                         onClick={() => setAdmissionFormRequested(selectedStudent, false)}
                         disabled={sendingForm}
-                        className="px-4 py-2 rounded-[12px] border border-blue-200 bg-white text-[13px] font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors shrink-0"
+                        className="w-full sm:w-auto px-4 py-2.5 rounded-[12px] border border-blue-200 bg-white text-[13px] font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors shrink-0 text-center"
                       >
                         {sendingForm ? 'Saving…' : 'Cancel request'}
                       </button>
                     </div>
                   ) : (
-                    <div className="flex flex-wrap items-center gap-3 p-4 rounded-[16px] border border-amber-100 bg-amber-50/60">
-                      <FileSignature size={20} className="text-amber-600 shrink-0" />
-                      <span className="flex-1 min-w-[200px] text-[13.5px] font-medium text-amber-800">Admission form not submitted yet - they'll be asked to fill it in before their first payment. Send it to make them fill it in now.</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-[16px] border border-amber-100 bg-amber-50/60">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <FileSignature size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                        <span className="text-[13.5px] font-medium text-amber-800">Admission form not submitted yet - they'll be asked to fill it in before their first payment. Send it to make them fill it in now.</span>
+                      </div>
                       <button
                         onClick={() => setAdmissionFormRequested(selectedStudent, true)}
                         disabled={sendingForm}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[12px] bg-amber-500 hover:bg-amber-600 text-white text-[13px] font-bold disabled:opacity-50 transition-colors shrink-0"
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-[12px] bg-amber-500 hover:bg-amber-600 text-white text-[13px] font-bold disabled:opacity-50 transition-colors shrink-0 shadow-sm"
                       >
                         <Send size={14} /> {sendingForm ? 'Sending…' : 'Send form'}
                       </button>
@@ -993,16 +1046,19 @@ const StudentDirectory = ({
                                     setConfirmDialog(null);
                                     try {
                                       const updatedBundles = selectedStudent.purchasedBundles.filter((_, i) => i !== idx);
-                                      // Premium (Elite) is its own switch in Edit Student - removing a bundle doesn't change it
-                                      await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), {
-                                        purchasedBundles: updatedBundles
-                                      });
+                                      const full = fullBundleOf({ purchasedBundles: updatedBundles, bundles, department: selectedStudent.department });
+                                      const bundleUpdates = {
+                                        purchasedBundles: updatedBundles,
+                                        isPro: Boolean(full)
+                                      };
+                                      await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), bundleUpdates);
 
-                                      const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles };
+                                      const updatedStudent = { ...selectedStudent, ...bundleUpdates };
                                       setSelectedStudent(updatedStudent);
                                       setJoinedStudents(joinedStudents.map(s => 
                                         s.id === selectedStudent.id ? updatedStudent : s
                                       ));
+                                      alert('Bundle cancelled successfully.');
                                     } catch (error) {
                                       console.error('Error canceling bundle:', error);
                                       alert(`Failed to cancel bundle. Error: ${error.message}`);
@@ -1029,13 +1085,16 @@ const StudentDirectory = ({
                         if (!bundleId) return;
                         try {
                           const updatedBundles = [...(selectedStudent.purchasedBundles || []), bundleId];
-                          // A bundle unlocks only what it includes; Premium (Elite) is turned on separately in Edit Student
-                          await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), {
-                            purchasedBundles: updatedBundles
-                          });
-                          const updatedStudent = { ...selectedStudent, purchasedBundles: updatedBundles };
+                          const full = fullBundleOf({ purchasedBundles: updatedBundles, bundles, department: selectedStudent.department });
+                          const bundleUpdates = {
+                            purchasedBundles: updatedBundles,
+                            isPro: Boolean(full)
+                          };
+                          await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), bundleUpdates);
+                          const updatedStudent = { ...selectedStudent, ...bundleUpdates };
                           setSelectedStudent(updatedStudent);
                           setJoinedStudents(joinedStudents.map(s => s.id === selectedStudent.id ? updatedStudent : s));
+                          alert(`Bundle assigned successfully!${full ? ' Student is now Elite.' : ''}`);
                         } catch (error) {
                           console.error('Error adding bundle:', error);
                           alert(`Failed to add bundle. Error: ${error.message}`);

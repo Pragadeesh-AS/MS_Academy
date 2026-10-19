@@ -71,9 +71,14 @@ export async function resolveUserRoles(email) {
   }
 
   try {
-    const studentSnap = await getDocs(query(collection(db, 'joined_students'), where('email', '==', email)));
+    let studentSnap = await getDocs(query(collection(db, 'joined_students'), where('email', '==', normalized)));
+    if (studentSnap.empty && email && email !== normalized) {
+      studentSnap = await getDocs(query(collection(db, 'joined_students'), where('email', '==', email)));
+    }
     if (!studentSnap.empty) {
-      roles.push({ role: 'student', name: studentSnap.docs[0].data().name || null });
+      const docs = studentSnap.docs.map(d => d.data());
+      const best = docs.find(d => d.name) || docs[0];
+      roles.push({ role: 'student', name: best.name || null });
     }
   } catch (e) {
     console.error('Failed to check student role', e);

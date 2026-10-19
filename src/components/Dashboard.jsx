@@ -136,8 +136,15 @@ export default function Dashboard() {
   const [studentDepartment, setStudentDepartment] = useState('');
   const [purchasedBundles, setPurchasedBundles] = useState([]);
   const [availableBundles, setAvailableBundles] = useState([]);
-  // Elite = owns a course bundle with every resource ticked (utils/membership); it unlocks the whole department
-  const isPro = isEliteStudent({ purchasedBundles, bundles: availableBundles, department: studentDepartment });
+  const [studentRecord, setStudentRecord] = useState(null);
+  // Elite = owns a course bundle with every resource ticked (utils/membership) or isPro flag; unlocks the whole department
+  const isPro = Boolean(studentRecord?.isPro) || isEliteStudent({
+    purchasedBundles,
+    bundles: availableBundles,
+    department: studentDepartment,
+    isPro: Boolean(studentRecord?.isPro),
+    student: studentRecord
+  });
   // Membership tier: Elite (pro) > Prime (bought bundles) > Foundation (everyone else)
   const bundleCount = purchasedBundles.length;
   const tier = isPro
@@ -177,7 +184,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   // Students must submit the signed Admission Application Form before using the portal
   const [admissionPending, setAdmissionPending] = useState(false);
-  const [studentRecord, setStudentRecord] = useState(null);
   // A purchase waiting for the admission form: { kind: 'bundle' | 'subject' | 'notebundle', id }
   const [admissionForPurchase, setAdmissionForPurchase] = useState(null);
   const [docId, setDocId] = useState(null);
@@ -507,45 +513,71 @@ export default function Dashboard() {
     
     setStudentName(name || 'Student');
 
-    const checkOnboarding = async () => {
-      try {
-        if (email) {
-          const q = query(collection(db, 'joined_students'), where('email', '==', email));
-          const querySnapshot = await getDocs(q);
-          
+    const normalizedEmail = (email || '').trim().toLowerCase();
+    let unsubscribeStudent = null;
+
+    if (normalizedEmail) {
+      const q = query(collection(db, 'joined_students'), where('email', '==', normalizedEmail));
+      unsubscribeStudent = onSnapshot(q, (querySnapshot) => {
+        try {
           if (!querySnapshot.empty) {
-            const studentDoc = querySnapshot.docs[0];
-            const data = studentDoc.data();
-            setDocId(studentDoc.id);
-            
-            if (data.department) {
-              setStudentDepartment(data.department);
-              localStorage.setItem('student_department', data.department);
+            const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Prioritize richest doc if multiple exist
+            const best = docs.find(d => (d.purchasedBundles && d.purchasedBundles.length > 0) || d.department || d.admissionFormRequested) || docs[0];
+            setDocId(best.id);
+
+            if (best.department) {
+              setStudentDepartment(best.department);
+              localStorage.setItem('student_department', best.department);
             }
-            if (data.purchasedBundles) {
-              setPurchasedBundles(data.purchasedBundles);
+            if (best.purchasedBundles) {
+              setPurchasedBundles(best.purchasedBundles);
             }
-            if (data.purchasedSubjects) {
-              setPurchasedSubjects(data.purchasedSubjects);
+            if (best.purchasedSubjects) {
+              setPurchasedSubjects(best.purchasedSubjects);
             }
-            if (data.purchasedNoteBundles) {
-              setPurchasedNoteBundles(data.purchasedNoteBundles);
+            if (best.purchasedNoteBundles) {
+              setPurchasedNoteBundles(best.purchasedNoteBundles);
             }
-            
-            setStudentRecord(data);
-            setAdmissionPending(admissionFormBlocksPortal(data));
+
+            setStudentRecord(best);
+            setAdmissionPending(admissionFormBlocksPortal(best));
           } else {
-            setAdmissionPending(true);
+            // Check fallback for original untrimmed email
+            if (email && email !== normalizedEmail) {
+              const fallbackQ = query(collection(db, 'joined_students'), where('email', '==', email));
+              getDocs(fallbackQ).then(snap => {
+                if (!snap.empty) {
+                  const d = snap.docs[0].data();
+                  setDocId(snap.docs[0].id);
+                  if (d.department) setStudentDepartment(d.department);
+                  if (d.purchasedBundles) setPurchasedBundles(d.purchasedBundles);
+                  setStudentRecord(d);
+                  setAdmissionPending(admissionFormBlocksPortal(d));
+                } else {
+                  setAdmissionPending(true);
+                }
+              }).catch(() => setAdmissionPending(true));
+            } else {
+              setAdmissionPending(true);
+            }
           }
+        } catch (e) {
+          console.error("Failed to process student details", e);
+        } finally {
+          setLoading(false);
         }
-      } catch (e) {
-        console.error("Failed to fetch student details", e);
-      } finally {
+      }, (err) => {
+        console.error("Student onSnapshot error:", err);
         setLoading(false);
-      }
+      });
+    } else {
+      setLoading(false);
+    }
+
+    return () => {
+      if (unsubscribeStudent) unsubscribeStudent();
     };
-    
-    checkOnboarding();
   }, [navigate]);
 
   const handleLogout = () => {

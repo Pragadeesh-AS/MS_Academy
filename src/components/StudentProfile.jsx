@@ -113,19 +113,23 @@ export default function StudentProfile() {
 
     const fetchProfile = async () => {
       try {
-        if (email) {
-          const q = query(collection(db, 'joined_students'), where('email', '==', email));
-          const querySnapshot = await getDocs(q);
+        const normEmail = (email || '').trim().toLowerCase();
+        if (normEmail) {
+          let querySnapshot = await getDocs(query(collection(db, 'joined_students'), where('email', '==', normEmail)));
+          if (querySnapshot.empty && email && email !== normEmail) {
+            querySnapshot = await getDocs(query(collection(db, 'joined_students'), where('email', '==', email.trim())));
+          }
           
           if (!querySnapshot.empty) {
-            const studentDoc = querySnapshot.docs[0];
-            const data = studentDoc.data();
+            const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const best = docs.find(d => (d.purchasedBundles && d.purchasedBundles.length > 0) || d.department || d.admissionFormRequested) || docs[0];
+            const data = best;
             // The admission form comes first - it's shown on the student dashboard
             if (admissionFormBlocksPortal(data)) {
               navigate('/student', { replace: true });
               return;
             }
-            setDocId(studentDoc.id);
+            setDocId(best.id);
             setProfileData(data);
             setEditFormData({
               avatarUrl: data.avatarUrl || '',

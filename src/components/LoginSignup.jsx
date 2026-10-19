@@ -42,20 +42,37 @@ export default function LoginSignup() {
 
   const markStudentAsActive = async (email, name) => {
     try {
-      const q = query(collection(db, 'joined_students'), where('email', '==', email));
-      const querySnapshot = await getDocs(q);
-      
+      const normEmail = (email || '').trim().toLowerCase();
+      if (!normEmail) return;
+
+      // Check for existing document by normalized email
+      const q = query(collection(db, 'joined_students'), where('email', '==', normEmail));
+      let querySnapshot = await getDocs(q);
+
+      // Fallback: if not found, check original raw email in case of legacy casing
+      if (querySnapshot.empty && email && email !== normEmail) {
+        const fallbackQ = query(collection(db, 'joined_students'), where('email', '==', email.trim()));
+        querySnapshot = await getDocs(fallbackQ);
+      }
+
       if (!querySnapshot.empty) {
-        const docId = querySnapshot.docs[0].id;
-        await updateDoc(doc(db, 'joined_students', docId), { status: 'Active', lastLogin: serverTimestamp() });
+        // Pick richest doc if multiple exist
+        const docs = querySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const best = docs.find(d => (d.purchasedBundles && d.purchasedBundles.length > 0) || d.department || d.admissionFormRequested) || docs[0];
+
+        await updateDoc(doc(db, 'joined_students', best.id), {
+          email: normEmail,
+          status: 'Active',
+          lastLogin: serverTimestamp()
+        });
       } else {
         const newStudentRef = doc(collection(db, 'joined_students'));
         await setDoc(newStudentRef, {
           name: name,
-          email: email,
-          whatsappNumber: whatsappNumber,
-          department: department,
-          plan: plan,
+          email: normEmail,
+          whatsappNumber: whatsappNumber || '',
+          department: department || '',
+          plan: plan || 'Free',
           joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
           joinedAt: serverTimestamp(), // exact time, for the Recently Joined list
           status: "Active",
@@ -72,18 +89,19 @@ export default function LoginSignup() {
   // user on the highest-priority one, and remembers the full set so the
   // dashboards can offer a "switch role" control.
   const finalizeLogin = async (user, fallbackName) => {
-    const roles = await resolveUserRoles(user.email);
+    const userEmail = (user.email || '').trim().toLowerCase();
+    const roles = await resolveUserRoles(userEmail);
 
     const byRole = (r) => roles.find(x => x.role === r);
     const existingName = byRole('student')?.name || byRole('teacher')?.name
       || byRole('typist')?.name || byRole('reviewer')?.name || null;
-    const userName = existingName || fallbackName || user.displayName || user.email.split('@')[0];
+    const userName = existingName || fallbackName || user.displayName || userEmail.split('@')[0];
 
     if (byRole('student')) {
-      await markStudentAsActive(user.email, userName);
+      await markStudentAsActive(userEmail, userName);
     }
 
-    sessionStorage.setItem('auth_email', user.email);
+    sessionStorage.setItem('auth_email', userEmail);
     sessionStorage.setItem('auth_name', userName);
     sessionStorage.setItem('auth_roles', JSON.stringify(roles));
 

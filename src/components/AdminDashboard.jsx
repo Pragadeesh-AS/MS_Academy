@@ -780,11 +780,19 @@ export default function AdminDashboard() {
           </div>
         </div>
       `;
-      await sendEmailViaGAS(inviteForm.email, "Invitation to join MS Academy", htmlMessage);
+      const cleanEmail = (inviteForm.email || '').trim().toLowerCase();
+      const existingSnap = await getDocs(query(collection(db, 'joined_students'), where('email', '==', cleanEmail)));
+      if (!existingSnap.empty) {
+        alert(`A student with email ${cleanEmail} already exists in the directory.`);
+        setIsInviting(false);
+        return;
+      }
+
+      await sendEmailViaGAS(cleanEmail, "Invitation to join MS Academy", htmlMessage);
 
       const newStudent = {
-        name: inviteForm.name,
-        email: inviteForm.email,
+        name: inviteForm.name.trim(),
+        email: cleanEmail,
         department: inviteForm.department,
         joinedDate: new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
         joinedAt: serverTimestamp(), // exact time, for the Recently Joined list

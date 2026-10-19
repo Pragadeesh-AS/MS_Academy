@@ -12,13 +12,18 @@ import { sameDepartment } from './subjects';
 export const fullBundleOf = ({ purchasedBundles = [], bundles = [], department = '' } = {}) =>
   (bundles || []).find(b =>
     purchasedBundles.includes(b.id) &&
-    (b.department === 'General' || sameDepartment(b.department, department)) &&
+    (b.department === 'General' || sameDepartment(b.department, department) || (!department && isFullBundle(b))) &&
     isFullBundle(b)
   ) || null;
 
-export const isEliteStudent = (args) => !!fullBundleOf(args);
-
-export const tierKeyOf = ({ purchasedBundles = [], bundles = [], department = '' } = {}) => {
-  if (isEliteStudent({ purchasedBundles, bundles, department })) return 'elite';
-  return purchasedBundles.length > 0 ? 'prime' : 'foundation';
+export const isEliteStudent = (args = {}) => {
+  if (args.isPro === true || args.student?.isPro === true) return true;
+  return !!fullBundleOf(args);
 };
+
+export const tierKeyOf = ({ purchasedBundles = [], bundles = [], department = '', isPro = false, student = null } = {}) => {
+  if (isEliteStudent({ purchasedBundles, bundles, department, isPro, student })) return 'elite';
+  const count = (purchasedBundles?.length || 0) || (student?.purchasedBundles?.length || 0);
+  return count > 0 ? 'prime' : 'foundation';
+};
+
