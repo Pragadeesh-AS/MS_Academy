@@ -352,57 +352,62 @@ export default function CourseSetup() {
                   </div>
                 )}
                 
-                <div className="absolute top-4 left-4 flex flex-wrap gap-1.5 z-30 max-w-[75%]">
-                  <span className="bg-white/90 backdrop-blur-sm text-slate-800 px-3 py-1 rounded-full text-[11px] font-[900] tracking-wider uppercase shadow-sm">
+                {/* Top Bar: Department Pill (Left) & Action Toolbar (Right) with zero overlap */}
+                <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2 z-30 pointer-events-none">
+                  <span className="bg-white/95 backdrop-blur-sm text-slate-800 px-3 py-1 rounded-full text-[11px] font-[900] tracking-wider uppercase shadow-sm truncate max-w-[62%] pointer-events-auto">
                     {bundle.department}
                   </span>
-                  {bundle.status === 'Active' ? (
-                    <span className="bg-emerald-500/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10.5px] font-[900] tracking-wider uppercase shadow-sm flex items-center gap-1">
-                      <Zap size={10} /> Active
-                    </span>
-                  ) : (
-                    <span className="bg-slate-800/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10.5px] font-[900] tracking-wider uppercase shadow-sm">
-                      Draft
-                    </span>
-                  )}
-                  {bundle.isHidden ? (
-                    <span className="bg-amber-600/95 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10.5px] font-[900] tracking-wider uppercase shadow-sm flex items-center gap-1">
-                      <EyeOff size={11} /> Offline Only
-                    </span>
-                  ) : (
-                    <span className="bg-blue-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10.5px] font-[900] tracking-wider uppercase shadow-sm flex items-center gap-1">
-                      <Eye size={11} /> Visible
-                    </span>
-                  )}
-                </div>
 
-                <div className="absolute top-4 right-4 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-30">
-                  <button 
-                    type="button"
-                    onClick={() => toggleBundleVisibility(bundle)}
-                    className={`w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md transition-colors ${bundle.isHidden ? 'text-amber-600 hover:bg-amber-50' : 'text-slate-600 hover:bg-slate-50'}`}
-                    title={bundle.isHidden ? "Make visible to online students in store" : "Hide from online students (Offline only)"}
-                  >
-                    {bundle.isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
-                  </button>
-                  <button 
-                    onClick={() => handleEdit(bundle)}
-                    className="w-8 h-8 bg-white text-blue-600 rounded-full flex items-center justify-center shadow-md hover:bg-blue-50 transition-colors"
-                    title="Edit Bundle"
-                  >
-                    <Edit2 size={14} />
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(bundle.id)}
-                    className="w-8 h-8 bg-white text-red-600 rounded-full flex items-center justify-center shadow-md hover:bg-red-50 transition-colors"
-                    title="Delete Bundle"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0 bg-white/95 backdrop-blur-md p-1 rounded-full shadow-md border border-slate-200/70 pointer-events-auto">
+                    <button 
+                      type="button"
+                      onClick={() => toggleBundleVisibility(bundle)}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${bundle.isHidden ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-slate-100 text-slate-700 hover:bg-blue-50 hover:text-blue-600'}`}
+                      title={bundle.isHidden ? "Make visible to online students in store" : "Hide from online students (Offline only)"}
+                    >
+                      {bundle.isHidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                    </button>
+                    <button 
+                      onClick={() => handleEdit(bundle)}
+                      className="w-7 h-7 bg-slate-100 text-blue-600 rounded-full flex items-center justify-center hover:bg-blue-100 transition-colors"
+                      title="Edit Bundle"
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(bundle.id)}
+                      className="w-7 h-7 bg-slate-100 text-red-600 rounded-full flex items-center justify-center hover:bg-red-100 transition-colors"
+                      title="Delete Bundle"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               </div>
 
               <div className="p-6 flex-1 flex flex-col">
+                {/* Status & Store Visibility Badges */}
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  {bundle.status === 'Active' ? (
+                    <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/80 px-2.5 py-0.5 rounded-full text-[10.5px] font-[800] uppercase tracking-wide flex items-center gap-1">
+                      <Zap size={11} className="text-emerald-500" /> Active
+                    </span>
+                  ) : (
+                    <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-full text-[10.5px] font-[800] uppercase tracking-wide">
+                      Draft
+                    </span>
+                  )}
+                  {bundle.isHidden ? (
+                    <span className="bg-amber-50 text-amber-700 border border-amber-200/80 px-2.5 py-0.5 rounded-full text-[10.5px] font-[800] uppercase tracking-wide flex items-center gap-1">
+                      <EyeOff size={11} className="text-amber-600" /> Offline Only
+                    </span>
+                  ) : (
+                    <span className="bg-blue-50 text-blue-700 border border-blue-200/80 px-2.5 py-0.5 rounded-full text-[10.5px] font-[800] uppercase tracking-wide flex items-center gap-1">
+                      <Eye size={11} className="text-blue-600" /> Online Store
+                    </span>
+                  )}
+                </div>
+
                 <div className="mb-4">
                   <h3 className="text-[18px] font-[900] text-slate-900 leading-tight mb-1 line-clamp-2">{bundle.name}</h3>
                   <p className="text-[14px] font-[600] text-slate-500 line-clamp-1">{bundle.tagline}</p>
