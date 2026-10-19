@@ -42,7 +42,14 @@ export function BundleAccessPicker({ bundles = [], value, onChange, allowFree = 
                   <label key={b.id} className={`flex items-center gap-3 px-3.5 py-2.5 cursor-pointer transition-colors ${checked ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}>
                     <input type="checkbox" checked={checked} onChange={() => toggle(b.id)} className="w-4 h-4 accent-indigo-600 shrink-0" />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-bold text-slate-800 truncate">{b.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="block text-[13px] font-bold text-slate-800 truncate">{b.name}</span>
+                        {b.isHidden && (
+                          <span className="shrink-0 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            Offline Only
+                          </span>
+                        )}
+                      </div>
                       {b.department && <span className="block text-[11px] font-semibold text-slate-400 truncate">{b.department}</span>}
                     </span>
                   </label>

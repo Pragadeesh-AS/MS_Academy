@@ -1044,7 +1044,14 @@ const StudentDirectory = ({
                               </div>
                               <div className="flex flex-col">
                                 <span className="text-[14px] font-semibold text-[#0F172A] leading-tight">{bundleName}</span>
-                                <span className="text-[11px] font-medium text-[#64748B]">Active Plan</span>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-[11px] font-medium text-[#64748B]">Active Plan</span>
+                                  {b?.isHidden && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-amber-700 bg-amber-50 border border-amber-200">
+                                      Offline Only
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <button
@@ -1111,9 +1118,11 @@ const StudentDirectory = ({
                         e.target.value = '';
                       }}
                     >
-                      <option value="">+ Assign New Bundle...</option>
+                      <option value="">+ Assign New Bundle (Online & Offline)...</option>
                       {bundles.filter(b => !(selectedStudent.purchasedBundles || []).includes(b.id)).map(b => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
+                        <option key={b.id} value={b.id}>
+                          {b.name}{b.department ? ` • ${b.department}` : ''}{b.isHidden ? ' [Offline Only / Hidden from Store]' : ''}
+                        </option>
                       ))}
                     </select>
                   </div>

@@ -3,7 +3,7 @@ import Loader from '../Loader';
 import { createPortal } from 'react-dom';
 import { 
   Package, Plus, Trash2, Edit2, Search, X, CheckCircle2, Image as ImageIcon,
-  Check, Tag, Zap, Star, ShieldCheck
+  Check, Tag, Zap, Star, ShieldCheck, Eye, EyeOff
 } from 'lucide-react';
 import { db, storage } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -20,6 +20,7 @@ export default function CourseSetup() {
   const [currentId, setCurrentId] = useState(null);
   
   const [search, setSearch] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState('ALL'); // 'ALL' | 'VISIBLE' | 'HIDDEN'
   
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -31,6 +32,7 @@ export default function CourseSetup() {
     discountedPrice: '',
     department: 'CSE',
     status: 'Active',
+    isHidden: false,
     imageUrl: '',
     features: [''],
     permissions: ['tests', 'live_classes', 'recordings', 'notes'],
@@ -113,6 +115,7 @@ export default function CourseSetup() {
       discountedPrice: '',
       department: 'CSE',
       status: 'Active',
+      isHidden: false,
       imageUrl: '',
       features: [''],
       permissions: ['tests', 'live_classes', 'recordings', 'notes'],
@@ -132,6 +135,7 @@ export default function CourseSetup() {
       discountedPrice: bundle.discountedPrice || '',
       department: bundle.department || 'CSE',
       status: bundle.status || 'Active',
+      isHidden: Boolean(bundle.isHidden),
       imageUrl: bundle.imageUrl || '',
       features: bundle.features && bundle.features.length > 0 ? bundle.features : [''],
       permissions: bundle.permissions || ['tests', 'live_classes', 'recordings', 'notes'],
@@ -141,6 +145,19 @@ export default function CourseSetup() {
     setCurrentId(bundle.id);
     setIsEditing(true);
     setIsCreatorOpen(true);
+  };
+
+  const toggleBundleVisibility = async (bundle) => {
+    const newHidden = !bundle.isHidden;
+    setBundles(prev => prev.map(b => b.id === bundle.id ? { ...b, isHidden: newHidden } : b));
+    try {
+      await updateDoc(doc(db, 'course_bundles', bundle.id), { isHidden: newHidden });
+      showToast(newHidden ? `"${bundle.name}" is now hidden from online students (Offline only).` : `"${bundle.name}" is now visible to all students.`, "success");
+    } catch (err) {
+      console.error("Error toggling bundle visibility:", err);
+      showToast("Failed to update visibility", "error");
+      fetchBundles();
+    }
   };
 
   const handleDelete = (id) => {
@@ -232,10 +249,19 @@ export default function CourseSetup() {
     }
   };
 
-  const filteredBundles = bundles.filter(b => 
-    b.name.toLowerCase().includes(search.toLowerCase()) || 
-    b.tagline.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredBundles = bundles.filter(b => {
+    const matchesSearch = 
+      b.name.toLowerCase().includes(search.toLowerCase()) || 
+      (b.tagline || '').toLowerCase().includes(search.toLowerCase()) ||
+      (b.department || '').toLowerCase().includes(search.toLowerCase());
+    
+    const matchesVisibility = 
+      visibilityFilter === 'ALL' ? true :
+      visibilityFilter === 'VISIBLE' ? !b.isHidden :
+      visibilityFilter === 'HIDDEN' ? Boolean(b.isHidden) : true;
+
+    return matchesSearch && matchesVisibility;
+  });
 
   return (
     <div className="space-y-6">
@@ -254,16 +280,42 @@ export default function CourseSetup() {
         </button>
       </div>
 
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3">
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-md">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
-            type="text"
-            placeholder="Search bundles..."
+            type="text" 
+            placeholder="Search bundles by name, tagline, department..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 text-sm font-medium rounded-xl pl-10 pr-4 py-2.5 outline-none focus:border-[#5b32ea] focus:ring-1 focus:ring-[#5b32ea] transition-all"
           />
+        </div>
+
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl self-start sm:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => setVisibilityFilter('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${visibilityFilter === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            All ({bundles.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setVisibilityFilter('VISIBLE')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${visibilityFilter === 'VISIBLE' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            <Eye size={13} className="text-emerald-500" />
+            Visible ({bundles.filter(b => !b.isHidden).length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setVisibilityFilter('HIDDEN')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${visibilityFilter === 'HIDDEN' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            <EyeOff size={13} className="text-amber-500" />
+            Offline Only ({bundles.filter(b => b.isHidden).length})
+          </button>
         </div>
       </div>
 
@@ -300,31 +352,50 @@ export default function CourseSetup() {
                   </div>
                 )}
                 
-                <div className="absolute top-4 left-4 flex gap-2 z-30">
+                <div className="absolute top-4 left-4 flex flex-wrap gap-1.5 z-30 max-w-[75%]">
                   <span className="bg-white/90 backdrop-blur-sm text-slate-800 px-3 py-1 rounded-full text-[11px] font-[900] tracking-wider uppercase shadow-sm">
                     {bundle.department}
                   </span>
                   {bundle.status === 'Active' ? (
-                    <span className="bg-emerald-500/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-[11px] font-[900] tracking-wider uppercase shadow-sm flex items-center gap-1">
+                    <span className="bg-emerald-500/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10.5px] font-[900] tracking-wider uppercase shadow-sm flex items-center gap-1">
                       <Zap size={10} /> Active
                     </span>
                   ) : (
-                    <span className="bg-slate-800/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-[11px] font-[900] tracking-wider uppercase shadow-sm">
+                    <span className="bg-slate-800/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10.5px] font-[900] tracking-wider uppercase shadow-sm">
                       Draft
+                    </span>
+                  )}
+                  {bundle.isHidden ? (
+                    <span className="bg-amber-600/95 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10.5px] font-[900] tracking-wider uppercase shadow-sm flex items-center gap-1">
+                      <EyeOff size={11} /> Offline Only
+                    </span>
+                  ) : (
+                    <span className="bg-blue-600/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-[10.5px] font-[900] tracking-wider uppercase shadow-sm flex items-center gap-1">
+                      <Eye size={11} /> Visible
                     </span>
                   )}
                 </div>
 
-                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-30">
+                <div className="absolute top-4 right-4 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-30">
+                  <button 
+                    type="button"
+                    onClick={() => toggleBundleVisibility(bundle)}
+                    className={`w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md transition-colors ${bundle.isHidden ? 'text-amber-600 hover:bg-amber-50' : 'text-slate-600 hover:bg-slate-50'}`}
+                    title={bundle.isHidden ? "Make visible to online students in store" : "Hide from online students (Offline only)"}
+                  >
+                    {bundle.isHidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                  </button>
                   <button 
                     onClick={() => handleEdit(bundle)}
                     className="w-8 h-8 bg-white text-blue-600 rounded-full flex items-center justify-center shadow-md hover:bg-blue-50 transition-colors"
+                    title="Edit Bundle"
                   >
                     <Edit2 size={14} />
                   </button>
                   <button 
                     onClick={() => handleDelete(bundle.id)}
                     className="w-8 h-8 bg-white text-red-600 rounded-full flex items-center justify-center shadow-md hover:bg-red-50 transition-colors"
+                    title="Delete Bundle"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -468,6 +539,45 @@ export default function CourseSetup() {
                     placeholder="e.g. 35000"
                     className="w-full bg-slate-50 border border-slate-200 text-[14px] font-[700] text-slate-900 rounded-xl px-4 py-3 outline-none focus:border-[#5b32ea] focus:ring-1 focus:ring-[#5b32ea] transition-all"
                   />
+                </div>
+
+                <div className="md:col-span-2 space-y-2.5">
+                  <label className="text-[13px] font-[800] text-slate-700 uppercase tracking-wide flex items-center justify-between">
+                    <span>Student Store Visibility</span>
+                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${formData.isHidden ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                      {formData.isHidden ? 'Hidden (Offline / Private)' : 'Visible in Online Store'}
+                    </span>
+                  </label>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, isHidden: false }))}
+                      className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 ${!formData.isHidden ? 'border-emerald-500 bg-emerald-50/70 ring-2 ring-emerald-500/20' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}
+                    >
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${!formData.isHidden ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                        <Eye size={16} />
+                      </div>
+                      <div>
+                        <p className={`text-[13px] font-bold ${!formData.isHidden ? 'text-emerald-950' : 'text-slate-800'}`}>Visible to Online Students</p>
+                        <p className="text-[11.5px] text-slate-500 font-medium mt-0.5">Students can browse and purchase this bundle on the website.</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, isHidden: true }))}
+                      className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 ${formData.isHidden ? 'border-amber-500 bg-amber-50/70 ring-2 ring-amber-500/20' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}
+                    >
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${formData.isHidden ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                        <EyeOff size={16} />
+                      </div>
+                      <div>
+                        <p className={`text-[13px] font-bold ${formData.isHidden ? 'text-amber-950' : 'text-slate-800'}`}>Hidden from Online Students (Offline Only)</p>
+                        <p className="text-[11.5px] text-slate-500 font-medium mt-0.5">Hidden from store. You can assign it manually to offline students.</p>
+                      </div>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="md:col-span-2 space-y-3 text-left border border-slate-200 p-5 rounded-2xl bg-slate-50/50 mt-4">

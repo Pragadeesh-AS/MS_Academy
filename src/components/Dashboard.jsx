@@ -1527,7 +1527,8 @@ export default function Dashboard() {
               ) : (
                 (() => {
                   const filteredBundles = availableBundles.filter(b => 
-                    b.department === studentDepartment
+                    (b.department === studentDepartment || b.department === 'General') &&
+                    (!b.isHidden || purchasedBundles.includes(b.id))
                   );
                   
                   if (filteredBundles.length === 0) {
