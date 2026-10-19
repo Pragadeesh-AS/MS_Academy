@@ -15,7 +15,12 @@ import {
   Sparkles,
   X,
   CheckCircle2,
-  ChevronRight
+  ChevronRight,
+  Zap,
+  Award,
+  Video,
+  BookOpen,
+  ShieldCheck
 } from 'lucide-react';
 import { sameDepartment, isCommonDeptName } from '../../utils/subjects';
 import {
@@ -26,6 +31,22 @@ import Toast from '../shared/Toast';
 const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 const sameName = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
 const MINUTES_PER_QUESTION = 3; // GATE: 180 minutes for 65 questions
+
+const formatPrice = (val) => {
+  const n = Number(String(val || '').replace(/[^\d.]/g, ''));
+  return n ? n.toLocaleString('en-IN') : val;
+};
+
+const getSavings = (orig, disc) => {
+  const o = Number(String(orig || '').replace(/[^\d.]/g, ''));
+  const d = Number(String(disc || '').replace(/[^\d.]/g, ''));
+  if (o && d && o > d) {
+    const diff = o - d;
+    const pct = Math.round((diff / o) * 100);
+    return { amount: diff.toLocaleString('en-IN'), pct };
+  }
+  return null;
+};
 
 // Practice tab of Academy Tests (see utils/practiceTests). The student picks subjects + topics of
 // their department, a question count and a duration; the questions are auto-selected.
@@ -388,116 +409,167 @@ export default function PracticeTests({
       {/* Elite Upsell Modal */}
       {showEliteModal && (
         <div 
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-[200] flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-300"
           onClick={() => setShowEliteModal(false)}
         >
           <div 
-            className="bg-white rounded-[28px] w-full max-w-xl shadow-2xl overflow-hidden border border-amber-200/80 flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+            className="bg-[#0b1222] text-slate-100 rounded-[32px] w-full max-w-[560px] shadow-[0_30px_90px_-15px_rgba(0,0,0,0.8)] border border-slate-700/70 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200 relative"
             onClick={e => e.stopPropagation()}
           >
-            {/* Header Banner */}
-            <div className="relative bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 px-6 pt-7 pb-6 text-white text-center">
+            {/* Header Banner with subtle champagne glow */}
+            <div className="relative px-6 sm:px-8 pt-8 pb-6 text-center border-b border-slate-800/80 overflow-hidden">
+              <div className="absolute top-0 inset-x-0 h-40 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/20 via-orange-500/5 to-transparent pointer-events-none" />
+              
               <button 
                 type="button"
                 onClick={() => setShowEliteModal(false)}
-                className="absolute top-4 right-4 p-2 rounded-full bg-black/10 hover:bg-black/20 text-white transition-colors"
+                className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/70 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors border border-slate-700/60 z-10 cursor-pointer"
                 aria-label="Close"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
               
-              <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center mx-auto mb-3 shadow-inner">
-                <Crown size={32} className="text-amber-200 fill-amber-300" />
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-b from-amber-400/20 via-amber-500/10 to-transparent border border-amber-400/40 flex items-center justify-center mx-auto mb-3 shadow-[0_0_25px_rgba(245,158,11,0.25)] relative">
+                <Crown size={28} className="text-amber-400 fill-amber-400/30 drop-shadow-[0_2px_8px_rgba(245,158,11,0.5)]" />
               </div>
 
-              <span className="inline-block text-[11px] font-black tracking-widest uppercase px-3 py-1 rounded-full bg-white/25 border border-white/40 mb-2">
-                MS GATE Elite Membership
-              </span>
+              <div className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-[0.2em] uppercase px-3 py-1 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/25 mb-2.5">
+                <Sparkles size={11} className="text-amber-400" />
+                <span>Official GATE Elite Pass</span>
+              </div>
 
-              <h2 className="text-2xl sm:text-3xl font-[900] tracking-tight leading-tight">
+              <h2 className="text-2xl sm:text-[28px] font-[900] text-white tracking-tight leading-tight">
                 Do you want to continue?
               </h2>
-              <p className="text-amber-100 text-sm sm:text-[15px] font-medium mt-1.5 max-w-md mx-auto">
+              <p className="text-slate-300 text-xs sm:text-[13.5px] font-medium mt-1.5 max-w-md mx-auto leading-relaxed">
                 Enroll in our Elite courses to get unlimited practice tests, full mock exams, live lectures, and study notes!
               </p>
             </div>
 
             {/* Modal Body */}
-            <div className="p-5 sm:p-7 overflow-y-auto space-y-5">
-              {eliteBundle ? (
-                <div className="bg-gradient-to-br from-slate-50 to-amber-50/30 rounded-2xl border-2 border-amber-200/80 p-5 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <span className="text-[11px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                        {eliteBundle.department || department || 'GATE Full Course'}
-                      </span>
-                      <h3 className="text-lg sm:text-xl font-[900] text-slate-900 mt-1.5 leading-snug">
-                        {eliteBundle.name}
-                      </h3>
-                      {eliteBundle.tagline && (
-                        <p className="text-xs text-slate-500 font-medium mt-0.5">{eliteBundle.tagline}</p>
-                      )}
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-2xl sm:text-3xl font-[900] text-slate-900">
-                        ₹{eliteBundle.discountedPrice || eliteBundle.price}
-                      </div>
-                      {eliteBundle.discountedPrice && eliteBundle.discountedPrice !== eliteBundle.price && (
-                        <div className="text-xs font-bold text-slate-400 line-through">₹{eliteBundle.price}</div>
-                      )}
-                    </div>
-                  </div>
+            <div className="p-5 sm:p-7 overflow-y-auto space-y-4 bg-[#080d19]/60">
+              {eliteBundle ? (() => {
+                const savings = getSavings(eliteBundle.price, eliteBundle.discountedPrice);
+                const displayPrice = eliteBundle.discountedPrice || eliteBundle.price;
+                return (
+                  <div className="bg-gradient-to-b from-slate-900/95 to-slate-950/95 rounded-2xl border border-amber-400/30 p-5 sm:p-6 space-y-4 shadow-[0_12px_30px_rgba(0,0,0,0.4)] relative overflow-hidden">
+                    <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500" />
 
-                  {/* Highlights */}
-                  <div className="border-t border-amber-100/80 pt-3 space-y-2">
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Everything you get with Elite:</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[13px] font-semibold text-slate-700">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                        <span><strong>Unlimited</strong> Practice Tests</span>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <span className="inline-block text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md bg-amber-400/15 text-amber-300 border border-amber-400/30">
+                          {eliteBundle.department || department || 'GATE Full Course'}
+                        </span>
+                        <h3 className="text-lg sm:text-[20px] font-[900] text-white mt-1.5 leading-snug">
+                          {eliteBundle.name}
+                        </h3>
+                        {eliteBundle.tagline && (
+                          <p className="text-[11px] text-amber-200/70 font-semibold tracking-wide uppercase mt-0.5">
+                            {eliteBundle.tagline}
+                          </p>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                        <span>All Academy & Mock Tests</span>
+                      <div className="text-right shrink-0">
+                        <div className="text-2xl sm:text-[28px] font-[900] text-amber-300 tracking-tight leading-none">
+                          ₹{formatPrice(displayPrice)}
+                        </div>
+                        {eliteBundle.discountedPrice && eliteBundle.discountedPrice !== eliteBundle.price && (
+                          <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                            <span className="text-xs font-bold text-slate-500 line-through">
+                              ₹{formatPrice(eliteBundle.price)}
+                            </span>
+                            {savings && (
+                              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                Save ₹{savings.amount}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                        <span>Live Classes & HD Recordings</span>
+                    </div>
+
+                    {/* Highlights Grid with bespoke icons */}
+                    <div className="border-t border-slate-800 pt-4 space-y-2.5">
+                      <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">
+                        Everything Included in Elite:
                       </div>
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                        <span>All Subject Study Notes</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs font-semibold text-slate-200">
+                        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                          <div className="w-7 h-7 rounded-lg bg-amber-400/15 text-amber-400 flex items-center justify-center shrink-0 border border-amber-400/25">
+                            <Zap size={14} />
+                          </div>
+                          <div>
+                            <div className="font-bold text-white text-[13px]">Unlimited Practice</div>
+                            <div className="text-[10px] text-slate-400">No question limits or caps</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                          <div className="w-7 h-7 rounded-lg bg-blue-400/15 text-blue-400 flex items-center justify-center shrink-0 border border-blue-400/25">
+                            <Award size={14} />
+                          </div>
+                          <div>
+                            <div className="font-bold text-white text-[13px]">Full Mock Series</div>
+                            <div className="text-[10px] text-slate-400">All department GATE mocks</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                          <div className="w-7 h-7 rounded-lg bg-purple-400/15 text-purple-400 flex items-center justify-center shrink-0 border border-purple-400/25">
+                            <Video size={14} />
+                          </div>
+                          <div>
+                            <div className="font-bold text-white text-[13px]">Live Classes & Vault</div>
+                            <div className="text-[10px] text-slate-400">HD lectures with recordings</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/40 border border-slate-700/50">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-400/15 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-400/25">
+                            <BookOpen size={14} />
+                          </div>
+                          <div>
+                            <div className="font-bold text-white text-[13px]">Complete Study Notes</div>
+                            <div className="text-[10px] text-slate-400">Formulas, shortcuts & theory</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Purchase CTA */}
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onBuyBundle && eliteBundle) {
+                            onBuyBundle(eliteBundle.id);
+                          } else if (onUpgrade) {
+                            onUpgrade();
+                          }
+                          setShowEliteModal(false);
+                        }}
+                        disabled={payingBundleId === eliteBundle.id}
+                        className="w-full py-4 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-[900] text-sm sm:text-[15px] rounded-xl shadow-[0_10px_28px_rgba(245,158,11,0.35)] hover:shadow-[0_12px_32px_rgba(245,158,11,0.5)] transition-all flex items-center justify-center gap-2 cursor-pointer hover:-translate-y-0.5 disabled:opacity-60"
+                      >
+                        <Crown size={18} className="fill-slate-950/30" />
+                        <span>
+                          {payingBundleId === eliteBundle.id 
+                            ? 'Opening Checkout...' 
+                            : `Enroll in Elite Course • ₹${formatPrice(displayPrice)}`}
+                        </span>
+                        <ArrowRight size={16} />
+                      </button>
+
+                      <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 font-medium pt-2">
+                        <ShieldCheck size={13} className="text-emerald-400" />
+                        <span>Instant access · 100% verified syllabus curriculum</span>
                       </div>
                     </div>
                   </div>
-
-                  {/* Purchase CTA */}
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onBuyBundle && eliteBundle) {
-                          onBuyBundle(eliteBundle.id);
-                        } else if (onUpgrade) {
-                          onUpgrade();
-                        }
-                        setShowEliteModal(false);
-                      }}
-                      disabled={payingBundleId === eliteBundle.id}
-                      className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-[900] text-[15px] rounded-xl shadow-lg shadow-amber-500/25 transition-all flex items-center justify-center gap-2 hover:-translate-y-0.5 cursor-pointer"
-                    >
-                      <Crown size={18} />
-                      <span>
-                        {payingBundleId === eliteBundle.id 
-                          ? 'Opening Checkout...' 
-                          : `Enroll in Elite Course • ₹${eliteBundle.discountedPrice || eliteBundle.price}`}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
+                );
+              })() : (
                 <div className="text-center py-6 space-y-4">
-                  <p className="text-slate-600 font-semibold text-sm">
+                  <p className="text-slate-300 font-semibold text-sm">
                     Upgrade to our Elite Membership to get unlimited practice tests, live lectures, study notes, and mock series!
                   </p>
                   <button
@@ -506,21 +578,21 @@ export default function PracticeTests({
                       onUpgrade && onUpgrade();
                       setShowEliteModal(false);
                     }}
-                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md text-sm"
+                    className="px-6 py-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-bold rounded-xl shadow-md text-sm"
                   >
                     Explore Course Bundles
                   </button>
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-4 pt-1 text-xs">
+              <div className="flex items-center justify-between gap-4 pt-2 text-xs border-t border-slate-800/80">
                 <button
                   type="button"
                   onClick={() => {
                     onUpgrade && onUpgrade();
                     setShowEliteModal(false);
                   }}
-                  className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1"
+                  className="text-slate-400 hover:text-amber-400 font-bold flex items-center gap-1 transition-colors cursor-pointer"
                 >
                   <span>View all course bundles</span>
                   <ChevronRight size={14} />
@@ -528,7 +600,7 @@ export default function PracticeTests({
                 <button
                   type="button"
                   onClick={() => setShowEliteModal(false)}
-                  className="text-slate-400 hover:text-slate-600 font-semibold"
+                  className="text-slate-500 hover:text-slate-300 font-semibold transition-colors cursor-pointer"
                 >
                   Maybe later
                 </button>
