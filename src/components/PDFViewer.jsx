@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-import { Lock, FileText, ZoomIn, ZoomOut, ShieldAlert } from 'lucide-react';
+import { Lock, FileText, ZoomIn, ZoomOut, ShieldAlert, Crown, ChevronRight } from 'lucide-react';
+import { sameDepartment } from '../utils/subjects';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = '//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+// Standard rendered page for full view or free preview pages
 const PdfPage = ({ page, scale }) => {
   const canvasRef = useRef(null);
 
@@ -46,13 +48,288 @@ const PdfPage = ({ page, scale }) => {
   );
 };
 
-export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
+// Blurred continuation page rendered with in-page suggested bundles to purchase
+const BlurredLockedPage = ({ 
+  page, 
+  scale, 
+  pageNumber, 
+  numPages, 
+  suggestedBundles = [], 
+  suggestedNoteBundles = [], 
+  onBuyBundle, 
+  onBuyNoteBundle, 
+  payingBundleId, 
+  onUpgrade 
+}) => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (!page || !canvasRef.current) return;
+    const viewport = page.getViewport({ scale });
+    const canvas = canvasRef.current;
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    const renderContext = {
+      canvasContext: canvas.getContext('2d'),
+      viewport: viewport,
+    };
+    
+    const renderTask = page.render(renderContext);
+    
+    renderTask.promise.catch(err => {
+      if (err.name !== 'RenderingCancelledException' && err.name !== 'AbortException') {
+        console.error('PDF render error:', err);
+      }
+    });
+    
+    return () => {
+      if (renderTask) {
+        renderTask.cancel();
+      }
+    };
+  }, [page, scale]);
+
+  const remainingAfterThis = Math.max(0, numPages - pageNumber);
+
+  return (
+    <div 
+      className="relative bg-white shadow-2xl mb-8 group rounded-2xl overflow-hidden border border-slate-200 w-full"
+      style={{ maxWidth: '100%' }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Real canvas of the next page rendered with blur filter */}
+      <canvas 
+        ref={canvasRef} 
+        className="max-w-full h-auto pointer-events-none select-none block mx-auto filter blur-[6px] opacity-75"
+      />
+
+      {/* Page indicator pill */}
+      <div className="absolute top-3 right-3 z-20 pointer-events-none flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/80 text-white backdrop-blur-md shadow-md text-[11px] font-black uppercase tracking-wider">
+        <Lock size={12} className="text-amber-400" />
+        <span>Page {pageNumber} Locked</span>
+      </div>
+
+      {/* Blurred frosted overlay covering the page with the bundle suggestions */}
+      <div 
+        className="absolute inset-0 z-20 flex flex-col items-center justify-center p-3 sm:p-6 text-center select-none overflow-y-auto bg-slate-900/25 backdrop-blur-[3px]"
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <div className="w-full max-w-xl bg-white/95 rounded-2xl sm:rounded-3xl border-2 border-amber-200/90 shadow-2xl p-5 sm:p-7 relative overflow-hidden backdrop-blur-xl animate-in zoom-in-95 duration-200 pointer-events-auto my-auto text-left">
+          {/* Top accent bar */}
+          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500" />
+
+          {/* Header */}
+          <div className="text-center mb-4">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
+              <Lock size={28} className="text-amber-600 drop-shadow-sm" />
+            </div>
+
+            <span className="inline-block text-[10px] sm:text-[11px] font-[900] tracking-widest uppercase px-3 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 mb-1.5">
+              Locked Content
+            </span>
+
+            <h3 className="text-xl sm:text-2xl font-[900] text-slate-900 tracking-tight leading-snug">
+              Unlock the Full Material
+            </h3>
+            
+            <p className="text-slate-600 text-xs sm:text-sm font-medium leading-relaxed max-w-md mx-auto mt-1">
+              You've reached the end of the free preview. {remainingAfterThis > 0 ? (
+                <>There are <strong className="text-slate-900 font-bold">{remainingAfterThis} more pages</strong> waiting for you!</>
+              ) : null} Purchase a course bundle below to instantly unlock this entire high-quality document:
+            </p>
+          </div>
+
+          {/* Suggested Bundles List */}
+          <div className="space-y-3 mb-4 max-h-[38vh] overflow-y-auto pr-1">
+            {suggestedBundles.map(bundle => {
+              const isPaying = payingBundleId === bundle.id;
+              const price = bundle.discountedPrice || bundle.price;
+              const hasDiscount = bundle.discountedPrice && bundle.discountedPrice !== bundle.price;
+              return (
+                <div 
+                  key={bundle.id}
+                  className="bg-gradient-to-br from-slate-50 to-amber-50/40 rounded-xl sm:rounded-2xl border-2 border-amber-200/90 p-3.5 sm:p-4 hover:border-amber-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                        {bundle.department || 'All Departments'}
+                      </span>
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        Recommended
+                      </span>
+                    </div>
+                    <h4 className="font-[900] text-slate-900 text-sm sm:text-[15px] leading-tight">
+                      {bundle.name}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                      Includes full study notes, unlimited tests & live classes
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2 shrink-0">
+                    <div className="text-left sm:text-right">
+                      <div className="text-lg sm:text-xl font-[900] text-slate-900">
+                        ₹{price}
+                      </div>
+                      {hasDiscount && (
+                        <div className="text-[10px] font-bold text-slate-400 line-through">
+                          ₹{bundle.price}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onBuyBundle) onBuyBundle(bundle.id);
+                        else if (onUpgrade) onUpgrade();
+                      }}
+                      disabled={isPaying}
+                      className="px-4 py-2 sm:py-2.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-[900] text-xs sm:text-sm rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer hover:-translate-y-0.5 disabled:opacity-60"
+                    >
+                      <Crown size={15} />
+                      <span>{isPaying ? 'Opening...' : 'Buy Bundle'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* If there are specific Notes Bundles (e.g. Civil Full Notes) */}
+            {suggestedNoteBundles.map(nb => {
+              const isPaying = payingBundleId === nb.id;
+              const price = nb.discountedPrice || nb.price;
+              const hasDiscount = nb.discountedPrice && nb.discountedPrice !== nb.price;
+              return (
+                <div 
+                  key={nb.id}
+                  className="bg-indigo-50/50 rounded-xl sm:rounded-2xl border border-indigo-200 p-3.5 sm:p-4 hover:border-indigo-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                        Notes Bundle
+                      </span>
+                    </div>
+                    <h4 className="font-[900] text-slate-900 text-sm sm:text-[15px] leading-tight">
+                      {nb.name}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                      All subjects study notes for your department
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2 shrink-0">
+                    <div className="text-left sm:text-right">
+                      <div className="text-lg sm:text-xl font-[900] text-slate-900">
+                        ₹{price}
+                      </div>
+                      {hasDiscount && (
+                        <div className="text-[10px] font-bold text-slate-400 line-through">
+                          ₹{nb.price}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onBuyNoteBundle) onBuyNoteBundle(nb.id);
+                        else if (onUpgrade) onUpgrade();
+                      }}
+                      disabled={isPaying}
+                      className="px-4 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-[900] text-xs sm:text-sm rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center gap-1.5 cursor-pointer hover:-translate-y-0.5 disabled:opacity-60"
+                    >
+                      <FileText size={15} />
+                      <span>{isPaying ? 'Opening...' : 'Buy Notes'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {suggestedBundles.length === 0 && suggestedNoteBundles.length === 0 && (
+              <div className="text-center py-4">
+                <button
+                  type="button"
+                  onClick={onUpgrade}
+                  className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-[900] text-sm shadow-md inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <Crown size={16} /> Upgrade to Pro
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Footer Navigation */}
+          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+            {onUpgrade && (
+              <button
+                type="button"
+                onClick={onUpgrade}
+                className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <span>Explore all course bundles</span>
+                <ChevronRight size={13} />
+              </button>
+            )}
+            {remainingAfterThis > 0 && (
+              <span className="text-slate-400 font-bold ml-auto text-[11px]">
+                +{remainingAfterThis} more pages locked
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default function PDFViewer({ 
+  url, 
+  previewLimit = null, 
+  note = null,
+  bundles = [],
+  noteBundles = [],
+  department = null,
+  onBuyBundle = null,
+  onBuyNoteBundle = null,
+  payingBundleId = null,
+  onUpgrade 
+}) {
   const [pdf, setPdf] = useState(null);
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1.2);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pages, setPages] = useState([]);
+  const [blurredPage, setBlurredPage] = useState(null);
+
+  // Compute matching suggested bundles where the notes are available
+  const noteBundleIds = note?.bundleAccess?.bundleIds || note?.bundleIds || [];
+  
+  let suggestedBundles = bundles.filter(b => {
+    if (b.isHidden) return false;
+    // If note is explicitly assigned to specific bundles:
+    if (noteBundleIds.length > 0) {
+      return noteBundleIds.includes(b.id);
+    }
+    // Matching department bundles that include notes (or Elite bundles)
+    return (
+      (sameDepartment(b.department, department) || b.department === 'General' || b.department === 'All') &&
+      (b.tier === 'elite' || b.isElite || /elite/i.test(b.name || '') || !b.permissions || b.permissions.includes('notes'))
+    );
+  });
+
+  if (suggestedBundles.length === 0) {
+    suggestedBundles = bundles.filter(b => 
+      !b.isHidden && (sameDepartment(b.department, department) || b.department === 'General' || b.department === 'All')
+    );
+  }
+
+  const suggestedNoteBundles = (noteBundles || []).filter(nb => 
+    !nb.isHidden && (sameDepartment(nb.department, department) || nb.department === 'General' || nb.department === 'All')
+  );
 
   useEffect(() => {
     let active = true;
@@ -62,6 +339,7 @@ export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
         setLoading(true);
         setError(null);
         setPages([]);
+        setBlurredPage(null);
         
         const loadingTask = pdfjsLib.getDocument(url);
         const loadedPdf = await loadingTask.promise;
@@ -70,18 +348,32 @@ export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
         setNumPages(loadedPdf.numPages);
         
         let pagesToRender = loadedPdf.numPages;
-        if (previewLimit !== null && previewLimit > 0) {
-          pagesToRender = Math.min(loadedPdf.numPages, previewLimit);
+        let loadBlurredNext = false;
+
+        // Keep preview pages (e.g. 3 pages) above, and load the 4th page for the blurred form
+        if (previewLimit !== null && previewLimit > 0 && loadedPdf.numPages > previewLimit) {
+          pagesToRender = previewLimit;
+          loadBlurredNext = true;
         }
         
         const pagePromises = [];
         for (let i = 1; i <= pagesToRender; i++) {
           pagePromises.push(loadedPdf.getPage(i));
         }
+
+        if (loadBlurredNext) {
+          pagePromises.push(loadedPdf.getPage(previewLimit + 1));
+        }
         
         const loadedPages = await Promise.all(pagePromises);
         if (active) {
-          setPages(loadedPages);
+          if (loadBlurredNext) {
+            setPages(loadedPages.slice(0, previewLimit));
+            setBlurredPage(loadedPages[previewLimit]);
+          } else {
+            setPages(loadedPages);
+            setBlurredPage(null);
+          }
           setLoading(false);
         }
       } catch (err) {
@@ -160,7 +452,7 @@ export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
         <span className="font-bold text-slate-800 text-[13px] sm:text-[15px] flex items-center gap-2 min-w-0 truncate">
           <FileText size={18} className="text-blue-600 flex-shrink-0" />
           <span className="truncate"><span className="hidden sm:inline">MS Academy </span>Document Viewer</span>
-          {isLocked && <span className="ml-1 sm:ml-2 text-[10px] uppercase tracking-wider bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-[900] flex-shrink-0">Preview</span>}
+          {isLocked && <span className="ml-1 sm:ml-2 text-[10px] uppercase tracking-wider bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-[900] flex-shrink-0">Preview ({pages.length} Pages)</span>}
         </span>
         <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
           <button onClick={zoomOut} className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"><ZoomOut size={18} /></button>
@@ -184,33 +476,25 @@ export default function PDFViewer({ url, previewLimit = null, onUpgrade }) {
           </div>
         )}
         
+        {/* Render free preview pages as normal sharp pages */}
         {!loading && !error && pages.map((page, index) => (
           <PdfPage key={index} page={page} scale={scale} />
         ))}
 
-        {!loading && isLocked && (
-          <div className="w-full max-w-3xl shrink-0 bg-white border-2 border-amber-100 rounded-[32px] p-6 sm:p-12 text-center shadow-2xl my-8 relative overflow-hidden flex flex-col items-center">
-            {/* Decorative background elements */}
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500"></div>
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-amber-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
-            <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-orange-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
-            
-            <div className="w-24 h-24 bg-gradient-to-br from-amber-50 to-orange-100 text-amber-500 rounded-full flex items-center justify-center mb-8 shadow-inner border border-amber-200 z-10 relative group hover:scale-105 transition-transform duration-300">
-              <div className="absolute inset-0 bg-amber-400/20 rounded-full animate-ping opacity-50"></div>
-              <Lock size={40} className="drop-shadow-sm" />
-            </div>
-            
-            <h3 className="text-3xl font-[900] text-slate-900 mb-4 tracking-tight z-10 relative">Unlock the Full Material</h3>
-            
-            <p className="text-slate-500 text-[17px] mb-10 max-w-xl font-medium leading-relaxed z-10 relative">
-              You've reached the end of the free preview. There are <strong className="text-slate-800 bg-amber-100 px-2 py-0.5 rounded-md font-bold">{numPages - previewLimit} more pages</strong> waiting for you! 
-              Purchase the course bundle to instantly unlock the entire high-quality document.
-            </p>
-            
-            <button onClick={onUpgrade} className="px-10 py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl font-[900] text-lg shadow-xl shadow-amber-500/25 transition-all hover:-translate-y-1 inline-flex items-center gap-3 z-10 relative group border border-amber-400/50">
-              <Lock size={20} className="group-hover:scale-110 transition-transform" /> Upgrade to Pro
-            </button>
-          </div>
+        {/* Instead of plain white card, render next page in blurred form with suggested bundles */}
+        {!loading && isLocked && blurredPage && (
+          <BlurredLockedPage
+            page={blurredPage}
+            scale={scale}
+            pageNumber={(previewLimit || 0) + 1}
+            numPages={numPages}
+            suggestedBundles={suggestedBundles}
+            suggestedNoteBundles={suggestedNoteBundles}
+            onBuyBundle={onBuyBundle}
+            onBuyNoteBundle={onBuyNoteBundle}
+            payingBundleId={payingBundleId}
+            onUpgrade={onUpgrade}
+          />
         )}
       </div>
     </div>
