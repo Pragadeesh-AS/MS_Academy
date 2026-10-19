@@ -1491,6 +1491,8 @@ export default function Dashboard() {
             reviewTestId={reviewTestId}
             onReviewClosed={reviewTestId ? () => { setAnalyticsTestId(reviewTestId); setReviewTestId(null); setActiveTab('analytics'); } : null}
             onUpgrade={() => setActiveTab('upgrade')}
+            onBuyBundle={handleUpgradeToPro}
+            payingBundleId={payingBundleId}
           />
         )}
 
@@ -1502,6 +1504,8 @@ export default function Dashboard() {
             purchasedBundles={purchasedBundles}
             bundles={availableBundles}
             onUpgrade={() => setActiveTab('upgrade')}
+            onBuyBundle={handleUpgradeToPro}
+            payingBundleId={payingBundleId}
           />
         )}
 

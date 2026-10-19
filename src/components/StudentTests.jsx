@@ -40,7 +40,7 @@ const fetchQuestionDocs = async (ids) => {
 // reviewTestId: open that completed test's solution review (asked for from Analytics); onReviewClosed
 // takes them back there. section: 'academy' (admin-made tests) or 'practice' (student-built tests,
 // utils/practiceTests) - each has its own sidebar tab. onUpgrade: open the bundles page.
-export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [], onTestCompleted = null, reviewTestId = null, onReviewClosed = null, onUpgrade = null, section = 'academy' }) {
+export default function StudentTests({ department, isPro, purchasedBundles = [], bundles = [], onTestCompleted = null, reviewTestId = null, onReviewClosed = null, onUpgrade = null, section = 'academy', onBuyBundle = null, payingBundleId = null }) {
   const [tests, setTests] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -880,7 +880,10 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           studentEmail={currentEmail()}
           studentName={sessionStorage.getItem('auth_name') || 'Student'}
           practiceTests={practiceTests}
-          unlimited={hasUnlimitedPractice({ purchasedBundles, bundles, department })}
+          unlimited={hasUnlimitedPractice({ purchasedBundles, bundles, department }) || isPro}
+          bundles={bundles}
+          onBuyBundle={onBuyBundle}
+          payingBundleId={payingBundleId}
           onStart={(t) => { setPracticeTests(prev => [t, ...prev]); startTest(t); }}
           onResume={startTest}
           onReview={viewPracticeResult}
