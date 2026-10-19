@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { doc, deleteDoc, updateDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc, collection, getDocs, writeBatch, query, where } from 'firebase/firestore';
 import { 
   Search, 
   ChevronDown, 
@@ -103,13 +103,49 @@ const StudentDirectory = ({
   const [detailTab, setDetailTab] = useState('overview'); // Student Details tab: overview | practice | bundles
   const [sendingForm, setSendingForm] = useState(false);
 
+  // Syncs student updates across any matching email records in Firestore
+  const syncStudentUpdatesByEmail = async (email, updates) => {
+    const normEmail = (email || '').trim().toLowerCase();
+    if (!normEmail) return;
+    try {
+      const qSnap = await getDocs(query(collection(db, 'joined_students'), where('email', '==', normEmail)));
+      const promises = qSnap.docs.map(d => updateDoc(doc(db, 'joined_students', d.id), updates));
+      await Promise.all(promises);
+    } catch (err) {
+      console.warn('syncStudentUpdatesByEmail warning:', err);
+    }
+  };
+
+  // 1-tap Elite status toggle for mobile and desktop admin
+  const toggleEliteStatus = async (student) => {
+    if (!student) return;
+    const newIsPro = !student.isPro;
+    try {
+      const updates = { isPro: newIsPro };
+      await updateDoc(doc(db, 'joined_students', String(student.id)), updates);
+      await syncStudentUpdatesByEmail(student.email, updates);
+      const updated = { ...student, isPro: newIsPro };
+      setSelectedStudent(updated);
+      setJoinedStudents(prev => prev.map(s => s.id === student.id ? updated : s));
+      showToast(newIsPro ? 'Student promoted to Elite Tier! Full access granted.' : 'Elite Tier removed for student.', 'success');
+    } catch (error) {
+      console.error('Failed to toggle elite status:', error);
+      showToast(`Failed to update tier: ${error.message}`, 'error');
+    }
+  };
+
   // Sends the admission form to a student who skipped it (e.g. joined offline on instalments): the
   // portal stays locked for them until they fill it in. Cancelling the request unlocks it again.
   const setAdmissionFormRequested = async (student, requested) => {
     setSendingForm(true);
     try {
-      const updates = { admissionFormRequested: requested, admissionFormRequestedAt: requested ? new Date().toISOString() : null };
+      const updates = { 
+        admissionFormRequested: requested, 
+        admissionFormRequestedAt: requested ? new Date().toISOString() : null,
+        ...(requested ? { admissionFormSubmitted: false } : {})
+      };
       await updateDoc(doc(db, 'joined_students', String(student.id)), updates);
+      await syncStudentUpdatesByEmail(student.email, updates);
       const updatedStudent = { ...student, ...updates };
       setSelectedStudent(updatedStudent);
       setJoinedStudents(prev => prev.map(s => (s.id === student.id ? updatedStudent : s)));
@@ -171,7 +207,7 @@ const StudentDirectory = ({
   };
   const [bundles, setBundles] = useState([]);
   const [editingStudent, setEditingStudent] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '', groupName: '' });
+  const [editForm, setEditForm] = useState({ name: '', department: '', collegeName: '', yearOfStudy: '', cgpa: '', batch: '', location: '', skills: '', groupName: '', isPro: false });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const studentsPerPage = 10;
 
@@ -273,6 +309,7 @@ const StudentDirectory = ({
   // actually stored in Firestore.
   const openEditStudent = (student) => {
     const raw = joinedStudents.find(s => String(s.id) === String(student.id)) || student;
+    const isProVal = Boolean(raw.isPro || fullBundleOf({ purchasedBundles: raw.purchasedBundles || [], bundles, department: raw.department }));
     setEditForm({
       name: raw.name || '',
       department: raw.department || '',
@@ -282,7 +319,8 @@ const StudentDirectory = ({
       batch: raw.batch || '',
       location: raw.location || '',
       skills: Array.isArray(raw.skills) ? raw.skills.join(', ') : '',
-      groupName: raw.groupName || ''
+      groupName: raw.groupName || '',
+      isPro: isProVal
     });
     setEditingStudent(raw);
   };
@@ -301,12 +339,17 @@ const StudentDirectory = ({
         batch: editForm.batch.trim(),
         location: editForm.location.trim(),
         skills: editForm.skills.split(',').map(sk => sk.trim()).filter(Boolean),
-        groupName: editForm.groupName.trim()
+        groupName: editForm.groupName.trim(),
+        isPro: Boolean(editForm.isPro)
       };
       await updateDoc(doc(db, 'joined_students', String(editingStudent.id)), updates);
+      await syncStudentUpdatesByEmail(editingStudent.email, updates);
       setJoinedStudents(joinedStudents.map(s =>
         String(s.id) === String(editingStudent.id) ? { ...s, ...updates } : s
       ));
+      if (selectedStudent && String(selectedStudent.id) === String(editingStudent.id)) {
+        setSelectedStudent(prev => ({ ...prev, ...updates }));
+      }
       setEditingStudent(null);
       showToast('Student updated successfully.', 'success');
     } catch (err) {
@@ -714,128 +757,232 @@ const StudentDirectory = ({
             </div>
           )}
 
-          {/* Student Table - sized to the page (no sideways scrolling): email sits under the name and the
-              college under the department, and the actions are always visible */}
+          {/* Student List: Dedicated Cards on Mobile, Scrollable Table on Desktop */}
           <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_12px_30px_rgba(15,23,42,0.05)] overflow-hidden">
-            <table className="w-full table-fixed text-left border-collapse">
-              <thead>
-                <tr className="bg-[#F8FAFC] border-b border-[#EEF2F7]">
-                  <th className="py-3.5 pl-5 pr-0 w-[44px]">
-                    <input
-                      type="checkbox"
-                      checked={paginatedStudents.length > 0 && paginatedStudents.every(s => selectedIds.includes(s.id))}
-                      onChange={() => {
-                        const pageIds = paginatedStudents.map(s => s.id);
-                        const allOn = pageIds.every(id => selectedIds.includes(id));
-                        setSelectedIds(prev => (allOn ? prev.filter(id => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]));
-                      }}
-                      disabled={paginatedStudents.length === 0}
-                      title="Select all students on this page"
-                      className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
-                    />
-                  </th>
-                  <th className="py-3.5 px-4 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider">Student</th>
-                  <th className="py-3.5 px-4 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider hidden lg:table-cell w-[30%]">Department &amp; College</th>
-                  <th className="py-3.5 px-4 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider w-[112px]">Status</th>
-                  <th className="py-3.5 pl-2 pr-5 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider text-right w-[136px]">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#EEF2F7]">
-                {paginatedStudents.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="py-16 text-center">
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                          <Search className="text-slate-300" size={32} />
-                        </div>
-                        <h4 className="text-[16px] font-semibold text-[#0F172A] mb-1">No students found</h4>
-                        <p className="text-[14px] text-[#64748B]">Try adjusting your search or filters.</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedStudents.map((student) => {
-                    const tier = getTier(student, bundles);
-                    return (
-                      <tr
-                        key={student.id}
-                        className={`group transition-colors duration-200 ${selectedIds.includes(student.id) ? 'bg-blue-50/60 hover:bg-blue-50' : 'hover:bg-[#F8FAFF]'}`}
-                      >
-                        <td className="pl-5 pr-0 py-4 align-middle">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.includes(student.id)}
-                            onChange={() => toggleSelected(student.id)}
-                            className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
-                          />
-                        </td>
-                        <td className="px-4 py-4 align-middle">
-                          <div className="flex items-center gap-3.5 min-w-0">
-                            <div className="relative shrink-0 group-hover:scale-105 transition-transform">
-                              <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${TIER_AVATAR[tier.key] || TIER_AVATAR.foundation} text-white font-bold text-[15px] flex items-center justify-center shadow-md ring-2 ring-white`}>
-                                {initialsOf(student.name || student.email)}
-                              </div>
-                              <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white shadow flex items-center justify-center text-[11px] leading-none" title={tier.label}>{tier.icon}</span>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-[15px] text-[#0F172A] tracking-tight truncate" title={student.name}>{student.name}</div>
-                              <div className="text-[13px] text-[#64748B] font-medium truncate" title={student.email}>{student.email}</div>
-                              <div className="text-[12.5px] text-[#475569] font-medium truncate lg:hidden" title={student.department}>{student.department || '—'}</div>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                <TierPill tier={tier} />
-                                {needsAdmissionForm(student) && (
-                                  <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-bold" title="Has not submitted the Admission Application Form yet">
-                                    <FileSignature size={11} /> Form pending
-                                  </span>
-                                )}
-                                {(student.groupName || '').trim() && (
-                                  <span className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold ${groupColor(student.groupName.trim())}`} title="Student group">
-                                    <UsersRound size={11} /> {student.groupName.trim()}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+            {/* Mobile Card List (< md screens) */}
+            <div className="md:hidden divide-y divide-[#EEF2F7]">
+              {paginatedStudents.length === 0 ? (
+                <div className="py-12 text-center px-4">
+                  <div className="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Search className="text-slate-300" size={26} />
+                  </div>
+                  <h4 className="text-[15px] font-semibold text-[#0F172A] mb-1">No students found</h4>
+                  <p className="text-[13px] text-[#64748B]">Try adjusting your search or filters.</p>
+                </div>
+              ) : (
+                paginatedStudents.map((student) => {
+                  const tier = getTier(student, bundles);
+                  const isSelected = selectedIds.includes(student.id);
+                  return (
+                    <div 
+                      key={student.id} 
+                      className={`p-4 transition-colors ${isSelected ? 'bg-blue-50/50' : 'hover:bg-slate-50/60'}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelected(student.id)}
+                          className="w-4 h-4 mt-1 accent-blue-600 cursor-pointer shrink-0"
+                        />
+                        <div className="relative shrink-0">
+                          <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${TIER_AVATAR[tier.key] || TIER_AVATAR.foundation} text-white font-bold text-[14px] flex items-center justify-center shadow-md ring-2 ring-white`}>
+                            {initialsOf(student.name || student.email)}
                           </div>
-                        </td>
-                        <td className="px-4 py-4 align-middle hidden lg:table-cell">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {student.department && <span className={`w-2.5 h-2.5 rounded-full shrink-0 bg-gradient-to-br ${paletteFor(student.department).badge}`} />}
-                            <span className="text-[14px] text-[#0F172A] font-medium truncate" title={student.department}>{student.department || '—'}</span>
-                          </div>
-                          <div className={`text-[12.5px] text-[#64748B] font-medium truncate mt-0.5 ${student.department ? 'pl-[18px]' : ''}`} title={student.college}>{student.college || 'College not added'}</div>
-                        </td>
-                        <td className="px-4 py-4 align-middle">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold tracking-wide whitespace-nowrap ${
-                            student.status === 'Active'
-                              ? 'bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-[#10B981] border border-emerald-100'
-                              : 'bg-gradient-to-r from-slate-50 to-slate-100/50 text-[#64748B] border border-slate-200'
-                          }`}>
-                            {student.status === 'Active' && <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] mr-1.5 animate-pulse"></span>}
-                            {student.status}
+                          <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white shadow flex items-center justify-center text-[10px] leading-none" title={tier.label}>
+                            {tier.icon}
                           </span>
-                        </td>
-                        <td className="pl-2 pr-5 py-4 align-middle">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button onClick={() => setSelectedStudent(student)} className="w-9 h-9 flex items-center justify-center text-[#64748B] bg-[#F8FAFC] border border-[#EEF2F7] hover:text-[#2563EB] hover:bg-blue-50 hover:border-blue-100 rounded-[10px] transition-colors" title="View Details">
-                              <Eye size={17} />
-                            </button>
-                            <button onClick={() => openEditStudent(student)} className="w-9 h-9 flex items-center justify-center text-[#64748B] bg-[#F8FAFC] border border-[#EEF2F7] hover:text-amber-600 hover:bg-amber-50 hover:border-amber-100 rounded-[10px] transition-colors" title="Edit Student">
-                              <Edit size={17} />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteStudent(student.id)}
-                              className="w-9 h-9 flex items-center justify-center text-[#64748B] bg-[#F8FAFC] border border-[#EEF2F7] hover:text-red-600 hover:bg-red-50 hover:border-red-100 rounded-[10px] transition-colors" title="Delete Student"
-                            >
-                              <Trash2 size={17} />
-                            </button>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-1">
+                            <div className="font-bold text-[15px] text-[#0F172A] truncate" title={student.name}>{student.name}</div>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide whitespace-nowrap shrink-0 ${
+                              student.status === 'Active'
+                                ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            }`}>
+                              {student.status === 'Active' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>}
+                              {student.status}
+                            </span>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                          <div className="text-[12.5px] text-[#64748B] font-medium truncate mt-0.5" title={student.email}>{student.email}</div>
+                          {student.department && (
+                            <div className="text-[12px] text-slate-600 font-semibold truncate mt-1 flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full shrink-0 bg-gradient-to-br ${paletteFor(student.department).badge}`} />
+                              <span className="truncate">{student.department}</span>
+                            </div>
+                          )}
+                          {student.college && (
+                            <div className="text-[11.5px] text-slate-400 font-medium truncate mt-0.5">
+                              {student.college}
+                            </div>
+                          )}
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            <TierPill tier={tier} />
+                            {needsAdmissionForm(student) && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[10.5px] font-bold">
+                                <FileSignature size={10} /> Form pending
+                              </span>
+                            )}
+                            {(student.groupName || '').trim() && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10.5px] font-bold ${groupColor(student.groupName.trim())}`}>
+                                <UsersRound size={10} /> {student.groupName.trim()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#EEF2F7]">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStudent(student)}
+                          className="h-9 px-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#2563EB] font-bold text-xs flex items-center justify-center gap-1.5 transition-colors border border-blue-100"
+                        >
+                          <Eye size={14} /> <span>View</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEditStudent(student)}
+                          className="h-9 px-2 rounded-xl bg-slate-50 hover:bg-amber-50 hover:text-amber-700 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-200/80"
+                        >
+                          <Edit size={14} /> <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteStudent(student.id)}
+                          className="h-9 px-2 rounded-xl bg-slate-50 hover:bg-rose-50 hover:text-rose-700 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-200/80"
+                        >
+                          <Trash2 size={14} /> <span>Delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Desktop Table (md+ screens) */}
+            <div className="hidden md:block overflow-x-auto min-w-full">
+              <table className="w-full min-w-[700px] table-fixed text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#F8FAFC] border-b border-[#EEF2F7]">
+                    <th className="py-3.5 pl-5 pr-0 w-[44px]">
+                      <input
+                        type="checkbox"
+                        checked={paginatedStudents.length > 0 && paginatedStudents.every(s => selectedIds.includes(s.id))}
+                        onChange={() => {
+                          const pageIds = paginatedStudents.map(s => s.id);
+                          const allOn = pageIds.every(id => selectedIds.includes(id));
+                          setSelectedIds(prev => (allOn ? prev.filter(id => !pageIds.includes(id)) : [...new Set([...prev, ...pageIds])]));
+                        }}
+                        disabled={paginatedStudents.length === 0}
+                        title="Select all students on this page"
+                        className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
+                      />
+                    </th>
+                    <th className="py-3.5 px-4 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider">Student</th>
+                    <th className="py-3.5 px-4 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider hidden lg:table-cell w-[30%]">Department &amp; College</th>
+                    <th className="py-3.5 px-4 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider w-[112px]">Status</th>
+                    <th className="py-3.5 pl-2 pr-5 text-[11.5px] font-bold text-[#64748B] uppercase tracking-wider text-right w-[136px]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#EEF2F7]">
+                  {paginatedStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="py-16 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                            <Search className="text-slate-300" size={32} />
+                          </div>
+                          <h4 className="text-[16px] font-semibold text-[#0F172A] mb-1">No students found</h4>
+                          <p className="text-[14px] text-[#64748B]">Try adjusting your search or filters.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedStudents.map((student) => {
+                      const tier = getTier(student, bundles);
+                      return (
+                        <tr
+                          key={student.id}
+                          className={`group transition-colors duration-200 ${selectedIds.includes(student.id) ? 'bg-blue-50/60 hover:bg-blue-50' : 'hover:bg-[#F8FAFF]'}`}
+                        >
+                          <td className="pl-5 pr-0 py-4 align-middle">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.includes(student.id)}
+                              onChange={() => toggleSelected(student.id)}
+                              className="w-4 h-4 accent-blue-600 cursor-pointer align-middle"
+                            />
+                          </td>
+                          <td className="px-4 py-4 align-middle">
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <div className="relative shrink-0 group-hover:scale-105 transition-transform">
+                                <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${TIER_AVATAR[tier.key] || TIER_AVATAR.foundation} text-white font-bold text-[15px] flex items-center justify-center shadow-md ring-2 ring-white`}>
+                                  {initialsOf(student.name || student.email)}
+                                </div>
+                                <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white shadow flex items-center justify-center text-[11px] leading-none" title={tier.label}>{tier.icon}</span>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-semibold text-[15px] text-[#0F172A] tracking-tight truncate" title={student.name}>{student.name}</div>
+                                <div className="text-[13px] text-[#64748B] font-medium truncate" title={student.email}>{student.email}</div>
+                                <div className="text-[12.5px] text-[#475569] font-medium truncate lg:hidden" title={student.department}>{student.department || '—'}</div>
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                  <TierPill tier={tier} />
+                                  {needsAdmissionForm(student) && (
+                                    <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-bold" title="Has not submitted the Admission Application Form yet">
+                                      <FileSignature size={11} /> Form pending
+                                    </span>
+                                  )}
+                                  {(student.groupName || '').trim() && (
+                                    <span className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-bold ${groupColor(student.groupName.trim())}`} title="Student group">
+                                      <UsersRound size={11} /> {student.groupName.trim()}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 align-middle hidden lg:table-cell">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {student.department && <span className={`w-2.5 h-2.5 rounded-full shrink-0 bg-gradient-to-br ${paletteFor(student.department).badge}`} />}
+                              <span className="text-[14px] text-[#0F172A] font-medium truncate" title={student.department}>{student.department || '—'}</span>
+                            </div>
+                            <div className={`text-[12.5px] text-[#64748B] font-medium truncate mt-0.5 ${student.department ? 'pl-[18px]' : ''}`} title={student.college}>{student.college || 'College not added'}</div>
+                          </td>
+                          <td className="px-4 py-4 align-middle">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-[12px] font-semibold tracking-wide whitespace-nowrap ${
+                              student.status === 'Active'
+                                ? 'bg-gradient-to-r from-emerald-50 to-emerald-100/50 text-[#10B981] border border-emerald-100'
+                                : 'bg-gradient-to-r from-slate-50 to-slate-100/50 text-[#64748B] border border-slate-200'
+                            }`}>
+                              {student.status === 'Active' && <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] mr-1.5 animate-pulse"></span>}
+                              {student.status}
+                            </span>
+                          </td>
+                          <td className="pl-2 pr-5 py-4 align-middle">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button onClick={() => setSelectedStudent(student)} className="w-9 h-9 flex items-center justify-center text-[#64748B] bg-[#F8FAFC] border border-[#EEF2F7] hover:text-[#2563EB] hover:bg-blue-50 hover:border-blue-100 rounded-[10px] transition-colors" title="View Details">
+                                <Eye size={17} />
+                              </button>
+                              <button onClick={() => openEditStudent(student)} className="w-9 h-9 flex items-center justify-center text-[#64748B] bg-[#F8FAFC] border border-[#EEF2F7] hover:text-amber-600 hover:bg-amber-50 hover:border-amber-100 rounded-[10px] transition-colors" title="Edit Student">
+                                <Edit size={17} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteStudent(student.id)}
+                                className="w-9 h-9 flex items-center justify-center text-[#64748B] bg-[#F8FAFC] border border-[#EEF2F7] hover:text-red-600 hover:bg-red-50 hover:border-red-100 rounded-[10px] transition-colors" title="Delete Student"
+                              >
+                                <Trash2 size={17} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
 
             {/* Pagination */}
             {totalPages > 0 && (
@@ -904,22 +1051,35 @@ const StudentDirectory = ({
           { key: 'bundles', label: 'Bundles', count: bundleCount },
         ];
         return (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-3 sm:p-4" onClick={() => setSelectedStudent(null)}>
-          <div className="bg-white rounded-[24px] w-full max-w-4xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4" onClick={() => setSelectedStudent(null)}>
+          <div className="bg-white rounded-[20px] sm:rounded-[24px] w-full max-w-4xl shadow-2xl overflow-hidden max-h-[94vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* Header: who it is, at a glance */}
-            <div className="relative shrink-0 bg-gradient-to-br from-blue-50 via-white to-indigo-50/60 border-b border-[#EEF2F7] px-5 sm:px-8 pt-6 pb-0">
-              <button onClick={() => setSelectedStudent(null)} className="absolute top-5 right-5 text-[#64748B] hover:text-[#0F172A] transition-colors bg-white/80 hover:bg-white border border-[#EEF2F7] p-2 rounded-full shadow-sm" title="Close">
+            <div className="relative shrink-0 bg-gradient-to-br from-blue-50 via-white to-indigo-50/60 border-b border-[#EEF2F7] px-4 sm:px-8 pt-5 sm:pt-6 pb-0">
+              <button onClick={() => setSelectedStudent(null)} className="absolute top-4 right-4 sm:top-5 sm:right-5 text-[#64748B] hover:text-[#0F172A] transition-colors bg-white/80 hover:bg-white border border-[#EEF2F7] p-2 rounded-full shadow-sm" title="Close">
                 <X size={18} />
               </button>
-              <div className="flex items-center gap-4 pr-12">
-                <div className="w-16 h-16 rounded-2xl bg-white text-[#2563EB] border border-blue-100 font-bold text-[28px] flex items-center justify-center shrink-0 shadow-sm">
+              <div className="flex items-center gap-3.5 sm:gap-4 pr-10 sm:pr-12">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white text-[#2563EB] border border-blue-100 font-bold text-[24px] sm:text-[28px] flex items-center justify-center shrink-0 shadow-sm">
                   {tier.icon}
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-[22px] font-bold text-[#0F172A] leading-tight truncate">{selectedStudent.name}</h4>
-                  <p className="text-[14px] font-medium text-[#64748B] mt-0.5 truncate">{selectedStudent.email}</p>
+                  <h4 className="text-[19px] sm:text-[22px] font-bold text-[#0F172A] leading-tight truncate">{selectedStudent.name}</h4>
+                  <p className="text-[13px] sm:text-[14px] font-medium text-[#64748B] mt-0.5 truncate">{selectedStudent.email}</p>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
                     <TierPill tier={tier} />
+                    <button
+                      type="button"
+                      onClick={() => toggleEliteStatus(selectedStudent)}
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-bold border transition-all active:scale-95 ${
+                        selectedStudent.isPro 
+                          ? 'bg-amber-500 text-white border-amber-600 shadow-sm' 
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-amber-400 hover:bg-amber-50/50'
+                      }`}
+                      title={selectedStudent.isPro ? 'Click to revoke Elite access' : 'Click to grant Elite access'}
+                    >
+                      <Crown size={12} className={selectedStudent.isPro ? 'text-white' : 'text-amber-500'} />
+                      <span>{selectedStudent.isPro ? 'Elite Access Active' : 'Make Elite'}</span>
+                    </button>
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold ${selectedStudent.status === 'Active' ? 'bg-emerald-100 text-[#10B981]' : 'bg-slate-200 text-[#64748B]'}`}>
                       {selectedStudent.status}
                     </span>
@@ -973,7 +1133,11 @@ const StudentDirectory = ({
                         <span className="text-[13.5px] font-medium text-blue-800">Admission form sent - they must fill it in before they can use the portal.</span>
                       </div>
                       <button
-                        onClick={() => setAdmissionFormRequested(selectedStudent, false)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAdmissionFormRequested(selectedStudent, false);
+                        }}
                         disabled={sendingForm}
                         className="w-full sm:w-auto px-4 py-2.5 rounded-[12px] border border-blue-200 bg-white text-[13px] font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors shrink-0 text-center"
                       >
@@ -987,7 +1151,11 @@ const StudentDirectory = ({
                         <span className="text-[13.5px] font-medium text-amber-800">Admission form not submitted yet - they'll be asked to fill it in before their first payment. Send it to make them fill it in now.</span>
                       </div>
                       <button
-                        onClick={() => setAdmissionFormRequested(selectedStudent, true)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAdmissionFormRequested(selectedStudent, true);
+                        }}
                         disabled={sendingForm}
                         className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-[12px] bg-amber-500 hover:bg-amber-600 text-white text-[13px] font-bold disabled:opacity-50 transition-colors shrink-0 shadow-sm"
                       >
@@ -1101,16 +1269,24 @@ const StudentDirectory = ({
                         if (!bundleId) return;
                         try {
                           const updatedBundles = [...(selectedStudent.purchasedBundles || []), bundleId];
-                          const full = fullBundleOf({ purchasedBundles: updatedBundles, bundles, department: selectedStudent.department });
+                          const targetBundle = bundles.find(b => b.id === bundleId);
+                          const isTargetElite = isFullBundle(targetBundle) || 
+                                                targetBundle?.tier === 'elite' || 
+                                                targetBundle?.isElite === true || 
+                                                /elite/i.test(targetBundle?.name || '') ||
+                                                /full/i.test(targetBundle?.name || '');
+                          const full = isTargetElite || fullBundleOf({ purchasedBundles: updatedBundles, bundles, department: selectedStudent.department });
+                          const shouldBeElite = Boolean(selectedStudent.isPro || full || isTargetElite);
                           const bundleUpdates = {
                             purchasedBundles: updatedBundles,
-                            isPro: Boolean(full)
+                            isPro: shouldBeElite
                           };
                           await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), bundleUpdates);
+                          await syncStudentUpdatesByEmail(selectedStudent.email, bundleUpdates);
                           const updatedStudent = { ...selectedStudent, ...bundleUpdates };
                           setSelectedStudent(updatedStudent);
                           setJoinedStudents(joinedStudents.map(s => s.id === selectedStudent.id ? updatedStudent : s));
-                          showToast(`Bundle assigned successfully!${full ? ' Student is now Elite.' : ''}`, 'success');
+                          showToast(`Bundle assigned successfully!${shouldBeElite ? ' Student is Elite.' : ''}`, 'success');
                         } catch (error) {
                           console.error('Error adding bundle:', error);
                           showToast(`Failed to add bundle: ${error.message}`, 'error');
@@ -1242,18 +1418,37 @@ const StudentDirectory = ({
               {(() => {
                 const owned = editingStudent.purchasedBundles || [];
                 const full = fullBundleOf({ purchasedBundles: owned, bundles, department: editForm.department });
-                const tier = getTier({ ...editingStudent, department: editForm.department }, bundles);
+                const currentTier = getTier({ ...editingStudent, department: editForm.department, isPro: Boolean(editForm.isPro) }, bundles);
                 return (
-                  <div className="flex items-start gap-3 px-4 py-3 bg-amber-50/60 border border-amber-100 rounded-2xl">
-                    <ShieldCheck size={20} className="text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">Membership: {tier.icon} {tier.label}</p>
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        {full
-                          ? `Elite because they own "${full.name}", which includes every resource.`
-                          : 'Elite is automatic for students who own a bundle with Academy Tests, Live Classes, Recordings and Study Notes all ticked in Course Setup. Assign one under Bundles to make them Elite.'}
-                      </p>
+                  <div className="p-4 bg-gradient-to-r from-amber-50/80 via-white to-amber-50/40 border border-amber-200/80 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+                          👑
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-bold text-slate-800 flex items-center gap-2">
+                            <span>Membership:</span>
+                            <span className="text-amber-700 font-extrabold">{currentTier.icon} {currentTier.label}</span>
+                          </p>
+                          <p className="text-[12px] text-slate-500 font-medium truncate">
+                            {editForm.isPro ? 'Elite access enabled (Full unlocks)' : (full ? `Auto-Elite via "${full.name}"` : 'Standard membership tier')}
+                          </p>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input 
+                          type="checkbox" 
+                          checked={Boolean(editForm.isPro)} 
+                          onChange={(e) => setEditForm({ ...editForm, isPro: e.target.checked })} 
+                          className="sr-only peer" 
+                        />
+                        <div className="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                      </label>
                     </div>
+                    <p className="text-[11px] text-slate-500 font-medium border-t border-amber-100/80 pt-2">
+                      Toggle ON to grant this student Elite status immediately, unlocking all department tests, live classes, recordings, and study notes.
+                    </p>
                   </div>
                 );
               })()}
@@ -1428,8 +1623,13 @@ const TIER_AVATAR = {
   prime: 'from-indigo-500 to-violet-600',
   foundation: 'from-emerald-500 to-teal-600',
 };
-const initialsOf = (name) => String(name || '?').replace(/[^A-Za-z\s.@]/g, ' ').split(/[\s.@]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
-const getTier = (st, bundles) => TIERS[tierKeyOf({ purchasedBundles: st.purchasedBundles || [], bundles, department: st.department })];
+const getTier = (st, bundles) => TIERS[tierKeyOf({ 
+  purchasedBundles: st?.purchasedBundles || [], 
+  bundles, 
+  department: st?.department, 
+  isPro: Boolean(st?.isPro), 
+  student: st 
+})];
 // Foundation icon: green sprout on a brown soil mound
 const SproutOnSoil = ({ size = 16 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="tier-pill__icon">

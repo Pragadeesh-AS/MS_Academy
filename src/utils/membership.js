@@ -10,11 +10,14 @@ import { sameDepartment } from './subjects';
 // The functions/testNotifications.js Cloud Function has a copy of the Elite rule - keep the two in sync.
 
 export const fullBundleOf = ({ purchasedBundles = [], bundles = [], department = '' } = {}) =>
-  (bundles || []).find(b =>
-    purchasedBundles.includes(b.id) &&
-    (b.department === 'General' || sameDepartment(b.department, department) || (!department && isFullBundle(b))) &&
-    isFullBundle(b)
-  ) || null;
+  (bundles || []).find(b => {
+    if (!purchasedBundles.includes(b.id)) return false;
+    const isNamedElite = b.tier === 'elite' || b.isElite === true || /elite/i.test(b.name || '');
+    const isFull = isFullBundle(b) || isNamedElite;
+    if (!isFull) return false;
+    const deptMatch = !department || !b.department || b.department === 'General' || b.department === 'All' || sameDepartment(b.department, department);
+    return deptMatch;
+  }) || null;
 
 export const isEliteStudent = (args = {}) => {
   if (args.isPro === true || args.student?.isPro === true) return true;
@@ -22,8 +25,10 @@ export const isEliteStudent = (args = {}) => {
 };
 
 export const tierKeyOf = ({ purchasedBundles = [], bundles = [], department = '', isPro = false, student = null } = {}) => {
-  if (isEliteStudent({ purchasedBundles, bundles, department, isPro, student })) return 'elite';
-  const count = (purchasedBundles?.length || 0) || (student?.purchasedBundles?.length || 0);
-  return count > 0 ? 'prime' : 'foundation';
+  const effectiveBundles = (purchasedBundles && purchasedBundles.length > 0) ? purchasedBundles : (student?.purchasedBundles || []);
+  const effectiveDept = department || student?.department || '';
+  const effectivePro = isPro || student?.isPro || false;
+  if (isEliteStudent({ purchasedBundles: effectiveBundles, bundles, department: effectiveDept, isPro: effectivePro, student })) return 'elite';
+  return effectiveBundles.length > 0 ? 'prime' : 'foundation';
 };
 
