@@ -352,6 +352,17 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }
   }, [initialEditQuestionId, questions, hasOpenedInitial]);
 
+  // A typist's / reviewer's own question: typed by them (email, or name on older questions saved
+  // before emails were stored), made in any of their pairs, or sent to them to review
+  const myEmail = (sessionStorage.getItem('auth_email') || '').toLowerCase();
+  const myName = (sessionStorage.getItem('auth_name') || '').trim().toLowerCase();
+  const isMyQuestion = (q) => (
+    (!!q.typedByEmail && q.typedByEmail.toLowerCase() === myEmail)
+    || (!q.typedByEmail && !!myName && (q.typedBy || '').trim().toLowerCase() === myName)
+    || (!!q.pairId && myPairIds.has(q.pairId))
+    || (!!q.reviewerEmail && q.reviewerEmail.toLowerCase() === myEmail)
+  );
+
   const isOwnDeptQuestion = (q) => deptNameVariants(lockedDepartment).includes(q.department);
   const sameFolderName = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
 
@@ -360,8 +371,17 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   // All questions in this active department (folder), ignoring subject/topic filter for full count stats
   const deptQuestions = useMemo(() => {
-    if (!activeDept) return questions;
-    return questions.filter(q => {
+    let base = questions;
+    if (externalFilter === 'Draft') {
+      base = base.filter(q => q.status === 'Draft' && isMyQuestion(q));
+    } else if (externalFilter === 'In Review') {
+      base = base.filter(q => q.status === 'In Review' && isMyQuestion(q));
+    } else {
+      // In Question Bank tab (Approved / All), count approved questions in the department
+      base = base.filter(q => q.status === 'Approved' || !q.status);
+    }
+    if (!activeDept) return base;
+    return base.filter(q => {
       if (lockedDepartment && !selectedFolder) {
         return isOwnDeptQuestion(q) || isCommonDeptName(q.department);
       }
@@ -370,7 +390,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       }
       return sameDepartment(q.department, activeDept) || (q.department || '').trim().toLowerCase() === activeDept.trim().toLowerCase();
     });
-  }, [questions, activeDept, lockedDepartment, selectedFolder]);
+  }, [questions, activeDept, lockedDepartment, selectedFolder, externalFilter, isMyQuestion]);
 
   // Question counts per subject inside the active department
   const subjectCounts = useMemo(() => {
@@ -843,7 +863,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   };
 
   // --- Quick actions from the list (admin, and the reviewer of a typist pair) ---
-  const canQuickEdit = userRole === 'admin' || (userRole === 'typist' && pairRole === 'reviewer');
+  const canQuickEdit = userRole === 'admin' || userRole === 'typist';
 
   // Marks straight from the row: saves the mark label and the matching negative mark
   const handleQuickMark = async (q, n) => {
@@ -991,17 +1011,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setIsCreatorOpen(true);
   };
 
-  // A typist's / reviewer's own question: typed by them (email, or name on older questions saved
-  // before emails were stored), made in any of their pairs, or sent to them to review
-  const myEmail = (sessionStorage.getItem('auth_email') || '').toLowerCase();
-  const myName = (sessionStorage.getItem('auth_name') || '').trim().toLowerCase();
-  const isMyQuestion = (q) => (
-    (!!q.typedByEmail && q.typedByEmail.toLowerCase() === myEmail)
-    || (!q.typedByEmail && !!myName && (q.typedBy || '').trim().toLowerCase() === myName)
-    || (!!q.pairId && myPairIds.has(q.pairId))
-    || (!!q.reviewerEmail && q.reviewerEmail.toLowerCase() === myEmail)
-  );
-
   const openFolder = (name) => {
     setSelectedFolder(name);
     setFilterDept(name);
@@ -1049,14 +1058,19 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
       // Questions still with a reviewer (In Review) or sent back (Draft) belong to the typist/reviewer
       // pair only - nobody else sees them until the reviewer approves them.
-      if (userRole !== 'typist' && (q.status === 'In Review' || q.status === 'Draft')) return false;
+      if (q.status === 'In Review' || q.status === 'Draft') {
+        if (userRole !== 'typist' || !isMyQuestion(q)) return false;
+      }
 
       // Default Role Filtering Logic
       let roleMatches = true;
       if (userRole === 'typist') {
-        roleMatches = isMyQuestion(q)
-          // Shared banks are visible in the approved Question Bank tab only - Drafts / Pending Review stay pair-only
-          || (externalFilter === 'Approved' && isCommonDeptName(q.department));
+        if (externalFilter === 'Draft' || externalFilter === 'In Review') {
+          roleMatches = isMyQuestion(q);
+        } else {
+          // Question Bank tab: allow seeing all approved questions across all departments
+          roleMatches = true;
+        }
       }
 
       // Premium View Filtering
@@ -1230,7 +1244,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                     color: 'purple'
                   },
                   { label: 'MCQ Questions', value: `${mcqPercentage}%`, icon: CheckCircle2, color: 'green' },
-                  userRole === 'typist'
+                  userRole === 'typist' && externalFilter !== 'Approved'
                     ? { label: 'Pending Review', value: pendingReview, icon: AlertCircle, color: 'orange' }
                     : { label: 'Not Reviewed', value: notReviewedCount, icon: AlertCircle, color: 'orange' },
                 ].map((stat, i) => (
@@ -1263,7 +1277,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               {/* FILTERS */}
               <div className="flex flex-wrap items-center gap-3">
                 {[
-                  { label: 'Status', plural: 'Statuses', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: userRole === 'typist' ? ['Draft', 'In Review', 'Approved'] : ['Approved', 'Not Reviewed'] },
+                  { label: 'Status', plural: 'Statuses', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: (userRole === 'typist' && externalFilter !== 'Approved') ? ['Draft', 'In Review', 'Approved'] : ['Approved', 'Not Reviewed'] },
                   { label: 'Type', plural: 'Types', val: filterType, setter: setFilterType, icon: Layers, opts: questionTypes },
                   { label: 'Category', plural: 'Categories', val: filterCategory, setter: setFilterCategory, icon: Calculator, opts: QUESTION_CATEGORIES },
                   { label: 'Subject', plural: 'Subjects', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
@@ -1300,7 +1314,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
                 <button
                   onClick={() => {
-                    setSearch(''); setFilterStatus('All'); setFilterDept(selectedFolder || lockedDepartment || 'All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All'); setFilterType('All'); setFilterCategory('All');
+                    setSearch(''); setFilterStatus(externalFilter || 'All'); setFilterDept(selectedFolder || lockedDepartment || 'All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All'); setFilterType('All'); setFilterCategory('All');
                   }}
                   className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2 cursor-pointer shadow-sm"
                 >
