@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { sameDepartment } from '../../utils/subjects';
+import { sameDepartment, STUDENT_DEPARTMENTS } from '../../utils/subjects';
 import Loader from '../Loader';
+
+export const WEBSITE_DEPARTMENTS = [
+  ...STUDENT_DEPARTMENTS,
+  'Engineering Mathematics',
+  'General Aptitude',
+];
 import { Plus, Edit2, Trash2, ChevronDown, Search, MoreHorizontal, CheckCircle2, Bookmark, LayoutList, Trophy, Star, Clock, Landmark, FileText } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
@@ -61,6 +67,15 @@ export default function AttributesManager({ lockedDepartment = null }) {
     const nameToAdd = (customName !== null ? customName : newValue).trim();
     const parentToAdd = lockedParent ?? (customParent !== null ? customParent : newParent);
     if (!nameToAdd) return;
+
+    if (activeTab === 'department') {
+      const exists = allAttributes.some(a => a.type === 'department' && (sameDepartment(a.name, nameToAdd) || a.name.trim().toLowerCase() === nameToAdd.toLowerCase()));
+      if (exists) {
+        setNotice(`"${nameToAdd}" is already added as a department.`);
+        setTimeout(() => setNotice(''), 4000);
+        return;
+      }
+    }
     
     try {
       await addDoc(collection(db, 'question_attributes'), {
@@ -303,18 +318,42 @@ export default function AttributesManager({ lockedDepartment = null }) {
         {/* Add Department Horizontal Section */}
         <div className="px-8 py-6">
           <div className="flex flex-col md:flex-row items-center gap-4 w-full">
-            <div className="flex-1 w-full relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Search size={20} className="text-[#94A3B8]" />
+            {activeAttribute.id === 'department' ? (
+              <div className="flex-1 w-full relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#2563EB]">
+                  <Landmark size={20} />
+                </div>
+                <select 
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  className="w-full h-[52px] pl-12 pr-10 appearance-none bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all shadow-sm cursor-pointer"
+                >
+                  <option value="" disabled>Select department from website...</option>
+                  {WEBSITE_DEPARTMENTS.map(dept => {
+                    const alreadyAdded = currentValues.some(v => sameDepartment(v.name, dept) || v.name.trim().toLowerCase() === dept.trim().toLowerCase());
+                    return (
+                      <option key={dept} value={dept} disabled={alreadyAdded}>
+                        {dept} {alreadyAdded ? '(Already Added)' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
               </div>
-              <input 
-                type="text"
-                placeholder={`Type new ${activeAttribute.name.toLowerCase()}...`}
-                value={newValue}
-                onChange={(e) => setNewValue(e.target.value)}
-                className="w-full h-[52px] pl-12 pr-4 bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] placeholder-[#94A3B8] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all shadow-sm"
-              />
-            </div>
+            ) : (
+              <div className="flex-1 w-full relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Search size={20} className="text-[#94A3B8]" />
+                </div>
+                <input 
+                  type="text"
+                  placeholder={`Type new ${activeAttribute.name.toLowerCase()}...`}
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  className="w-full h-[52px] pl-12 pr-4 bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] placeholder-[#94A3B8] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all shadow-sm"
+                />
+              </div>
+            )}
             
             {activeAttribute.childOf && (
               <div className="w-full md:w-[240px] relative shrink-0">
@@ -502,15 +541,44 @@ export default function AttributesManager({ lockedDepartment = null }) {
             }}>
               <div className="space-y-5 mb-8">
                 <div className="space-y-2">
-                  <label className="text-[13px] font-[600] text-[#0F172A] ml-1">Attribute Name</label>
-                  <input 
-                    type="text"
-                    value={editingAttr.name}
-                    onChange={(e) => setEditingAttr({ ...editingAttr, name: e.target.value })}
-                    placeholder={`E.g. ${activeAttribute.name === 'Department' ? 'Computer Science' : 'Physics'}`}
-                    className="w-full h-[52px] px-5 bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all placeholder-[#94A3B8] shadow-sm"
-                    autoFocus
-                  />
+                  <label className="text-[13px] font-[600] text-[#0F172A] ml-1">
+                    {activeAttribute.id === 'department' ? 'Select Department' : 'Attribute Name'}
+                  </label>
+                  {activeAttribute.id === 'department' ? (
+                    <div className="relative">
+                      <select
+                        value={editingAttr.name}
+                        onChange={(e) => setEditingAttr({ ...editingAttr, name: e.target.value })}
+                        className="w-full h-[52px] pl-4 pr-10 appearance-none bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer shadow-sm"
+                        required
+                        autoFocus
+                      >
+                        <option value="" disabled>Select department from website...</option>
+                        {editingAttr.name && !WEBSITE_DEPARTMENTS.includes(editingAttr.name) && (
+                          <option value={editingAttr.name}>{editingAttr.name} (Current)</option>
+                        )}
+                        {WEBSITE_DEPARTMENTS.map(dept => {
+                          const isCurrent = editingAttr.name === dept;
+                          const alreadyAdded = !isCurrent && currentValues.some(v => sameDepartment(v.name, dept) || v.name.trim().toLowerCase() === dept.trim().toLowerCase());
+                          return (
+                            <option key={dept} value={dept} disabled={alreadyAdded}>
+                              {dept} {alreadyAdded ? '(Already Added)' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
+                    </div>
+                  ) : (
+                    <input 
+                      type="text"
+                      value={editingAttr.name}
+                      onChange={(e) => setEditingAttr({ ...editingAttr, name: e.target.value })}
+                      placeholder={`E.g. ${activeAttribute.name === 'Department' ? 'Computer Science' : 'Physics'}`}
+                      className="w-full h-[52px] px-5 bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all placeholder-[#94A3B8] shadow-sm"
+                      autoFocus
+                    />
+                  )}
                 </div>
 
                 {editingAttr.id === 'NEW' && activeAttribute.childOf && (
