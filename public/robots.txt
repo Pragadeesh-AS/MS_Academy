@@ -1,0 +1,29 @@
+# Robots.txt for MS Gate Academy (www.msgateacademy.com)
+User-agent: *
+Allow: /
+Allow: /courses/
+Allow: /gate-courses
+Allow: /programming
+Allow: /careers
+Allow: /about
+Allow: /contact
+Allow: /blog
+Allow: /gallery
+
+# Disallow private user/admin portals and internal test states
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /teacher-dashboard
+Disallow: /teacher-dashboard/*
+Disallow: /typist-dashboard
+Disallow: /typist-dashboard/*
+Disallow: /student
+Disallow: /student/*
+Disallow: /test-states
+Disallow: /login
+Disallow: /session-expired
+Disallow: /403
+Disallow: /500
+
+# Sitemap
+Sitemap: https://www.msgateacademy.com/sitemap.xml
