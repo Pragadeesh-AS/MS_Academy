@@ -5,6 +5,7 @@ import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import QuestionBank from './admin/QuestionBank';
+import { prewarmQuestionBankCache } from '../utils/questionBankCache';
 import AIGenerator from './admin/AIGenerator';
 import AttributesManager from './admin/AttributesManager';
 import RoleSwitcher from './shared/RoleSwitcher';
@@ -88,6 +89,7 @@ export default function TypistDashboard() {
 
 
   useEffect(() => {
+    prewarmQuestionBankCache();
     const role = sessionStorage.getItem('auth_role');
     const name = sessionStorage.getItem('auth_name');
     const email = sessionStorage.getItem('auth_email');

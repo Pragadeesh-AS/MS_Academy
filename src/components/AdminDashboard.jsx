@@ -17,6 +17,7 @@ import { STUDENT_DEPARTMENTS } from '../utils/subjects';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot, serverTimestamp, arrayUnion, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
+import { prewarmQuestionBankCache } from '../utils/questionBankCache';
 import NotesManager from './admin/NotesManager';
 import RecordingsManager from './admin/RecordingsManager';
 import Analytics from './admin/Analytics';
@@ -204,6 +205,7 @@ export default function AdminDashboard() {
 
   // Load database from Firestore
   useEffect(() => {
+    prewarmQuestionBankCache();
     const syncData = async () => {
       try {
         // 1. Applications are kept live by the notifications listener below

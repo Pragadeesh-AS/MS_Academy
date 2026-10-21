@@ -13,6 +13,7 @@ import Analytics from './admin/Analytics';
 import { TrendingUp, ShieldAlert, Tag } from 'lucide-react';
 import ReportedQuestions from './admin/ReportedQuestions';
 import QuestionBank from './admin/QuestionBank';
+import { prewarmQuestionBankCache } from '../utils/questionBankCache';
 import AttributesManager from './admin/AttributesManager';
 import { gateCoursesData } from './GateCourses';
 import RoleSwitcher from './shared/RoleSwitcher';
@@ -68,6 +69,12 @@ export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [teacherName, setTeacherName] = useState('Teacher');
   const [teacherDepartment, setTeacherDepartment] = useState('');
+
+  useEffect(() => {
+    if (teacherDepartment) {
+      prewarmQuestionBankCache(teacherDepartment);
+    }
+  }, [teacherDepartment]);
   // Open reports for this teacher's department - shown as a red badge on "Reported Q's"
   const pendingReports = usePendingReportCount(teacherDepartment || null, !!teacherDepartment);
   const [searchParams, setSearchParams] = useSearchParams();

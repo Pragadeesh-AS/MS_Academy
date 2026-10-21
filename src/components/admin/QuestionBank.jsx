@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Loader from '../Loader';
-import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, ArrowLeft, Upload, ClipboardPaste } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, ArrowLeft, Upload, ClipboardPaste, RotateCw } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore';
 import { questionFingerprint, isEmptyQuestion } from '../../utils/questionDuplicates';
@@ -12,6 +12,16 @@ import { answerKeyChanged } from '../../utils/testGrading';
 import { regradeAttemptsForQuestion } from '../../utils/regradeAttempts';
 import MatchColumns from '../shared/MatchColumns';
 import DepartmentFolderGrid from './DepartmentFolderGrid';
+import {
+  loadQuestionBankData,
+  getCachedQuestionsSync,
+  getCachedAttributesSync,
+  hasCachedQuestions,
+  cacheAddQuestion,
+  cacheUpdateQuestion,
+  cacheRemoveQuestions,
+  cacheBulkUpdate
+} from '../../utils/questionBankCache';
 
 // Engineering Mathematics and Aptitude banks are shared by every department.
 const isCommonDeptName = (name) => {
@@ -154,8 +164,11 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const userRole = sessionStorage.getItem('auth_role') || 'admin';
   const pairRole = localStorage.getItem('pair_role') || null;
   const pairId = localStorage.getItem('pair_id') || null;
-  const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = lockedDepartment ? `dept_${lockedDepartment}` : 'all';
+  const [questions, setQuestions] = useState(() => getCachedQuestionsSync(cacheKey) || []);
+  const [attributes, setAttributes] = useState(() => getCachedAttributesSync() || []);
+  const [loading, setLoading] = useState(() => !hasCachedQuestions(cacheKey));
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
@@ -276,8 +289,6 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     reviewedBy: ''
   });
 
-  const [attributes, setAttributes] = useState([]);
-
   // Typist / reviewer: every pair this email has been part of (current and earlier ones), so the
   // questions they typed or reviewed stay visible even after a pairing is re-created
   const [myPairIds, setMyPairIds] = useState(() => new Set(pairId ? [pairId] : []));
@@ -293,95 +304,36 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }).catch(err => console.error('Failed to load your pairs', err));
   }, [userRole, pairId]);
 
-  const fetchQuestions = async () => {
-    setLoading(true);
-    try {
-      const attrSnapshot = await getDocs(collection(db, 'question_attributes'));
-      const attrData = attrSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAttributes(attrData);
-
-      // Teachers are locked to their own department (plus the shared Engineering
-      // Mathematics / Aptitude banks): scope the query at the Firestore level (not just
-      // client-side filtering) so other departments' questions never reach their browser.
-      const questionsRef = collection(db, 'question_bank');
-      let qSnapshot;
-      if (lockedDepartment) {
-        const commonNames = attrData.filter(a => a.type === 'department' && isCommonDeptName(a.name)).map(a => a.name);
-        const allowed = [...new Set([...deptNameVariants(lockedDepartment), ...commonNames])].slice(0, 30);
-        qSnapshot = await getDocs(query(questionsRef, where('department', 'in', allowed)));
-      } else {
-        qSnapshot = await getDocs(questionsRef);
+  const fetchQuestions = async (forceRefresh = false) => {
+    // Only show full-screen loader if there is NO cached data available
+    if (!questions.length || forceRefresh) {
+      if (!hasCachedQuestions(cacheKey)) {
+        setLoading(true);
       }
-      let qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-      // Questions referenced by a test must never be auto-deleted, or that test shows
-      // "Question content not found" to students.
-      const usedInTests = new Set();
-      try {
-        const testsSnap = await getDocs(collection(db, 'tests'));
-        testsSnap.docs.forEach(t => (t.data().questions || []).forEach(id => usedInTests.add(id)));
-      } catch (err) {
-        console.error("Failed to load tests for duplicate check - skipping cleanup", err);
-        usedInTests.add('__unknown__');
-      }
-      const testsKnown = !usedInTests.has('__unknown__');
-
-      // Deduplication Logic
-      // When copies collide, keep the one a test uses, then the premium one (so a premium
-      // import is never lost to an older normal copy), then prefer the Approved one.
-      const rank = (q) => (usedInTests.has(q.id) ? 4 : 0) + (q.isPremium === true ? 2 : 0) + (q.status === 'Approved' ? 1 : 0);
-      const keeper = new Map();
-      const duplicateIds = [];
-
-      qData.forEach(q => {
-        // Same text, options and images (ignoring HTML and whitespace differences) = same question.
-        // Options are part of it, so two different questions with the same stem are both kept.
-        const hash = questionFingerprint(q);
-
-        // If hash is just '_', it means both text and image are empty.
-        // We might not want to deduplicate completely empty shells aggressively unless they are truly duplicates.
-        // But let's include them in deduplication if there are multiple empty ones.
-        const current = keeper.get(hash);
-        if (!current) {
-          keeper.set(hash, q);
-          return;
-        }
-        const [keep, drop] = rank(q) > rank(current) ? [q, current] : [current, q];
-        keeper.set(hash, keep);
-        // Leave both copies in place if the "extra" one is used by a test (or tests couldn't be checked)
-        if (testsKnown && !usedInTests.has(drop.id)) duplicateIds.push(drop.id);
-      });
-
-      if (duplicateIds.length > 0) {
-        console.log(`Found ${duplicateIds.length} duplicate questions. Deleting...`);
-        // Delete duplicates from Firestore
-        for (const id of duplicateIds) {
-          try {
-            await deleteDoc(doc(db, 'question_bank', id));
-          } catch (err) {
-            console.error("Failed to delete duplicate doc", id, err);
-          }
-        }
-        // Remove duplicates from local state
-        qData = qData.filter(q => !duplicateIds.includes(q.id));
-      }
-
-      // Newest first: the latest import (or newly added question) sits at the top. Questions of
-      // one import keep their PDF order; ones with no date at all go to the bottom.
-      // (createdAt is an ISO string; a few older questions may hold a Firestore Timestamp instead)
-      const iso = (v) => (v?.toDate ? v.toDate().toISOString() : String(v || ''));
-      const addedAt = (q) => iso(q.importedAt || q.createdAt);
-      qData.sort((a, b) =>
-        addedAt(b).localeCompare(addedAt(a)) ||
-        (a.importOrder ?? 0) - (b.importOrder ?? 0) ||
-        iso(a.createdAt).localeCompare(iso(b.createdAt))
-      );
-
-      setQuestions(qData);
-    } catch (e) {
-      console.error("Failed to fetch data", e);
     }
-    setLoading(false);
+    try {
+      await loadQuestionBankData({
+        lockedDepartment,
+        forceRefresh,
+        onCacheHit: ({ questions: cachedQ, attributes: cachedAttr }) => {
+          setQuestions(cachedQ);
+          if (cachedAttr?.length) setAttributes(cachedAttr);
+          setLoading(false);
+        },
+        onBackgroundUpdate: ({ questions: updatedQ, attributes: updatedAttr }) => {
+          setQuestions(updatedQ);
+          if (updatedAttr?.length) setAttributes(updatedAttr);
+          setLoading(false);
+        },
+        onSyncStateChange: (syncing) => {
+          setIsSyncing(syncing);
+        }
+      });
+    } catch (e) {
+      console.error("Failed to load question bank data", e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -400,36 +352,124 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     }
   }, [initialEditQuestionId, questions, hasOpenedInitial]);
 
-  // Cascading logic to get parent IDs
-  // "Mechanical (ME)" on a teacher/question matches a "Mechanical" department attribute too
-  const selectedDeptObj = filterDept !== 'All'
-    ? attributes.find(a => a.type === 'department' && sameDepartment(a.name, filterDept))
-    : null;
-    
-  const selectedSubjectObj = filterSubject !== 'All' 
-    ? attributes.find(a => a.type === 'subject' && a.name === filterSubject) 
-    : null;
+  const isOwnDeptQuestion = (q) => deptNameVariants(lockedDepartment).includes(q.department);
+  const sameFolderName = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
 
-  const departments = Array.from(new Set([
+  // The active department: either the currently opened folder, lockedDepartment, or filterDept
+  const activeDept = selectedFolder || lockedDepartment || (filterDept !== 'All' ? filterDept : null);
+
+  // All questions in this active department (folder), ignoring subject/topic filter for full count stats
+  const deptQuestions = useMemo(() => {
+    if (!activeDept) return questions;
+    return questions.filter(q => {
+      if (lockedDepartment && !selectedFolder) {
+        return isOwnDeptQuestion(q) || isCommonDeptName(q.department);
+      }
+      if (selectedFolder === 'Uncategorized') {
+        return !q.department || q.department.trim() === '';
+      }
+      return sameDepartment(q.department, activeDept) || (q.department || '').trim().toLowerCase() === activeDept.trim().toLowerCase();
+    });
+  }, [questions, activeDept, lockedDepartment, selectedFolder]);
+
+  // Question counts per subject inside the active department
+  const subjectCounts = useMemo(() => {
+    const map = {};
+    deptQuestions.forEach(q => {
+      const s = (q.subject || '').trim();
+      if (s) {
+        map[s] = (map[s] || 0) + 1;
+      }
+    });
+    return map;
+  }, [deptQuestions]);
+
+  // Question counts per topic inside the active department & current subject
+  const topicCounts = useMemo(() => {
+    const map = {};
+    const relevant = filterSubject !== 'All'
+      ? deptQuestions.filter(q => (q.subject || '').trim().toLowerCase() === filterSubject.trim().toLowerCase())
+      : deptQuestions;
+    relevant.forEach(q => {
+      const t = (q.topic || '').trim();
+      if (t) {
+        map[t] = (map[t] || 0) + 1;
+      }
+    });
+    return map;
+  }, [deptQuestions, filterSubject]);
+
+  // Department attribute object for cascading
+  const selectedDeptObj = useMemo(() => {
+    if (!activeDept) return null;
+    return attributes.find(a =>
+      a.type === 'department' && (
+        sameDepartment(a.name, activeDept) ||
+        (a.name || '').trim().toLowerCase() === activeDept.trim().toLowerCase()
+      )
+    ) || null;
+  }, [activeDept, attributes]);
+
+  // Subject attribute object for cascading topics
+  const selectedSubjectObj = useMemo(() => {
+    if (filterSubject === 'All') return null;
+    return attributes.find(a =>
+      a.type === 'subject' && (
+        (a.name || '').trim().toLowerCase() === filterSubject.trim().toLowerCase() &&
+        (!selectedDeptObj || a.parentId === selectedDeptObj.id)
+      )
+    ) || null;
+  }, [filterSubject, attributes, selectedDeptObj]);
+
+  const departments = useMemo(() => Array.from(new Set([
     ...attributes.filter(a => a.type === 'department').map(a => a.name),
     ...questions.map(q => q.department).filter(Boolean)
-  ]));
-  
-  const subjects = attributes
-    .filter(a => a.type === 'subject' && (!selectedDeptObj || a.parentId === selectedDeptObj.id))
-    .map(a => a.name);
-    
-  const topics = attributes
-    .filter(a => a.type === 'topic' && (!selectedSubjectObj || a.parentId === selectedSubjectObj.id))
-    .map(a => a.name);
+  ])), [attributes, questions]);
+
+  // ONLY subjects present in this particular department
+  const subjects = useMemo(() => {
+    if (!activeDept) {
+      return Array.from(new Set([
+        ...attributes.filter(a => a.type === 'subject').map(a => a.name.trim()),
+        ...questions.map(q => (q.subject || '').trim()).filter(Boolean)
+      ])).sort((a, b) => a.localeCompare(b));
+    }
+
+    // 1. From department's attributes
+    const attrSubjects = selectedDeptObj
+      ? attributes.filter(a => a.type === 'subject' && a.parentId === selectedDeptObj.id).map(a => a.name.trim())
+      : [];
+
+    // 2. From actual questions inside this department
+    const questionSubjects = Object.keys(subjectCounts);
+
+    // Merge both, filter out empties, and sort alphabetically
+    const combined = Array.from(new Set([...attrSubjects, ...questionSubjects])).filter(Boolean);
+    return combined.sort((a, b) => a.localeCompare(b));
+  }, [activeDept, selectedDeptObj, attributes, questions, subjectCounts]);
+
+  // Topics for the selected subject (or department)
+  const topics = useMemo(() => {
+    // 1. From attributes
+    const attrTopics = attributes
+      .filter(a => a.type === 'topic' && (!selectedSubjectObj || a.parentId === selectedSubjectObj.id))
+      .map(a => a.name.trim());
+
+    // 2. From actual questions
+    const questionTopics = Object.keys(topicCounts);
+
+    return Array.from(new Set([...attrTopics, ...questionTopics])).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [attributes, selectedSubjectObj, topicCounts]);
+
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: currentYear - 1990 + 1}, (_, i) => (currentYear - i).toString()); // 1990 to current year, descending
-  const marks = attributes.filter(a => a.type === 'mark').map(a => a.name);
+  const marks = useMemo(() => attributes.filter(a => a.type === 'mark').map(a => a.name), [attributes]);
+
   // One Marks-filter option per mark value (1, 2, ...), whatever text each question stores it as
-  const markFilterOptions = [...new Set([
+  const markFilterOptions = useMemo(() => [...new Set([
     ...marks.map(markNumberOf),
     ...questions.map(q => markNumberOf(q.mark) || 1),
-  ].filter(n => n !== null))].sort((a, b) => a - b).map(n => markLabelFor(n, marks));
+  ].filter(n => n !== null))].sort((a, b) => a - b).map(n => markLabelFor(n, marks)), [marks, questions]);
 
   // The Marks pills ("1 Mark (-0.33)") and the Mark attribute dropdown ("1", "2") store
   // different strings, so link them by the mark number and save the attribute's value.
@@ -651,6 +691,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       const before = questions.find(q => q.id === currentId);
       // Merge - fields the form doesn't carry (pairId, typedByEmail...) stay on the question
       setQuestions(prev => prev.map(q => q.id === currentId ? { ...q, ...payload, id: currentId } : q));
+      cacheUpdateQuestion({ id: currentId, ...payload }, cacheKey);
       updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
         showToast("Question saved successfully", "success");
         return regradeIfKeyChanged(before, { id: currentId, ...payload });
@@ -664,6 +705,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       setQuestions(prev => [{ id: tempId, ...payload }, ...prev]);
       addDoc(collection(db, 'question_bank'), payload).then(docRef => {
         setQuestions(prev => prev.map(q => q.id === tempId ? { ...q, id: docRef.id } : q));
+        cacheAddQuestion({ id: docRef.id, ...payload }, cacheKey);
         showToast("Question saved successfully", "success");
       }).catch(e => {
         console.error("Failed to add question", e);
@@ -722,6 +764,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       const before = questions.find(q => q.id === currentId);
       // Merge - fields the form doesn't carry (pairId, typedByEmail...) stay on the question
       setQuestions(prev => prev.map(q => q.id === currentId ? { ...q, ...payload, id: currentId } : q));
+      cacheUpdateQuestion({ id: currentId, ...payload }, cacheKey);
       updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
         showToast("Question saved successfully. Add next.", "success");
         return regradeIfKeyChanged(before, { id: currentId, ...payload });
@@ -735,6 +778,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       setQuestions(prev => [{ id: tempId, ...payload }, ...prev]);
       addDoc(collection(db, 'question_bank'), payload).then(docRef => {
         setQuestions(prev => prev.map(q => q.id === tempId ? { ...q, id: docRef.id } : q));
+        cacheAddQuestion({ id: docRef.id, ...payload }, cacheKey);
         showToast("Question saved successfully. Add next.", "success");
       }).catch(e => {
         console.error("Failed to add question", e);
@@ -807,6 +851,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     const update = { mark: markLabelFor(n, marks), updatedAt: new Date().toISOString() };
     update.negativeMark = negativeMarkFor({ ...q, ...update });
     setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, ...update } : x));
+    cacheUpdateQuestion({ id: q.id, ...q, ...update }, cacheKey);
     try {
       await updateDoc(doc(db, 'question_bank', q.id), update);
       showToast(`Set to ${n} mark${n > 1 ? 's' : ''}${update.negativeMark ? ` (-${update.negativeMark} for a wrong answer)` : ' (no negative marking)'}`, "success");
@@ -834,6 +879,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     if (String(q.id).startsWith('temp-')) return;
     const update = approvalFields();
     setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, ...update } : x));
+    cacheUpdateQuestion({ id: q.id, ...q, ...update }, cacheKey);
     try {
       await updateDoc(doc(db, 'question_bank', q.id), update);
       showToast("Question approved", "success");
@@ -854,12 +900,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       if (bulkAction === 'delete') {
         await runBulk(ids, (batch, ref) => batch.delete(ref));
         setQuestions(prev => prev.filter(q => !ids.includes(q.id)));
+        cacheRemoveQuestions(ids, cacheKey);
         showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} deleted`, "success");
       } else if (bulkAction === 'premium') {
         const makePremium = !isPremiumView;
         const updatedAt = new Date().toISOString();
         await runBulk(ids, (batch, ref) => batch.update(ref, { isPremium: makePremium, updatedAt }));
         setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, isPremium: makePremium, updatedAt } : q));
+        cacheBulkUpdate(ids, { isPremium: makePremium, updatedAt }, cacheKey);
         showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} moved to the ${makePremium ? 'Premium Question Bank' : 'Question Bank'}`, "success");
       } else if (bulkAction === 'approve') {
         // A typist's selection may include shared-bank questions they can't approve - skip those
@@ -875,6 +923,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         const update = approvalFields();
         await runBulk(ids, (batch, ref) => batch.update(ref, update));
         setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, ...update } : q));
+        cacheBulkUpdate(ids, update, cacheKey);
         showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} approved`, "success");
       } else if (bulkAction === 'mark1' || bulkAction === 'mark2') {
         const n = bulkAction === 'mark2' ? 2 : 1;
@@ -886,6 +935,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           mark, updatedAt, negativeMark: negativeMarkFor({ ...byId.get(ref.id), mark })
         }));
         setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, mark, updatedAt, negativeMark: negativeMarkFor({ ...q, mark }) } : q));
+        cacheBulkUpdate(ids, { mark, updatedAt }, cacheKey);
         showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} set to ${n} mark${n > 1 ? 's' : ''}`, "success");
         // Scores of attempts that include these questions follow the new marks (one question at a time)
         (async () => {
@@ -952,81 +1002,75 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     || (!!q.reviewerEmail && q.reviewerEmail.toLowerCase() === myEmail)
   );
 
-  // Teacher folders: their own department, and each shared (Maths / Aptitude) bank separately
-  const isOwnDeptQuestion = (q) => deptNameVariants(lockedDepartment).includes(q.department);
-  const sameFolderName = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
-
   const openFolder = (name) => {
     setSelectedFolder(name);
-    if (lockedDepartment) {
-      // Subject / topic filters follow the folder's department
-      setFilterDept(name);
-      setFilterSubject('All');
-      setFilterTopic('All');
-    }
+    setFilterDept(name);
+    setFilterSubject('All');
+    setFilterTopic('All');
   };
   const closeFolder = () => {
     setSelectedFolder(null);
-    if (lockedDepartment) {
-      setFilterDept(lockedDepartment);
-      setFilterSubject('All');
-      setFilterTopic('All');
-    }
+    setFilterDept(lockedDepartment || 'All');
+    setFilterSubject('All');
+    setFilterTopic('All');
   };
 
-  const filteredQuestions = questions.filter(q => {
-    const matchesSearch = q.questionText?.toLowerCase().includes(search.toLowerCase());
-    const matchesDept = lockedDepartment
-      ? (!selectedFolder
-        ? (isOwnDeptQuestion(q) || isCommonDeptName(q.department))
-        : selectedFolder === lockedDepartment
-          ? isOwnDeptQuestion(q)
-          : sameFolderName(q.department, selectedFolder))
-      : selectedFolder
-        ? (selectedFolder === 'Uncategorized' ? (!q.department || q.department.trim() === '') : q.department === selectedFolder)
-        : (filterDept === 'All' || q.department === filterDept);
-    const matchesSubject = filterSubject === 'All' || q.subject === filterSubject;
-    const matchesTopic = filterTopic === 'All' || q.topic === filterTopic;
-    const matchesYear = filterYear === 'All' || q.year === filterYear;
-    // Compare the mark number, not the stored text - the same 1-mark question may be saved as
-    // "1 Mark (-0.33)", "1" or "1 Mark", and one with no mark shows (and scores) as 1 mark
-    const matchesMark = filterMark === 'All' || (markNumberOf(q.mark) || 1) === markNumberOf(filterMark);
-    const matchesDifficulty = filterDifficulty === 'All' || q.difficultyLevel === filterDifficulty;
-    // Approved and Not Reviewed don't overlap: a Skip-Review question is saved as Approved with
-    // reviewed: false, and questions saved before statuses existed count as Approved. A typist's
-    // Approved tab still lists their Skip-Review questions.
-    const isApprovedQ = q.status === 'Approved' || !q.status;
-    const matchesStatus = filterStatus === 'All'
-      || (filterStatus === 'Not Reviewed' ? (isApprovedQ && q.reviewed === false)
-        : filterStatus === 'Approved' ? (isApprovedQ && (userRole === 'typist' || q.reviewed !== false))
-        : q.status === filterStatus);
-    const matchesType = filterType === 'All' || q.questionType === filterType;
-    const matchesCategory = filterCategory === 'All' || getQuestionCategory(q) === filterCategory;
+  const filteredQuestions = useMemo(() => {
+    if (!questions.length) return [];
+    const searchLower = (search || '').toLowerCase().trim();
+    return questions.filter(q => {
+      const matchesSearch = !searchLower || (q.questionText || '').toLowerCase().includes(searchLower);
+      const matchesDept = lockedDepartment
+        ? (!selectedFolder
+          ? (isOwnDeptQuestion(q) || isCommonDeptName(q.department))
+          : selectedFolder === lockedDepartment
+            ? isOwnDeptQuestion(q)
+            : sameFolderName(q.department, selectedFolder))
+        : selectedFolder
+          ? (selectedFolder === 'Uncategorized' ? (!q.department || q.department.trim() === '') : q.department === selectedFolder)
+          : (filterDept === 'All' || q.department === filterDept);
+      const matchesSubject = filterSubject === 'All' || q.subject === filterSubject;
+      const matchesTopic = filterTopic === 'All' || q.topic === filterTopic;
+      const matchesYear = filterYear === 'All' || q.year === filterYear;
+      // Compare the mark number, not the stored text - the same 1-mark question may be saved as
+      // "1 Mark (-0.33)", "1" or "1 Mark", and one with no mark shows (and scores) as 1 mark
+      const matchesMark = filterMark === 'All' || (markNumberOf(q.mark) || 1) === markNumberOf(filterMark);
+      const matchesDifficulty = filterDifficulty === 'All' || q.difficultyLevel === filterDifficulty;
+      // Approved and Not Reviewed don't overlap: a Skip-Review question is saved as Approved with
+      // reviewed: false, and questions saved before statuses existed count as Approved. A typist's
+      // Approved tab still lists their Skip-Review questions.
+      const isApprovedQ = q.status === 'Approved' || !q.status;
+      const matchesStatus = filterStatus === 'All'
+        || (filterStatus === 'Not Reviewed' ? (isApprovedQ && q.reviewed === false)
+          : filterStatus === 'Approved' ? (isApprovedQ && (userRole === 'typist' || q.reviewed !== false))
+          : q.status === filterStatus);
+      const matchesType = filterType === 'All' || q.questionType === filterType;
+      const matchesCategory = filterCategory === 'All' || getQuestionCategory(q) === filterCategory;
 
-    // Questions still with a reviewer (In Review) or sent back (Draft) belong to the typist/reviewer
-    // pair only - nobody else sees them until the reviewer approves them.
-    if (userRole !== 'typist' && (q.status === 'In Review' || q.status === 'Draft')) return false;
+      // Questions still with a reviewer (In Review) or sent back (Draft) belong to the typist/reviewer
+      // pair only - nobody else sees them until the reviewer approves them.
+      if (userRole !== 'typist' && (q.status === 'In Review' || q.status === 'Draft')) return false;
 
-    // Default Role Filtering Logic
-    let roleMatches = true;
-    if (userRole === 'typist') {
-      roleMatches = isMyQuestion(q)
-        // Shared banks are visible in the approved Question Bank tab only - Drafts / Pending Review stay pair-only
-        || (externalFilter === 'Approved' && isCommonDeptName(q.department));
-    }
+      // Default Role Filtering Logic
+      let roleMatches = true;
+      if (userRole === 'typist') {
+        roleMatches = isMyQuestion(q)
+          // Shared banks are visible in the approved Question Bank tab only - Drafts / Pending Review stay pair-only
+          || (externalFilter === 'Approved' && isCommonDeptName(q.department));
+      }
 
-    // Premium View Filtering
-    let premiumMatches = true;
-    if (isPremiumView) {
-      premiumMatches = q.isPremium === true;
-    } else if (userRole === 'admin') {
-      // Admin has a separate Premium bank, so premium questions live only there.
-      premiumMatches = q.isPremium !== true;
-    }
+      // Premium View Filtering
+      let premiumMatches = true;
+      if (isPremiumView) {
+        premiumMatches = q.isPremium === true;
+      } else if (userRole === 'admin') {
+        // Admin has a separate Premium bank, so premium questions live only there.
+        premiumMatches = q.isPremium !== true;
+      }
 
-    return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && matchesType && matchesCategory && roleMatches && premiumMatches;
-  });
-
+      return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && matchesType && matchesCategory && roleMatches && premiumMatches;
+    });
+  }, [questions, search, lockedDepartment, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, filterCategory, userRole, externalFilter, isPremiumView, isMyQuestion]);
 
   const totalPages = Math.max(1, Math.ceil(filteredQuestions.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
@@ -1049,21 +1093,30 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setGoToPage('');
   };
 
-  const pageNumbers = (() => {
+  const pageNumbers = useMemo(() => {
     const pages = [];
     for (let i = 1; i <= totalPages; i++) {
       if (i === 1 || i === totalPages || Math.abs(i - safePage) <= 1) pages.push(i);
       else if (pages[pages.length - 1] !== '...') pages.push('...');
     }
     return pages;
-  })();
+  }, [totalPages, safePage]);
 
-  const totalQuestions = filteredQuestions.length;
-  const mcqQuestions = filteredQuestions.filter(q => q.questionType === 'Single Choice' || q.questionType === 'Multiple Choice').length;
-  const mcqPercentage = totalQuestions === 0 ? 0 : Math.round((mcqQuestions / totalQuestions) * 100);
-  const totalSubjects = new Set(filteredQuestions.map(q => q.subject).filter(Boolean)).size;
-  const pendingReview = filteredQuestions.filter(q => q.status === 'In Review').length;
-  const notReviewedCount = filteredQuestions.filter(q => q.status === 'Approved' && q.reviewed === false).length;
+  const { totalQuestions, mcqPercentage, totalSubjects, pendingReview, notReviewedCount } = useMemo(() => {
+    const totalQ = filteredQuestions.length;
+    const mcqQ = filteredQuestions.filter(q => q.questionType === 'Single Choice' || q.questionType === 'Multiple Choice').length;
+    const mcqPct = totalQ === 0 ? 0 : Math.round((mcqQ / totalQ) * 100);
+    const totalSub = new Set(filteredQuestions.map(q => q.subject).filter(Boolean)).size;
+    const pendingRev = filteredQuestions.filter(q => q.status === 'In Review').length;
+    const notRevCount = filteredQuestions.filter(q => q.status === 'Approved' && q.reviewed === false).length;
+    return {
+      totalQuestions: totalQ,
+      mcqPercentage: mcqPct,
+      totalSubjects: totalSub,
+      pendingReview: pendingRev,
+      notReviewedCount: notRevCount
+    };
+  }, [filteredQuestions]);
 
   return (
     <>
@@ -1107,15 +1160,27 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 </div>
               </div>
 
-            {selectedFolder && (
-              <button 
-                onClick={openAddCreator}
-                className="h-[56px] px-8 bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] hover:shadow-[0_8px_20px_rgba(37,99,235,0.25)] hover:-translate-y-1 text-white font-[600] text-[15px] rounded-[16px] transition-all shrink-0 flex items-center justify-center gap-2 group"
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => fetchQuestions(true)}
+                disabled={isSyncing}
+                className="h-[52px] sm:h-[56px] px-4 sm:px-5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold text-[14px] rounded-[16px] transition-all shadow-sm flex items-center gap-2 group cursor-pointer disabled:opacity-60"
+                title="Sync Question Bank with Cloud"
               >
-                <Plus size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" /> 
-                Add Question
+                <RotateCw size={18} className={`text-slate-400 group-hover:text-blue-600 transition-colors ${isSyncing ? 'animate-spin text-blue-600' : ''}`} />
+                <span className="hidden sm:inline font-bold text-slate-700">{isSyncing ? 'Syncing...' : 'Sync'}</span>
               </button>
-            )}
+              {selectedFolder && (
+                <button 
+                  onClick={openAddCreator}
+                  className="h-[52px] sm:h-[56px] px-6 sm:px-8 bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] hover:shadow-[0_8px_20px_rgba(37,99,235,0.25)] hover:-translate-y-1 text-white font-[600] text-[15px] rounded-[16px] transition-all shrink-0 flex items-center justify-center gap-2 group"
+                >
+                  <Plus size={20} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" /> 
+                  Add Question
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1152,8 +1217,18 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
               {/* KPI CARDS */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                 {[
-                  { label: 'Total Questions', value: totalQuestions, icon: FileText, color: 'blue' },
-                  { label: 'Subjects', value: totalSubjects, icon: Bookmark, color: 'purple' },
+                  {
+                    label: filterSubject !== 'All' ? `${filterSubject} Questions` : 'Total Questions',
+                    value: totalQuestions,
+                    icon: FileText,
+                    color: 'blue'
+                  },
+                  {
+                    label: filterSubject !== 'All' ? 'Active Subject' : 'Subjects',
+                    value: filterSubject !== 'All' ? `${totalQuestions} Qs` : totalSubjects,
+                    icon: Bookmark,
+                    color: 'purple'
+                  },
                   { label: 'MCQ Questions', value: `${mcqPercentage}%`, icon: CheckCircle2, color: 'green' },
                   userRole === 'typist'
                     ? { label: 'Pending Review', value: pendingReview, icon: AlertCircle, color: 'orange' }
@@ -1163,9 +1238,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                     <div className={`w-[54px] h-[54px] rounded-full bg-${stat.color}-50 flex items-center justify-center shrink-0 border border-${stat.color}-100`}>
                       <stat.icon size={24} className={`text-${stat.color}-500`} strokeWidth={2} />
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-[28px] font-[800] text-[#0F172A] leading-none">{stat.value}</span>
-                      <span className="text-[14px] font-[600] text-[#64748B] mt-1.5">{stat.label}</span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[28px] font-[800] text-[#0F172A] leading-none truncate" title={String(stat.value)}>{stat.value}</span>
+                      <span className="text-[14px] font-[600] text-[#64748B] mt-1.5 truncate" title={stat.label}>{stat.label}</span>
                     </div>
                   </div>
                 ))}
@@ -1177,7 +1252,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   <Search size={22} className="text-[#94A3B8]" />
                 </div>
                 <input 
-                  type="text"
+                  type="text" 
                   placeholder="Search questions by text..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -1201,27 +1276,60 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                     <select
                       value={f.val}
                       onChange={(e) => f.setter(e.target.value)}
-                      className="h-[48px] pl-11 pr-10 appearance-none bg-white border border-[#E5E7EB] rounded-[14px] text-[13px] font-[600] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer min-w-[140px] hover:border-[#CBD5E1]"
+                      className={`h-[48px] pl-11 pr-10 appearance-none bg-white border ${f.val !== 'All' ? 'border-[#2563EB] bg-blue-50/20 text-[#2563EB] font-[700]' : 'border-[#E5E7EB] text-[#0F172A] font-[600]'} rounded-[14px] text-[13px] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer min-w-[140px] hover:border-[#CBD5E1] shadow-sm`}
                     >
-                      <option value="All">All {f.plural}</option>
-                      {f.opts.map((opt, idx) => (
-                        <option key={idx} value={opt}>{opt}</option>
-                      ))}
+                      <option value="All">
+                        All {f.plural} {f.label === 'Subject' && selectedFolder ? `(${deptQuestions.length})` : ''}
+                      </option>
+                      {f.opts.map((opt, idx) => {
+                        const count = f.label === 'Subject'
+                          ? subjectCounts[opt]
+                          : f.label === 'Topic'
+                            ? topicCounts[opt]
+                            : null;
+                        const labelText = count !== undefined && count !== null ? `${opt} (${count})` : opt;
+                        return (
+                          <option key={idx} value={opt}>{labelText}</option>
+                        );
+                      })}
                     </select>
-                    <f.icon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#2563EB]" />
+                    <f.icon size={16} className={`absolute left-4 top-1/2 -translate-y-1/2 ${f.val !== 'All' ? 'text-[#2563EB]' : 'text-[#64748B]'}`} />
                     <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none group-hover:text-[#64748B] transition-colors" />
                   </div>
                 ))}
 
                 <button
                   onClick={() => {
-                    setSearch(''); setFilterStatus('All'); setFilterDept('All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All'); setFilterType('All'); setFilterCategory('All');
+                    setSearch(''); setFilterStatus('All'); setFilterDept(selectedFolder || lockedDepartment || 'All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All'); setFilterType('All'); setFilterCategory('All');
                   }}
-                  className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2"
+                  className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2 cursor-pointer shadow-sm"
                 >
                   <X size={16} /> Reset
                 </button>
               </div>
+
+              {/* ACTIVE SUBJECT PILL */}
+              {filterSubject !== 'All' && (
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl shadow-sm text-sm">
+                  <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Bookmark size={15} />
+                  </div>
+                  <div className="flex items-baseline gap-2 text-slate-700 flex-wrap">
+                    <span className="font-bold text-[13.5px]">Selected Subject:</span>
+                    <span className="font-extrabold text-blue-900 text-[14px]">{filterSubject}</span>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-200/80 text-blue-800">
+                      {totalQuestions} {totalQuestions === 1 ? 'question' : 'questions'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => { setFilterSubject('All'); setFilterTopic('All'); }}
+                    className="ml-auto flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-red-600 hover:bg-white/80 px-2.5 py-1 rounded-lg transition-all border border-transparent hover:border-slate-200 cursor-pointer"
+                    title="Show all subjects in department"
+                  >
+                    <X size={14} /> Clear
+                  </button>
+                </div>
+              )}
 
           {/* BULK ACTION BAR */}
           {selectedIds.length > 0 && (

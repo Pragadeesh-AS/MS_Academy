@@ -20,6 +20,7 @@ import { TEST_TEMPLATES, TEMPLATE_FOLDERS, templateByKey, templateMarks, templat
 import { recentQuestionUse, pickRotated } from '../utils/questionRotation';
 import { QUESTION_TYPES, TYPE_KEYS, TYPE_PRESETS, presetLabel, questionTypeKey, typeCountsOf, sumCounts, pctOf, cellsCanSupply, planTypeMix, buildTypeSplit, defaultTypeSplit } from '../utils/questionTypeSplit';
 import { DIFFICULTIES, DIFFICULTY_KEYS, difficultyKey, hasDifficultyMix, difficultyTotal, splitByDifficulty } from '../utils/questionDifficulty';
+import { getCachedQuestionsSync, loadQuestionBankData } from '../utils/questionBankCache';
 
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
@@ -48,7 +49,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
-  const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions] = useState(() => (getCachedQuestionsSync('all') || []).filter(q => q.status === 'Approved' || !q.status));
   const [attributes, setAttributes] = useState([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [editingTestId, setEditingTestId] = useState(null);
@@ -204,9 +205,20 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   };
 
   const fetchQuestions = async () => {
+    const cached = getCachedQuestionsSync('all');
+    if (cached && cached.length > 0) {
+      setQuestions(cached.filter(q => q.status === 'Approved' || !q.status));
+      return;
+    }
     try {
-      const snapshot = await getDocs(collection(db, 'question_bank'));
-      setQuestions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(q => q.status === 'Approved' || !q.status));
+      await loadQuestionBankData({
+        onCacheHit: ({ questions: qData }) => {
+          setQuestions(qData.filter(q => q.status === 'Approved' || !q.status));
+        },
+        onBackgroundUpdate: ({ questions: qData }) => {
+          setQuestions(qData.filter(q => q.status === 'Approved' || !q.status));
+        }
+      });
     } catch (err) {
       console.error("Error fetching questions:", err);
     }
