@@ -977,6 +977,26 @@ export default function AdminDashboard() {
     }
   };
 
+  const deleteApplication = async (appId, appName) => {
+    setConfirmDeleteObj({
+      type: 'application',
+      id: appId,
+      title: 'Delete Application',
+      message: `Are you sure you want to delete the application for "${appName || 'this candidate'}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'career_applications', appId));
+          setApplications(prev => prev.filter(a => a.id !== appId));
+          if (selectedApp?.id === appId) setSelectedApp(null);
+          showToast('Application deleted successfully.', 'success');
+        } catch (e) {
+          console.error("Failed to delete application", e);
+          showToast('Failed to delete application.', 'error');
+        }
+      }
+    });
+  };
+
   const deleteTeacher = async (teacherId) => {
     setConfirmDeleteObj({
       type: 'teacher',
@@ -1945,13 +1965,22 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="py-4 px-4 text-right">
-                              <button
-                                onClick={() => setSelectedApp(app)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg text-xs font-semibold transition-all shadow-sm"
-                              >
-                                <Eye size={14} />
-                                View
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => setSelectedApp(app)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-lg text-xs font-semibold transition-all shadow-sm"
+                                >
+                                  <Eye size={14} />
+                                  View
+                                </button>
+                                <button
+                                  onClick={() => deleteApplication(app.id, app.fullName)}
+                                  title="Delete Application"
+                                  className="p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 rounded-lg transition-all shadow-sm"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -2343,6 +2372,14 @@ export default function AdminDashboard() {
                   >
                     <X size={14} />
                     <span>{isProcessingApp ? 'Processing...' : selectedApp.status === 'Rejected' ? 'Rejected' : 'Reject Candidate'}</span>
+                  </button>
+                  <button
+                    onClick={() => deleteApplication(selectedApp.id, selectedApp.fullName)}
+                    disabled={isProcessingApp}
+                    title="Delete Application"
+                    className="p-3 rounded-xl font-bold text-xs flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition-all shrink-0"
+                  >
+                    <Trash2 size={16} />
                   </button>
                 </>
               )}
