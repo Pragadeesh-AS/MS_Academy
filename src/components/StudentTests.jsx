@@ -21,6 +21,7 @@ import { loadTestProgress, saveTestProgress, clearTestProgress, inProgressTestId
 
 import TestLeaderboard from './student/TestLeaderboard';
 import PracticeTests from './student/PracticeTests';
+import TestFeedbackModal from './student/TestFeedbackModal';
 import { hasUnlimitedPractice } from '../utils/practiceTests';
 import { upgradeClaritySession, setClarityTag, trackClarityEvent } from '../utils/clarity';
 
@@ -64,6 +65,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   // A test started earlier and not submitted (refresh / crash / dropped connection), being resumed
   const [resumeProgress, setResumeProgress] = useState(null);
   const [unlockModalTest, setUnlockModalTest] = useState(null);
+  const [pendingFeedback, setPendingFeedback] = useState(null);
 
   // Re-checks a scheduled answer release the moment its time arrives, so a student sitting on the
   // results screen sees the solutions appear without reloading
@@ -355,15 +357,41 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       setResumeProgress(null);
       const freshAttempt = { id: attemptId, ...attemptPayload };
       fetchTestsAndAttempts();
-      if (onTestCompleted && !test.isPractice) {
-        setTestMode('list');
-        setActiveAttempt(null);
-        setActiveTest(null);
-        onTestCompleted(test.id);
-      } else {
-        setActiveAttempt(freshAttempt);
-        setTestMode('result');
+
+      // Mandatory feedback payload: student cannot skip without giving feedback
+      const feedbackData = {
+        testId: test.id,
+        testTitle: test.title,
+        testDepartment: test.department || '',
+        testSubject: test.subject || '',
+        attemptId: attemptId,
+        score: attemptPayload.score,
+        totalMarks: totalMarks,
+        studentEmail: attemptPayload.studentEmail,
+        studentName: attemptPayload.studentName,
+        isPractice: !!test.isPractice
+      };
+
+      try {
+        localStorage.setItem('pending_feedback_test', JSON.stringify(feedbackData));
+      } catch (err) {
+        console.warn('Could not cache pending_feedback_test', err);
       }
+
+      setPendingFeedback({
+        ...feedbackData,
+        onComplete: () => {
+          if (onTestCompleted && !test.isPractice) {
+            setTestMode('list');
+            setActiveAttempt(null);
+            setActiveTest(null);
+            onTestCompleted(test.id);
+          } else {
+            setActiveAttempt(freshAttempt);
+            setTestMode('result');
+          }
+        }
+      });
     } catch (err) {
       console.error("Failed to save attempt:", err);
       showToast("Test graded but failed to save logs. Score: " + attemptPayload.score + "/" + totalMarks, "warning");
@@ -478,6 +506,28 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   }, [reviewTestId, loading, tests, attempts]);
 
   // A test left unfinished (the student refreshed or the tab crashed mid-test) reopens on its own
+  // Check if student has pending unsubmitted feedback from a completed test
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('pending_feedback_test');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const email = (sessionStorage.getItem('auth_email') || auth.currentUser?.email || '').toLowerCase().trim();
+        if (parsed && (!parsed.studentEmail || parsed.studentEmail.toLowerCase() === email)) {
+          setPendingFeedback({
+            ...parsed,
+            onComplete: () => {
+              setPendingFeedback(null);
+              fetchTestsAndAttempts();
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading pending_feedback_test', e);
+    }
+  }, []);
+
   const autoResumedRef = useRef(false);
   useEffect(() => {
     if (autoResumedRef.current || loading || testMode !== 'list' || reviewTestId) return;
@@ -494,6 +544,17 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     return (
       <>
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+        {pendingFeedback && createPortal(
+          <TestFeedbackModal
+            feedbackData={pendingFeedback}
+            onSuccess={() => {
+              const cb = pendingFeedback.onComplete;
+              setPendingFeedback(null);
+              if (cb) cb();
+            }}
+          />,
+          document.body
+        )}
         <GateTestInterface 
           test={activeTest}
           testQuestions={testQuestions}
@@ -510,6 +571,17 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   if (testMode === 'result' && activeAttempt && activeTest) {
     return (
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
+        {pendingFeedback && createPortal(
+          <TestFeedbackModal
+            feedbackData={pendingFeedback}
+            onSuccess={() => {
+              const cb = pendingFeedback.onComplete;
+              setPendingFeedback(null);
+              if (cb) cb();
+            }}
+          />,
+          document.body
+        )}
         
         {/* Results Banner */}
         <div className="bg-white border border-slate-200 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
@@ -1419,6 +1491,17 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
 
       {/* In-app Toast Notification */}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {pendingFeedback && createPortal(
+        <TestFeedbackModal
+          feedbackData={pendingFeedback}
+          onSuccess={() => {
+            const cb = pendingFeedback.onComplete;
+            setPendingFeedback(null);
+            if (cb) cb();
+          }}
+        />,
+        document.body
+      )}
     </div>
   );
 }

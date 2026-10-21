@@ -7,7 +7,7 @@ import {
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, ChevronDown, UserCheck, Database, BarChart2, Megaphone, Sparkles,
   Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck, Menu, Images, MessageSquareText,
-  PhoneCall, Phone, MessageCircle
+  PhoneCall, Phone, MessageCircle, Star
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
@@ -30,6 +30,7 @@ import TeacherDirectory from './admin/TeacherDirectory';
 import FeesTracker from './admin/FeesTracker';
 import SalaryManager from './admin/SalaryManager';
 import TestsManager from './TestsManager';
+import TestFeedbackViewer from './admin/TestFeedbackViewer';
 import ReportedQuestions from './admin/ReportedQuestions';
 import ReportCountBadge, { usePendingReportCount } from './shared/ReportCountBadge';
 import InvoiceGenerator from './admin/InvoiceGenerator';
@@ -76,7 +77,7 @@ const pctChange = (curr, prev) => (prev > 0 ? Math.round(((curr - prev) / prev) 
 const VALID_ADMIN_TABS = [
   'overview', 'teachers', 'typists', 'queries', 'questions', 'premium_questions',
   'reported', 'notes', 'recordings', 'attributes', 'analytics', 'popup',
-  'courses', 'invoice', 'welcome_letter', 'fees', 'salary', 'ai', 'tests',
+  'courses', 'invoice', 'welcome_letter', 'fees', 'salary', 'ai', 'tests', 'test_feedback',
   'blogs', 'gallery'
 ];
 
@@ -1338,6 +1339,13 @@ export default function AdminDashboard() {
               </button>
 
               <button
+                onClick={() => setActiveTab('test_feedback')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'test_feedback' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+              >
+                <Star size={20} className={activeTab === 'test_feedback' ? 'text-white' : 'text-amber-400'} />
+                {!isCollapsed && <span>Test Feedback</span>}
+              </button>
+              <button
                 onClick={() => setActiveTab('reported')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'reported' ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
@@ -2232,6 +2240,11 @@ export default function AdminDashboard() {
           />
         )}
         
+        {/* Test Feedback Tab */}
+        {activeTab === 'test_feedback' && (
+          <TestFeedbackViewer />
+        )}
+
         {/* Blogs Tab */}
         {activeTab === 'blogs' && <BlogManager />}
 

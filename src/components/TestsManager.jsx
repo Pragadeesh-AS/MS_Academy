@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where, Timestamp } from 'firebase/firestore';
-import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2, FolderOpen, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2, FolderOpen, ArrowLeft, Star } from 'lucide-react';
 
 import { isNumericalQuestion, getQuestionCategory } from '../utils/questionCategory';
 import { markNumberOf } from '../utils/marking';
@@ -11,6 +11,7 @@ import {
 } from '../utils/solutionRelease';
 
 import TestScheduleCalendar from './tests/TestScheduleCalendar';
+import TestFeedbackViewer from './admin/TestFeedbackViewer';
 import { DepartmentTestFolders, TemplateTestFolders } from './tests/TestFolderCards';
 import { sendWebhookEmailToEach } from '../utils/emailWebhook';
 import { BundleAccessPicker, BundleAccessModal } from './shared/BundleAccessPicker';
@@ -56,6 +57,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [openFolder, setOpenFolder] = useState(null); // department folder (admin)
   const [openTemplateFolder, setOpenTemplateFolder] = useState(null); // 'topic' | 'subject' | 'full' | 'other'
   const [editBundleTest, setEditBundleTest] = useState(null);
+  const [viewingFeedbackTest, setViewingFeedbackTest] = useState(null);
   const [editBundleValue, setEditBundleValue] = useState({ mode: 'default', ids: [] });
   const [confirmModal, setConfirmModal] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -1303,6 +1305,13 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
+                      onClick={() => setViewingFeedbackTest(test)}
+                      className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition-colors inline-flex"
+                      title="View Student Feedback"
+                    >
+                      <Star size={17} />
+                    </button>
+                    <button
                       onClick={() => handleEditTest(test)}
                       className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors inline-flex"
                       title="Edit Test"
@@ -2540,6 +2549,17 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
         />
       )}
 
+      {/* Test Feedback Modal */}
+      {viewingFeedbackTest && (
+        <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div className="bg-slate-50 rounded-3xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 border border-slate-200">
+            <TestFeedbackViewer
+              initialTestId={viewingFeedbackTest.id}
+              onClose={() => setViewingFeedbackTest(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
