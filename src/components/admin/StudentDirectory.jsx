@@ -1623,6 +1623,7 @@ const TIER_AVATAR = {
   prime: 'from-indigo-500 to-violet-600',
   foundation: 'from-emerald-500 to-teal-600',
 };
+const initialsOf = (name) => String(name || '?').replace(/[^A-Za-z\s.@]/g, ' ').split(/[\s.@]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
 const getTier = (st, bundles) => TIERS[tierKeyOf({ 
   purchasedBundles: st?.purchasedBundles || [], 
   bundles, 
