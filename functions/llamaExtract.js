@@ -115,7 +115,7 @@ IMPORTANT:
 - TABLES: Transcribe every table of text or numbers as a Markdown table on its own lines: a header row, then a separator row, then one row per table row, each cell between | characters. Keep every row, column, header and value exactly as printed, use $...$ for maths inside cells, and put the table's caption on its own line just before it. Never make an image for such a table.
 - DIAGRAMS: For every figure drawn as a graphic - diagram, graph, plot, circuit, tree, flowchart, geometric figure, chemical structure or photo - add one entry to "images" of the question it belongs to:
   - "page": the 1-based index of the page within this PDF file (the file's first page is 1; ignore printed page numbers).
-  - "box_2d": [ymin, xmin, ymax, xmax] normalized to 0-1000 of that page's height and width, drawn tightly around the whole figure including its labels and caption, but NOT the question text, options, code, or the question's header bar/border.
+  - "box_2d": [ymin, xmin, ymax, xmax] normalized to 0-1000 of that page's height and width, drawn tightly around the whole figure including its labels and caption. STRICT REQUIREMENT: box_2d MUST NEVER include any options (A, B, C, D), option labels, or explanation text. ymax MUST stop strictly above the start of Option (A) and Option (B). ymin MUST be strictly below the question text. Do NOT include question text, options, code, or the question's header bar/border.
   - "target": "question" for a figure in the question body; "optionA"-"optionD" when that option is itself a figure; "explanation" for a figure in the solution/explanation.
   - Never make images for code snippets, equations or plain text - transcribe those as text.
 - For Match type questions, extract the columns accurately.

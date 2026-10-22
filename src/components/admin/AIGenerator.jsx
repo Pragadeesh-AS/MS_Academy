@@ -616,14 +616,42 @@ const dropSlicedEdgeLines = (canvas, maxBand) => {
     }
   }
   if (bands.length < 2) return canvas;
-  const slicedText = (b) => b.bottom - b.top + 1 <= maxBand
-    && (b.right - b.left + 1 >= width * 0.4 || b.left <= 1 || b.right >= width - 2);
-  let first = 0, lastIdx = bands.length - 1;
-  if (bands[first].top <= 1 && slicedText(bands[first])) first++;
-  if (lastIdx > first && bands[lastIdx].bottom >= height - 2 && slicedText(bands[lastIdx])) lastIdx--;
+
+  // Prune any text lines mistakenly caught at the bottom of the crop
+  let lastIdx = bands.length - 1;
+  while (lastIdx > 0) {
+    const b = bands[lastIdx];
+    const prev = bands[lastIdx - 1];
+    const gap = b.top - prev.bottom;
+    const bHeight = b.bottom - b.top + 1;
+    const isTextRow = bHeight <= maxBand * 1.5 && (b.right - b.left + 1 >= width * 0.25 || b.left <= 2 || b.right >= width - 3);
+    const touchesBottom = b.bottom >= height - 4;
+    if ((touchesBottom && isTextRow) || (gap >= 10 && isTextRow && b.bottom > height * 0.6)) {
+      lastIdx--;
+    } else {
+      break;
+    }
+  }
+
+  // Prune any text lines mistakenly caught at the top of the crop
+  let first = 0;
+  while (first < lastIdx) {
+    const b = bands[first];
+    const next = bands[first + 1];
+    const gap = next.top - b.bottom;
+    const bHeight = b.bottom - b.top + 1;
+    const isTextRow = bHeight <= maxBand * 1.5 && (b.right - b.left + 1 >= width * 0.25 || b.left <= 2 || b.right >= width - 3);
+    const touchesTop = b.top <= 3;
+    if ((touchesTop && isTextRow) || (gap >= 10 && isTextRow && b.top < height * 0.35)) {
+      first++;
+    } else {
+      break;
+    }
+  }
+
   if (first === 0 && lastIdx === bands.length - 1) return canvas;
-  const top = first > 0 ? bands[first - 1].bottom + 1 : 0;
-  const bottom = lastIdx < bands.length - 1 ? bands[lastIdx + 1].top - 1 : height - 1;
+  const top = first > 0 ? bands[first].top : 0;
+  const bottom = lastIdx < bands.length - 1 ? bands[lastIdx].bottom : height - 1;
   const out = makeCanvas(width, bottom - top + 1);
   out.getContext('2d').drawImage(canvas, 0, top, width, out.height, 0, 0, width, out.height);
   return out;
@@ -688,15 +716,27 @@ const attachDiagramImages = async (fileObj, questions) => {
 
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await fileObj.arrayBuffer()) }).promise;
 
-  // Pre-index text of all pages so we can verify or re-target any mismatched/offset page numbers
-  const pageTexts = [];
+  // Pre-index text and items of all pages for validation and boundary clamping
+  const pageData = [];
   for (let p = 1; p <= pdf.numPages; p++) {
     try {
       const page = await pdf.getPage(p);
+      const vp = page.getViewport({ scale: 1.0 });
       const tc = await page.getTextContent();
-      pageTexts.push(tc.items.map(it => it.str).join(' ').toLowerCase());
+      const items = (tc.items || []).map(it => {
+        const [vx, vy] = vp.convertToViewportPoint(it.transform[4], it.transform[5]);
+        return {
+          str: (it.str || '').trim(),
+          normY: vy / vp.height, // 0 to 1
+          normX: vx / vp.width
+        };
+      }).filter(it => it.str.length > 0);
+      pageData.push({
+        text: items.map(it => it.str).join(' ').toLowerCase(),
+        items
+      });
     } catch {
-      pageTexts.push('');
+      pageData.push({ text: '', items: [] });
     }
   }
 
@@ -710,7 +750,7 @@ const attachDiagramImages = async (fileObj, questions) => {
 
     // Check if the reported page actually contains this question
     if (pNum >= 1 && pNum <= pdf.numPages) {
-      const pText = pageTexts[pNum - 1] || '';
+      const pText = pageData[pNum - 1]?.text || '';
       const trigrams = [];
       for (let i = 0; i <= Math.min(tokens.length - 3, 10); i++) {
         trigrams.push(tokens.slice(i, i + 3).join(' '));
@@ -729,9 +769,10 @@ const attachDiagramImages = async (fileObj, questions) => {
       }
       let bestPage = pNum;
       let maxScore = 0;
-      for (let p = 0; p < pageTexts.length; p++) {
-        let score = trigrams.filter(t => pageTexts[p].includes(t)).length * 3;
-        if (qNum && pageTexts[p].includes(qNum)) score += 5;
+      for (let p = 0; p < pageData.length; p++) {
+        const pText = pageData[p]?.text || '';
+        let score = trigrams.filter(t => pText.includes(t)).length * 3;
+        if (qNum && pText.includes(qNum)) score += 5;
         if (score > maxScore) {
           maxScore = score;
           bestPage = p + 1;
@@ -741,6 +782,58 @@ const attachDiagramImages = async (fileObj, questions) => {
     }
 
     return pNum >= 1 && pNum <= pdf.numPages ? pNum : null;
+  };
+
+  const isOptionIndicator = (s) => /^\s*[\(\[]?([A-Da-d1-4])[\)\]\.](\s|$)|^\s*Option\s+[A-Da-d][:\.\s]/i.test(s);
+  const isExplanationIndicator = (s) => /^\s*(Explanation|Solution|Concept|Calculation|Answer|Ans)\s*[:]/i.test(s);
+
+  // Clamps bounding box so it NEVER swallows options below the figure or question text above it
+  const clampDiagramBounds = (pageNum, q, target, originalRect) => {
+    const data = pageData[pageNum - 1];
+    if (!data || !data.items || data.items.length === 0) return originalRect;
+
+    const rect = { ...originalRect };
+
+    if (target === 'question') {
+      // Find where question text ends on this page
+      const qClean = (q?.questionText || '').replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+      const words = qClean.split(' ').filter(w => w.length >= 4);
+      let questionBottom = -Infinity;
+      if (words.length >= 3) {
+        const endWords = words.slice(-5);
+        for (const item of data.items) {
+          const s = item.str.toLowerCase();
+          if (endWords.some(w => s.includes(w))) {
+            if (item.normY > questionBottom) questionBottom = item.normY;
+          }
+        }
+      }
+
+      // Find where options start below the question text
+      let optionsTop = Infinity;
+      const isMCQ = !!(q?.optionA || q?.questionType?.includes('Choice') || q?.questionType?.includes('Match'));
+      for (const item of data.items) {
+        const y = item.normY;
+        if (Number.isFinite(questionBottom) && y < questionBottom) continue;
+        if (isMCQ && isOptionIndicator(item.str)) {
+          if (y < optionsTop) optionsTop = y;
+        } else if (isExplanationIndicator(item.str)) {
+          if (y < optionsTop) optionsTop = y;
+        }
+      }
+
+      // Stop ymax strictly above the options / explanation
+      if (Number.isFinite(optionsTop) && rect.bottom >= optionsTop - 0.005) {
+        rect.bottom = Math.max(rect.top + 0.04, optionsTop - 0.012);
+      }
+
+      // Stop ymin strictly below the question text
+      if (Number.isFinite(questionBottom) && rect.top <= questionBottom + 0.005 && rect.bottom > questionBottom + 0.04) {
+        rect.top = questionBottom + 0.008;
+      }
+    }
+
+    return rect;
   };
 
   // Only the last rendered page is kept - questions come in page order and full pages are large
@@ -763,8 +856,9 @@ const attachDiagramImages = async (fileObj, questions) => {
       for (const img of Array.isArray(questions[qi].images) ? questions[qi].images : []) {
         const field = IMAGE_TARGETS[img?.target] || IMAGE_TARGETS.question;
         const pageNum = resolveCorrectPage(img?.page, questions[qi]);
-        const rect = normalizeBox(img?.box_2d);
+        let rect = normalizeBox(img?.box_2d);
         if (!rect || !pageNum || !(pageNum >= 1 && pageNum <= pdf.numPages)) continue;
+        rect = clampDiagramBounds(pageNum, questions[qi], img?.target || 'question', rect);
         try {
           const crop = cropRegion(await renderPage(pageNum), rect);
           if (crop) (crops[field] ||= []).push(crop);
