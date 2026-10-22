@@ -444,7 +444,7 @@ const callExtractApi = async (payload, apiKey) => {
 
 // ---------- Complete extraction ----------
 // Big PDFs are extracted a few pages per request so one reply never runs out of output room
-const PAGES_PER_BATCH = 4;
+const PAGES_PER_BATCH = 12;
 const MAX_CONTINUATIONS = 6;
 
 const stripJsonFence = (text) => text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -1481,12 +1481,15 @@ export default function AIGenerator({ pairMode = false }) {
         parsedQuestions = rawQuestions.map(q => ({
           ...q,
           isImported: true,
-          questionText: formatExtractedText(q.questionText),
-          optionA: formatExtractedText(q.optionA),
-          optionB: formatExtractedText(q.optionB),
-          optionC: formatExtractedText(q.optionC),
-          optionD: formatExtractedText(q.optionD),
-          explanation: formatExtractedText(q.explanation)
+          questionText: formatExtractedText(q.questionText) || '',
+          optionA: formatExtractedText(q.optionA) || '',
+          optionB: formatExtractedText(q.optionB) || '',
+          optionC: formatExtractedText(q.optionC) || '',
+          optionD: formatExtractedText(q.optionD) || '',
+          correctAnswer: q.correctAnswer || '',
+          correctAnswers: Array.isArray(q.correctAnswers) ? q.correctAnswers : (q.correctAnswer ? [q.correctAnswer] : []),
+          fillBlankAnswer: q.fillBlankAnswer || '',
+          explanation: formatExtractedText(q.explanation) || ''
         }));
 
         try {
@@ -1647,23 +1650,52 @@ export default function AIGenerator({ pairMode = false }) {
       // One timestamp for the whole import + each question's position, so the Question Bank can
       // list the latest import first while keeping that import in the PDF's order
       const importedAt = new Date().toISOString();
+
+      const cleanFirestoreData = (data) => {
+        if (data === null || data === undefined) return '';
+        if (Array.isArray(data)) {
+          return data.filter(item => item !== undefined).map(cleanFirestoreData);
+        }
+        if (typeof data === 'object' && !(data instanceof Date)) {
+          const clean = {};
+          for (const [k, v] of Object.entries(data)) {
+            if (v !== undefined) {
+              clean[k] = cleanFirestoreData(v);
+            }
+          }
+          return clean;
+        }
+        return data;
+      };
+
       for (const [importOrder, original] of toImport.entries()) {
         const { _duplicate, _key, _dupDecision, ...question } = original;
-        await addDoc(collection(db, 'question_bank'), {
-          ...question,
-          department: importSettings.department,
-          year: importSettings.year,
-          subject: importSettings.subject,
-          topic: importSettings.topic || question.topic || '',
-          mark: importSettings.mark,
-          difficultyLevel: importSettings.difficultyLevel === 'Auto' ? (question.difficultyLevel || 'Medium') : importSettings.difficultyLevel,
+        const docPayload = cleanFirestoreData({
+          questionText: question.questionText || '',
+          questionType: question.questionType || 'Single Choice',
+          questionCategory: question.questionCategory || 'Theory',
+          optionA: question.optionA || '',
+          optionB: question.optionB || '',
+          optionC: question.optionC || '',
+          optionD: question.optionD || '',
+          correctAnswer: question.correctAnswer || '',
+          correctAnswers: Array.isArray(question.correctAnswers) ? question.correctAnswers : (question.correctAnswer ? [question.correctAnswer] : []),
+          fillBlankAnswer: question.fillBlankAnswer || '',
           fillBlankMode: question.fillBlankMode || 'Exact Match',
           fillBlankPrecision: question.fillBlankPrecision || 'None',
           fillBlankRangeStart: question.fillBlankRangeStart || '',
           fillBlankRangeEnd: question.fillBlankRangeEnd || '',
-          matchColumn1: question.matchColumn1 || ['', ''],
-          matchColumn2: question.matchColumn2 || ['', ''],
+          matchColumn1: Array.isArray(question.matchColumn1) ? question.matchColumn1 : ['', ''],
+          matchColumn2: Array.isArray(question.matchColumn2) ? question.matchColumn2 : ['', ''],
+          explanation: question.explanation || '',
+          topic: importSettings.topic || question.topic || '',
+          department: importSettings.department || '',
+          year: importSettings.year || '',
+          subject: importSettings.subject || '',
+          mark: importSettings.mark || '',
+          difficultyLevel: importSettings.difficultyLevel === 'Auto' ? (question.difficultyLevel || 'Medium') : importSettings.difficultyLevel,
           source: 'AI Generator',
+          ...question,
           ...reviewFields,
           ...pairFields,
           isPremium: importAsPremium,
@@ -1674,6 +1706,7 @@ export default function AIGenerator({ pairMode = false }) {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
+        await addDoc(collection(db, 'question_bank'), docPayload);
         imported.add(original);
       }
       setImportSummary({ imported: toImport.length, keptDuplicates });
@@ -1685,7 +1718,7 @@ export default function AIGenerator({ pairMode = false }) {
       console.error("Error importing questions:", error);
       // Drop the ones that did get saved, so pressing Import again can't save them twice
       setExtractedQuestions(prev => prev.filter(q => !imported.has(q)));
-      setErrorMsg(`Failed to import questions to database.${imported.size ? ` ${imported.size} question(s) were saved before the error and were removed from this list.` : ''}`);
+      setErrorMsg(`Failed to import questions to database: ${error.message || 'Unknown error'}.${imported.size ? ` ${imported.size} question(s) were saved before the error and were removed from this list.` : ''}`);
       setStatus('review');
     }
   };

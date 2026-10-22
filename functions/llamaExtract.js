@@ -119,7 +119,8 @@ IMPORTANT:
   - "target": "question" for a figure in the question body; "optionA"-"optionD" when that option is itself a figure; "explanation" for a figure in the solution/explanation.
   - Never make images for code snippets, equations or plain text - transcribe those as text.
 - For Match type questions, extract the columns accurately.
-- For Match type questions, optionA, optionB, optionC and optionD MUST be filled with the answer choices exactly as printed in the PDF (for example "P-2, Q-1, R-4, S-3"). Never leave them empty, and set correctAnswer to the letter of the correct choice.`;
+- For Match type questions, optionA, optionB, optionC and optionD MUST be filled with the answer choices exactly as printed in the PDF (for example "P-2, Q-1, R-4, S-3"). Never leave them empty, and set correctAnswer to the letter of the correct choice.
+- CONTINUATIONS ACROSS PAGES: Questions often start near the bottom of one page and continue with options (A, B, C, D) or explanation/solution at the top of the next page. You MUST connect the continuation from the next page to the question. Never leave optionA, optionB, optionC, optionD, correctAnswer, or explanation empty when they appear on the subsequent page.`;
 
 async function getLlamaCloudProjectId(apiKey) {
   try {
