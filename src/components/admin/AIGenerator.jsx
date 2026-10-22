@@ -3,7 +3,6 @@ import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit, Al
 import { db } from '../../firebase';
 import { collection, addDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-import { GoogleGenAI } from '@google/genai';
 import katex from 'katex';
 import { findDuplicateQuestions } from '../../utils/questionDuplicates';
 import { QUESTION_CATEGORIES, inferQuestionCategory } from '../../utils/questionCategory';
@@ -397,6 +396,169 @@ const repairMathDelimiters = (text) => text
   .split(/(\$\$[\s\S]+?\$\$)/)
   .map((chunk, i) => (i % 2 === 1 ? chunk : chunk.split('\n').map(repairLine).join('\n')))
   .join('');
+
+// ---------- LlamaIndex / LlamaCloud Extraction Helpers ----------
+const LLAMA_CLOUD_BASE = 'https://api.cloud.llamaindex.ai';
+
+const QUESTION_EXTRACTION_SCHEMA = {
+  type: "object",
+  properties: {
+    questions: {
+      type: "array",
+      description: "Array of extracted questions from the document in exact reading order",
+      items: {
+        type: "object",
+        properties: {
+          questionNumber: {
+            type: "string",
+            description: "The question's label exactly as printed, e.g. \"Q1\", \"12\", \"Q3(a)\""
+          },
+          questionType: {
+            type: "string",
+            enum: ["Single Choice", "Multiple Choice", "Fill in the Blanks", "Match"],
+            description: "Single Choice | Multiple Choice | Fill in the Blanks | Match"
+          },
+          questionCategory: {
+            type: "string",
+            enum: ["Numerical", "Theory"],
+            description: "Numerical when the answer is a calculated value or for NAT/Fill in the Blanks; Theory for conceptual/statement/code questions"
+          },
+          questionText: {
+            type: "string",
+            description: "The COMPLETE question text exactly as printed, word for word. Use LaTeX inside $...$ for all math/equations. Do NOT include question number or header."
+          },
+          optionA: { type: "string", description: "Option A text" },
+          optionB: { type: "string", description: "Option B text" },
+          optionC: { type: "string", description: "Option C text" },
+          optionD: { type: "string", description: "Option D text" },
+          correctAnswer: { type: "string", description: "A, B, C, or D (For Single Choice/Match)" },
+          correctAnswers: {
+            type: "array",
+            items: { type: "string" },
+            description: "Array of correct option letters for Multiple Choice, e.g. [\"A\", \"B\"]"
+          },
+          fillBlankAnswer: {
+            type: "string",
+            description: "For NAT only: exact numerical answer as plain digits (no units, no commas)"
+          },
+          fillBlankMode: {
+            type: "string",
+            enum: ["Exact Match", "Numeric Range"],
+            description: "Numeric Range if PDF states a range of accepted answers, otherwise Exact Match"
+          },
+          fillBlankRangeStart: { type: "string", description: "Lowest accepted value as plain digits for range" },
+          fillBlankRangeEnd: { type: "string", description: "Highest accepted value as plain digits for range" },
+          topic: { type: "string", description: "The title printed in question's header or short topic" },
+          difficultyLevel: {
+            type: "string",
+            enum: ["Easy", "Medium", "Hard"],
+            description: "Easy | Medium | Hard"
+          },
+          explanation: {
+            type: "string",
+            description: "The COMPLETE solution/explanation exactly as printed, with all steps, concepts, formulas, calculations. Use LaTeX inside $...$."
+          },
+          matchColumn1: {
+            type: "array",
+            items: { type: "string" },
+            description: "Only for Match questions, array of exactly 4 strings"
+          },
+          matchColumn2: {
+            type: "array",
+            items: { type: "string" },
+            description: "Only for Match questions, array of exactly 4 strings"
+          },
+          images: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                target: {
+                  type: "string",
+                  enum: ["question", "optionA", "optionB", "optionC", "optionD", "explanation"]
+                },
+                page: { type: "number", description: "1-based page index within the PDF" },
+                box_2d: {
+                  type: "array",
+                  items: { type: "number" },
+                  description: "[ymin, xmin, ymax, xmax] normalized to 0-1000"
+                }
+              }
+            },
+            description: "Figures/diagrams belonging to this question"
+          }
+        },
+        required: ["questionText", "questionType"]
+      }
+    }
+  },
+  required: ["questions"]
+};
+
+const uploadToLlamaCloud = async (fileObj, apiKey) => {
+  const form = new FormData();
+  form.append('file', fileObj);
+  form.append('purpose', 'extract');
+  const res = await fetch(`${LLAMA_CLOUD_BASE}/api/v1/beta/files`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || `Failed to upload file to LlamaIndex (${res.status})`);
+  }
+  const data = await res.json();
+  return data.id;
+};
+
+const getLlamaCloudProjectId = async (apiKey) => {
+  try {
+    const res = await fetch(`${LLAMA_CLOUD_BASE}/api/v1/projects`, {
+      headers: { Authorization: `Bearer ${apiKey}` }
+    });
+    if (res.ok) {
+      const projects = await res.json();
+      if (Array.isArray(projects) && projects.length > 0) {
+        const def = projects.find(p => p.is_default) || projects[0];
+        return def.id;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch LlamaCloud projects, using default:", err);
+  }
+  return '696d4251-46c7-40d2-9b29-ceaa6d9b04b9';
+};
+
+const pollLlamaExtractJob = async (jobId, apiKey, onTick) => {
+  const startTime = Date.now();
+  const maxWaitMs = 360000; // 6 minutes max
+  while (Date.now() - startTime < maxWaitMs) {
+    await new Promise(r => setTimeout(r, 2000));
+    const elapsedSec = Math.round((Date.now() - startTime) / 1000);
+    const res = await fetch(`${LLAMA_CLOUD_BASE}/api/v2/extract/${jobId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` }
+    });
+    if (!res.ok) {
+      if (res.status === 429) {
+        onTick && onTick('rate_limited', elapsedSec);
+        await new Promise(r => setTimeout(r, 3000));
+        continue;
+      }
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `LlamaIndex job check failed (${res.status})`);
+    }
+    const data = await res.json();
+    onTick && onTick(data.status, elapsedSec);
+    if (data.status === 'COMPLETED') {
+      return data.extract_result?.questions || [];
+    }
+    if (data.status === 'FAILED') {
+      throw new Error(data.error_message || 'LlamaIndex extraction job failed.');
+    }
+  }
+  throw new Error('LlamaIndex extraction timed out. Please try again.');
+};
 
 // ---------- Complete extraction ----------
 // Big PDFs are extracted a few pages per request so one reply never runs out of output room
@@ -1177,20 +1339,6 @@ export default function AIGenerator({ pairMode = false }) {
     return questions;
   };
 
-  const fileToGenerativePart = async (fileObj) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64Data = reader.result.split(',')[1];
-        resolve({
-          inlineData: { data: base64Data, mimeType: fileObj.type }
-        });
-      };
-      reader.onerror = () => reject(reader.error || new Error('Failed to read the file.'));
-      reader.readAsDataURL(fileObj);
-    });
-  };
-
   const startAnalysis = async () => {
     if (!file) return;
     setStatus('uploading');
@@ -1202,176 +1350,116 @@ export default function AIGenerator({ pairMode = false }) {
       setStatus('analyzing');
       let parsedQuestions = [];
       
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      const apiKey = import.meta.env.VITE_LLAMA_INDEX_API_KEY
+        || import.meta.env.Lama_INDEX_API
+        || import.meta.env.VITE_LAMA_INDEX_API
+        || import.meta.env.LLAMA_CLOUD_API_KEY;
+
       if (apiKey) {
-        const modelsToTry = [
-          "gemini-3.6-flash",
-          "gemini-3.5-flash-lite",
-          "gemini-3.7-flash",
-          "gemini-3.8-flash",
-          "gemini-flash-latest"
-        ];
-        let lastError = null;
-        
-        console.log("Attempting to use Gemini API for extraction...");
-        const ai = new GoogleGenAI({ apiKey });
-        const pdfPart = await fileToGenerativePart(file);
-        
-        const prompt = `You are a specialized AI that transcribes multiple-choice and numerical questions from PDF documents into JSON, completely and word for word.
-Read the attached PDF and extract the questions described in SCOPE at the end.
-Respond ONLY with a valid JSON array of objects. Do not include markdown code blocks (\`\`\`json) or any other text.
-Each object must have exactly these fields:
-{
-  "questionNumber": "The question's label exactly as printed, e.g. \\"Q1\\", \\"12\\", \\"Q3(a)\\"",
-  "questionType": "Single Choice" | "Multiple Choice" | "Fill in the Blanks" | "Match",
-  "questionCategory": "Numerical" | "Theory" ("Numerical" when the answer is a numerical value that has to be calculated or worked out - every Fill in the Blanks/NAT question, and any MCQ/MSQ whose correct option is a number or a value with a unit. "Theory" for conceptual, definition, statement, reasoning or code-reading questions whose answer is not a computed value),
-  "questionText": "The COMPLETE question exactly as printed, word for word: every sentence, given data, list, note and instruction (e.g. \\"Round off to two decimal places\\", \\"Answer in kJ\\"). Do NOT include the question number or header label. Use LaTeX inside $...$ for all math/equations.",
-  "optionA": "Option A text",
-  "optionB": "Option B text",
-  "optionC": "Option C text",
-  "optionD": "Option D text",
-  "correctAnswer": "A", "B", "C", or "D" (For Single Choice/Match. Auto-detect if checked/marked),
-  "correctAnswers": ["A", "B"] (Array of strings for Multiple Choice. Auto-detect if checked/marked),
-  "fillBlankAnswer": "For NAT only: the exact numerical answer as plain digits (no units, no commas). Take it from the answer key / answer line / calculation in the PDF.",
-  "fillBlankMode": "For NAT only: \"Numeric Range\" if the PDF states a range of accepted answers (e.g. \"2.4 to 2.6\", \"between 2.4 and 2.6\", \"2.5 ± 0.1\"), otherwise \"Exact Match\"",
-  "fillBlankRangeStart": "For NAT with a range only: the lowest accepted value as plain digits, else empty string",
-  "fillBlankRangeEnd": "For NAT with a range only: the highest accepted value as plain digits, else empty string",
-  "topic": "The title printed in the question's header (e.g. \\"Function Annotations\\"), else a short topic",
-  "difficultyLevel": "Easy" | "Medium" | "Hard",
-  "explanation": "The COMPLETE solution exactly as printed: everything after the options/answer, e.g. Concept, Reasoning, Given, Formula, Calculation, every step, the final answer line and any notes. Start each labelled part on its own line with the label in bold, e.g. \\"**Concept:** Metadata and Type Hinting.\\\\n**Reasoning:** Python stores ...\\". Use LaTeX inside $...$ for all math/equations. Empty string only if the PDF has no solution.",
-  "matchColumn1": ["Item P", "Item Q", "Item R", "Item S"], (Only for Match questions, array of exactly 4 strings, LaTeX inside $...$ for any math/equations, e.g. "$4\\\\sigma/R$")
-  "matchColumn2": ["Item 1", "Item 2", "Item 3", "Item 4"], (Only for Match questions, array of exactly 4 strings, LaTeX inside $...$ for any math/equations, e.g. "$\\\\sigma (1/R_1 + 1/R_2)$")
-  "images": [{ "target": "question" | "optionA" | "optionB" | "optionC" | "optionD" | "explanation", "page": 1, "box_2d": [ymin, xmin, ymax, xmax] }] (Figures belonging to this question - use [] when there are none)
-}
+        console.log("Attempting to use LlamaIndex AI for extraction...");
+        setProgressMsg("Uploading document to LlamaIndex AI engine...");
+
+        const fileId = await uploadToLlamaCloud(file, apiKey);
+        const projectId = await getLlamaCloudProjectId(apiKey);
+        const totalPages = await countPdfPages(file);
+
+        const prompt = `You are a specialized AI that transcribes multiple-choice, numerical and match-the-column questions from PDF documents into JSON, completely and word for word.
+Read the attached document and extract all questions.
+Extract each question object strictly adhering to the schema.
 IMPORTANT:
-- COMPLETENESS IS THE TOP PRIORITY. Extract every question in SCOPE - never skip one, including long questions and ones with diagrams, tables, code or unusual layouts. Transcribe everything; never shorten, summarize, paraphrase, merge or "clean up" any text in the question, options or solution. When unsure whether something belongs, include it.
+- COMPLETENESS IS THE TOP PRIORITY. Extract every question - never skip one, including long questions and ones with diagrams, tables, code or unusual layouts. Transcribe everything; never shorten, summarize, paraphrase, merge or "clean up" any text in the question, options or solution. When unsure whether something belongs, include it.
 - Keep the structure: separate paragraphs, calculation steps, list items and sub-parts with \\n, keep their numbering/bullets, and put each equation step of a calculation on its own line.
-- For equations, fractions, subscripts, or math symbols, use standard LaTeX formatting enclosed in $...$ (e.g., $m^2K$, $\\\\frac{1}{U}$). YOU MUST double-escape all backslashes so the output is valid JSON (e.g. use \\\\frac instead of \\frac).
-- Every $...$ must compile in KaTeX: balanced braces, never two superscripts or two subscripts in a row (write $25^{\\\\circ}\\\\text{C}$, never $10^1^\\\\circ$), degrees as ^{\\\\circ}, only standard LaTeX math commands (no siunitx such as \\\\SI or \\\\si, no custom macros, no \\\\( \\\\) or \\\\[ \\\\] delimiters).
-- Copy every number, unit and symbol exactly as printed in the PDF. Never rewrite a value into another form (if the PDF says 25°C, write $25^{\\\\circ}\\\\text{C}$, not 2.5 × 10^1). Do not add, drop, summarize or reword any text; keep the full question and full explanation.
-- This applies to matchColumn1 and matchColumn2 too - every expression containing a LaTeX command (\\\\sigma, \\\\Delta, \\\\frac, subscripts like R_1, etc.) MUST be wrapped in $...$. Never output a bare backslash command outside $...$ anywhere in the JSON.
-- For Fill in the Blanks (NAT) questions, read the answer key / answer line carefully. Put a single value in fillBlankAnswer, or if a range of accepted answers is given, set fillBlankMode to \"Numeric Range\" and fill fillBlankRangeStart and fillBlankRangeEnd. Never put units in these fields.
-- CODE: If a question or explanation contains a code snippet (Python, C, Java, SQL, shell, etc.), put it inside a fenced block: three backticks + language name, a newline, the code, a newline, three backticks (e.g. "Determine val:\\n\`\`\`python\\ndef f(x):\\n    return x\\n\`\`\`"). Keep every line break (as \\n) and every leading space of indentation exactly as printed. Never flatten code onto one line and never use $...$ inside code.
-- Short inline code such as identifiers, keywords or literals (e.g. __annotations__, 'return', None) goes in single backticks.
-- Copy option text exactly as printed, including angle brackets and quotes (e.g. <class 'dict'>). Options are plain text: use single backticks for code-like options, never HTML. Do not include the ✓ tick mark in the option text; use it only to set the correct answer.
-- TABLES: Transcribe every table of text or numbers (cost matrices, data tables, truth tables, etc.) as a Markdown table on its own lines: a header row, then a separator row, then one row per table row, each cell between | characters (e.g. "\\n| Worker / Job | J1 | J2 |\\n|---|---|---|\\n| M1 | 13 | 8 |\\n"). Keep every row, column, header and value exactly as printed, use $...$ for maths inside cells, and put the table's caption on its own line just before it. Never make an image for such a table.
+- For equations, fractions, subscripts, or math symbols, use standard LaTeX formatting enclosed in $...$ (e.g., $m^2K$, $\\frac{1}{U}$).
+- Every $...$ must compile in KaTeX: balanced braces, never two superscripts or two subscripts in a row (write $25^{\\circ}\\text{C}$, never $10^1^\\circ$), degrees as ^{\\circ}, only standard LaTeX math commands (no siunitx such as \\SI or \\si, no custom macros, no \\( \\) or \\[ \\] delimiters).
+- Copy every number, unit and symbol exactly as printed in the PDF. Never rewrite a value into another form. Do not add, drop, summarize or reword any text; keep the full question and full explanation.
+- This applies to matchColumn1 and matchColumn2 too - every expression containing a LaTeX command (\\sigma, \\Delta, \\frac, subscripts like R_1, etc.) MUST be wrapped in $...$. Never output a bare backslash command outside $...$ anywhere in the JSON.
+- For Fill in the Blanks (NAT) questions, read the answer key / answer line carefully. Put a single value in fillBlankAnswer, or if a range of accepted answers is given, set fillBlankMode to "Numeric Range" and fill fillBlankRangeStart and fillBlankRangeEnd. Never put units in these fields.
+- CODE: If a question or explanation contains a code snippet (Python, C, Java, SQL, shell, etc.), put it inside a fenced block: three backticks + language name, a newline, the code, a newline, three backticks. Keep every line break (as \\n) and every leading space of indentation exactly as printed. Never flatten code onto one line and never use $...$ inside code.
+- Short inline code such as identifiers, keywords or literals goes in single backticks.
+- Copy option text exactly as printed, including angle brackets and quotes. Options are plain text: use single backticks for code-like options, never HTML. Do not include the ✓ tick mark in the option text; use it only to set the correct answer.
+- TABLES: Transcribe every table of text or numbers as a Markdown table on its own lines: a header row, then a separator row, then one row per table row, each cell between | characters. Keep every row, column, header and value exactly as printed, use $...$ for maths inside cells, and put the table's caption on its own line just before it. Never make an image for such a table.
 - DIAGRAMS: For every figure drawn as a graphic - diagram, graph, plot, circuit, tree, flowchart, geometric figure, chemical structure or photo - add one entry to "images" of the question it belongs to:
   - "page": the 1-based index of the page within this PDF file (the file's first page is 1; ignore printed page numbers).
   - "box_2d": [ymin, xmin, ymax, xmax] normalized to 0-1000 of that page's height and width, drawn tightly around the whole figure including its labels and caption, but NOT the question text, options, code, or the question's header bar/border.
-  - "target": "question" for a figure in the question body; "optionA"-"optionD" when that option is itself a figure (then its option text should be empty); "explanation" for a figure in the solution/explanation.
-  - Never make images for code snippets, equations or plain text - transcribe those as text. Do not describe the figure in the text, but keep references like "the figure below".
+  - "target": "question" for a figure in the question body; "optionA"-"optionD" when that option is itself a figure; "explanation" for a figure in the solution/explanation.
+  - Never make images for code snippets, equations or plain text - transcribe those as text.
 - For Match type questions, extract the columns accurately.
-- For Match type questions, optionA, optionB, optionC and optionD MUST be filled with the answer choices exactly as printed in the PDF (for example "P-2, Q-1, R-4, S-3"). Never leave them empty, and set correctAnswer to the letter of the correct choice.
-- The response MUST be a pure JSON array parseable by JSON.parse().`;
+- For Match type questions, optionA, optionB, optionC and optionD MUST be filled with the answer choices exactly as printed in the PDF (for example "P-2, Q-1, R-4, S-3"). Never leave them empty, and set correctAnswer to the letter of the correct choice.`;
 
-        const quotaExhausted = new Set();
-        const failureMessage = () => {
-          const busy = /503|high demand|unavailable|overloaded/i.test(String(lastError?.message || lastError));
-          return quotaExhausted.size > 0
-            ? "The Gemini API key has reached its daily free-tier limit. Enable billing for the key's Google project (ai.dev/rate-limit) or try again tomorrow."
-            : busy
-              ? "Google's Gemini servers are busy right now. Please wait a minute and click Retry."
-              : "All Gemini AI models failed. Please check your API key or try again later.";
-        };
-
-        // Sends the prompt plus one SCOPE instruction. 503 "high demand" errors from Gemini are
-        // transient, so fail over to the next model quickly (1 SDK retry instead of ~30s of
-        // backoff) and make a second pass if all were busy.
-        const askGemini = async (scope) => {
-          const attempts = [...modelsToTry, ...modelsToTry];
-          for (let i = 0; i < attempts.length; i++) {
-            const modelName = attempts[i];
-            // A 429 means the daily free-tier quota for that model is used up - retrying it is pointless
-            if (quotaExhausted.has(modelName)) continue;
-            if (i === modelsToTry.length) await new Promise(r => setTimeout(r, 5000));
-            try {
-              console.log(`Trying model: ${modelName}...`);
-              const interaction = await ai.interactions.create({
-                  model: modelName,
-                  input: [
-                      { type: "text", text: `${prompt}\n\nSCOPE: ${scope}` },
-                      { type: "document", data: pdfPart.inlineData.data, mime_type: pdfPart.inlineData.mimeType }
-                  ]
-              }, { timeout: 300000, maxRetries: 1 });
-              const responseText = interaction.output_text;
-              if (!responseText) throw new Error('Empty response from model');
-              const { items, complete } = parseQuestionArray(responseText);
-              // "incomplete" = the reply hit the output limit; salvaged questions are still usable
-              const truncated = !complete || ['incomplete', 'budget_exceeded'].includes(interaction.status);
-              if (!complete && items.length === 0) throw new Error('Reply was not valid JSON');
-              console.log(`Extracted ${items.length} question(s) via ${modelName}${truncated ? ' (reply was cut off)' : ''}.`);
-              return { items, truncated };
-            } catch (modelError) {
-              lastError = modelError;
-              if (/429|rate limit|quota/i.test(String(modelError?.message || modelError))) quotaExhausted.add(modelName);
-              console.warn(`Model ${modelName} failed:`, modelError.message || modelError);
-            }
-          }
-          throw new Error(failureMessage());
-        };
-
+        let rawQuestions = [];
         const warnings = [];
         const pageLabel = (from, to) => (from === to ? `page ${from}` : `pages ${from}-${to}`);
-        const rangeScope = (from, to, total) => (from === 1 && to === total
-          ? 'Extract every question in the whole PDF.'
-          : `Extract ONLY the questions that START on ${pageLabel(from, to)} of this PDF (1-based page index within the file). A question that starts in this range but continues onto a later page must still be extracted completely, including its options and full solution from the following page(s). Skip questions that start before page ${from} or after page ${to}.`);
 
-        // Extracts a page range; if the reply is cut off, the range is split, or on a single page
-        // the extraction continues after the last complete question until nothing is left.
-        const extractRange = async (from, to, total) => {
-          const collected = [];
-          let scope = rangeScope(from, to, total);
-          for (let round = 0; round <= MAX_CONTINUATIONS; round++) {
-            const { items, truncated } = await askGemini(scope);
-            collected.push(...items);
-            if (!truncated) return collected;
-            if (round === 0 && to > from && items.length === 0) {
-              const mid = Math.floor((from + to) / 2);
-              return [...await extractRange(from, mid, total), ...await extractRange(mid + 1, to, total)];
-            }
-            const last = collected[collected.length - 1];
-            if (!last) break;
-            setProgressMsg(`Reply was long - continuing ${pageLabel(from, to)} after question ${last.questionNumber || collected.length}...`);
-            scope = `${rangeScope(from, to, total)} The questions up to and including question ${JSON.stringify(last.questionNumber || '')} (the one beginning "${String(last.questionText || '').slice(0, 80)}") are already extracted - start with the question right after it.`;
+        const runExtract = async (targetPages, scopeText = '') => {
+          const config = {
+            tier: 'agentic',
+            version: '2.6',
+            system_prompt: scopeText ? `${prompt}\n\nSCOPE: ${scopeText}` : prompt,
+            data_schema: QUESTION_EXTRACTION_SCHEMA
+          };
+          if (targetPages) config.target_pages = targetPages;
+
+          const res = await fetch(`${LLAMA_CLOUD_BASE}/api/v2/extract?project_id=${projectId}`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              file_input: fileId,
+              configuration: config
+            })
+          });
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || `LlamaIndex extract job request failed (${res.status})`);
           }
-          warnings.push(`The AI reply for ${pageLabel(from, to)} kept getting cut off - check the last questions from those pages.`);
-          return collected;
+
+          const job = await res.json();
+          return await pollLlamaExtractJob(job.id, apiKey, (status, sec) => {
+            const targetDesc = targetPages ? ` ${targetPages}` : '';
+            setProgressMsg(`LlamaIndex AI extracting${targetDesc} (${status.toLowerCase()}, ${sec}s)...`);
+          });
         };
 
-        const totalPages = await countPdfPages(file);
-        let rawQuestions = [];
-        let batchError = null;
-        for (let from = 1; from <= totalPages; from += PAGES_PER_BATCH) {
-          const to = Math.min(totalPages, from + PAGES_PER_BATCH - 1);
-          setProgressMsg(totalPages > PAGES_PER_BATCH ? `Extracting ${pageLabel(from, to)} of ${totalPages}...` : 'Extracting questions...');
-          try {
-            rawQuestions.push(...await extractRange(from, to, totalPages));
-          } catch (batchErr) {
-            // Keep what the other pages produced and flag the pages that failed
-            batchError = batchErr;
-            warnings.push(`Could not extract ${pageLabel(from, to)}: ${batchErr.message}`);
+        if (totalPages <= PAGES_PER_BATCH) {
+          setProgressMsg('LlamaIndex AI is analyzing document & extracting questions...');
+          rawQuestions = await runExtract(null);
+        } else {
+          for (let from = 1; from <= totalPages; from += PAGES_PER_BATCH) {
+            const to = Math.min(totalPages, from + PAGES_PER_BATCH - 1);
+            setProgressMsg(`Extracting ${pageLabel(from, to)} of ${totalPages}...`);
+            try {
+              const batchQuestions = await runExtract(`${from}-${to}`, `Extract ONLY the questions that START on ${pageLabel(from, to)} of this PDF. Skip questions that start before page ${from} or after page ${to}.`);
+              rawQuestions.push(...batchQuestions);
+            } catch (batchErr) {
+              console.warn(`Extraction failed for ${pageLabel(from, to)}:`, batchErr);
+              warnings.push(`Could not extract ${pageLabel(from, to)}: ${batchErr.message}`);
+            }
           }
         }
-        if (rawQuestions.length === 0 && batchError) {
-          setErrorMsg(batchError.message);
+
+        if (rawQuestions.length === 0 && warnings.length > 0) {
+          setErrorMsg(warnings.join(' | '));
           setStatus('error');
           return;
         }
+
         rawQuestions = dedupeQuestions(rawQuestions);
 
-        // Numbering gaps usually mean the AI skipped a question - ask for exactly those again
+        // Numbering gaps usually mean a question was missed
         const gaps = findNumberGaps(rawQuestions);
         if (gaps.length > 0) {
           const missing = gaps.flatMap(g => g.numbers);
           setProgressMsg(`Recovering skipped question(s) ${missing.join(', ')}...`);
           let recovered = [];
           try {
-            ({ items: recovered } = await askGemini(`Extract ONLY the question(s) numbered ${missing.join(', ')} (by their printed question labels) - they were missed earlier. Return each of them completely.`));
+            recovered = await runExtract(null, `Extract ONLY the question(s) numbered ${missing.join(', ')} (by their printed question labels) - they were missed earlier. Return each of them completely.`);
           } catch (gapErr) {
             console.warn('Could not recover skipped questions:', gapErr);
           }
           const known = new Set(rawQuestions.map(questionKey));
-          // Insert from the last gap backwards so earlier indexes stay valid
           for (const gap of [...gaps].reverse()) {
             const found = recovered
               .filter(q => gap.numbers.includes(questionNumberOf(q)) && !known.has(questionKey(q)))
@@ -1397,12 +1485,11 @@ IMPORTANT:
         try {
           parsedQuestions = await attachDiagramImages(file, parsedQuestions);
         } catch (imgErr) {
-          // Text extraction still worked - keep the questions and let images be added by hand
           console.error('Diagram cropping failed:', imgErr);
           parsedQuestions = parsedQuestions.map(({ images, ...rest }) => rest);
         }
       } else {
-        console.log("No VITE_GEMINI_API_KEY found. Using pdf.js fallback...");
+        console.log("No LlamaIndex API key found. Using pdf.js fallback...");
         const text = await extractTextFromPDF(file);
         parsedQuestions = parseQuestionsFromText(text);
       }
@@ -1435,7 +1522,15 @@ IMPORTANT:
       markDuplicates(parsedQuestions);
     } catch (err) {
       console.error("PDF Parsing Error", err);
-      setErrorMsg(err.message || "Failed to parse the PDF document.");
+      let msg = err.message || "Failed to parse the PDF document.";
+      if (/401|unauthorized|invalid.*key/i.test(msg)) {
+        msg = "The LlamaIndex API key is invalid or unauthorized. Please verify your Lama_INDEX_API key in the .env file.";
+      } else if (/429|quota|credits|rate limit/i.test(msg)) {
+        msg = "LlamaIndex API rate limit reached or credits exhausted. Please check your LlamaCloud account.";
+      } else if (/503|service unavailable|overloaded/i.test(msg)) {
+        msg = "LlamaIndex servers are busy right now. Please wait a moment and try again.";
+      }
+      setErrorMsg(msg);
       setStatus('error');
     }
   };
