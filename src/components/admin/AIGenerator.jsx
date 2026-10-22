@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit, AlertCircle } from 'lucide-react';
+import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit, AlertCircle, AlertTriangle, Edit3, Check, Trash2, ArrowRight } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, addDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
@@ -886,6 +886,12 @@ export default function AIGenerator({ pairMode = false }) {
   const [importSummary, setImportSummary] = useState(null); // { imported, skipped }
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [importAsPremium, setImportAsPremium] = useState(false);
+  // Missing fields & Question editing modal state
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState(null);
+  const [isImportPending, setIsImportPending] = useState(false);
+  const [pendingImportDirect, setPendingImportDirect] = useState(false);
+  const [modalFormData, setModalFormData] = useState(null);
+  const [modalValidationErrors, setModalValidationErrors] = useState({});
   // Extracted questions go to this person for review before they reach the question bank
   const [reviewerEmail, setReviewerEmail] = useState('');
 
@@ -1350,10 +1356,15 @@ export default function AIGenerator({ pairMode = false }) {
       
       questions.push({
         questionType: questionType,
+        rawQuestionText: qTextRaw,
         questionText: qText,
+        rawOptionA: optA,
         optionA: optA,
+        rawOptionB: optB,
         optionB: optB,
+        rawOptionC: optC,
         optionC: optC,
+        rawOptionD: optD,
         optionD: optD,
         correctAnswer: correctAnswer,
         correctAnswers: correctAnswers,
@@ -1361,6 +1372,7 @@ export default function AIGenerator({ pairMode = false }) {
         topic: topic,
         matchColumn1: matchColumn1,
         matchColumn2: matchColumn2,
+        rawExplanation: explanation,
         explanation: explanation,
         difficultyLevel: difficultyForThisQuestion,
         isImported: true
@@ -1481,6 +1493,12 @@ export default function AIGenerator({ pairMode = false }) {
         parsedQuestions = rawQuestions.map(q => ({
           ...q,
           isImported: true,
+          rawQuestionText: q.questionText || '',
+          rawOptionA: q.optionA || '',
+          rawOptionB: q.optionB || '',
+          rawOptionC: q.optionC || '',
+          rawOptionD: q.optionD || '',
+          rawExplanation: q.explanation || '',
           questionText: formatExtractedText(q.questionText) || '',
           optionA: formatExtractedText(q.optionA) || '',
           optionB: formatExtractedText(q.optionB) || '',
@@ -1546,14 +1564,246 @@ export default function AIGenerator({ pairMode = false }) {
     }
   };
 
+  // Helpers for text, answers, and missing field validation
+  const plainText = (html) => String(html || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  const isFillBlank = (q) => ['Fill in the Blanks', 'Fill in Blanks'].includes(q?.questionType);
+  const answerText = (q) => {
+    if (isFillBlank(q)) return q?.fillBlankMode === 'Numeric Range' ? `${q?.fillBlankRangeStart ?? ''} to ${q?.fillBlankRangeEnd ?? ''}` : String(q?.fillBlankAnswer ?? '');
+    if (q?.questionType === 'Multiple Choice') return [...(q?.correctAnswers || [])].sort().join(', ');
+    return q?.correctAnswer || '';
+  };
+  const isCorrectOption = (q, opt) => (q?.questionType === 'Multiple Choice' ? (q?.correctAnswers || []).includes(opt) : q?.correctAnswer === opt);
+
+  const getMissingFields = (q) => {
+    const missing = [];
+    if (!q) return missing;
+
+    // 1. Question Text
+    const textClean = plainText(q.rawQuestionText ?? q.questionText);
+    if (!textClean && !q.questionImageUrl) {
+      missing.push({ key: 'questionText', label: 'Question Text' });
+    }
+
+    const isNat = ['Fill in the Blanks', 'Fill in Blanks'].includes(q.questionType);
+    const isMultiple = q.questionType === 'Multiple Choice';
+
+    if (isNat) {
+      if (q.fillBlankMode === 'Numeric Range') {
+        const s = q.fillBlankRangeStart !== undefined && q.fillBlankRangeStart !== null ? String(q.fillBlankRangeStart).trim() : '';
+        const e = q.fillBlankRangeEnd !== undefined && q.fillBlankRangeEnd !== null ? String(q.fillBlankRangeEnd).trim() : '';
+        if (!s) missing.push({ key: 'fillBlankRangeStart', label: 'Range Start Value' });
+        if (!e) missing.push({ key: 'fillBlankRangeEnd', label: 'Range End Value' });
+      } else {
+        const a = q.fillBlankAnswer !== undefined && q.fillBlankAnswer !== null ? String(q.fillBlankAnswer).trim() : '';
+        if (!a) missing.push({ key: 'fillBlankAnswer', label: 'Numerical Answer' });
+      }
+    } else {
+      // Single Choice, Multiple Choice, Match
+      ['A', 'B', 'C', 'D'].forEach(opt => {
+        const optVal = q[`rawOption${opt}`] ?? q[`option${opt}`];
+        const optImg = q[`option${opt}Image`];
+        if (!plainText(optVal) && !optImg) {
+          missing.push({ key: `option${opt}`, label: `Option ${opt}` });
+        }
+      });
+
+      if (isMultiple) {
+        const answers = Array.isArray(q.correctAnswers) ? q.correctAnswers : (q.correctAnswer ? [q.correctAnswer] : []);
+        if (answers.length === 0) {
+          missing.push({ key: 'correctAnswers', label: 'Correct Answer(s)' });
+        }
+      } else {
+        const ans = String(q.correctAnswer || '').trim().toUpperCase();
+        if (!['A', 'B', 'C', 'D'].includes(ans)) {
+          missing.push({ key: 'correctAnswer', label: 'Correct Answer' });
+        }
+      }
+    }
+
+    return missing;
+  };
+
+  // Sync modal form when a question is chosen for editing
+  useEffect(() => {
+    if (editingQuestionIndex !== null && extractedQuestions[editingQuestionIndex]) {
+      const q = extractedQuestions[editingQuestionIndex];
+      const isNat = ['Fill in the Blanks', 'Fill in Blanks'].includes(q.questionType);
+      
+      setModalFormData({
+        questionType: q.questionType || 'Single Choice',
+        questionCategory: q.questionCategory || (isNat ? 'Numerical' : 'Theory'),
+        difficultyLevel: q.difficultyLevel || 'Medium',
+        rawQuestionText: q.rawQuestionText ?? stripTags(q.questionText) ?? '',
+        questionText: q.questionText || '',
+        questionImageUrl: q.questionImageUrl || '',
+        rawOptionA: q.rawOptionA ?? (q.optionA ? stripTags(q.optionA) : '') ?? '',
+        optionA: q.optionA || '',
+        optionAImage: q.optionAImage || '',
+        rawOptionB: q.rawOptionB ?? (q.optionB ? stripTags(q.optionB) : '') ?? '',
+        optionB: q.optionB || '',
+        optionBImage: q.optionBImage || '',
+        rawOptionC: q.rawOptionC ?? (q.optionC ? stripTags(q.optionC) : '') ?? '',
+        optionC: q.optionC || '',
+        optionCImage: q.optionCImage || '',
+        rawOptionD: q.rawOptionD ?? (q.optionD ? stripTags(q.optionD) : '') ?? '',
+        optionD: q.optionD || '',
+        optionDImage: q.optionDImage || '',
+        correctAnswer: q.correctAnswer || '',
+        correctAnswers: Array.isArray(q.correctAnswers) ? [...q.correctAnswers] : (q.correctAnswer ? [q.correctAnswer] : []),
+        fillBlankAnswer: q.fillBlankAnswer !== undefined && q.fillBlankAnswer !== null ? String(q.fillBlankAnswer) : '',
+        fillBlankMode: q.fillBlankMode || 'Exact Match',
+        fillBlankPrecision: q.fillBlankPrecision || 'None',
+        fillBlankRangeStart: q.fillBlankRangeStart !== undefined && q.fillBlankRangeStart !== null ? String(q.fillBlankRangeStart) : '',
+        fillBlankRangeEnd: q.fillBlankRangeEnd !== undefined && q.fillBlankRangeEnd !== null ? String(q.fillBlankRangeEnd) : '',
+        rawExplanation: q.rawExplanation ?? (q.explanation ? stripTags(q.explanation) : '') ?? '',
+        explanation: q.explanation || '',
+        explanationImageUrl: q.explanationImageUrl || '',
+        matchColumn1: Array.isArray(q.matchColumn1) ? [...q.matchColumn1] : ['', ''],
+        matchColumn2: Array.isArray(q.matchColumn2) ? [...q.matchColumn2] : ['', ''],
+        topic: q.topic || '',
+        subject: q.subject || ''
+      });
+      setModalValidationErrors({});
+    } else {
+      setModalFormData(null);
+      setModalValidationErrors({});
+    }
+  }, [editingQuestionIndex]);
+
+  const handleModalFieldChange = (field, value) => {
+    setModalFormData(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, [field]: value };
+      if (field === 'rawQuestionText') next.questionText = value;
+      if (field === 'rawOptionA') next.optionA = value;
+      if (field === 'rawOptionB') next.optionB = value;
+      if (field === 'rawOptionC') next.optionC = value;
+      if (field === 'rawOptionD') next.optionD = value;
+      if (field === 'rawExplanation') next.explanation = value;
+      return next;
+    });
+    setModalValidationErrors(prev => {
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const openEditModal = (idx) => {
+    setIsImportPending(false);
+    setEditingQuestionIndex(idx);
+  };
+
+  const handleCancelModal = () => {
+    setEditingQuestionIndex(null);
+    setIsImportPending(false);
+    setPendingImportDirect(false);
+    setModalFormData(null);
+    setModalValidationErrors({});
+  };
+
+  const handleDiscardModal = () => {
+    if (editingQuestionIndex === null) return;
+    const updatedList = extractedQuestions.filter((_, i) => i !== editingQuestionIndex);
+    setExtractedQuestions(updatedList);
+
+    if (updatedList.length === 0) {
+      setEditingQuestionIndex(null);
+      setIsImportPending(false);
+      resetState();
+      return;
+    }
+
+    if (isImportPending) {
+      const nextIncompleteIdx = updatedList.findIndex(q => getMissingFields(q).length > 0);
+      if (nextIncompleteIdx !== -1) {
+        setEditingQuestionIndex(nextIncompleteIdx);
+      } else {
+        setEditingQuestionIndex(null);
+        setIsImportPending(false);
+        confirmApprove(pendingImportDirect, updatedList);
+      }
+    } else {
+      setEditingQuestionIndex(null);
+    }
+  };
+
+  const handleSaveModal = () => {
+    if (editingQuestionIndex === null || !modalFormData) return;
+
+    const rawQText = modalFormData.rawQuestionText ?? modalFormData.questionText ?? '';
+    const rawA = modalFormData.rawOptionA ?? modalFormData.optionA ?? '';
+    const rawB = modalFormData.rawOptionB ?? modalFormData.optionB ?? '';
+    const rawC = modalFormData.rawOptionC ?? modalFormData.optionC ?? '';
+    const rawD = modalFormData.rawOptionD ?? modalFormData.optionD ?? '';
+    const rawExp = modalFormData.rawExplanation ?? modalFormData.explanation ?? '';
+
+    const candidate = {
+      ...extractedQuestions[editingQuestionIndex],
+      ...modalFormData,
+      rawQuestionText: rawQText,
+      rawOptionA: rawA,
+      rawOptionB: rawB,
+      rawOptionC: rawC,
+      rawOptionD: rawD,
+      rawExplanation: rawExp,
+      questionText: formatExtractedText(wrapBareLatex(rawQText)),
+      optionA: formatExtractedText(wrapBareLatex(rawA)),
+      optionB: formatExtractedText(wrapBareLatex(rawB)),
+      optionC: formatExtractedText(wrapBareLatex(rawC)),
+      optionD: formatExtractedText(wrapBareLatex(rawD)),
+      explanation: formatExtractedText(wrapBareLatex(rawExp)),
+    };
+
+    const missing = getMissingFields(candidate);
+    if (missing.length > 0) {
+      const errs = {};
+      missing.forEach(m => { errs[m.key] = true; });
+      setModalValidationErrors(errs);
+      return;
+    }
+
+    setModalValidationErrors({});
+    const updatedList = extractedQuestions.map((q, i) => (i === editingQuestionIndex ? candidate : q));
+    setExtractedQuestions(updatedList);
+
+    if (isImportPending) {
+      const nextIncompleteIdx = updatedList.findIndex(q => getMissingFields(q).length > 0);
+      if (nextIncompleteIdx !== -1) {
+        setEditingQuestionIndex(nextIncompleteIdx);
+      } else {
+        setEditingQuestionIndex(null);
+        setIsImportPending(false);
+        confirmApprove(pendingImportDirect, updatedList);
+      }
+    } else {
+      setEditingQuestionIndex(null);
+    }
+  };
+
   const handleApprove = () => {
     if (!canImport || undecidedDuplicates > 0 || checkingDuplicates) return;
-    confirmApprove(false);
+    initiateImport(false);
   };
 
   const handleImportDirect = () => {
     if (!canImportDirect || undecidedDuplicates > 0 || checkingDuplicates) return;
-    confirmApprove(true);
+    initiateImport(true);
+  };
+
+  const initiateImport = (direct = false) => {
+    if (undecidedDuplicates > 0 || checkingDuplicates) return;
+
+    // Check if any question has undefined/missing fields
+    const incompleteIdx = extractedQuestions.findIndex(q => getMissingFields(q).length > 0);
+    if (incompleteIdx !== -1) {
+      setPendingImportDirect(direct);
+      setIsImportPending(true);
+      setEditingQuestionIndex(incompleteIdx);
+      return;
+    }
+
+    confirmApprove(direct);
   };
 
   const handleSettingChange = (e) => {
@@ -1602,16 +1852,18 @@ export default function AIGenerator({ pairMode = false }) {
   // direct=true skips the reviewer entirely: questions land straight in the Question
   // Bank as Approved, but flagged reviewed:false since nobody but the typist/admin who
   // extracted them has actually looked them over.
-  const confirmApprove = async (direct = false) => {
+  const confirmApprove = async (direct = false, listOverride = null) => {
     setStatus('saving');
     setErrorMsg('');
+
+    const toImport = listOverride || extractedQuestions;
 
     // Re-check against the bank as it is right now (someone may have added questions since the
     // review screen opened). Every duplicate needs the extracter's decision, so a newly found one
     // goes back to the review screen for comparison instead of being imported or skipped silently.
     let matches;
     try {
-      matches = await findDuplicateQuestions(extractedQuestions, await loadQuestionBank());
+      matches = await findDuplicateQuestions(toImport, await loadQuestionBank());
     } catch (err) {
       console.error('Duplicate check failed:', err);
       setErrorMsg("Couldn't check the Question Bank for duplicates, so nothing was imported. Please try again.");
@@ -1619,8 +1871,8 @@ export default function AIGenerator({ pairMode = false }) {
       return;
     }
     const newlyFound = new Map();
-    extractedQuestions.forEach((q, i) => {
-      if (matches[i] && !duplicateOf(q) && q._dupDecision !== 'import') newlyFound.set(q._key, describeDuplicate(matches[i], extractedQuestions));
+    toImport.forEach((q, i) => {
+      if (matches[i] && !duplicateOf(q) && q._dupDecision !== 'import') newlyFound.set(q._key, describeDuplicate(matches[i], toImport));
     });
     if (newlyFound.size > 0) {
       setExtractedQuestions(prev => prev.map(q => (newlyFound.has(q._key) ? { ...q, _duplicate: newlyFound.get(q._key) } : q)));
@@ -1628,7 +1880,6 @@ export default function AIGenerator({ pairMode = false }) {
       setStatus('review');
       return;
     }
-    const toImport = extractedQuestions;
     const keptDuplicates = toImport.filter(q => duplicateOf(q)).length;
     const imported = new Set();
 
@@ -1669,7 +1920,18 @@ export default function AIGenerator({ pairMode = false }) {
       };
 
       for (const [importOrder, original] of toImport.entries()) {
-        const { _duplicate, _key, _dupDecision, ...question } = original;
+        const {
+          _duplicate,
+          _key,
+          _dupDecision,
+          rawQuestionText,
+          rawOptionA,
+          rawOptionB,
+          rawOptionC,
+          rawOptionD,
+          rawExplanation,
+          ...question
+        } = original;
         const docPayload = cleanFirestoreData({
           questionText: question.questionText || '',
           questionType: question.questionType || 'Single Choice',
@@ -1731,7 +1993,11 @@ export default function AIGenerator({ pairMode = false }) {
     setExtractionWarnings([]);
     setProgressMsg('');
     setImportSummary(null);
-    setShowImportModal(false);
+    setEditingQuestionIndex(null);
+    setIsImportPending(false);
+    setPendingImportDirect(false);
+    setModalFormData(null);
+    setModalValidationErrors({});
     setImportSettings({ department: '', year: '', subject: '', topic: '', mark: '', difficultyLevel: 'Auto' });
   };
 
@@ -1742,14 +2008,6 @@ export default function AIGenerator({ pairMode = false }) {
   };
 
   // --- Duplicate comparison: the extracted question next to the one it matches ---
-  const plainText = (html) => String(html || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-  const isFillBlank = (q) => ['Fill in the Blanks', 'Fill in Blanks'].includes(q.questionType);
-  const answerText = (q) => {
-    if (isFillBlank(q)) return q.fillBlankMode === 'Numeric Range' ? `${q.fillBlankRangeStart ?? ''} to ${q.fillBlankRangeEnd ?? ''}` : String(q.fillBlankAnswer ?? '');
-    if (q.questionType === 'Multiple Choice') return [...(q.correctAnswers || [])].sort().join(', ');
-    return q.correctAnswer || '';
-  };
-  const isCorrectOption = (q, opt) => (q.questionType === 'Multiple Choice' ? (q.correctAnswers || []).includes(opt) : q.correctAnswer === opt);
   const COMPARE_IMAGES = [['questionImageUrl', 'Question diagram'], ['optionAImage', 'Option A diagram'], ['optionBImage', 'Option B diagram'], ['optionCImage', 'Option C diagram'], ['optionDImage', 'Option D diagram']];
 
   const duplicateDifferences = (a, b, otherName) => {
@@ -2221,20 +2479,65 @@ export default function AIGenerator({ pairMode = false }) {
               </div>
             )}
 
+            {/* Missing Fields Banner */}
+            {(() => {
+              const incompleteCount = extractedQuestions.filter(q => getMissingFields(q).length > 0).length;
+              if (incompleteCount === 0) return null;
+              return (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-amber-100 text-amber-700 rounded-xl mt-0.5">
+                      <AlertTriangle size={20} />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-amber-900 text-base">
+                        {incompleteCount} question{incompleteCount > 1 ? 's have' : ' has'} undefined or missing fields
+                      </h4>
+                      <p className="text-sm text-amber-800 font-medium mt-0.5">
+                        Some questions are missing options, answer keys, or text. When you click <strong>Approve & Import</strong> or <strong>Import Directly</strong>, you will be prompted to enter the missing details before importing.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const first = extractedQuestions.findIndex(q => getMissingFields(q).length > 0);
+                      if (first !== -1) openEditModal(first);
+                    }}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow transition-colors flex items-center gap-1.5 ml-auto"
+                  >
+                    <Edit3 size={14} /> Review & Fill Missing Fields
+                  </button>
+                </div>
+              );
+            })()}
+
             <div className="grid grid-cols-1 gap-6">
               {extractedQuestions.map((q, idx) => {
                 const dup = duplicateOf(q);
+                const missing = getMissingFields(q);
+                const isIncomplete = missing.length > 0;
                 return (
-                <div key={q._key ?? idx} className={`bg-white border rounded-2xl p-6 shadow-sm relative group ${dup ? (q._dupDecision === 'import' ? 'border-green-300' : 'border-amber-400 ring-2 ring-amber-100') : 'border-slate-200'}`}>
-                  <button 
-                    onClick={() => removeQuestion(idx)}
-                    className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                    title="Discard Question"
-                  >
-                    <X size={18} />
-                  </button>
+                <div key={q._key ?? idx} className={`bg-white border rounded-2xl p-6 shadow-sm relative group ${isIncomplete ? 'border-amber-400 ring-2 ring-amber-200' : (dup ? (q._dupDecision === 'import' ? 'border-green-300' : 'border-amber-400 ring-2 ring-amber-100') : 'border-slate-200')}`}>
+                  <div className="absolute top-4 right-4 flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(idx)}
+                      className="p-2 bg-slate-100 hover:bg-purple-100 text-slate-500 hover:text-purple-700 rounded-lg transition-colors"
+                      title="Edit Question"
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button 
+                      onClick={() => removeQuestion(idx)}
+                      className="p-2 bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-600 rounded-lg transition-colors"
+                      title="Discard Question"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
                   
-                  <div className="flex items-center gap-3 mb-4">
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
                     <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-md text-xs font-bold flex items-center gap-1">
                       <Sparkles size={12} /> AI Extracted
                     </span>
@@ -2248,12 +2551,34 @@ export default function AIGenerator({ pairMode = false }) {
                     >
                       {q.questionCategory || 'Theory'} ⇄
                     </button>
+                    {isIncomplete && (
+                      <span className="px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-md text-xs font-bold flex items-center gap-1.5 animate-pulse">
+                        <AlertTriangle size={13} className="text-amber-700" />
+                        Missing: {missing.map(m => m.label).join(', ')}
+                      </span>
+                    )}
                     {dup && (
                       <span className={`text-xs font-bold px-3 py-1 rounded-md ${q._dupDecision === 'import' ? 'text-green-800 bg-green-100' : 'text-amber-800 bg-amber-100'}`}>
                         {dup.label}{q._dupDecision === 'import' ? ' - will be imported' : ' - decision needed'}
                       </span>
                     )}
                   </div>
+
+                  {isIncomplete && (
+                    <div className="mb-4 p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-center justify-between gap-3">
+                      <div className="text-xs font-semibold text-amber-900 flex items-center gap-2">
+                        <AlertCircle size={15} className="text-amber-600 flex-shrink-0" />
+                        <span>Undefined fields ({missing.map(m => m.label).join(', ')}). Must be entered before importing.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(idx)}
+                        className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center gap-1 flex-shrink-0"
+                      >
+                        <Edit3 size={13} /> Enter Missing Fields
+                      </button>
+                    </div>
+                  )}
 
                   {dup && renderDuplicateComparison(q, idx, dup)}
 
@@ -2320,6 +2645,397 @@ export default function AIGenerator({ pairMode = false }) {
                 </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Missing Fields / Edit Question Modal */}
+        {editingQuestionIndex !== null && modalFormData && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              
+              {/* Modal Header */}
+              <div className={`p-6 border-b flex items-start justify-between gap-4 ${isImportPending ? 'bg-amber-50/80 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    {isImportPending ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-200 text-amber-900 flex items-center gap-1">
+                        <AlertTriangle size={12} className="text-amber-700" /> Action Required Before Import
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700 flex items-center gap-1">
+                        <Edit3 size={12} /> Edit Extracted Question
+                      </span>
+                    )}
+                    <span className="text-xs font-semibold text-slate-500">
+                      Question {editingQuestionIndex + 1} of {extractedQuestions.length}
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900">
+                    {isImportPending ? 'Complete Missing Question Information' : `Edit Question #${editingQuestionIndex + 1}`}
+                  </h3>
+                  <p className="text-xs text-slate-600 font-medium mt-1">
+                    {isImportPending
+                      ? 'This question has undefined or missing fields. Please enter the required details below before importing into the Question Bank, or discard this question.'
+                      : 'Modify question text, options, answer, or explanation below.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelModal}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors"
+                  title="Close without saving"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Missing Fields Notice */}
+              {(() => {
+                const missing = getMissingFields(modalFormData);
+                if (missing.length === 0) return null;
+                return (
+                  <div className="mx-6 mt-5 p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-3">
+                    <AlertCircle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-xs font-bold text-amber-900">
+                        The following required field{missing.length > 1 ? 's are' : ' is'} currently missing:
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {missing.map(m => (
+                          <span key={m.key} className="px-2.5 py-0.5 bg-white border border-amber-300 text-amber-800 text-xs font-bold rounded-lg shadow-sm">
+                            {m.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                {/* Type & Classification Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Question Type</label>
+                    <select
+                      value={modalFormData.questionType}
+                      onChange={(e) => handleModalFieldChange('questionType', e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-3 py-2.5 outline-none focus:border-purple-500 font-medium"
+                    >
+                      <option value="Single Choice">Single Choice (MCQ)</option>
+                      <option value="Multiple Choice">Multiple Choice (MSQ)</option>
+                      <option value="Fill in the Blanks">Numerical (NAT)</option>
+                      <option value="Match">Match the Following</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Category</label>
+                    <select
+                      value={modalFormData.questionCategory}
+                      onChange={(e) => handleModalFieldChange('questionCategory', e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-3 py-2.5 outline-none focus:border-purple-500 font-medium"
+                    >
+                      <option value="Theory">Theory</option>
+                      <option value="Numerical">Numerical</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Difficulty</label>
+                    <select
+                      value={modalFormData.difficultyLevel}
+                      onChange={(e) => handleModalFieldChange('difficultyLevel', e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-3 py-2.5 outline-none focus:border-purple-500 font-medium"
+                    >
+                      <option value="Easy">Easy</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Hard">Hard</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Question Text */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                      Question Text <span className="text-red-500">*</span>
+                    </label>
+                    {modalValidationErrors.questionText && (
+                      <span className="text-xs font-bold text-red-600">Question text is required</span>
+                    )}
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={modalFormData.rawQuestionText}
+                    onChange={(e) => handleModalFieldChange('rawQuestionText', e.target.value)}
+                    placeholder="Type or paste question text here. LaTeX formulas can be enclosed in $...$ (e.g. $x^2 + y^2$)"
+                    className={`w-full bg-slate-50 border text-slate-900 text-sm rounded-xl p-3.5 outline-none focus:bg-white focus:ring-2 font-medium leading-relaxed ${
+                      modalValidationErrors.questionText ? 'border-red-400 focus:ring-red-200 bg-red-50/30' : 'border-slate-200 focus:border-purple-500 focus:ring-purple-500/20'
+                    }`}
+                  />
+                  {modalFormData.rawQuestionText && (
+                    <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Live Rendered Preview</div>
+                      <div
+                        className="text-slate-900 break-words"
+                        dangerouslySetInnerHTML={{ __html: formatExtractedText(wrapBareLatex(modalFormData.rawQuestionText)) }}
+                      />
+                    </div>
+                  )}
+                  {modalFormData.questionImageUrl && (
+                    <div className="mt-2 flex items-center gap-3 p-2 bg-slate-50 border border-slate-200 rounded-xl">
+                      <img src={modalFormData.questionImageUrl} alt="Question Diagram" className="h-16 rounded border border-slate-200" />
+                      <div className="text-xs text-slate-600 font-medium">Question Diagram Attached</div>
+                      <button
+                        type="button"
+                        onClick={() => handleModalFieldChange('questionImageUrl', '')}
+                        className="ml-auto text-xs text-red-600 hover:text-red-700 font-bold px-2 py-1 rounded bg-red-50 hover:bg-red-100"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Options & Answer for MCQ / MSQ / Match */}
+                {!['Fill in the Blanks', 'Fill in Blanks'].includes(modalFormData.questionType) ? (
+                  <div className="space-y-4">
+                    <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Options (A, B, C, D) <span className="text-red-500">*</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {['A', 'B', 'C', 'D'].map(opt => {
+                        const isMissing = modalValidationErrors[`option${opt}`] || (!modalFormData[`rawOption${opt}`]?.trim() && !modalFormData[`option${opt}Image`]);
+                        return (
+                          <div
+                            key={opt}
+                            className={`p-3.5 rounded-2xl border transition-all ${
+                              isMissing ? 'border-amber-300 bg-amber-50/40 ring-2 ring-amber-100' : 'border-slate-200 bg-slate-50/50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                                <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-800 flex items-center justify-center text-xs font-bold">
+                                  {opt}
+                                </span>
+                                Option {opt}
+                              </span>
+                              {isMissing && (
+                                <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                                  Required
+                                </span>
+                              )}
+                            </div>
+                            <textarea
+                              rows={2}
+                              value={modalFormData[`rawOption${opt}`]}
+                              onChange={(e) => handleModalFieldChange(`rawOption${opt}`, e.target.value)}
+                              placeholder={`Enter text for Option ${opt}...`}
+                              className="w-full bg-white border border-slate-200 text-slate-900 text-xs rounded-xl p-2.5 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 font-medium"
+                            />
+                            {modalFormData[`rawOption${opt}`] && (
+                              <div className="mt-1 text-xs text-slate-700 break-words" dangerouslySetInnerHTML={{ __html: formatExtractedText(wrapBareLatex(modalFormData[`rawOption${opt}`])) }} />
+                            )}
+                            {modalFormData[`option${opt}Image`] && (
+                              <div className="mt-2 flex items-center gap-2">
+                                <img src={modalFormData[`option${opt}Image`]} alt={`Option ${opt}`} className="h-10 rounded border border-slate-200" />
+                                <button
+                                  type="button"
+                                  onClick={() => handleModalFieldChange(`option${opt}Image`, '')}
+                                  className="text-[11px] text-red-600 font-bold hover:underline"
+                                >
+                                  Remove Image
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Correct Answer Selection */}
+                    <div className={`p-4 rounded-2xl border ${modalValidationErrors.correctAnswer || modalValidationErrors.correctAnswers ? 'border-red-300 bg-red-50/30 ring-2 ring-red-100' : 'border-slate-200 bg-slate-50'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                          {modalFormData.questionType === 'Multiple Choice' ? 'Correct Answer(s) (MSQ - Select all that apply)' : 'Correct Answer (MCQ)'} <span className="text-red-500">*</span>
+                        </label>
+                        {(modalValidationErrors.correctAnswer || modalValidationErrors.correctAnswers) && (
+                          <span className="text-xs font-bold text-red-600">Please choose the correct answer</span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {['A', 'B', 'C', 'D'].map(opt => {
+                          const isSelected = modalFormData.questionType === 'Multiple Choice'
+                            ? (modalFormData.correctAnswers || []).includes(opt)
+                            : modalFormData.correctAnswer === opt;
+                          return (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => {
+                                if (modalFormData.questionType === 'Multiple Choice') {
+                                  const current = modalFormData.correctAnswers || [];
+                                  const updated = current.includes(opt) ? current.filter(x => x !== opt) : [...current, opt].sort();
+                                  handleModalFieldChange('correctAnswers', updated);
+                                } else {
+                                  handleModalFieldChange('correctAnswer', opt);
+                                }
+                              }}
+                              className={`py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all border ${
+                                isSelected
+                                  ? 'bg-green-600 text-white border-green-600 shadow-md shadow-green-600/30 ring-2 ring-green-300'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              {isSelected && <Check size={16} />}
+                              Option {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Fill in the Blanks (NAT) Fields */
+                  <div className="space-y-4 p-4 rounded-2xl border border-slate-200 bg-slate-50">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Numerical Mode</label>
+                      <div className="flex gap-1 bg-slate-200/80 p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => handleModalFieldChange('fillBlankMode', 'Exact Match')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            modalFormData.fillBlankMode !== 'Numeric Range' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Exact Match
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleModalFieldChange('fillBlankMode', 'Numeric Range')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            modalFormData.fillBlankMode === 'Numeric Range' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Numeric Range
+                        </button>
+                      </div>
+                    </div>
+
+                    {modalFormData.fillBlankMode === 'Numeric Range' ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">Range Start Value *</label>
+                          <input
+                            type="text"
+                            value={modalFormData.fillBlankRangeStart}
+                            onChange={(e) => handleModalFieldChange('fillBlankRangeStart', e.target.value)}
+                            placeholder="e.g. 24.0"
+                            className={`w-full bg-white border text-sm rounded-xl px-3 py-2.5 outline-none font-medium ${
+                              modalValidationErrors.fillBlankRangeStart ? 'border-red-400 bg-red-50/30' : 'border-slate-200 focus:border-purple-500'
+                            }`}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">Range End Value *</label>
+                          <input
+                            type="text"
+                            value={modalFormData.fillBlankRangeEnd}
+                            onChange={(e) => handleModalFieldChange('fillBlankRangeEnd', e.target.value)}
+                            placeholder="e.g. 25.0"
+                            className={`w-full bg-white border text-sm rounded-xl px-3 py-2.5 outline-none font-medium ${
+                              modalValidationErrors.fillBlankRangeEnd ? 'border-red-400 bg-red-50/30' : 'border-slate-200 focus:border-purple-500'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Numerical Answer Value *</label>
+                        <input
+                          type="text"
+                          value={modalFormData.fillBlankAnswer}
+                          onChange={(e) => handleModalFieldChange('fillBlankAnswer', e.target.value)}
+                          placeholder="e.g. 24.5"
+                          className={`w-full bg-white border text-sm rounded-xl px-3 py-2.5 outline-none font-medium ${
+                            modalValidationErrors.fillBlankAnswer ? 'border-red-400 bg-red-50/30' : 'border-slate-200 focus:border-purple-500'
+                          }`}
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">Decimal Precision</label>
+                      <select
+                        value={modalFormData.fillBlankPrecision}
+                        onChange={(e) => handleModalFieldChange('fillBlankPrecision', e.target.value)}
+                        className="w-full bg-white border border-slate-200 text-sm rounded-xl px-3 py-2 outline-none"
+                      >
+                        <option value="None">None (Default)</option>
+                        <option value=".00">2 Decimals (.00)</option>
+                        <option value=".000">3 Decimals (.000)</option>
+                        <option value=".0000">4 Decimals (.0000)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Explanation */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Explanation / Calculation <span className="font-normal text-slate-400">(Optional)</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={modalFormData.rawExplanation}
+                    onChange={(e) => handleModalFieldChange('rawExplanation', e.target.value)}
+                    placeholder="Detailed explanation, formula derivations, steps..."
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl p-3.5 outline-none focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 font-medium"
+                  />
+                  {modalFormData.rawExplanation && (
+                    <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Preview</div>
+                      <div
+                        className="text-slate-800 break-words"
+                        dangerouslySetInnerHTML={{ __html: formatExtractedText(wrapBareLatex(modalFormData.rawExplanation)) }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Sticky Footer */}
+              <div className="p-4 px-6 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleDiscardModal}
+                  className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                >
+                  <Trash2 size={15} /> Discard This Question
+                </button>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={handleCancelModal}
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveModal}
+                    className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black shadow-lg shadow-purple-600/30 flex items-center gap-1.5 transition-all"
+                  >
+                    <Check size={16} />
+                    {isImportPending ? 'Save & Continue Import' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         )}
