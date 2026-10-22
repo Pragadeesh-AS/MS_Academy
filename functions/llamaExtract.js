@@ -251,6 +251,31 @@ exports.extractQuestions = onRequest({
       const job = await createRes.json();
       const questions = await pollJob(job.id, apiKey, 280);
 
+      // Normalize diagram image page numbers if extracted within a target_pages slice (e.g. "13-16")
+      if (req.body?.targetPages && typeof req.body.targetPages === 'string') {
+        const parts = req.body.targetPages.split('-').map(s => parseInt(s.trim(), 10));
+        const from = parts[0];
+        const to = parts[1] || from;
+        if (from > 1 && Array.isArray(questions)) {
+          for (const q of questions) {
+            if (Array.isArray(q.images)) {
+              for (const img of q.images) {
+                if (img && img.page != null) {
+                  const p = parseInt(img.page, 10);
+                  if (!isNaN(p)) {
+                    if (to && p >= from && p <= to) {
+                      img.page = p;
+                    } else if (p >= 1 && (!to || p <= (to - from + 1))) {
+                      img.page = (from - 1) + p;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
       return res.status(200).json({
         success: true,
         fileId,

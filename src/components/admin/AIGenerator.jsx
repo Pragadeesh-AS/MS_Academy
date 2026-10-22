@@ -687,6 +687,62 @@ const attachDiagramImages = async (fileObj, questions) => {
   if (!questions.some(q => Array.isArray(q.images) && q.images.length > 0)) return strip;
 
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await fileObj.arrayBuffer()) }).promise;
+
+  // Pre-index text of all pages so we can verify or re-target any mismatched/offset page numbers
+  const pageTexts = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    try {
+      const page = await pdf.getPage(p);
+      const tc = await page.getTextContent();
+      pageTexts.push(tc.items.map(it => it.str).join(' ').toLowerCase());
+    } catch {
+      pageTexts.push('');
+    }
+  }
+
+  const resolveCorrectPage = (rawPage, q) => {
+    let pNum = parseInt(rawPage, 10);
+    if (isNaN(pNum)) return null;
+
+    const qText = (q?.questionText || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const tokens = qText.split(' ').filter(w => w.length > 2);
+    const qNum = (q?.questionNumber || '').trim().toLowerCase();
+
+    // Check if the reported page actually contains this question
+    if (pNum >= 1 && pNum <= pdf.numPages) {
+      const pText = pageTexts[pNum - 1] || '';
+      const trigrams = [];
+      for (let i = 0; i <= Math.min(tokens.length - 3, 10); i++) {
+        trigrams.push(tokens.slice(i, i + 3).join(' '));
+      }
+      const matches = trigrams.filter(t => pText.includes(t)).length;
+      if (matches >= 2 || (qNum && pText.includes(qNum))) {
+        return pNum; // Verified!
+      }
+    }
+
+    // Reported page didn't match: find the true page where this question is printed
+    if (tokens.length >= 3) {
+      const trigrams = [];
+      for (let i = 0; i <= Math.min(tokens.length - 3, 15); i++) {
+        trigrams.push(tokens.slice(i, i + 3).join(' '));
+      }
+      let bestPage = pNum;
+      let maxScore = 0;
+      for (let p = 0; p < pageTexts.length; p++) {
+        let score = trigrams.filter(t => pageTexts[p].includes(t)).length * 3;
+        if (qNum && pageTexts[p].includes(qNum)) score += 5;
+        if (score > maxScore) {
+          maxScore = score;
+          bestPage = p + 1;
+        }
+      }
+      if (maxScore >= 3) return bestPage;
+    }
+
+    return pNum >= 1 && pNum <= pdf.numPages ? pNum : null;
+  };
+
   // Only the last rendered page is kept - questions come in page order and full pages are large
   let cached = { num: 0, canvas: null };
   const renderPage = async (num) => {
@@ -706,9 +762,9 @@ const attachDiagramImages = async (fileObj, questions) => {
       const crops = {};
       for (const img of Array.isArray(questions[qi].images) ? questions[qi].images : []) {
         const field = IMAGE_TARGETS[img?.target] || IMAGE_TARGETS.question;
-        const pageNum = parseInt(img?.page, 10);
+        const pageNum = resolveCorrectPage(img?.page, questions[qi]);
         const rect = normalizeBox(img?.box_2d);
-        if (!rect || !(pageNum >= 1 && pageNum <= pdf.numPages)) continue;
+        if (!rect || !pageNum || !(pageNum >= 1 && pageNum <= pdf.numPages)) continue;
         try {
           const crop = cropRegion(await renderPage(pageNum), rect);
           if (crop) (crops[field] ||= []).push(crop);
@@ -1276,7 +1332,20 @@ export default function AIGenerator({ pairMode = false }) {
             setProgressMsg(`Extracting ${pageLabel(from, to)} of ${totalPages}...`);
             try {
               const batchQuestions = await runExtract(`${from}-${to}`, `Extract ONLY the questions that START on ${pageLabel(from, to)} of this PDF. Skip questions that start before page ${from} or after page ${to}.`);
-              rawQuestions.push(...batchQuestions);
+              const normalizedBatch = (batchQuestions || []).map(q => {
+                if (!Array.isArray(q.images) || q.images.length === 0) return q;
+                return {
+                  ...q,
+                  images: q.images.map(img => {
+                    if (!img || img.page == null) return img;
+                    const p = parseInt(img.page, 10);
+                    if (isNaN(p)) return img;
+                    const actualPage = (p >= from && p <= to) ? p : (from > 1 && p <= (to - from + 1)) ? (from - 1) + p : p;
+                    return { ...img, page: actualPage };
+                  })
+                };
+              });
+              rawQuestions.push(...normalizedBatch);
             } catch (batchErr) {
               console.warn(`Extraction failed for ${pageLabel(from, to)}:`, batchErr);
               warnings.push(`Could not extract ${pageLabel(from, to)}: ${batchErr.message}`);
@@ -1315,7 +1384,7 @@ export default function AIGenerator({ pairMode = false }) {
         }
 
         setExtractionWarnings(warnings);
-        parsedQuestions = rawQuestions.map(({ questionNumber, ...q }) => ({
+        parsedQuestions = rawQuestions.map(q => ({
           ...q,
           isImported: true,
           questionText: formatExtractedText(q.questionText),
@@ -1332,6 +1401,7 @@ export default function AIGenerator({ pairMode = false }) {
           console.error('Diagram cropping failed:', imgErr);
           parsedQuestions = parsedQuestions.map(({ images, ...rest }) => rest);
         }
+        parsedQuestions = parsedQuestions.map(({ questionNumber, images, ...rest }) => rest);
       } else {
         console.log("No LlamaIndex API key found. Using pdf.js fallback...");
         const text = await extractTextFromPDF(file);
