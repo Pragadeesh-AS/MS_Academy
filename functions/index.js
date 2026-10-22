@@ -11,6 +11,7 @@ Object.assign(exports, require('./testNotifications'));
 Object.assign(exports, require('./postClassQuizCleanup'));
 Object.assign(exports, require('./enquiryNotifications'));
 Object.assign(exports, require('./googleReviews'));
+Object.assign(exports, require('./llamaExtract'));
 
 exports.generateAgoraToken = onRequest({ cors: true }, (request, response) => {
     // using built-in v2 cors or the manual cors middleware
