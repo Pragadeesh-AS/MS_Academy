@@ -1993,6 +1993,7 @@ export default function AIGenerator({ pairMode = false }) {
           isPremium: importAsPremium,
           // Compared with its duplicate and kept on purpose - the Question Bank cleanup leaves it alone
           ...(duplicateOf(original) ? { allowDuplicate: true } : {}),
+          sourceFileName: file?.name || '',
           importedAt,
           importOrder,
           createdAt: new Date().toISOString(),

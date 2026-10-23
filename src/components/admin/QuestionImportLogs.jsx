@@ -117,7 +117,7 @@ export default function QuestionImportLogs() {
           batchId: `HIST-${key}`,
           type: inReviewCount > 0 ? 'import_for_review' : 'direct_push',
           action: inReviewCount > 0 ? 'Historical Import (In Review)' : 'Historical Import (Pushed to Question Bank)',
-          fileName: sample.source === 'AI Generator' ? 'AI Extracted Document' : (sample.source || 'Question Bank Import'),
+          fileName: sample.sourceFileName || (sample.topic ? `${String(sample.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : (sample.subject ? `${String(sample.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : 'Extracted_Questions.pdf')),
           department: sample.department || 'Multiple / General',
           subject: sample.subject || '',
           topic: sample.topic || '',
@@ -656,8 +656,7 @@ export default function QuestionImportLogs() {
               <thead>
                 <tr className="bg-[#F8FAFC] border-b border-[#EEF2F7] text-[12px] font-bold text-slate-500 uppercase tracking-wider">
                   <th className="py-4 px-5">Date & Time</th>
-                  <th className="py-4 px-4">Action / Event</th>
-                  <th className="py-4 px-4">File / Source</th>
+                  <th className="py-4 px-4">Uploaded File</th>
                   <th className="py-4 px-4">Imported By</th>
                   <th className="py-4 px-4">Pushed By</th>
                   <th className="py-4 px-4">Department / Subject</th>
@@ -677,6 +676,13 @@ export default function QuestionImportLogs() {
                   const hasRejected = (log.rejectedCount || 0) > 0;
                   const importerName = log.importedBy?.name || log.user?.name || 'Admin';
                   const pusherName = log.pushedBy?.name || (isPushed ? importerName : '-');
+                  const resolvedFileName = log.fileName && !log.fileName.includes('Question Bank Import') && !log.fileName.includes('AI Extracted Document')
+                    ? log.fileName
+                    : log.topic
+                      ? `${String(log.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf`
+                      : log.subject
+                        ? `${String(log.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf`
+                        : 'Extracted_Questions.pdf';
 
                   return (
                     <tr 
@@ -696,27 +702,18 @@ export default function QuestionImportLogs() {
                         </div>
                       </td>
 
-                      {/* Action */}
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-bold ${
-                          isPushed 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                            : log.type === 'import_for_review'
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                              : 'bg-blue-50 text-blue-700 border border-blue-200'
-                        }`}>
-                          {isPushed ? <CheckCircle2 size={13} /> : <Clock size={13} />}
-                          {log.action || (isPushed ? 'Pushed to Bank' : 'Sent for Review')}
-                        </span>
-                      </td>
-
-                      {/* File Name */}
-                      <td className="py-4 px-4 max-w-[200px]">
-                        <div className="flex items-center gap-2">
-                          <FileText size={16} className="text-slate-400 shrink-0" />
-                          <span className="font-semibold text-slate-800 truncate" title={log.fileName}>
-                            {log.fileName || 'Extracted Document'}
-                          </span>
+                      {/* Uploaded File Name */}
+                      <td className="py-4 px-4 max-w-[240px]">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100 shadow-xs">
+                            <FileText size={16} />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-slate-800 truncate text-[13.5px]" title={resolvedFileName}>
+                              {resolvedFileName}
+                            </span>
+                            <span className="text-[11px] font-medium text-slate-400">PDF Document</span>
+                          </div>
                         </div>
                       </td>
 
@@ -929,10 +926,19 @@ export default function QuestionImportLogs() {
                   </span>
                 </div>
                 <div className="flex flex-col sm:items-end">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Source Document</span>
-                  <span className="text-[14px] font-bold text-blue-600 mt-0.5">
-                    {selectedLog.fileName || 'Extracted Document'}
-                  </span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Uploaded File</span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <FileText size={15} className="text-red-500 shrink-0" />
+                    <span className="text-[14px] font-bold text-slate-800">
+                      {selectedLog.fileName && !selectedLog.fileName.includes('Question Bank Import') && !selectedLog.fileName.includes('AI Extracted Document')
+                        ? selectedLog.fileName
+                        : selectedLog.topic
+                          ? `${String(selectedLog.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf`
+                          : selectedLog.subject
+                            ? `${String(selectedLog.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf`
+                            : 'Extracted_Questions.pdf'}
+                    </span>
+                  </div>
                 </div>
               </div>
 

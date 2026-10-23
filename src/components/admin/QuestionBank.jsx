@@ -715,10 +715,12 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       cacheUpdateQuestion({ id: currentId, ...payload }, cacheKey);
       updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
         showToast("Question saved successfully", "success");
+        const resolvedFile = payload.sourceFileName || before?.sourceFileName || (payload.topic ? `${String(payload.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : (payload.subject ? `${String(payload.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : 'Extracted_Questions.pdf'));
         if (before?.status === 'In Review' && finalStatus === 'Approved') {
           logQuestionActivity({
             type: 'approval',
             action: 'Question Approved & Pushed to Bank',
+            fileName: resolvedFile,
             pushedCount: 1,
             importedCount: 1,
             pushedBy: {
@@ -735,6 +737,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           logQuestionActivity({
             type: 'rejection',
             action: 'Question Rejected to Drafts',
+            fileName: resolvedFile,
             rejectedCount: 1,
             rejectedBy: {
               name: authName,
@@ -939,6 +942,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       logQuestionActivity({
         type: 'approval',
         action: 'Question Approved & Pushed to Bank',
+        fileName: q.sourceFileName || (q.topic ? `${String(q.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : (q.subject ? `${String(q.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : 'Extracted_Questions.pdf')),
         pushedCount: 1,
         importedCount: 1,
         pushedBy: {
@@ -994,9 +998,11 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         cacheBulkUpdate(ids, update, cacheKey);
         showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} approved`, "success");
         const approvedQuestions = questions.filter(q => ids.includes(q.id));
+        const firstQ = approvedQuestions[0];
         logQuestionActivity({
           type: 'approval',
           action: 'Bulk Approved & Pushed to Question Bank',
+          fileName: firstQ?.sourceFileName || (firstQ?.topic ? `${String(firstQ.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : (firstQ?.subject ? `${String(firstQ.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : 'Extracted_Questions.pdf')),
           pushedCount: ids.length,
           importedCount: ids.length,
           pushedBy: {
