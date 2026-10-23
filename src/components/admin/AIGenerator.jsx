@@ -5,6 +5,7 @@ import { collection, addDoc, doc, getDoc, getDocs, setDoc } from 'firebase/fires
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import katex from 'katex';
 import { findDuplicateQuestions } from '../../utils/questionDuplicates';
+import { logQuestionActivity, hasDiagram } from '../../utils/questionLogger';
 import { QUESTION_CATEGORIES, inferQuestionCategory } from '../../utils/questionCategory';
 import 'katex/dist/katex.min.css';
 
@@ -885,6 +886,7 @@ export default function AIGenerator({ pairMode = false }) {
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [importSummary, setImportSummary] = useState(null); // { imported, skipped }
   const [extractedQuestions, setExtractedQuestions] = useState([]);
+  const [initialExtractedCount, setInitialExtractedCount] = useState(0);
   const [importAsPremium, setImportAsPremium] = useState(false);
   // Missing fields & Question editing modal state
   const [editingQuestionIndex, setEditingQuestionIndex] = useState(null);
@@ -1551,6 +1553,7 @@ export default function AIGenerator({ pairMode = false }) {
       // Stable id per extracted question, so a duplicate flag can point at "question #3 of this PDF"
       // even after other questions are edited or removed
       parsedQuestions = parsedQuestions.map((q, i) => ({ ...q, _key: i }));
+      setInitialExtractedCount(parsedQuestions.length);
       setExtractedQuestions(parsedQuestions);
       setStatus('review');
       markDuplicates(parsedQuestions);
@@ -1998,11 +2001,61 @@ export default function AIGenerator({ pairMode = false }) {
         await addDoc(collection(db, 'question_bank'), docPayload);
         imported.add(original);
       }
-      setImportSummary({ imported: toImport.length, keptDuplicates });
+
+      // Record detailed extraction & import log
+      try {
+        const currentUser = {
+          name: sessionStorage.getItem('auth_name') || (pairMode ? 'Typist' : 'Admin'),
+          email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
+          role: pairMode ? 'Typist' : (sessionStorage.getItem('user_role') || 'Admin')
+        };
+        const diagCount = toImport.filter(q => hasDiagram(q)).length;
+        const totalExtracted = initialExtractedCount || toImport.length;
+        const skippedCount = Math.max(0, totalExtracted - toImport.length) + (keptDuplicates || 0);
+
+        await logQuestionActivity({
+          batchId: `BATCH-${Date.now()}`,
+          type: direct ? 'direct_push' : 'import_for_review',
+          action: direct ? 'Extracted & Pushed directly to Question Bank' : 'Extracted & Sent for Review',
+          fileName: file?.name || 'Extracted PDF Document',
+          department: importSettings.department || toImport[0]?.department || '',
+          subject: importSettings.subject || toImport[0]?.subject || '',
+          topic: importSettings.topic || toImport[0]?.topic || '',
+          totalExtracted,
+          importedCount: toImport.length,
+          pushedCount: direct ? toImport.length : 0,
+          skippedCount,
+          rejectedCount: 0,
+          diagramCount: diagCount,
+          textOnlyCount: toImport.length - diagCount,
+          questionTypes: {
+            singleChoice: toImport.filter(q => q.questionType === 'Single Choice' || !q.questionType).length,
+            multipleChoice: toImport.filter(q => q.questionType === 'Multiple Choice').length,
+            nat: toImport.filter(q => q.questionType === 'Fill in Blanks' || q.questionType === 'Fill in the Blanks').length,
+            match: toImport.filter(q => q.questionType === 'Match').length
+          },
+          user: currentUser,
+          importedBy: currentUser,
+          pushedBy: direct ? currentUser : null,
+          reviewerEmail: direct ? '' : reviewer,
+          importedAt,
+          createdAt: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.warn('Failed to log import activity:', logErr);
+      }
+
+      setImportSummary({ 
+        imported: toImport.length, 
+        keptDuplicates,
+        diagramCount: diagCount,
+        skipped: skippedCount,
+        pushed: direct ? toImport.length : 0
+      });
       setStatus('success');
       setTimeout(() => {
         resetState();
-      }, toImport.length === 0 ? 5000 : 3000);
+      }, toImport.length === 0 ? 5000 : 4000);
     } catch (error) {
       console.error("Error importing questions:", error);
       // Drop the ones that did get saved, so pressing Import again can't save them twice
@@ -2017,6 +2070,7 @@ export default function AIGenerator({ pairMode = false }) {
     setStatus('idle');
     setErrorMsg('');
     setExtractedQuestions([]);
+    setInitialExtractedCount(0);
     setExtractionWarnings([]);
     setProgressMsg('');
     setImportSummary(null);
@@ -2414,9 +2468,15 @@ export default function AIGenerator({ pairMode = false }) {
           <h3 className="text-2xl font-black text-slate-800 mb-2">
             Successfully Imported!
           </h3>
-          <p className="text-slate-500 font-medium">
-            {`${importSummary ? `${importSummary.imported} question(s) imported. ` : ''}The extracted questions have been sent to the reviewer. They reach the Question Bank once approved.`}
+          <p className="text-slate-600 font-semibold">
+            {importSummary ? `${importSummary.imported} question(s) imported${importSummary.diagramCount ? ` (${importSummary.diagramCount} with diagrams)` : ''}. ` : ''}
+            {importSummary?.pushed > 0 ? 'Pushed directly into the Question Bank!' : 'Sent to the reviewer for final approval.'}
           </p>
+          {importSummary?.skipped > 0 && (
+            <p className="text-slate-400 font-medium text-sm mt-1">
+              {importSummary.skipped} question(s) skipped or excluded.
+            </p>
+          )}
           {importSummary?.keptDuplicates > 0 && (
             <p className="text-amber-700 font-semibold mt-2">{importSummary.keptDuplicates} of them matched an existing question and were imported because you chose to keep them.</p>
           )}

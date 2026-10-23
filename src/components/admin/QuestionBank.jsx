@@ -9,6 +9,7 @@ import { QUESTION_CATEGORIES, getQuestionCategory, inferQuestionCategory } from 
 import { markNumberOf, markLabelFor, negativeMarkFor } from '../../utils/marking';
 import { sameDepartment } from '../../utils/subjects';
 import { answerKeyChanged } from '../../utils/testGrading';
+import { logQuestionActivity, hasDiagram } from '../../utils/questionLogger';
 import { regradeAttemptsForQuestion } from '../../utils/regradeAttempts';
 import MatchColumns from '../shared/MatchColumns';
 import DepartmentFolderGrid from './DepartmentFolderGrid';
@@ -714,6 +715,38 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       cacheUpdateQuestion({ id: currentId, ...payload }, cacheKey);
       updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
         showToast("Question saved successfully", "success");
+        if (before?.status === 'In Review' && finalStatus === 'Approved') {
+          logQuestionActivity({
+            type: 'approval',
+            action: 'Question Approved & Pushed to Bank',
+            pushedCount: 1,
+            importedCount: 1,
+            pushedBy: {
+              name: authName,
+              email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
+              role: 'Reviewer/Admin'
+            },
+            diagramCount: hasDiagram(payload) ? 1 : 0,
+            department: payload.department || '',
+            subject: payload.subject || '',
+            topic: payload.topic || ''
+          });
+        } else if (before?.status === 'In Review' && finalStatus === 'Draft') {
+          logQuestionActivity({
+            type: 'rejection',
+            action: 'Question Rejected to Drafts',
+            rejectedCount: 1,
+            rejectedBy: {
+              name: authName,
+              email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
+              role: 'Reviewer'
+            },
+            diagramCount: hasDiagram(payload) ? 1 : 0,
+            department: payload.department || '',
+            subject: payload.subject || '',
+            topic: payload.topic || ''
+          });
+        }
         return regradeIfKeyChanged(before, { id: currentId, ...payload });
       }).catch(e => {
         console.error("Failed to update question", e);
@@ -903,6 +936,21 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     try {
       await updateDoc(doc(db, 'question_bank', q.id), update);
       showToast("Question approved", "success");
+      logQuestionActivity({
+        type: 'approval',
+        action: 'Question Approved & Pushed to Bank',
+        pushedCount: 1,
+        importedCount: 1,
+        pushedBy: {
+          name: sessionStorage.getItem('auth_name') || 'Admin',
+          email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
+          role: 'Reviewer/Admin'
+        },
+        diagramCount: hasDiagram(q) ? 1 : 0,
+        department: q.department || '',
+        subject: q.subject || '',
+        topic: q.topic || ''
+      });
     } catch (e) {
       console.error("Failed to approve question", e);
       showToast("Failed to approve. Changes reverted.", "error");
@@ -945,6 +993,22 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         setQuestions(prev => prev.map(q => ids.includes(q.id) ? { ...q, ...update } : q));
         cacheBulkUpdate(ids, update, cacheKey);
         showToast(`${ids.length} question${ids.length === 1 ? '' : 's'} approved`, "success");
+        const approvedQuestions = questions.filter(q => ids.includes(q.id));
+        logQuestionActivity({
+          type: 'approval',
+          action: 'Bulk Approved & Pushed to Question Bank',
+          pushedCount: ids.length,
+          importedCount: ids.length,
+          pushedBy: {
+            name: sessionStorage.getItem('auth_name') || 'Admin',
+            email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
+            role: 'Reviewer/Admin'
+          },
+          diagramCount: approvedQuestions.filter(hasDiagram).length,
+          department: approvedQuestions[0]?.department || '',
+          subject: approvedQuestions[0]?.subject || '',
+          topic: approvedQuestions[0]?.topic || ''
+        });
       } else if (bulkAction === 'mark1' || bulkAction === 'mark2') {
         const n = bulkAction === 'mark2' ? 2 : 1;
         const mark = markLabelFor(n, marks);

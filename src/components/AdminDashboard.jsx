@@ -7,7 +7,7 @@ import {
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, ChevronDown, UserCheck, Database, BarChart2, Megaphone, Sparkles,
   Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck, Menu, Images, MessageSquareText,
-  PhoneCall, Phone, MessageCircle, Star
+  PhoneCall, Phone, MessageCircle, Star, ScrollText
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
@@ -17,6 +17,7 @@ import { STUDENT_DEPARTMENTS } from '../utils/subjects';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, onSnapshot, serverTimestamp, arrayUnion, query, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import QuestionBank from './admin/QuestionBank';
+import QuestionImportLogs from './admin/QuestionImportLogs';
 import { prewarmQuestionBankCache } from '../utils/questionBankCache';
 import NotesManager from './admin/NotesManager';
 import RecordingsManager from './admin/RecordingsManager';
@@ -1147,6 +1148,7 @@ export default function AdminDashboard() {
                   { key: 'attributes', label: 'Attributes', icon: Tag },
                   { key: 'analytics', label: 'Analytics', icon: BarChart2 },
                   { key: 'questions', label: 'Question Bank', icon: Database },
+                  { key: 'question_logs', label: 'Question Logs', icon: ScrollText },
                   { key: 'tests', label: 'Create Test', icon: Trophy },
                   { key: 'reported', label: "Reported Q's", icon: ShieldCheck, danger: true },
                   { key: 'premium_questions', label: 'Premium Questions', icon: Database },
@@ -1328,6 +1330,14 @@ export default function AdminDashboard() {
               >
                 <Database size={20} className={activeTab === 'questions' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Question Bank</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('question_logs')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'question_logs' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+              >
+                <ScrollText size={20} className={activeTab === 'question_logs' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Question Logs</span>}
               </button>
 
               <button
@@ -2176,6 +2186,11 @@ export default function AdminDashboard() {
           <div>
             <QuestionBank isPremiumView={true} initialEditQuestionId={editQuestionId} onClearEdit={() => setEditQuestionId(null)} />
           </div>
+        )}
+
+        {/* Question Activity & Import Logs Tab */}
+        {activeTab === 'question_logs' && (
+          <QuestionImportLogs />
         )}
         
         {/* Reported Questions Tab */}
