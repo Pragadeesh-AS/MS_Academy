@@ -31,7 +31,7 @@ import {
 import AdmissionFormViewer from './AdmissionFormViewer';
 import { needsAdmissionForm, isAdmissionFormExempt } from '../../utils/admissionForm';
 import { tierKeyOf, fullBundleOf } from '../../utils/membership';
-import { hasUnlimitedPractice } from '../../utils/practiceTests';
+import { hasUnlimitedPractice, isFullBundle } from '../../utils/practiceTests';
 import StudentPracticeStats from './StudentPracticeStats';
 import AdmissionFormsArchive from './AdmissionFormsArchive';
 import { paletteFor } from '../../utils/departmentColors';
