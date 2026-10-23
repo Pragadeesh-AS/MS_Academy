@@ -359,6 +359,19 @@ export default function QuestionImportLogs() {
     }
   };
 
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return { date: 'Unknown', time: '' };
+    try {
+      const d = new Date(dateStr);
+      return {
+        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      };
+    } catch {
+      return { date: String(dateStr), time: '' };
+    }
+  };
+
   return (
     <div className="w-full flex flex-col gap-6 p-4 sm:p-6 lg:p-8 bg-[#F8FAFC] min-h-screen">
       
@@ -651,26 +664,24 @@ export default function QuestionImportLogs() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="w-full overflow-hidden">
+            <table className="w-full table-fixed text-left border-collapse">
               <thead>
-                <tr className="bg-[#F8FAFC] border-b border-[#EEF2F7] text-[12px] font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="py-4 px-5">Date & Time</th>
-                  <th className="py-4 px-4">Uploaded File</th>
-                  <th className="py-4 px-4">Imported By</th>
-                  <th className="py-4 px-4">Pushed By</th>
-                  <th className="py-4 px-4">Department / Subject</th>
-                  <th className="py-4 px-5 text-right">Details</th>
+                <tr className="bg-[#F8FAFC] border-b border-[#EEF2F7] text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="py-3 px-3 w-[115px]">Date & Time</th>
+                  <th className="py-3 px-3 w-[28%]">Uploaded File</th>
+                  <th className="py-3 px-3 w-[18%]">Imported By</th>
+                  <th className="py-3 px-3 w-[14%]">Pushed By</th>
+                  <th className="py-3 px-3">Department / Subject</th>
+                  <th className="py-3 px-3 w-[70px] text-right">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EEF2F7] text-[13px]">
                 {paginatedLogs.map((log) => {
                   const isPushed = (log.pushedCount || 0) > 0;
-                  const hasDiagrams = (log.diagramCount || 0) > 0;
-                  const hasSkipped = (log.skippedCount || 0) > 0;
-                  const hasRejected = (log.rejectedCount || 0) > 0;
                   const importerName = log.importedBy?.name || log.user?.name || 'Admin';
                   const pusherName = log.pushedBy?.name || (isPushed ? importerName : '-');
+                  const dt = formatDateTime(log.createdAt || log.importedAt);
                   const resolvedFileName = log.fileName && !log.fileName.includes('Question Bank Import') && !log.fileName.includes('AI Extracted Document')
                     ? log.fileName
                     : log.topic
@@ -685,44 +696,44 @@ export default function QuestionImportLogs() {
                       className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
                       onClick={() => setSelectedLog(log)}
                     >
-                      {/* Date */}
-                      <td className="py-4 px-5 whitespace-nowrap">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-800">
-                            {formatDate(log.createdAt || log.importedAt)}
+                      {/* Date & Time (compact 2-line layout, reduced width) */}
+                      <td className="py-3 px-3 w-[115px]">
+                        <div className="flex flex-col leading-tight" title={log.batchId || log.id}>
+                          <span className="font-bold text-slate-800 text-[12px] whitespace-nowrap">
+                            {dt.date}
                           </span>
-                          <span className="text-[11px] font-mono text-slate-400">
-                            {log.batchId || log.id.slice(0, 8)}
+                          <span className="text-[11px] font-medium text-slate-400 whitespace-nowrap mt-0.5">
+                            {dt.time}
                           </span>
                         </div>
                       </td>
 
                       {/* Uploaded File Name */}
-                      <td className="py-4 px-4 max-w-[240px]">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100 shadow-xs">
-                            <FileText size={16} />
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-7 h-7 rounded-md bg-red-50 text-red-600 flex items-center justify-center shrink-0 border border-red-100 shadow-xs">
+                            <FileText size={14} />
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="font-bold text-slate-800 truncate text-[13.5px]" title={resolvedFileName}>
+                            <span className="font-bold text-slate-800 truncate text-[12.5px]" title={resolvedFileName}>
                               {resolvedFileName}
                             </span>
-                            <span className="text-[11px] font-medium text-slate-400">PDF Document</span>
+                            <span className="text-[10px] font-medium text-slate-400">PDF Document</span>
                           </div>
                         </div>
                       </td>
 
                       {/* Imported By */}
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0">
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold text-[10.5px] flex items-center justify-center shrink-0">
                             {importerName.charAt(0).toUpperCase()}
                           </div>
-                          <div className="flex flex-col">
-                            <span className="font-bold text-slate-800 leading-tight">
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-slate-800 text-[12px] truncate" title={importerName}>
                               {importerName}
                             </span>
-                            <span className="text-[11px] font-medium text-slate-400 truncate max-w-[140px]" title={log.importedBy?.email || log.user?.email}>
+                            <span className="text-[10.5px] font-medium text-slate-400 truncate" title={log.importedBy?.email || log.user?.email || 'System'}>
                               {log.importedBy?.email || log.user?.email || 'System'}
                             </span>
                           </div>
@@ -730,36 +741,34 @@ export default function QuestionImportLogs() {
                       </td>
 
                       {/* Pushed By */}
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        <span className={`font-semibold ${isPushed ? 'text-emerald-700' : 'text-slate-400'}`}>
+                      <td className="py-3 px-3">
+                        <span className={`font-semibold text-[12px] truncate block ${isPushed ? 'text-emerald-700 font-bold' : 'text-slate-400'}`} title={pusherName}>
                           {pusherName}
                         </span>
                       </td>
 
                       {/* Department / Subject */}
-                      <td className="py-4 px-4 max-w-[180px]">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-800 truncate" title={log.department}>
+                      <td className="py-3 px-3">
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-slate-800 text-[12px] truncate" title={log.department || 'General'}>
                             {log.department || 'General'}
                           </span>
-                          <span className="text-[11px] font-medium text-slate-500 truncate" title={`${log.subject || ''} ${log.topic ? `• ${log.topic}` : ''}`}>
-                            {log.subject || 'All Subjects'} {log.topic ? `• ${log.topic}` : ''}
+                          <span className="text-[10.5px] font-medium text-slate-500 truncate" title={`${log.subject || ''} ${log.topic ? `• ${log.topic}` : ''}`}>
+                            {log.subject || 'All Subjects'}{log.topic ? ` • ${log.topic}` : ''}
                           </span>
                         </div>
                       </td>
 
-
-
                       {/* Action / Inspect */}
-                      <td className="py-4 px-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="py-3 px-3 w-[70px] text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
                             onClick={() => setSelectedLog(log)}
                             className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                             title="Inspect details"
                           >
-                            <Eye size={17} />
+                            <Eye size={16} />
                           </button>
                           <button
                             type="button"
@@ -767,7 +776,7 @@ export default function QuestionImportLogs() {
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                             title="Delete log entry"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={15} />
                           </button>
                         </div>
                       </td>
