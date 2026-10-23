@@ -22,7 +22,8 @@ import {
   cacheUpdateQuestion,
   cacheRemoveQuestions,
   cacheBulkUpdate,
-  updateCachedAttributes
+  updateCachedAttributes,
+  questionTimeMillis
 } from '../../utils/questionBankCache';
 
 // Engineering Mathematics and Aptitude banks are shared by every department.
@@ -756,8 +757,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     payload.negativeMark = negativeMarkFor(payload);
     // Creation date is stamped once; edits must never overwrite it
     if (formData.createdAt) payload.createdAt = formData.createdAt;
-    else if (!isEditing) payload.createdAt = nowIso;
-    else delete payload.createdAt;
+    else if (!isEditing) {
+      payload.createdAt = nowIso;
+      payload.importedAt = nowIso;
+    } else delete payload.createdAt;
 
     // Who typed it is stamped once, on creation - by name for display and by email so the typist can
     // always find it again. An edit (e.g. a reviewer approving it) never changes the owner or the
@@ -1207,7 +1210,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const filteredQuestions = useMemo(() => {
     if (!questions.length) return [];
     const searchLower = (search || '').toLowerCase().trim();
-    return questions.filter(q => {
+    const matchedList = questions.filter(q => {
       const matchesSearch = !searchLower || (q.questionText || '').toLowerCase().includes(searchLower);
       const matchesDept = lockedDepartment
         ? (!selectedFolder
@@ -1263,6 +1266,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       }
 
       return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && matchesType && matchesCategory && roleMatches && premiumMatches;
+    });
+
+    // Always ensure the latest extracted or added questions come first
+    return [...matchedList].sort((a, b) => {
+      const bTime = questionTimeMillis(b);
+      const aTime = questionTimeMillis(a);
+      if (bTime !== aTime) return bTime - aTime;
+      return (a.importOrder ?? 0) - (b.importOrder ?? 0);
     });
   }, [questions, search, lockedDepartment, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, filterCategory, userRole, externalFilter, isPremiumView, isMyQuestion]);
 

@@ -26,6 +26,19 @@ import { getCachedQuestionsSync, loadQuestionBankData } from '../utils/questionB
 import tkModule from '@axelixlabs/react-timepicker';
 const TimeKeeper = tkModule.default || tkModule;
 
+// Helper to safely extract milliseconds for test sorting (latest created first)
+export const testCreatedMillis = (t) => {
+  if (!t) return 0;
+  const c = t.createdAt || t.created_at || t.updatedAt || t.startsAt;
+  if (!c) return 0;
+  if (typeof c === 'number') return c;
+  if (typeof c.toMillis === 'function') return c.toMillis();
+  if (typeof c.toDate === 'function') return c.toDate().getTime();
+  if (c.seconds) return c.seconds * 1000 + (c.nanoseconds ? Math.round(c.nanoseconds / 1000000) : 0);
+  const parsed = Date.parse(c);
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 // Marks of a question as a number, whatever text it's stored as ("1 Mark (-0.33)", "1", "1 Mark").
 // A question with no mark counts as 1 - that's how the Question Bank shows it and how tests score it.
 const markValue = (q) => markNumberOf(q.mark) || 1;
@@ -189,6 +202,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
       if (isTeacher && department) {
         testsList = testsList.filter(t => sameDepartment(t.department, department));
       }
+      testsList.sort((a, b) => testCreatedMillis(b) - testCreatedMillis(a));
       setTests(testsList);
     } catch (err) {
       console.error("Error fetching tests:", err);
@@ -724,14 +738,21 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
         await updateDoc(doc(db, 'tests', editingTestId), testPayload);
         showToast("Test template updated successfully!", "success");
       } else {
-        await addDoc(collection(db, 'tests'), {
+        const newDocRef = await addDoc(collection(db, 'tests'), {
           ...testPayload,
           status: 'active',
           solutionsUnlocked: false,
           createdBy: sessionStorage.getItem('auth_name') || (isTeacher ? 'Teacher' : 'Admin'),
-          createdAt: serverTimestamp()
+          createdAt: Timestamp.now()
         });
         showToast("Test template created successfully!", "success");
+        if (!isTeacher && testPayload.department) {
+          const targetFolder = folderOf(testPayload);
+          setOpenFolder(targetFolder);
+          if (templateKeyOf(testPayload)) {
+            setOpenTemplateFolder(templateKeyOf(testPayload));
+          }
+        }
       }
       setIsCreatorOpen(false);
       resetForm();
@@ -1053,8 +1074,10 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     }
     return raw;
   };
-  // Inside a department (or a teacher's own list): one folder per test template
-  const deptTests = isTeacher ? tests : tests.filter(t => folderOf(t) === openFolder);
+  // Inside a department (or a teacher's own list): one folder per test template, sorted latest first
+  const deptTests = (isTeacher ? tests : tests.filter(t => folderOf(t) === openFolder))
+    .slice()
+    .sort((a, b) => testCreatedMillis(b) - testCreatedMillis(a));
   const templateFolders = templateFoldersFor(deptTests);
   const showTemplateFolders = !showFolders && !openTemplateFolder;
   const folders = Object.entries(tests.reduce((acc, t) => {
@@ -1062,7 +1085,9 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     acc[k] = (acc[k] || 0) + 1;
     return acc;
   }, {})).map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
-  const visibleTests = openTemplateFolder ? deptTests.filter(t => templateKeyOf(t) === openTemplateFolder) : deptTests;
+  const visibleTests = (openTemplateFolder ? deptTests.filter(t => templateKeyOf(t) === openTemplateFolder) : deptTests)
+    .slice()
+    .sort((a, b) => testCreatedMillis(b) - testCreatedMillis(a));
 
   useEffect(() => {
     if (openFolder && !loading && !tests.some(t => folderOf(t) === openFolder)) setOpenFolder(null);

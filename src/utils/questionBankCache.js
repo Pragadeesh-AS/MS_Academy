@@ -5,16 +5,26 @@ const DB_NAME = 'ms_academy_cache';
 const DB_VERSION = 1;
 const STORE_NAME = 'question_bank_store';
 
-// Helper: safe date parsing & sorting
-const iso = (v) => (v?.toDate ? v.toDate().toISOString() : String(v || ''));
-const addedAt = (q) => iso(q.importedAt || q.createdAt);
+// Helper: safe timestamp extraction for questions
+export const questionTimeMillis = (q) => {
+  if (!q) return 0;
+  const val = q.importedAt || q.createdAt || q.updatedAt;
+  if (!val) return 0;
+  if (typeof val === 'number') return val;
+  if (typeof val.toMillis === 'function') return val.toMillis();
+  if (typeof val.toDate === 'function') return val.toDate().getTime();
+  if (val.seconds) return val.seconds * 1000 + (val.nanoseconds ? Math.round(val.nanoseconds / 1000000) : 0);
+  const parsed = Date.parse(val);
+  return isNaN(parsed) ? 0 : parsed;
+};
 
 export const sortQuestionsList = (list) => {
-  return [...list].sort((a, b) =>
-    addedAt(b).localeCompare(addedAt(a)) ||
-    (a.importOrder ?? 0) - (b.importOrder ?? 0) ||
-    iso(a.createdAt).localeCompare(iso(b.createdAt))
-  );
+  return [...list].sort((a, b) => {
+    const bTime = questionTimeMillis(b);
+    const aTime = questionTimeMillis(a);
+    if (bTime !== aTime) return bTime - aTime;
+    return (a.importOrder ?? 0) - (b.importOrder ?? 0);
+  });
 };
 
 // Check common department names
