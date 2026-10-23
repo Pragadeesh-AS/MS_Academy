@@ -398,16 +398,10 @@ export default function QuestionImportLogs() {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={syncHistoricalImports}
-            disabled={isSyncingHistory}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100/70 text-blue-700 text-[13px] font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
-            title="Scan Question Bank and reconstruct logs for past extractions"
-          >
-            <RefreshCw size={15} className={isSyncingHistory ? 'animate-spin' : ''} />
-            <span>{isSyncingHistory ? 'Syncing...' : 'Sync Past History'}</span>
-          </button>
+          <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[12.5px] font-bold shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Real-time Auto-Sync</span>
+          </div>
 
           <button
             type="button"
@@ -649,19 +643,9 @@ export default function QuestionImportLogs() {
             <h3 className="text-[17px] font-extrabold text-[#0F172A]">No activity logs found</h3>
             <p className="text-[14px] font-medium text-[#64748B] mt-1 max-w-md">
               {logs.length === 0
-                ? "No extraction or import logs have been recorded yet. Click 'Sync Past History' above to scan previously imported questions from your Question Bank!"
+                ? "No extraction or import logs have been recorded yet. Activity will automatically sync and appear here in real-time as questions are extracted, imported, or approved."
                 : "No logs matched your current search and filter criteria."}
             </p>
-            {logs.length === 0 && (
-              <button
-                type="button"
-                onClick={syncHistoricalImports}
-                disabled={isSyncingHistory}
-                className="mt-4 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[13px] transition-all shadow-md shadow-blue-500/20"
-              >
-                Sync Previous Imports Now
-              </button>
-            )}
           </div>
         ) : (
           <div className="w-full overflow-hidden">

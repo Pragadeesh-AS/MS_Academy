@@ -763,6 +763,29 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         setQuestions(prev => prev.map(q => q.id === tempId ? { ...q, id: docRef.id } : q));
         cacheAddQuestion({ id: docRef.id, ...payload }, cacheKey);
         showToast("Question saved successfully", "success");
+        logQuestionActivity({
+          type: finalStatus === 'Approved' ? 'direct_push' : 'import_for_review',
+          action: finalStatus === 'Approved' ? 'Question Created & Added to Bank' : 'Question Created & Sent for Review',
+          fileName: payload.sourceFileName || (payload.topic ? `${String(payload.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : (payload.subject ? `${String(payload.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : 'Direct_Entry.pdf')),
+          importedCount: 1,
+          pushedCount: finalStatus === 'Approved' ? 1 : 0,
+          skippedCount: 0,
+          rejectedCount: 0,
+          diagramCount: hasDiagram(payload) ? 1 : 0,
+          importedBy: {
+            name: authName,
+            email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
+            role: sessionStorage.getItem('user_role') || 'Admin'
+          },
+          pushedBy: finalStatus === 'Approved' ? {
+            name: authName,
+            email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
+            role: sessionStorage.getItem('user_role') || 'Admin'
+          } : null,
+          department: payload.department || '',
+          subject: payload.subject || '',
+          topic: payload.topic || ''
+        });
       }).catch(e => {
         console.error("Failed to add question", e);
         showToast("Failed to save. Changes reverted.", "error");
@@ -836,6 +859,29 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         setQuestions(prev => prev.map(q => q.id === tempId ? { ...q, id: docRef.id } : q));
         cacheAddQuestion({ id: docRef.id, ...payload }, cacheKey);
         showToast("Question saved successfully. Add next.", "success");
+        logQuestionActivity({
+          type: finalStatus === 'Approved' ? 'direct_push' : 'import_for_review',
+          action: finalStatus === 'Approved' ? 'Question Created & Added to Bank' : 'Question Created & Sent for Review',
+          fileName: payload.sourceFileName || (payload.topic ? `${String(payload.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : (payload.subject ? `${String(payload.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : 'Direct_Entry.pdf')),
+          importedCount: 1,
+          pushedCount: finalStatus === 'Approved' ? 1 : 0,
+          skippedCount: 0,
+          rejectedCount: 0,
+          diagramCount: hasDiagram(payload) ? 1 : 0,
+          importedBy: {
+            name: authName,
+            email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
+            role: sessionStorage.getItem('user_role') || 'Admin'
+          },
+          pushedBy: finalStatus === 'Approved' ? {
+            name: authName,
+            email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
+            role: sessionStorage.getItem('user_role') || 'Admin'
+          } : null,
+          department: payload.department || '',
+          subject: payload.subject || '',
+          topic: payload.topic || ''
+        });
       }).catch(e => {
         console.error("Failed to add question", e);
         showToast("Failed to save. Changes reverted.", "error");
