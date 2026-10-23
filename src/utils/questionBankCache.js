@@ -285,9 +285,23 @@ export const loadQuestionBankData = async ({
   }
 };
 
+// Update attributes in memory & IndexedDB cache live
+export const updateCachedAttributes = (attrs) => {
+  if (Array.isArray(attrs)) {
+    memoryCache.attributes = attrs;
+    idbSet('attributes', attrs);
+  }
+};
+
+// Invalidate attributes cache when attributes are modified
+export const clearAttributesCache = () => {
+  memoryCache.attributes = null;
+  idbDelete('attributes');
+};
+
 // Fetch attributes in parallel
-export const fetchAttributes = async () => {
-  if (memoryCache.attributes) return memoryCache.attributes;
+export const fetchAttributes = async (force = false) => {
+  if (!force && memoryCache.attributes) return memoryCache.attributes;
   try {
     const attrSnapshot = await getDocs(collection(db, 'question_attributes'));
     const attrData = attrSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -296,7 +310,7 @@ export const fetchAttributes = async () => {
     return attrData;
   } catch (err) {
     console.error('Failed to fetch question attributes:', err);
-    return [];
+    return memoryCache.attributes || [];
   }
 };
 

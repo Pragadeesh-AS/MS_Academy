@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Upload, FileText, CheckCircle2, X, Database, BrainCircuit, AlertCircle, AlertTriangle, Edit3, Check, Trash2, ArrowRight } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, addDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, getDocs, setDoc, onSnapshot } from 'firebase/firestore';
+import { sameDepartment } from '../../utils/subjects';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import katex from 'katex';
 import { findDuplicateQuestions } from '../../utils/questionDuplicates';
@@ -916,19 +917,33 @@ export default function AIGenerator({ pairMode = false }) {
   // Departments / subjects / topics / marks / difficulties come from the admin Attributes tab
   const [attributes, setAttributes] = useState([]);
   useEffect(() => {
-    getDocs(collection(db, 'question_attributes'))
-      .then(snap => setAttributes(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
-      .catch(err => console.error('Failed to load attributes:', err));
+    const unsub = onSnapshot(collection(db, 'question_attributes'), (snap) => {
+      setAttributes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error('Failed to load attributes:', err);
+    });
+    return () => unsub();
   }, []);
 
   const attrNames = (type) => attributes.filter(a => a.type === type).map(a => a.name);
   const departments = attrNames('department');
-  const selectedDeptAttr = attributes.find(a => a.type === 'department' && a.name === importSettings.department);
+  const selectedDeptAttr = attributes.find(a =>
+    a.type === 'department' && (
+      a.name === importSettings.department ||
+      sameDepartment(a.name, importSettings.department) ||
+      (a.name || '').trim().toLowerCase() === (importSettings.department || '').trim().toLowerCase()
+    )
+  );
   const selectedSubjectAttr = attributes.find(
-    a => a.type === 'subject' && a.name === importSettings.subject && (!selectedDeptAttr || a.parentId === selectedDeptAttr.id)
+    a => a.type === 'subject' &&
+      (a.name || '').trim().toLowerCase() === (importSettings.subject || '').trim().toLowerCase() &&
+      (!selectedDeptAttr || a.parentId === selectedDeptAttr.id)
+  ) || attributes.find(
+    a => a.type === 'subject' &&
+      (a.name || '').trim().toLowerCase() === (importSettings.subject || '').trim().toLowerCase()
   );
   const subjects = attributes
-    .filter(a => a.type === 'subject' && selectedDeptAttr && a.parentId === selectedDeptAttr.id)
+    .filter(a => a.type === 'subject' && (!selectedDeptAttr || a.parentId === selectedDeptAttr.id))
     .map(a => a.name);
   const topics = attributes
     .filter(a => a.type === 'topic' && selectedSubjectAttr && a.parentId === selectedSubjectAttr.id)
@@ -2851,9 +2866,16 @@ export default function AIGenerator({ pairMode = false }) {
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Subtopic</label>
-                    <div className="w-full bg-purple-50 border border-purple-200 text-purple-900 text-sm rounded-xl px-3 py-2.5 font-bold truncate" title={modalFormData.topic || importSettings.topic || 'No Subtopic Selected'}>
-                      {modalFormData.topic || importSettings.topic || 'No Subtopic'}
-                    </div>
+                    <select
+                      value={modalFormData.topic || ''}
+                      onChange={(e) => handleModalFieldChange('topic', e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-xl px-3 py-2.5 outline-none focus:border-purple-500 font-medium cursor-pointer"
+                    >
+                      <option value="">{topics.length > 0 ? '-- Select Subtopic (Optional) --' : (modalFormData.topic || 'No Subtopic')}</option>
+                      {topics.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

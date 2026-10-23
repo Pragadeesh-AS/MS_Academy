@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Loader from '../Loader';
 import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, ArrowLeft, Upload, ClipboardPaste, RotateCw } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch, onSnapshot } from 'firebase/firestore';
 import { questionFingerprint, isEmptyQuestion } from '../../utils/questionDuplicates';
 import { QUESTION_CATEGORIES, getQuestionCategory, inferQuestionCategory } from '../../utils/questionCategory';
 import { markNumberOf, markLabelFor, negativeMarkFor } from '../../utils/marking';
@@ -21,7 +21,8 @@ import {
   cacheAddQuestion,
   cacheUpdateQuestion,
   cacheRemoveQuestions,
-  cacheBulkUpdate
+  cacheBulkUpdate,
+  updateCachedAttributes
 } from '../../utils/questionBankCache';
 
 // Engineering Mathematics and Aptitude banks are shared by every department.
@@ -168,6 +169,20 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const cacheKey = lockedDepartment ? `dept_${lockedDepartment}` : 'all';
   const [questions, setQuestions] = useState(() => getCachedQuestionsSync(cacheKey) || []);
   const [attributes, setAttributes] = useState(() => getCachedAttributesSync() || []);
+
+  // Live real-time listener for question_attributes so newly added topics/subjects reflect immediately
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'question_attributes'), (snapshot) => {
+      const liveAttrs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAttributes(liveAttrs);
+      try {
+        updateCachedAttributes(liveAttrs);
+      } catch (_) {}
+    }, (error) => {
+      console.warn('Error listening to question_attributes in QuestionBank:', error);
+    });
+    return () => unsub();
+  }, []);
   const [loading, setLoading] = useState(() => !hasCachedQuestions(cacheKey));
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCreatorOpen, setIsCreatorOpen] = useState(false);
@@ -469,7 +484,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     return combined.sort((a, b) => a.localeCompare(b));
   }, [activeDept, selectedDeptObj, attributes, questions, subjectCounts]);
 
-  // Topics for the selected subject (or department)
+  // Topics for the selected subject (or department) in table filter
   const topics = useMemo(() => {
     // 1. From attributes
     const attrTopics = attributes
@@ -481,6 +496,36 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
     return Array.from(new Set([...attrTopics, ...questionTopics])).filter(Boolean).sort((a, b) => a.localeCompare(b));
   }, [attributes, selectedSubjectObj, topicCounts]);
+
+  // Subject attribute object for the add/edit form (cascades directly from formData.subject)
+  const formSubjectObj = useMemo(() => {
+    if (!formData.subject) return null;
+    const formSubjectTrimmed = (formData.subject || '').trim().toLowerCase();
+    return attributes.find(a =>
+      a.type === 'subject' &&
+      (a.name || '').trim().toLowerCase() === formSubjectTrimmed &&
+      (!selectedDeptObj || a.parentId === selectedDeptObj.id)
+    ) || attributes.find(a =>
+      a.type === 'subject' &&
+      (a.name || '').trim().toLowerCase() === formSubjectTrimmed
+    ) || null;
+  }, [formData.subject, attributes, selectedDeptObj]);
+
+  // Topics specifically for the add/edit form: show all topics belonging to formData.subject
+  const formTopics = useMemo(() => {
+    if (formSubjectObj) {
+      const attrTopics = attributes
+        .filter(a => a.type === 'topic' && a.parentId === formSubjectObj.id)
+        .map(a => a.name.trim());
+      const existingQTopics = deptQuestions
+        .filter(q => (q.subject || '').trim().toLowerCase() === (formData.subject || '').trim().toLowerCase())
+        .map(q => (q.topic || '').trim())
+        .filter(Boolean);
+      const current = formData.topic ? [formData.topic.trim()] : [];
+      return Array.from(new Set([...attrTopics, ...existingQTopics, ...current])).filter(Boolean).sort((a, b) => a.localeCompare(b));
+    }
+    return topics;
+  }, [formSubjectObj, formData.subject, formData.topic, attributes, deptQuestions, topics]);
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: currentYear - 1990 + 1}, (_, i) => (currentYear - i).toString()); // 1990 to current year, descending
@@ -520,7 +565,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const optionsList = ['A', 'B', 'C', 'D'];
 
   const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+      ...(name === 'department' ? { subject: '', topic: '' } : {}),
+      ...(name === 'subject' && prev.subject !== value ? { topic: '' } : {})
+    }));
   };
 
   const handleCheckboxChange = (opt) => {
@@ -2296,7 +2347,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   <div className="relative">
                     <select name="topic" required value={formData.topic} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
                       <option value="">-- Select Topic --</option>
-                      {topics.map(t => <option key={t} value={t}>{t}</option>)}
+                      {formTopics.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>

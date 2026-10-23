@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { sameDepartment, STUDENT_DEPARTMENTS } from '../../utils/subjects';
+import { clearAttributesCache } from '../../utils/questionBankCache';
 import Loader from '../Loader';
 
 export const WEBSITE_DEPARTMENTS = [
@@ -80,6 +81,7 @@ export default function AttributesManager({ lockedDepartment = null }) {
         parentId: deptId,
         createdAt: new Date().toISOString()
       });
+      clearAttributesCache();
       setNotice(`Added subject "${name}".`);
       setTimeout(() => setNotice(''), 4000);
     } catch (err) {
@@ -97,6 +99,7 @@ export default function AttributesManager({ lockedDepartment = null }) {
         parentId: subjectId,
         createdAt: new Date().toISOString()
       });
+      clearAttributesCache();
       setNotice(`Added topic "${name}".`);
       setTimeout(() => setNotice(''), 4000);
     } catch (err) {
@@ -125,6 +128,7 @@ export default function AttributesManager({ lockedDepartment = null }) {
         parentId: parentToAdd || null,
         createdAt: new Date().toISOString()
       });
+      clearAttributesCache();
       setNewValue('');
       setNewParent('');
     } catch (error) {
@@ -135,6 +139,7 @@ export default function AttributesManager({ lockedDepartment = null }) {
     if (!deletingId) return;
     try {
       await deleteDoc(doc(db, 'question_attributes', deletingId));
+      clearAttributesCache();
     } catch (error) {
       console.error("Error deleting attribute:", error);
     }
@@ -161,6 +166,7 @@ export default function AttributesManager({ lockedDepartment = null }) {
     setRenaming(true);
     try {
       await updateDoc(doc(db, 'question_attributes', editingAttr.id), { name: newName });
+      clearAttributesCache();
 
       // The same subject / topic name can exist under two departments / subjects - only rename the
       // questions that belong to this one
