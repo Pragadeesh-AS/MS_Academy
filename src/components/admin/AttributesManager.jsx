@@ -7,7 +7,7 @@ export const WEBSITE_DEPARTMENTS = [
   'Engineering Mathematics',
   'General Aptitude',
 ];
-import { Plus, Edit2, Trash2, ChevronDown, Search, MoreHorizontal, CheckCircle2, Bookmark, LayoutList, Trophy, Star, Clock, Landmark, FileText, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, ChevronDown, Search, MoreHorizontal, CheckCircle2, Bookmark, LayoutList, Trophy, Star, Clock, Landmark, FileText, X, ArrowRight, BookOpen } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 
@@ -28,6 +28,10 @@ export default function AttributesManager({ lockedDepartment = null }) {
   const [allAttributes, setAllAttributes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedParentFilter, setSelectedParentFilter] = useState('');
+  const [inspectingSubject, setInspectingSubject] = useState(null);
+  const [inspectingTopicSearch, setInspectingTopicSearch] = useState('');
+  const [newTopicForSubject, setNewTopicForSubject] = useState('');
 
   // Modal states
   const [editingAttr, setEditingAttr] = useState(null);
@@ -62,6 +66,23 @@ export default function AttributesManager({ lockedDepartment = null }) {
   // A teacher's new subject always goes under their own department
   const lockedParent = lockedDepartment && activeTab === 'subject' ? (ownDept?.id || '') : null;
   const parentValue = lockedParent ?? newParent;
+
+  const handleAddTopicDirectly = async (topicName, subjectId) => {
+    const name = topicName.trim();
+    if (!name || !subjectId) return;
+    try {
+      await addDoc(collection(db, 'question_attributes'), {
+        type: 'topic',
+        name,
+        parentId: subjectId,
+        createdAt: new Date().toISOString()
+      });
+      setNotice(`Added topic "${name}".`);
+      setTimeout(() => setNotice(''), 4000);
+    } catch (err) {
+      console.error("Error adding topic directly:", err);
+    }
+  };
 
   const handleAdd = async (customName = null, customParent = null) => {
     const nameToAdd = (customName !== null ? customName : newValue).trim();
@@ -164,16 +185,20 @@ export default function AttributesManager({ lockedDepartment = null }) {
     : [];
 
   const filteredValues = useMemo(() => {
+    let list = currentValues;
+    if (selectedParentFilter) {
+      list = list.filter(val => val.parentId === selectedParentFilter || val.parentId === attributes.find(a => a.id === selectedParentFilter)?.name);
+    }
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return currentValues;
-    return currentValues.filter(val => {
+    if (!q) return list;
+    return list.filter(val => {
       const matchName = val.name?.toLowerCase().includes(q);
       const parentName = val.parentId 
         ? attributes.find(a => a.id === val.parentId)?.name?.toLowerCase() 
         : '';
       return matchName || parentName?.includes(q);
     });
-  }, [currentValues, searchQuery, attributes]);
+  }, [currentValues, searchQuery, selectedParentFilter, attributes]);
 
   const getInitials = (name) => {
     if (!name) return 'EC';
@@ -239,6 +264,8 @@ export default function AttributesManager({ lockedDepartment = null }) {
                   setNewValue('');
                   setNewParent('');
                   setSearchQuery('');
+                  setSelectedParentFilter('');
+                  setInspectingSubject(null);
                 }}
                 className={`relative flex items-center justify-between p-3 rounded-[16px] transition-all duration-200 ${
                   isActive 
@@ -328,108 +355,54 @@ export default function AttributesManager({ lockedDepartment = null }) {
           </div>
         </div>
 
-        {/* Add Department Horizontal Section */}
-        <div className="px-8 py-6">
-          <div className="flex flex-col md:flex-row items-center gap-4 w-full">
-            {activeAttribute.id === 'department' ? (
-              <div className="flex-1 w-full relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#2563EB]">
-                  <Landmark size={20} />
-                </div>
-                <select 
-                  value={newValue}
-                  onChange={(e) => setNewValue(e.target.value)}
-                  className="w-full h-[52px] pl-12 pr-10 appearance-none bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all shadow-sm cursor-pointer"
-                >
-                  <option value="" disabled>Select department from website...</option>
-                  {WEBSITE_DEPARTMENTS.map(dept => {
-                    const alreadyAdded = currentValues.some(v => sameDepartment(v.name, dept) || v.name.trim().toLowerCase() === dept.trim().toLowerCase());
-                    return (
-                      <option key={dept} value={dept} disabled={alreadyAdded}>
-                        {dept} {alreadyAdded ? '(Already Added)' : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-                <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
-              </div>
-            ) : (
-              <div className="flex-1 w-full relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#2563EB]">
-                  <activeAttribute.icon size={20} />
-                </div>
-                <input 
-                  type="text"
-                  placeholder={`Type new ${activeAttribute.name.toLowerCase()}...`}
-                  value={newValue}
-                  onChange={(e) => setNewValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      if (!newValue.trim() || (activeAttribute.childOf && !parentValue)) {
-                        setEditingAttr({ id: 'NEW', name: newValue });
-                      } else {
-                        handleAdd();
-                      }
-                    }
-                  }}
-                  className="w-full h-[52px] pl-12 pr-4 bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] placeholder-[#94A3B8] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all shadow-sm"
-                />
-              </div>
-            )}
-            
-            {activeAttribute.childOf && (
-              <div className="w-full md:w-[240px] relative shrink-0">
-                <select 
-                  value={parentValue}
-                  disabled={lockedParent !== null}
-                  onChange={(e) => setNewParent(e.target.value)}
-                  className="w-full h-[52px] pl-4 pr-10 appearance-none bg-white border border-[#EEF2F7] rounded-[12px] text-[14px] font-[500] text-[#0F172A] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all shadow-sm cursor-pointer"
-                >
-                  <option value="" disabled>Select parent...</option>
-                  {parentOptions.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none" />
-              </div>
-            )}
-
-            <button 
-              onClick={() => {
-                if (!newValue.trim() || (activeAttribute.childOf && !parentValue)) {
-                  setEditingAttr({ id: 'NEW', name: newValue });
-                } else {
-                  handleAdd();
-                }
-              }}
-              className="relative overflow-hidden w-full md:w-auto h-[52px] px-6 text-[#2563EB] border-2 border-[#2563EB] rounded-[34px] font-[600] text-[15px] bg-transparent transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-white hover:scale-105 hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-100 shrink-0 flex items-center justify-center gap-2 group z-[1]"
-            >
-              <span className="absolute inset-0 m-auto w-[50px] h-[50px] rounded-[inherit] scale-0 -z-10 bg-[#2563EB] transition-transform duration-[600ms] ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:scale-[10]"></span>
-              <Plus size={20} strokeWidth={2.5} className="z-10" /> 
-              <span className="z-10">Add {activeAttribute.name}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Content Grid */}
-        <div className="px-8 pb-8 flex-1 overflow-y-auto">
-          {notice && (
-            <div className="mb-4 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[13px] font-[700] text-emerald-800">{notice}</div>
-          )}
-          
-          {/* Section Header with Search Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-            <div className="flex items-center gap-2.5">
-              <h3 className="text-[18px] font-[800] text-[#0F172A] tracking-tight">Current Values</h3>
-              <span className="text-[12px] font-[700] px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+        {/* Unified Action Header with ONE Single Search Bar */}
+        <div className="px-8 py-5 border-b border-[#F1F5F9] flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/40">
+          {/* Left: Values count & Parent Filter dropdown */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[17px] font-[800] text-[#0F172A] tracking-tight">Current Values</h3>
+              <span className="text-[12px] font-[700] px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
                 {filteredValues.length} {filteredValues.length === 1 ? activeAttribute.name : `${activeAttribute.name}s`}
-                {searchQuery.trim() && ` (filtered from ${currentValues.length})`}
+                {(searchQuery.trim() || selectedParentFilter) && ` (filtered from ${currentValues.length})`}
               </span>
             </div>
 
-            {/* Real Working Search Bar */}
-            <div className="relative w-full sm:w-[280px] md:w-[320px]">
+            {/* If Topic tab: Subject Filter Dropdown */}
+            {activeAttribute.childOf && parentOptions.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <div className="relative">
+                  <select
+                    value={selectedParentFilter}
+                    onChange={(e) => setSelectedParentFilter(e.target.value)}
+                    className="h-[38px] pl-3 pr-8 appearance-none bg-white border border-[#EEF2F7] rounded-[10px] text-[12.5px] font-[600] text-slate-700 hover:border-blue-300 focus:border-[#2563EB] outline-none shadow-xs cursor-pointer"
+                  >
+                    <option value="">All {attributeTypes.find(a => a.id === activeAttribute.childOf)?.name}s ({parentOptions.length})</option>
+                    {parentOptions.map(p => {
+                      const count = attributes.filter(a => a.parentId === p.id && a.type === activeAttribute.id).length;
+                      return (
+                        <option key={p.id} value={p.id}>{p.name} ({count})</option>
+                      );
+                    })}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+                {selectedParentFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedParentFilter('')}
+                    className="text-[11.5px] font-bold text-blue-600 hover:underline px-1"
+                  >
+                    Show all
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right: The ONLY Search Bar + Add Button */}
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            {/* The One Real Working Search Bar */}
+            <div className="relative flex-1 md:w-[320px]">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                 <Search size={16} />
               </div>
@@ -438,7 +411,7 @@ export default function AttributesManager({ lockedDepartment = null }) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={`Search ${activeAttribute.name.toLowerCase()}s by name or parent...`}
-                className="w-full h-[42px] pl-10 pr-9 bg-[#F8FAFC] hover:bg-white border border-[#EEF2F7] focus:border-[#2563EB] focus:bg-white rounded-[12px] text-[13px] font-[500] text-[#0F172A] placeholder-[#94A3B8] outline-none transition-all focus:ring-4 focus:ring-[#2563EB]/10 shadow-sm"
+                className="w-full h-[40px] pl-10 pr-9 bg-white border border-[#EEF2F7] focus:border-[#2563EB] rounded-[11px] text-[13px] font-[500] text-[#0F172A] placeholder-[#94A3B8] outline-none transition-all focus:ring-4 focus:ring-[#2563EB]/10 shadow-xs"
               />
               {searchQuery && (
                 <button
@@ -451,7 +424,27 @@ export default function AttributesManager({ lockedDepartment = null }) {
                 </button>
               )}
             </div>
+
+            {/* Single Add Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setEditingAttr({ id: 'NEW', name: '' });
+                if (selectedParentFilter) setNewParent(selectedParentFilter);
+              }}
+              className="h-[40px] px-5 rounded-[11px] bg-[#2563EB] hover:bg-blue-700 text-white font-[700] text-[13px] flex items-center gap-1.5 transition-all shadow-md shadow-blue-500/20 shrink-0"
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              <span>Add {activeAttribute.name}</span>
+            </button>
           </div>
+        </div>
+
+        {/* Content Grid */}
+        <div className="px-8 py-6 flex-1 overflow-y-auto">
+          {notice && (
+            <div className="mb-4 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[13px] font-[700] text-emerald-800">{notice}</div>
+          )}
           
           {loading ? (
             <div className="h-[200px] flex items-center justify-center">
@@ -488,10 +481,17 @@ export default function AttributesManager({ lockedDepartment = null }) {
                 const childText = getChildCountText(val.id, activeAttribute.id);
                 const styles = getInitialsStyles(index);
 
+                const isSubjectCard = activeTab === 'subject';
+
                 return (
                   <div 
                     key={val.id} 
-                    className="relative flex flex-col p-5 bg-[#FFFFFF] border border-[#EEF2F7] rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] transition-all duration-300 group hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] hover:border-[#2563EB]/40 min-h-[160px]"
+                    onClick={() => {
+                      if (isSubjectCard) setInspectingSubject(val);
+                    }}
+                    className={`relative flex flex-col p-5 bg-[#FFFFFF] border border-[#EEF2F7] rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] transition-all duration-300 group hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] min-h-[160px] ${
+                      isSubjectCard ? 'cursor-pointer hover:border-[#2563EB] ring-0 hover:ring-2 hover:ring-blue-100' : 'hover:border-[#2563EB]/40'
+                    }`}
                   >
                     {/* Top Row: Icon + Menu */}
                     <div className="flex justify-between items-start gap-2 w-full">
@@ -510,9 +510,21 @@ export default function AttributesManager({ lockedDepartment = null }) {
                             </span>
                           )}
                           {childText && (
-                            <span className="text-[13px] font-[600] text-[#2563EB] mt-1.5">
-                              {childText}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isSubjectCard) setInspectingSubject(val);
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-[12px] transition-colors mt-2 text-left w-fit ${
+                                isSubjectCard
+                                  ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200/60 shadow-xs'
+                                  : 'bg-slate-50 text-slate-600'
+                              }`}
+                            >
+                              <FileText size={13} />
+                              <span>{childText} {isSubjectCard ? '• Click to view topics' : ''}</span>
+                            </button>
                           )}
                         </div>
                       </div>
@@ -527,16 +539,18 @@ export default function AttributesManager({ lockedDepartment = null }) {
                         {getRelativeTime(val.createdAt)}
                       </span>
 
-                      <div className="flex gap-2 shrink-0">
+                      <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <button 
                           onClick={() => setEditingAttr({ id: val.id, name: val.name })}
                           className="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] bg-white text-[#3B82F6] shadow-sm transition-colors border border-[#EEF2F7] hover:border-[#3B82F6] hover:bg-blue-50"
+                          title="Edit attribute"
                         >
                           <Edit2 size={16} />
                         </button>
                         <button 
                           onClick={() => setDeletingId(val.id)}
                           className="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] bg-white text-[#EF4444] shadow-sm transition-colors border border-[#EEF2F7] hover:border-[#EF4444] hover:bg-red-50"
+                          title="Delete attribute"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -599,6 +613,212 @@ export default function AttributesManager({ lockedDepartment = null }) {
           </div>
         </div>
       )}
+
+      {/* Inspecting Subject Topics Modal */}
+      {inspectingSubject && (() => {
+        const parentDept = attributes.find(a => a.id === inspectingSubject.parentId);
+        const parentDeptName = parentDept?.name;
+        const allTopicsForSub = attributes.filter(a => a.type === 'topic' && (a.parentId === inspectingSubject.id || a.parentId === inspectingSubject.name));
+        const filteredTopics = allTopicsForSub.filter(t => {
+          if (!inspectingTopicSearch.trim()) return true;
+          return t.name.toLowerCase().includes(inspectingTopicSearch.trim().toLowerCase());
+        });
+
+        return (
+          <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <div className="bg-white rounded-[24px] max-w-2xl w-full max-h-[85vh] flex flex-col shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-[#EEF2F7] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              
+              {/* Modal Header */}
+              <div className="p-6 border-b border-[#F1F5F9] flex items-start justify-between gap-4 bg-slate-50/70">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-[#2563EB] text-white flex items-center justify-center font-extrabold text-[18px] shadow-md shadow-blue-500/20 shrink-0">
+                    <Bookmark size={22} />
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-[20px] font-extrabold text-[#0F172A] leading-tight">
+                        {inspectingSubject.name}
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11.5px]">
+                        {allTopicsForSub.length} Topics
+                      </span>
+                    </div>
+                    {parentDeptName && (
+                      <span className="text-[12px] font-medium text-[#64748B] mt-0.5">
+                        Department: <strong className="text-slate-700 font-semibold">{parentDeptName}</strong>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInspectingSubject(null);
+                    setInspectingTopicSearch('');
+                    setNewTopicForSubject('');
+                  }}
+                  className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Quick Search & Quick Add inside Modal */}
+              <div className="p-5 border-b border-[#F1F5F9] bg-white flex flex-col sm:flex-row items-center gap-3">
+                {/* Search in this subject */}
+                <div className="relative flex-1 w-full">
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={inspectingTopicSearch}
+                    onChange={(e) => setInspectingTopicSearch(e.target.value)}
+                    placeholder={`Search topics in ${inspectingSubject.name}...`}
+                    className="w-full h-[40px] pl-9 pr-8 bg-slate-50 focus:bg-white border border-[#EEF2F7] focus:border-blue-500 rounded-xl text-[13px] outline-none transition-all"
+                  />
+                  {inspectingTopicSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setInspectingTopicSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Quick Add Topic to this subject */}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <input
+                    type="text"
+                    value={newTopicForSubject}
+                    onChange={(e) => setNewTopicForSubject(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newTopicForSubject.trim()) {
+                          handleAddTopicDirectly(newTopicForSubject, inspectingSubject.id);
+                          setNewTopicForSubject('');
+                        }
+                      }
+                    }}
+                    placeholder="New topic name..."
+                    className="h-[40px] px-3.5 bg-slate-50 focus:bg-white border border-[#EEF2F7] focus:border-blue-500 rounded-xl text-[13px] outline-none transition-all flex-1 sm:w-[180px]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newTopicForSubject.trim()) {
+                        handleAddTopicDirectly(newTopicForSubject, inspectingSubject.id);
+                        setNewTopicForSubject('');
+                      }
+                    }}
+                    disabled={!newTopicForSubject.trim()}
+                    className="h-[40px] px-4 rounded-xl bg-[#2563EB] hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-[12.5px] transition-colors shrink-0 flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Plus size={15} strokeWidth={2.5} />
+                    <span>Add</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Topics List Body */}
+              <div className="p-6 overflow-y-auto flex-1 space-y-2.5">
+                {filteredTopics.length === 0 ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-2.5">
+                      <FileText size={24} />
+                    </div>
+                    <p className="font-bold text-slate-700 text-[15px]">
+                      {inspectingTopicSearch ? 'No matching topics found' : `No topics yet in ${inspectingSubject.name}`}
+                    </p>
+                    <p className="text-[12.5px] text-slate-400 mt-0.5">
+                      {inspectingTopicSearch
+                        ? 'Try searching with different keywords.'
+                        : 'Use the quick add bar above to add your first topic to this subject.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {filteredTopics.map((top, idx) => (
+                      <div
+                        key={top.id}
+                        className="p-3.5 rounded-xl border border-slate-200/80 hover:border-blue-300 hover:bg-blue-50/20 bg-white transition-all flex items-center justify-between gap-3 group"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-orange-50 text-orange-600 font-bold text-[11px] flex items-center justify-center shrink-0 border border-orange-100">
+                            {idx + 1}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-slate-800 text-[13px] truncate" title={top.name}>
+                              {top.name}
+                            </span>
+                            <span className="text-[10.5px] text-slate-400">
+                              {getRelativeTime(top.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => setEditingAttr({ id: top.id, name: top.name, type: 'topic' })}
+                            className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            title="Edit topic"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingId(top.id)}
+                            className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Delete topic"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 px-6 border-t border-[#F1F5F9] bg-slate-50 flex items-center justify-between gap-3">
+                <span className="text-[12px] font-medium text-slate-500">
+                  Showing {filteredTopics.length} of {allTopicsForSub.length} topics
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedParentFilter(inspectingSubject.id);
+                      setActiveTab('topic');
+                      setInspectingSubject(null);
+                      setInspectingTopicSearch('');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:border-blue-300 text-blue-700 font-bold text-[12.5px] transition-all flex items-center gap-1.5 shadow-xs"
+                  >
+                    <span>Manage in Topics View</span>
+                    <ArrowRight size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectingSubject(null);
+                      setInspectingTopicSearch('');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[12.5px] transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Add / Edit Modal */}
       {editingAttr && (
