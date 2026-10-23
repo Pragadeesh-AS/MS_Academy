@@ -356,87 +356,87 @@ export default function AttributesManager({ lockedDepartment = null }) {
         </div>
 
         {/* Unified Action Header with ONE Single Search Bar */}
-        <div className="px-8 py-5 border-b border-[#F1F5F9] flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/40">
-          {/* Left: Values count & Parent Filter dropdown */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-[17px] font-[800] text-[#0F172A] tracking-tight">Current Values</h3>
-              <span className="text-[12px] font-[700] px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                {filteredValues.length} {filteredValues.length === 1 ? activeAttribute.name : `${activeAttribute.name}s`}
-                {(searchQuery.trim() || selectedParentFilter) && ` (filtered from ${currentValues.length})`}
-              </span>
-            </div>
+        <div className="px-6 sm:px-8 py-4 border-b border-[#F1F5F9] bg-slate-50/50">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
+            {/* Left: Values count & Parent Filter on the exact same row */}
+            <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                <h3 className="text-[17px] font-[800] text-[#0F172A] tracking-tight">Current Values</h3>
+                <span className="text-[12px] font-[700] px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200/60 shadow-xs">
+                  {filteredValues.length} {filteredValues.length === 1 ? activeAttribute.name : `${activeAttribute.name}s`}
+                  {(searchQuery.trim() || selectedParentFilter) && ` (filtered)`}
+                </span>
+              </div>
 
-            {/* If Topic tab: Subject Filter Dropdown */}
-            {activeAttribute.childOf && parentOptions.length > 0 && (
-              <div className="flex items-center gap-1.5">
-                <div className="relative">
-                  <select
-                    value={selectedParentFilter}
-                    onChange={(e) => setSelectedParentFilter(e.target.value)}
-                    className="h-[38px] pl-3 pr-8 appearance-none bg-white border border-[#EEF2F7] rounded-[10px] text-[12.5px] font-[600] text-slate-700 hover:border-blue-300 focus:border-[#2563EB] outline-none shadow-xs cursor-pointer"
-                  >
-                    <option value="">All {attributeTypes.find(a => a.id === activeAttribute.childOf)?.name}s ({parentOptions.length})</option>
-                    {parentOptions.map(p => {
-                      const count = attributes.filter(a => a.parentId === p.id && a.type === activeAttribute.id).length;
-                      return (
-                        <option key={p.id} value={p.id}>{p.name} ({count})</option>
-                      );
-                    })}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              {/* If childOf: Parent Filter dropdown aligned directly next to Current Values */}
+              {activeAttribute.childOf && parentOptions.length > 0 && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="relative">
+                    <select
+                      value={selectedParentFilter}
+                      onChange={(e) => setSelectedParentFilter(e.target.value)}
+                      className="h-[40px] pl-3 pr-8 appearance-none bg-white border border-[#EEF2F7] rounded-[11px] text-[12.5px] font-[600] text-slate-700 hover:border-blue-300 focus:border-[#2563EB] outline-none shadow-xs cursor-pointer max-w-[210px] truncate"
+                    >
+                      <option value="">All {attributeTypes.find(a => a.id === activeAttribute.childOf)?.name}s ({parentOptions.length})</option>
+                      {parentOptions.map(p => {
+                        const count = attributes.filter(a => a.parentId === p.id && a.type === activeAttribute.id).length;
+                        return (
+                          <option key={p.id} value={p.id}>{p.name} ({count})</option>
+                        );
+                      })}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
+                  {selectedParentFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedParentFilter('')}
+                      className="text-[11.5px] font-bold text-blue-600 hover:underline px-1 whitespace-nowrap"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
-                {selectedParentFilter && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedParentFilter('')}
-                    className="text-[11.5px] font-bold text-blue-600 hover:underline px-1"
-                  >
-                    Show all
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Right: The ONLY Search Bar + Add Button */}
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            {/* The One Real Working Search Bar */}
-            <div className="relative flex-1 md:w-[320px]">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Search size={16} />
-              </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search ${activeAttribute.name.toLowerCase()}s by name or parent...`}
-                className="w-full h-[40px] pl-10 pr-9 bg-white border border-[#EEF2F7] focus:border-[#2563EB] rounded-[11px] text-[13px] font-[500] text-[#0F172A] placeholder-[#94A3B8] outline-none transition-all focus:ring-4 focus:ring-[#2563EB]/10 shadow-xs"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
-                  title="Clear search"
-                >
-                  <X size={15} />
-                </button>
               )}
             </div>
 
-            {/* Single Add Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setEditingAttr({ id: 'NEW', name: '' });
-                if (selectedParentFilter) setNewParent(selectedParentFilter);
-              }}
-              className="h-[40px] px-5 rounded-[11px] bg-[#2563EB] hover:bg-blue-700 text-white font-[700] text-[13px] flex items-center gap-1.5 transition-all shadow-md shadow-blue-500/20 shrink-0"
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              <span>Add {activeAttribute.name}</span>
-            </button>
+            {/* Right: The ONLY Search Bar + Add Button matching 40px height */}
+            <div className="flex items-center gap-2.5 w-full lg:w-auto justify-end">
+              <div className="relative flex-1 sm:w-[280px] md:w-[320px]">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Search size={16} />
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={`Search ${activeAttribute.name.toLowerCase()}s by name or parent...`}
+                  className="w-full h-[40px] pl-10 pr-9 bg-white border border-[#EEF2F7] focus:border-[#2563EB] rounded-[11px] text-[13px] font-[500] text-[#0F172A] placeholder-[#94A3B8] outline-none transition-all focus:ring-4 focus:ring-[#2563EB]/10 shadow-xs"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                    title="Clear search"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingAttr({ id: 'NEW', name: '' });
+                  if (selectedParentFilter) setNewParent(selectedParentFilter);
+                }}
+                className="h-[40px] px-5 rounded-[11px] bg-[#2563EB] hover:bg-blue-700 text-white font-[700] text-[13px] flex items-center gap-1.5 transition-all shadow-md shadow-blue-500/20 shrink-0 whitespace-nowrap"
+              >
+                <Plus size={16} strokeWidth={2.5} />
+                <span>Add {activeAttribute.name}</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -482,6 +482,7 @@ export default function AttributesManager({ lockedDepartment = null }) {
                 const styles = getInitialsStyles(index);
 
                 const isSubjectCard = activeTab === 'subject';
+                const childCount = attributes.filter(a => a.parentId === val.id && a.type === 'topic').length;
 
                 return (
                   <div 
@@ -489,73 +490,76 @@ export default function AttributesManager({ lockedDepartment = null }) {
                     onClick={() => {
                       if (isSubjectCard) setInspectingSubject(val);
                     }}
-                    className={`relative flex flex-col p-5 bg-[#FFFFFF] border border-[#EEF2F7] rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] transition-all duration-300 group hover:-translate-y-1 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] min-h-[160px] ${
+                    className={`relative flex flex-col justify-between p-5 bg-[#FFFFFF] border border-[#EEF2F7] rounded-[18px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] transition-all duration-300 group hover:-translate-y-1 hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)] min-h-[170px] ${
                       isSubjectCard ? 'cursor-pointer hover:border-[#2563EB] ring-0 hover:ring-2 hover:ring-blue-100' : 'hover:border-[#2563EB]/40'
                     }`}
                   >
-                    {/* Top Row: Icon + Menu */}
-                    <div className="flex justify-between items-start gap-2 w-full">
-                      {/* min-w-0 lets a long name shrink and truncate instead of running over the menu */}
-                      <div className="flex gap-4 min-w-0 flex-1">
-                        <div className={`w-[54px] h-[54px] shrink-0 rounded-full ${styles.bg} ${styles.text} ${styles.shadow} flex items-center justify-center font-[800] text-[18px] tracking-wide`}>
+                    {/* Top Row: Squircle Avatar + Name & Parent + Action Buttons */}
+                    <div className="flex items-start justify-between gap-3 w-full">
+                      <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                        {/* Modern squircle avatar (replaces the circle) */}
+                        <div className={`w-11 h-11 rounded-xl ${styles.bg} ${styles.text} flex items-center justify-center font-extrabold text-[15px] shrink-0 border border-slate-100 shadow-2xs`}>
                           {getInitials(val.name)}
                         </div>
-                        <div className="flex flex-col pt-1 min-w-0">
-                          <h3 className="text-[18px] font-[800] text-[#0F172A] leading-tight truncate" title={val.name}>
+                        <div className="flex flex-col min-w-0 pt-0.5">
+                          <h3 className="text-[16px] font-[800] text-[#0F172A] leading-snug truncate" title={val.name}>
                             {val.name}
                           </h3>
                           {parentName && (
-                            <span className="text-[12px] font-[600] text-[#64748B] mt-1 truncate" title={`Parent: ${parentName}`}>
+                            <span className="text-[12px] font-[500] text-[#64748B] truncate mt-0.5" title={`Parent: ${parentName}`}>
                               Parent: {parentName}
                             </span>
                           )}
-                          {childText && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isSubjectCard) setInspectingSubject(val);
-                              }}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-[12px] transition-colors mt-2 text-left w-fit ${
-                                isSubjectCard
-                                  ? 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200/60 shadow-xs'
-                                  : 'bg-slate-50 text-slate-600'
-                              }`}
-                            >
-                              <FileText size={13} />
-                              <span>{childText} {isSubjectCard ? '• Click to view topics' : ''}</span>
-                            </button>
-                          )}
                         </div>
                       </div>
-                      <button className="w-8 h-8 shrink-0 flex items-center justify-center text-[#94A3B8] transition-colors hover:text-[#0F172A]">
-                        <MoreHorizontal size={20} />
-                      </button>
-                    </div>
 
-                    {/* Bottom Row */}
-                    <div className="flex items-center justify-between gap-2 mt-auto pt-4">
-                      <span className="text-[12px] font-[500] text-[#64748B] truncate min-w-0">
-                        {getRelativeTime(val.createdAt)}
-                      </span>
-
-                      <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {/* Edit & Delete Action Buttons */}
+                      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                         <button 
+                          type="button"
                           onClick={() => setEditingAttr({ id: val.id, name: val.name })}
-                          className="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] bg-white text-[#3B82F6] shadow-sm transition-colors border border-[#EEF2F7] hover:border-[#3B82F6] hover:bg-blue-50"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                           title="Edit attribute"
                         >
-                          <Edit2 size={16} />
+                          <Edit2 size={14} />
                         </button>
                         <button 
+                          type="button"
                           onClick={() => setDeletingId(val.id)}
-                          className="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] bg-white text-[#EF4444] shadow-sm transition-colors border border-[#EEF2F7] hover:border-[#EF4444] hover:bg-red-50"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                           title="Delete attribute"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </div>
+
+                    {/* Bottom Row: Modern Non-wrapping Topic Pill + Timestamp (replaces ugly circle button) */}
+                    {isSubjectCard ? (
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInspectingSubject(val);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[12px] transition-all border border-blue-200/60 shadow-2xs group/btn"
+                        >
+                          <BookOpen size={13} className="text-blue-600 shrink-0" />
+                          <span className="whitespace-nowrap">{childCount} Topics</span>
+                          <span className="text-blue-400 group-hover/btn:translate-x-0.5 transition-transform text-[11px]">→</span>
+                        </button>
+                        <span className="text-[11.5px] font-medium text-slate-400 truncate">
+                          {getRelativeTime(val.createdAt)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                        <span className="text-[11.5px] font-medium text-slate-400 truncate">
+                          {getRelativeTime(val.createdAt)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
