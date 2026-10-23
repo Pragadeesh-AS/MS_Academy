@@ -30,6 +30,9 @@ export default function AttributesManager({ lockedDepartment = null }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedParentFilter, setSelectedParentFilter] = useState('');
   const [inspectingSubject, setInspectingSubject] = useState(null);
+  const [inspectingDepartment, setInspectingDepartment] = useState(null);
+  const [inspectingDeptSearch, setInspectingDeptSearch] = useState('');
+  const [newSubjectForDept, setNewSubjectForDept] = useState('');
   const [inspectingTopicSearch, setInspectingTopicSearch] = useState('');
   const [newTopicForSubject, setNewTopicForSubject] = useState('');
 
@@ -66,6 +69,23 @@ export default function AttributesManager({ lockedDepartment = null }) {
   // A teacher's new subject always goes under their own department
   const lockedParent = lockedDepartment && activeTab === 'subject' ? (ownDept?.id || '') : null;
   const parentValue = lockedParent ?? newParent;
+
+  const handleAddSubjectDirectly = async (subjectName, deptId) => {
+    const name = subjectName.trim();
+    if (!name || !deptId) return;
+    try {
+      await addDoc(collection(db, 'question_attributes'), {
+        type: 'subject',
+        name,
+        parentId: deptId,
+        createdAt: new Date().toISOString()
+      });
+      setNotice(`Added subject "${name}".`);
+      setTimeout(() => setNotice(''), 4000);
+    } catch (err) {
+      console.error("Error adding subject directly:", err);
+    }
+  };
 
   const handleAddTopicDirectly = async (topicName, subjectId) => {
     const name = topicName.trim();
@@ -266,6 +286,7 @@ export default function AttributesManager({ lockedDepartment = null }) {
                   setSearchQuery('');
                   setSelectedParentFilter('');
                   setInspectingSubject(null);
+                  setInspectingDepartment(null);
                 }}
                 className={`relative flex items-center justify-between p-3 rounded-[16px] transition-all duration-200 ${
                   isActive 
@@ -481,17 +502,28 @@ export default function AttributesManager({ lockedDepartment = null }) {
                 const childText = getChildCountText(val.id, activeAttribute.id);
                 const styles = getInitialsStyles(index);
 
+                const isDeptCard = activeTab === 'department';
                 const isSubjectCard = activeTab === 'subject';
-                const childCount = attributes.filter(a => a.parentId === val.id && a.type === 'topic').length;
+                
+                // Department child calculations (subjects & topics)
+                const deptSubjects = isDeptCard ? attributes.filter(a => a.type === 'subject' && (a.parentId === val.id || a.parentId === val.name)) : [];
+                const deptSubjectIds = new Set(deptSubjects.map(s => s.id));
+                const deptTopics = isDeptCard ? attributes.filter(a => a.type === 'topic' && (deptSubjectIds.has(a.parentId) || deptSubjects.some(s => s.name === a.parentId))) : [];
+
+                // Subject child calculations (topics)
+                const subjectTopics = isSubjectCard ? attributes.filter(a => a.type === 'topic' && (a.parentId === val.id || a.parentId === val.name)) : [];
+
+                const isClickable = isDeptCard || isSubjectCard;
 
                 return (
                   <div 
                     key={val.id} 
                     onClick={() => {
-                      if (isSubjectCard) setInspectingSubject(val);
+                      if (isDeptCard) setInspectingDepartment(val);
+                      else if (isSubjectCard) setInspectingSubject(val);
                     }}
                     className={`relative flex flex-col justify-between p-5 bg-[#FFFFFF] border border-[#EEF2F7] rounded-[18px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] transition-all duration-300 group hover:-translate-y-1 hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)] min-h-[170px] ${
-                      isSubjectCard ? 'cursor-pointer hover:border-[#2563EB] ring-0 hover:ring-2 hover:ring-blue-100' : 'hover:border-[#2563EB]/40'
+                      isClickable ? 'cursor-pointer hover:border-[#2563EB] ring-0 hover:ring-2 hover:ring-blue-100' : 'hover:border-[#2563EB]/40'
                     }`}
                   >
                     {/* Top Row: Squircle Avatar + Name & Parent + Action Buttons */}
@@ -534,8 +566,29 @@ export default function AttributesManager({ lockedDepartment = null }) {
                       </div>
                     </div>
 
-                    {/* Bottom Row: Modern Non-wrapping Topic Pill + Timestamp (replaces ugly circle button) */}
-                    {isSubjectCard ? (
+                    {/* Bottom Row: Informative Pill + Timestamp */}
+                    {isDeptCard ? (
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInspectingDepartment(val);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-[12px] transition-all border border-purple-200/60 shadow-2xs group/btn"
+                        >
+                          <Bookmark size={13} className="text-purple-600 shrink-0" />
+                          <span className="whitespace-nowrap">{deptSubjects.length} Subjects</span>
+                          {deptTopics.length > 0 && (
+                            <span className="text-purple-500 font-medium whitespace-nowrap">• {deptTopics.length} Topics</span>
+                          )}
+                          <span className="text-purple-400 group-hover/btn:translate-x-0.5 transition-transform text-[11px]">→</span>
+                        </button>
+                        <span className="text-[11.5px] font-medium text-slate-400 truncate">
+                          {getRelativeTime(val.createdAt)}
+                        </span>
+                      </div>
+                    ) : isSubjectCard ? (
                       <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                         <button
                           type="button"
@@ -546,7 +599,7 @@ export default function AttributesManager({ lockedDepartment = null }) {
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[12px] transition-all border border-blue-200/60 shadow-2xs group/btn"
                         >
                           <BookOpen size={13} className="text-blue-600 shrink-0" />
-                          <span className="whitespace-nowrap">{childCount} Topics</span>
+                          <span className="whitespace-nowrap">{subjectTopics.length} Topics</span>
                           <span className="text-blue-400 group-hover/btn:translate-x-0.5 transition-transform text-[11px]">→</span>
                         </button>
                         <span className="text-[11.5px] font-medium text-slate-400 truncate">
@@ -617,6 +670,223 @@ export default function AttributesManager({ lockedDepartment = null }) {
           </div>
         </div>
       )}
+
+      {/* Inspecting Department Subjects Modal */}
+      {inspectingDepartment && (() => {
+        const allSubjectsForDept = attributes.filter(a => a.type === 'subject' && (a.parentId === inspectingDepartment.id || a.parentId === inspectingDepartment.name));
+        const subIds = new Set(allSubjectsForDept.map(s => s.id));
+        const allTopicsForDept = attributes.filter(a => a.type === 'topic' && (subIds.has(a.parentId) || allSubjectsForDept.some(s => s.name === a.parentId)));
+
+        const filteredSubjects = allSubjectsForDept.filter(s => {
+          if (!inspectingDeptSearch.trim()) return true;
+          return s.name.toLowerCase().includes(inspectingDeptSearch.trim().toLowerCase());
+        });
+
+        return (
+          <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+            <div className="bg-white rounded-[24px] max-w-2xl w-full max-h-[85vh] flex flex-col shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-[#EEF2F7] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              
+              {/* Modal Header */}
+              <div className="p-6 border-b border-[#F1F5F9] flex items-start justify-between gap-4 bg-slate-50/70">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-[#2563EB] text-white flex items-center justify-center font-extrabold text-[18px] shadow-md shadow-blue-500/20 shrink-0">
+                    <Landmark size={22} />
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-[20px] font-extrabold text-[#0F172A] leading-tight">
+                        {inspectingDepartment.name}
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold text-[11.5px]">
+                        {allSubjectsForDept.length} Subjects
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-bold text-[11.5px]">
+                        {allTopicsForDept.length} Topics
+                      </span>
+                    </div>
+                    <span className="text-[12px] font-medium text-[#64748B] mt-0.5">
+                      Department Configuration & Academic Structure
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInspectingDepartment(null);
+                    setInspectingDeptSearch('');
+                    setNewSubjectForDept('');
+                  }}
+                  className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Quick Search & Quick Add inside Department Modal */}
+              <div className="p-5 border-b border-[#F1F5F9] bg-white flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={inspectingDeptSearch}
+                    onChange={(e) => setInspectingDeptSearch(e.target.value)}
+                    placeholder={`Search subjects in ${inspectingDepartment.name}...`}
+                    className="w-full h-[40px] pl-9 pr-8 bg-slate-50 focus:bg-white border border-[#EEF2F7] focus:border-blue-500 rounded-xl text-[13px] outline-none transition-all"
+                  />
+                  {inspectingDeptSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setInspectingDeptSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <input
+                    type="text"
+                    value={newSubjectForDept}
+                    onChange={(e) => setNewSubjectForDept(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newSubjectForDept.trim()) {
+                          handleAddSubjectDirectly(newSubjectForDept, inspectingDepartment.id);
+                          setNewSubjectForDept('');
+                        }
+                      }
+                    }}
+                    placeholder="New subject name..."
+                    className="h-[40px] px-3.5 bg-slate-50 focus:bg-white border border-[#EEF2F7] focus:border-blue-500 rounded-xl text-[13px] outline-none transition-all flex-1 sm:w-[180px]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newSubjectForDept.trim()) {
+                        handleAddSubjectDirectly(newSubjectForDept, inspectingDepartment.id);
+                        setNewSubjectForDept('');
+                      }
+                    }}
+                    disabled={!newSubjectForDept.trim()}
+                    className="h-[40px] px-4 rounded-xl bg-[#2563EB] hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-[12.5px] transition-colors shrink-0 flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Plus size={15} strokeWidth={2.5} />
+                    <span>Add</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Subjects List Body */}
+              <div className="p-6 overflow-y-auto flex-1 space-y-2.5">
+                {filteredSubjects.length === 0 ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-2.5">
+                      <Bookmark size={24} />
+                    </div>
+                    <p className="font-bold text-slate-700 text-[15px]">
+                      {inspectingDeptSearch ? 'No matching subjects found' : `No subjects yet in ${inspectingDepartment.name}`}
+                    </p>
+                    <p className="text-[12.5px] text-slate-400 mt-0.5">
+                      {inspectingDeptSearch
+                        ? 'Try searching with different keywords.'
+                        : 'Use the quick add bar above to add your first subject to this department.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {filteredSubjects.map((sub, idx) => {
+                      const topicCount = attributes.filter(a => a.type === 'topic' && (a.parentId === sub.id || a.parentId === sub.name)).length;
+                      return (
+                        <div
+                          key={sub.id}
+                          className="p-3.5 rounded-xl border border-slate-200/80 hover:border-blue-300 hover:bg-blue-50/20 bg-white transition-all flex items-center justify-between gap-3 group"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 font-bold text-[11px] flex items-center justify-center shrink-0 border border-blue-100">
+                              {idx + 1}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-bold text-slate-800 text-[13px] truncate" title={sub.name}>
+                                {sub.name}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setInspectingDepartment(null);
+                                  setInspectingSubject(sub);
+                                }}
+                                className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1 mt-0.5 text-left"
+                              >
+                                <span>{topicCount} Topics</span>
+                                <ArrowRight size={11} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={() => setEditingAttr({ id: sub.id, name: sub.name, type: 'subject' })}
+                              className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              title="Edit subject"
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingId(sub.id)}
+                              className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Delete subject"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 px-6 border-t border-[#F1F5F9] bg-slate-50 flex items-center justify-between gap-3">
+                <span className="text-[12px] font-medium text-slate-500">
+                  Showing {filteredSubjects.length} of {allSubjectsForDept.length} subjects
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedParentFilter(inspectingDepartment.id);
+                      setActiveTab('subject');
+                      setInspectingDepartment(null);
+                      setInspectingDeptSearch('');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:border-blue-300 text-blue-700 font-bold text-[12.5px] transition-all flex items-center gap-1.5 shadow-xs"
+                  >
+                    <span>Manage in Subjects Tab</span>
+                    <ArrowRight size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectingDepartment(null);
+                      setInspectingDeptSearch('');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[12.5px] transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Inspecting Subject Topics Modal */}
       {inspectingSubject && (() => {
