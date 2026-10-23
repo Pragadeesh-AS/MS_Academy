@@ -1963,7 +1963,7 @@ export default function LiveClasses({ department }) {
           const response = await fetch(`https://us-central1-msgate-5bad9.cloudfunctions.net/generateAgoraToken?channelName=MS_ACADEMY&role=publisher&t=${Date.now()}`);
           const data = await response.json();
           if (data.token) {
-            console.log("Fetched new Agora token successfully", data.token.substring(0, 20) + "...");
+            console.log("Session token initialized successfully.");
             setDynamicToken(data.token);
           } else {
             setTokenError("Failed to get token from server");

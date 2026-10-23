@@ -410,7 +410,7 @@ const fileToBase64 = (fileObj) => new Promise((resolve, reject) => {
   reader.readAsDataURL(fileObj);
 });
 
-const callExtractApi = async (payload, apiKey) => {
+const callExtractApi = async (payload) => {
   const endpoints = [
     '/api/extractQuestions',
     'https://us-central1-msgate-5bad9.cloudfunctions.net/extractQuestions'
@@ -422,13 +422,9 @@ const callExtractApi = async (payload, apiKey) => {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...payload,
-          apiKey: apiKey || undefined
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json().catch(() => ({}));
@@ -1413,13 +1409,9 @@ export default function AIGenerator({ pairMode = false }) {
       setStatus('analyzing');
       let parsedQuestions = [];
       
-      const apiKey = import.meta.env.VITE_LLAMA_INDEX_API_KEY
-        || import.meta.env.Lama_INDEX_API
-        || import.meta.env.VITE_LAMA_INDEX_API
-        || import.meta.env.LLAMA_CLOUD_API_KEY;
+      let isAiExtracted = false;
 
-      if (apiKey) {
-        console.log("Attempting to use LlamaIndex AI for extraction via backend proxy...");
+      try {
         setProgressMsg("Preparing document for AI analysis...");
 
         const fileBase64 = await fileToBase64(file);
@@ -1443,13 +1435,13 @@ export default function AIGenerator({ pairMode = false }) {
             payload.fileType = file.type || 'application/pdf';
           }
 
-          const res = await callExtractApi(payload, apiKey);
+          const res = await callExtractApi(payload);
           if (res.fileId) storedFileId = res.fileId;
           return res.questions || [];
         };
 
         if (totalPages <= PAGES_PER_BATCH) {
-          setProgressMsg('LlamaIndex AI is analyzing document & extracting questions...');
+          setProgressMsg('AI is analyzing document & extracting questions...');
           rawQuestions = await runExtract(null);
         } else {
           for (let from = 1; from <= totalPages; from += PAGES_PER_BATCH) {
@@ -1484,63 +1476,69 @@ export default function AIGenerator({ pairMode = false }) {
           return;
         }
 
-        rawQuestions = dedupeQuestions(rawQuestions);
+        if (rawQuestions.length > 0) {
+          isAiExtracted = true;
+          rawQuestions = dedupeQuestions(rawQuestions);
 
-        // Numbering gaps usually mean a question was missed
-        const gaps = findNumberGaps(rawQuestions);
-        if (gaps.length > 0) {
-          const missing = gaps.flatMap(g => g.numbers);
-          setProgressMsg(`Recovering skipped question(s) ${missing.join(', ')}...`);
-          let recovered = [];
+          // Numbering gaps usually mean a question was missed
+          const gaps = findNumberGaps(rawQuestions);
+          if (gaps.length > 0) {
+            const missing = gaps.flatMap(g => g.numbers);
+            setProgressMsg(`Recovering skipped question(s) ${missing.join(', ')}...`);
+            let recovered = [];
+            try {
+              recovered = await runExtract(null, `Extract ONLY the question(s) numbered ${missing.join(', ')} (by their printed question labels) - they were missed earlier. Return each of them completely.`);
+            } catch (gapErr) {
+              console.warn('Could not recover skipped questions:', gapErr);
+            }
+            const known = new Set(rawQuestions.map(questionKey));
+            for (const gap of [...gaps].reverse()) {
+              const found = recovered
+                .filter(q => gap.numbers.includes(questionNumberOf(q)) && !known.has(questionKey(q)))
+                .sort((a, b) => questionNumberOf(a) - questionNumberOf(b));
+              rawQuestions.splice(gap.afterIndex + 1, 0, ...found);
+              const stillMissing = gap.numbers.filter(n => !found.some(q => questionNumberOf(q) === n));
+              if (stillMissing.length) warnings.push(`Question ${stillMissing.join(', ')} could not be extracted - please add ${stillMissing.length > 1 ? 'them' : 'it'} manually.`);
+            }
+          }
+
+          setExtractionWarnings(warnings);
+          parsedQuestions = rawQuestions.map(q => ({
+            ...q,
+            isImported: true,
+            topic: (importSettings.topic && importSettings.topic.trim()) ? importSettings.topic.trim() : (q.topic || ''),
+            subject: (importSettings.subject && importSettings.subject.trim()) ? importSettings.subject.trim() : (q.subject || ''),
+            department: (importSettings.department && importSettings.department.trim()) ? importSettings.department.trim() : (q.department || ''),
+            rawQuestionText: q.questionText || '',
+            rawOptionA: q.optionA || '',
+            rawOptionB: q.optionB || '',
+            rawOptionC: q.optionC || '',
+            rawOptionD: q.optionD || '',
+            rawExplanation: q.explanation || '',
+            questionText: formatExtractedText(q.questionText) || '',
+            optionA: formatExtractedText(q.optionA) || '',
+            optionB: formatExtractedText(q.optionB) || '',
+            optionC: formatExtractedText(q.optionC) || '',
+            optionD: formatExtractedText(q.optionD) || '',
+            correctAnswer: q.correctAnswer || '',
+            correctAnswers: Array.isArray(q.correctAnswers) ? q.correctAnswers : (q.correctAnswer ? [q.correctAnswer] : []),
+            fillBlankAnswer: q.fillBlankAnswer || '',
+            explanation: formatExtractedText(q.explanation) || ''
+          }));
+
           try {
-            recovered = await runExtract(null, `Extract ONLY the question(s) numbered ${missing.join(', ')} (by their printed question labels) - they were missed earlier. Return each of them completely.`);
-          } catch (gapErr) {
-            console.warn('Could not recover skipped questions:', gapErr);
+            parsedQuestions = await attachDiagramImages(file, parsedQuestions);
+          } catch (imgErr) {
+            console.error('Diagram cropping failed:', imgErr);
+            parsedQuestions = parsedQuestions.map(({ images, ...rest }) => rest);
           }
-          const known = new Set(rawQuestions.map(questionKey));
-          for (const gap of [...gaps].reverse()) {
-            const found = recovered
-              .filter(q => gap.numbers.includes(questionNumberOf(q)) && !known.has(questionKey(q)))
-              .sort((a, b) => questionNumberOf(a) - questionNumberOf(b));
-            rawQuestions.splice(gap.afterIndex + 1, 0, ...found);
-            const stillMissing = gap.numbers.filter(n => !found.some(q => questionNumberOf(q) === n));
-            if (stillMissing.length) warnings.push(`Question ${stillMissing.join(', ')} could not be extracted - please add ${stillMissing.length > 1 ? 'them' : 'it'} manually.`);
-          }
+          parsedQuestions = parsedQuestions.map(({ questionNumber, images, ...rest }) => rest);
         }
+      } catch (aiErr) {
+        console.warn("AI extraction service unavailable, attempting local parser fallback:", aiErr.message);
+      }
 
-        setExtractionWarnings(warnings);
-        parsedQuestions = rawQuestions.map(q => ({
-          ...q,
-          isImported: true,
-          topic: (importSettings.topic && importSettings.topic.trim()) ? importSettings.topic.trim() : (q.topic || ''),
-          subject: (importSettings.subject && importSettings.subject.trim()) ? importSettings.subject.trim() : (q.subject || ''),
-          department: (importSettings.department && importSettings.department.trim()) ? importSettings.department.trim() : (q.department || ''),
-          rawQuestionText: q.questionText || '',
-          rawOptionA: q.optionA || '',
-          rawOptionB: q.optionB || '',
-          rawOptionC: q.optionC || '',
-          rawOptionD: q.optionD || '',
-          rawExplanation: q.explanation || '',
-          questionText: formatExtractedText(q.questionText) || '',
-          optionA: formatExtractedText(q.optionA) || '',
-          optionB: formatExtractedText(q.optionB) || '',
-          optionC: formatExtractedText(q.optionC) || '',
-          optionD: formatExtractedText(q.optionD) || '',
-          correctAnswer: q.correctAnswer || '',
-          correctAnswers: Array.isArray(q.correctAnswers) ? q.correctAnswers : (q.correctAnswer ? [q.correctAnswer] : []),
-          fillBlankAnswer: q.fillBlankAnswer || '',
-          explanation: formatExtractedText(q.explanation) || ''
-        }));
-
-        try {
-          parsedQuestions = await attachDiagramImages(file, parsedQuestions);
-        } catch (imgErr) {
-          console.error('Diagram cropping failed:', imgErr);
-          parsedQuestions = parsedQuestions.map(({ images, ...rest }) => rest);
-        }
-        parsedQuestions = parsedQuestions.map(({ questionNumber, images, ...rest }) => rest);
-      } else {
-        console.log("No LlamaIndex API key found. Using pdf.js fallback...");
+      if (!isAiExtracted) {
         const text = await extractTextFromPDF(file);
         parsedQuestions = parseQuestionsFromText(text);
       }
@@ -1576,11 +1574,11 @@ export default function AIGenerator({ pairMode = false }) {
       console.error("PDF Parsing Error", err);
       let msg = err.message || "Failed to parse the PDF document.";
       if (/401|unauthorized|invalid.*key/i.test(msg)) {
-        msg = "The LlamaIndex API key is invalid or unauthorized. Please verify your Lama_INDEX_API key in the .env file.";
+        msg = "AI extraction authentication error. Please contact the administrator.";
       } else if (/429|quota|credits|rate limit/i.test(msg)) {
-        msg = "LlamaIndex API rate limit reached or credits exhausted. Please check your LlamaCloud account.";
+        msg = "AI service rate limit reached or credits exhausted. Please try again later.";
       } else if (/503|service unavailable|overloaded/i.test(msg)) {
-        msg = "LlamaIndex servers are busy right now. Please wait a moment and try again.";
+        msg = "AI extraction servers are busy right now. Please wait a moment and try again.";
       }
       setErrorMsg(msg);
       setStatus('error');

@@ -195,15 +195,15 @@ exports.extractQuestions = onRequest({
     }
 
     try {
-      const apiKey = req.body?.apiKey
-        || (req.headers.authorization ? req.headers.authorization.replace(/^Bearer\s+/i, '').trim() : null)
-        || process.env.LLAMA_INDEX_API
+      const apiKey = process.env.LLAMA_INDEX_API
         || process.env.LLAMA_CLOUD_API_KEY
+        || process.env.Lama_INDEX_API
         || process.env.VITE_LLAMA_INDEX_API_KEY
-        || process.env.Lama_INDEX_API;
+        || req.body?.apiKey
+        || (req.headers.authorization ? req.headers.authorization.replace(/^Bearer\s+/i, '').trim() : null);
 
       if (!apiKey) {
-        return res.status(400).json({ error: 'LlamaIndex API key is required. Please check your Lama_INDEX_API key in the environment.' });
+        return res.status(500).json({ error: 'Question extraction service is not configured on the server.' });
       }
 
       let fileId = req.body?.fileId;
@@ -287,11 +287,11 @@ exports.extractQuestions = onRequest({
       console.error('extractQuestions error:', err);
       let msg = err.message || 'Question extraction failed';
       if (/401|unauthorized|invalid.*key/i.test(msg)) {
-        msg = "The LlamaIndex API key is invalid or unauthorized. Please verify your Lama_INDEX_API key in the .env file.";
+        msg = "AI extraction authentication error. Please check server configuration.";
       } else if (/429|quota|credits|rate limit/i.test(msg)) {
-        msg = "LlamaIndex API rate limit reached or credits exhausted. Please check your LlamaCloud account.";
+        msg = "AI service rate limit reached or credits exhausted. Please try again later.";
       } else if (/503|service unavailable|overloaded/i.test(msg)) {
-        msg = "LlamaIndex servers are busy right now. Please wait a moment and try again.";
+        msg = "AI extraction servers are busy right now. Please wait a moment and try again.";
       }
       return res.status(500).json({ error: msg });
     }
