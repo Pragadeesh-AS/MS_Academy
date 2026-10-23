@@ -660,11 +660,6 @@ export default function QuestionImportLogs() {
                   <th className="py-4 px-4">Imported By</th>
                   <th className="py-4 px-4">Pushed By</th>
                   <th className="py-4 px-4">Department / Subject</th>
-                  <th className="py-4 px-4 text-center">Imported</th>
-                  <th className="py-4 px-4 text-center">Pushed</th>
-                  <th className="py-4 px-4 text-center">Diagrams</th>
-                  <th className="py-4 px-4 text-center">Skipped</th>
-                  <th className="py-4 px-4 text-center">Rejected</th>
                   <th className="py-4 px-5 text-right">Details</th>
                 </tr>
               </thead>
@@ -753,57 +748,7 @@ export default function QuestionImportLogs() {
                         </div>
                       </td>
 
-                      {/* Imported Count */}
-                      <td className="py-4 px-4 text-center whitespace-nowrap">
-                        <span className="inline-block px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-800 font-extrabold text-[13px]">
-                          {log.importedCount || 0}
-                        </span>
-                      </td>
 
-                      {/* Pushed Count */}
-                      <td className="py-4 px-4 text-center whitespace-nowrap">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-lg font-extrabold text-[13px] ${
-                          isPushed 
-                            ? 'bg-emerald-100 text-emerald-800' 
-                            : 'bg-slate-100 text-slate-400'
-                        }`}>
-                          {log.pushedCount || 0}
-                        </span>
-                      </td>
-
-                      {/* Diagram Count */}
-                      <td className="py-4 px-4 text-center whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg font-extrabold text-[12.5px] ${
-                          hasDiagrams 
-                            ? 'bg-purple-100 text-purple-800' 
-                            : 'bg-slate-100 text-slate-400'
-                        }`}>
-                          <ImageIcon size={12} />
-                          {log.diagramCount || 0}
-                        </span>
-                      </td>
-
-                      {/* Skipped */}
-                      <td className="py-4 px-4 text-center whitespace-nowrap">
-                        <span className={`inline-block px-2 py-0.5 rounded-md font-bold text-[12px] ${
-                          hasSkipped 
-                            ? 'bg-amber-100 text-amber-800 font-extrabold' 
-                            : 'text-slate-300'
-                        }`}>
-                          {log.skippedCount || 0}
-                        </span>
-                      </td>
-
-                      {/* Rejected */}
-                      <td className="py-4 px-4 text-center whitespace-nowrap">
-                        <span className={`inline-block px-2 py-0.5 rounded-md font-bold text-[12px] ${
-                          hasRejected 
-                            ? 'bg-rose-100 text-rose-800 font-extrabold' 
-                            : 'text-slate-300'
-                        }`}>
-                          {log.rejectedCount || 0}
-                        </span>
-                      </td>
 
                       {/* Action / Inspect */}
                       <td className="py-4 px-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -947,7 +892,7 @@ export default function QuestionImportLogs() {
                 <h4 className="text-[13px] font-bold uppercase tracking-wider text-slate-400 mb-3">
                   Questions Breakdown
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   <div className="p-3.5 rounded-xl border border-blue-100 bg-blue-50/40 flex flex-col">
                     <span className="text-[11px] font-bold text-blue-600">Imported</span>
                     <span className="text-[22px] font-extrabold text-blue-700 mt-1">
@@ -978,6 +923,14 @@ export default function QuestionImportLogs() {
                       {selectedLog.skippedCount || 0}
                     </span>
                     <span className="text-[11px] text-amber-500/80">Excluded</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl border border-rose-100 bg-rose-50/40 flex flex-col">
+                    <span className="text-[11px] font-bold text-rose-600">Rejected</span>
+                    <span className="text-[22px] font-extrabold text-rose-700 mt-1">
+                      {selectedLog.rejectedCount || 0}
+                    </span>
+                    <span className="text-[11px] text-rose-500/80">Sent to Drafts</span>
                   </div>
                 </div>
               </div>
