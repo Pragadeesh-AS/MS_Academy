@@ -29,7 +29,7 @@ import {
   Trash2,
   CheckCircle
 } from 'lucide-react';
-import { hasDiagram } from '../../utils/questionLogger';
+import { hasDiagram, countQuestionTypes } from '../../utils/questionLogger';
 
 export default function QuestionImportLogs() {
   const [logs, setLogs] = useState([]);
@@ -45,6 +45,42 @@ export default function QuestionImportLogs() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
   const [deletingId, setDeletingId] = useState(null);
+
+  const resolveQuestionTypes = (log) => {
+    if (!log) return { singleChoice: 0, multipleChoice: 0, nat: 0, match: 0 };
+    const qt = log.questionTypes;
+    const sum = (Number(qt?.singleChoice) || 0) + (Number(qt?.multipleChoice) || 0) + (Number(qt?.nat) || 0) + (Number(qt?.match) || 0);
+    if (sum > 0) {
+      return {
+        singleChoice: Number(qt.singleChoice) || 0,
+        multipleChoice: Number(qt.multipleChoice) || 0,
+        nat: Number(qt.nat) || 0,
+        match: Number(qt.match) || 0
+      };
+    }
+    // If sum is 0, check other logs with the same fileName that have non-zero counts
+    if (log.fileName && log.fileName !== 'Question Batch' && log.fileName !== 'Extracted_Questions.pdf') {
+      const companion = logs.find(l => 
+        l.id !== log.id && 
+        l.fileName === log.fileName && 
+        ((Number(l.questionTypes?.singleChoice) || 0) + (Number(l.questionTypes?.multipleChoice) || 0) + (Number(l.questionTypes?.nat) || 0) + (Number(l.questionTypes?.match) || 0)) > 0
+      );
+      if (companion?.questionTypes) {
+        return {
+          singleChoice: Number(companion.questionTypes.singleChoice) || 0,
+          multipleChoice: Number(companion.questionTypes.multipleChoice) || 0,
+          nat: Number(companion.questionTypes.nat) || 0,
+          match: Number(companion.questionTypes.match) || 0
+        };
+      }
+    }
+    return {
+      singleChoice: 0,
+      multipleChoice: 0,
+      nat: 0,
+      match: 0
+    };
+  };
 
   // 1. Live subscribe to question_import_logs
   useEffect(() => {
@@ -128,12 +164,7 @@ export default function QuestionImportLogs() {
           rejectedCount: draftCount,
           diagramCount: diagramQuestions,
           textOnlyCount: batchQuestions.length - diagramQuestions,
-          questionTypes: {
-            singleChoice: batchQuestions.filter(q => q.questionType === 'Single Choice' || !q.questionType).length,
-            multipleChoice: batchQuestions.filter(q => q.questionType === 'Multiple Choice').length,
-            nat: batchQuestions.filter(q => q.questionType === 'Fill in Blanks' || q.questionType === 'Fill in the Blanks').length,
-            match: batchQuestions.filter(q => q.questionType === 'Match').length
-          },
+          questionTypes: countQuestionTypes(batchQuestions),
           user: {
             name: importerName,
             email: importerEmail,
@@ -325,10 +356,10 @@ export default function QuestionImportLogs() {
       l.rejectedCount || 0,
       l.diagramCount || 0,
       l.textOnlyCount || 0,
-      l.questionTypes?.singleChoice || 0,
-      l.questionTypes?.multipleChoice || 0,
-      l.questionTypes?.nat || 0,
-      l.questionTypes?.match || 0,
+      resolveQuestionTypes(l).singleChoice,
+      resolveQuestionTypes(l).multipleChoice,
+      resolveQuestionTypes(l).nat,
+      resolveQuestionTypes(l).match,
       `"${(l.reviewerEmail || '').replace(/"/g, '""')}"`,
       `"${(l.notes || '').replace(/"/g, '""')}"`
     ]);
@@ -951,31 +982,34 @@ export default function QuestionImportLogs() {
               </div>
 
               {/* Question Types Split */}
-              {selectedLog.questionTypes && (
-                <div>
-                  <h4 className="text-[13px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                    Question Formats in this Batch
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-xl text-center">
-                      <span className="text-[11px] font-bold text-slate-400 block">Single Choice (MCQ)</span>
-                      <span className="text-[18px] font-extrabold text-slate-800">{selectedLog.questionTypes.singleChoice || 0}</span>
-                    </div>
-                    <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-xl text-center">
-                      <span className="text-[11px] font-bold text-slate-400 block">Multiple Choice (MSQ)</span>
-                      <span className="text-[18px] font-extrabold text-slate-800">{selectedLog.questionTypes.multipleChoice || 0}</span>
-                    </div>
-                    <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-xl text-center">
-                      <span className="text-[11px] font-bold text-slate-400 block">Numerical (NAT)</span>
-                      <span className="text-[18px] font-extrabold text-slate-800">{selectedLog.questionTypes.nat || 0}</span>
-                    </div>
-                    <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-xl text-center">
-                      <span className="text-[11px] font-bold text-slate-400 block">Match Items</span>
-                      <span className="text-[18px] font-extrabold text-slate-800">{selectedLog.questionTypes.match || 0}</span>
+              {(() => {
+                const types = resolveQuestionTypes(selectedLog);
+                return (
+                  <div>
+                    <h4 className="text-[13px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                      Question Formats in this Batch
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-xl text-center">
+                        <span className="text-[11px] font-bold text-slate-400 block">Single Choice (MCQ)</span>
+                        <span className="text-[18px] font-extrabold text-slate-800">{types.singleChoice}</span>
+                      </div>
+                      <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-xl text-center">
+                        <span className="text-[11px] font-bold text-slate-400 block">Multiple Choice (MSQ)</span>
+                        <span className="text-[18px] font-extrabold text-slate-800">{types.multipleChoice}</span>
+                      </div>
+                      <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-xl text-center">
+                        <span className="text-[11px] font-bold text-slate-400 block">Numerical (NAT)</span>
+                        <span className="text-[18px] font-extrabold text-slate-800">{types.nat}</span>
+                      </div>
+                      <div className="p-3 bg-slate-50 border border-slate-200/70 rounded-xl text-center">
+                        <span className="text-[11px] font-bold text-slate-400 block">Match Items</span>
+                        <span className="text-[18px] font-extrabold text-slate-800">{types.match}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* User & Metadata Details */}
               <div className="p-4 rounded-2xl bg-white border border-[#EEF2F7] space-y-3">

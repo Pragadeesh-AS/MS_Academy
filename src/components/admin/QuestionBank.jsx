@@ -9,7 +9,7 @@ import { QUESTION_CATEGORIES, getQuestionCategory, inferQuestionCategory } from 
 import { markNumberOf, markLabelFor, negativeMarkFor } from '../../utils/marking';
 import { sameDepartment } from '../../utils/subjects';
 import { answerKeyChanged } from '../../utils/testGrading';
-import { logQuestionActivity, hasDiagram } from '../../utils/questionLogger';
+import { logQuestionActivity, hasDiagram, countQuestionTypes } from '../../utils/questionLogger';
 import { regradeAttemptsForQuestion } from '../../utils/regradeAttempts';
 import MatchColumns from '../shared/MatchColumns';
 import DepartmentFolderGrid from './DepartmentFolderGrid';
@@ -783,6 +783,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       updateDoc(doc(db, 'question_bank', currentId), payload).then(() => {
         showToast("Question saved successfully", "success");
         const resolvedFile = payload.sourceFileName || before?.sourceFileName || (payload.topic ? `${String(payload.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : (payload.subject ? `${String(payload.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : 'Extracted_Questions.pdf'));
+        const qObj = { id: currentId, ...payload };
         if (before?.status === 'In Review' && finalStatus === 'Approved') {
           logQuestionActivity({
             type: 'approval',
@@ -790,6 +791,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
             fileName: resolvedFile,
             pushedCount: 1,
             importedCount: 1,
+            questions: [qObj],
+            questionTypes: countQuestionTypes([qObj]),
             pushedBy: {
               name: authName,
               email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
@@ -806,6 +809,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
             action: 'Question Rejected to Drafts',
             fileName: resolvedFile,
             rejectedCount: 1,
+            questions: [qObj],
+            questionTypes: countQuestionTypes([qObj]),
             rejectedBy: {
               name: authName,
               email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
@@ -830,6 +835,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         setQuestions(prev => prev.map(q => q.id === tempId ? { ...q, id: docRef.id } : q));
         cacheAddQuestion({ id: docRef.id, ...payload }, cacheKey);
         showToast("Question saved successfully", "success");
+        const qObj = { id: docRef.id, ...payload };
         logQuestionActivity({
           type: finalStatus === 'Approved' ? 'direct_push' : 'import_for_review',
           action: finalStatus === 'Approved' ? 'Question Created & Added to Bank' : 'Question Created & Sent for Review',
@@ -838,6 +844,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           pushedCount: finalStatus === 'Approved' ? 1 : 0,
           skippedCount: 0,
           rejectedCount: 0,
+          questions: [qObj],
+          questionTypes: countQuestionTypes([qObj]),
           diagramCount: hasDiagram(payload) ? 1 : 0,
           importedBy: {
             name: authName,
@@ -926,6 +934,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         setQuestions(prev => prev.map(q => q.id === tempId ? { ...q, id: docRef.id } : q));
         cacheAddQuestion({ id: docRef.id, ...payload }, cacheKey);
         showToast("Question saved successfully. Add next.", "success");
+        const qObj = { id: docRef.id, ...payload };
         logQuestionActivity({
           type: finalStatus === 'Approved' ? 'direct_push' : 'import_for_review',
           action: finalStatus === 'Approved' ? 'Question Created & Added to Bank' : 'Question Created & Sent for Review',
@@ -934,6 +943,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           pushedCount: finalStatus === 'Approved' ? 1 : 0,
           skippedCount: 0,
           rejectedCount: 0,
+          questions: [qObj],
+          questionTypes: countQuestionTypes([qObj]),
           diagramCount: hasDiagram(payload) ? 1 : 0,
           importedBy: {
             name: authName,
@@ -1058,6 +1069,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         fileName: q.sourceFileName || (q.topic ? `${String(q.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : (q.subject ? `${String(q.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : 'Extracted_Questions.pdf')),
         pushedCount: 1,
         importedCount: 1,
+        questions: [q],
+        questionTypes: countQuestionTypes([q]),
         pushedBy: {
           name: sessionStorage.getItem('auth_name') || 'Admin',
           email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
@@ -1118,6 +1131,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           fileName: firstQ?.sourceFileName || (firstQ?.topic ? `${String(firstQ.topic).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : (firstQ?.subject ? `${String(firstQ.subject).replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '_')}_Questions.pdf` : 'Extracted_Questions.pdf')),
           pushedCount: ids.length,
           importedCount: ids.length,
+          questions: approvedQuestions,
+          questionTypes: countQuestionTypes(approvedQuestions),
           pushedBy: {
             name: sessionStorage.getItem('auth_name') || 'Admin',
             email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),

@@ -19,6 +19,35 @@ export const hasDiagram = (q) => {
 };
 
 /**
+ * Robustly counts questions by format: Single Choice (MCQ), Multiple Choice (MSQ), Fill in Blanks (NAT), Match
+ */
+export const countQuestionTypes = (questions = []) => {
+  const counts = { singleChoice: 0, multipleChoice: 0, nat: 0, match: 0 };
+  const list = Array.isArray(questions) ? questions : (questions ? [questions] : []);
+
+  for (const q of list) {
+    if (!q) continue;
+    const raw = String(q.questionType || '').trim().toLowerCase();
+    if (raw === 'multiple choice' || raw === 'multiple select' || raw === 'msq') {
+      counts.multipleChoice += 1;
+    } else if (
+      raw.includes('fill') || 
+      raw.includes('blank') || 
+      raw.includes('numerical') || 
+      raw === 'nat'
+    ) {
+      counts.nat += 1;
+    } else if (raw.includes('match')) {
+      counts.match += 1;
+    } else {
+      counts.singleChoice += 1;
+    }
+  }
+
+  return counts;
+};
+
+/**
  * Helper to clean undefined values before saving to Firestore.
  */
 const sanitizePayload = (obj) => {
@@ -45,6 +74,40 @@ export const logQuestionActivity = async (entry = {}) => {
       role: sessionStorage.getItem('user_role') || 'Admin'
     };
 
+    const questionsList = Array.isArray(entry.questions) 
+      ? entry.questions 
+      : (entry.question ? [entry.question] : []);
+
+    let questionTypes = entry.questionTypes;
+    const qtSum = questionTypes 
+      ? ((Number(questionTypes.singleChoice) || 0) + (Number(questionTypes.multipleChoice) || 0) + (Number(questionTypes.nat) || 0) + (Number(questionTypes.match) || 0))
+      : 0;
+
+    if (qtSum === 0 && questionsList.length > 0) {
+      questionTypes = countQuestionTypes(questionsList);
+    } else if (!questionTypes) {
+      questionTypes = {
+        singleChoice: 0,
+        multipleChoice: 0,
+        nat: 0,
+        match: 0
+      };
+    } else {
+      questionTypes = {
+        singleChoice: Number(questionTypes.singleChoice) || 0,
+        multipleChoice: Number(questionTypes.multipleChoice) || 0,
+        nat: Number(questionTypes.nat) || 0,
+        match: Number(questionTypes.match) || 0
+      };
+    }
+
+    const importedCount = Number(entry.importedCount ?? (questionsList.length || 0));
+    const diagramCount = Number(
+      entry.diagramCount !== undefined 
+        ? entry.diagramCount 
+        : (questionsList.length > 0 ? questionsList.filter(hasDiagram).length : 0)
+    );
+
     const payload = sanitizePayload({
       batchId: entry.batchId || `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
       type: entry.type || 'import', // 'import', 'direct_push', 'approval', 'rejection'
@@ -53,23 +116,18 @@ export const logQuestionActivity = async (entry = {}) => {
       department: entry.department || '',
       subject: entry.subject || '',
       topic: entry.topic || '',
-      totalExtracted: Number(entry.totalExtracted || entry.importedCount || 0),
-      importedCount: Number(entry.importedCount || 0),
-      pushedCount: Number(entry.pushedCount || 0),
+      totalExtracted: Number(entry.totalExtracted || importedCount || 0),
+      importedCount,
+      pushedCount: Number(entry.pushedCount ?? importedCount),
       skippedCount: Number(entry.skippedCount || 0),
       rejectedCount: Number(entry.rejectedCount || 0),
-      diagramCount: Number(entry.diagramCount || 0),
-      textOnlyCount: Math.max(0, Number(entry.importedCount || 0) - Number(entry.diagramCount || 0)),
-      questionTypes: entry.questionTypes || {
-        singleChoice: 0,
-        multipleChoice: 0,
-        nat: 0,
-        match: 0
-      },
+      diagramCount,
+      textOnlyCount: Math.max(0, importedCount - diagramCount),
+      questionTypes,
       user: entry.user || currentUser,
       importedBy: entry.importedBy || (entry.type === 'rejection' ? null : currentUser),
-      pushedBy: entry.pushedBy || (entry.pushedCount > 0 ? currentUser : null),
-      rejectedBy: entry.rejectedBy || (entry.rejectedCount > 0 ? currentUser : null),
+      pushedBy: entry.pushedBy || (Number(entry.pushedCount ?? importedCount) > 0 ? currentUser : null),
+      rejectedBy: entry.rejectedBy || (Number(entry.rejectedCount || 0) > 0 ? currentUser : null),
       reviewerEmail: entry.reviewerEmail || '',
       notes: entry.notes || '',
       createdAt: entry.createdAt || new Date().toISOString()

@@ -6,7 +6,7 @@ import { sameDepartment } from '../../utils/subjects';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import katex from 'katex';
 import { findDuplicateQuestions } from '../../utils/questionDuplicates';
-import { logQuestionActivity, hasDiagram } from '../../utils/questionLogger';
+import { logQuestionActivity, hasDiagram, countQuestionTypes } from '../../utils/questionLogger';
 import { QUESTION_CATEGORIES, inferQuestionCategory } from '../../utils/questionCategory';
 import 'katex/dist/katex.min.css';
 
@@ -2044,12 +2044,8 @@ export default function AIGenerator({ pairMode = false }) {
           rejectedCount: 0,
           diagramCount: diagCount,
           textOnlyCount: toImport.length - diagCount,
-          questionTypes: {
-            singleChoice: toImport.filter(q => q.questionType === 'Single Choice' || !q.questionType).length,
-            multipleChoice: toImport.filter(q => q.questionType === 'Multiple Choice').length,
-            nat: toImport.filter(q => q.questionType === 'Fill in Blanks' || q.questionType === 'Fill in the Blanks').length,
-            match: toImport.filter(q => q.questionType === 'Match').length
-          },
+          questions: toImport,
+          questionTypes: countQuestionTypes(toImport),
           user: currentUser,
           importedBy: currentUser,
           pushedBy: direct ? currentUser : null,
