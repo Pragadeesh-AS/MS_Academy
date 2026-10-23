@@ -1136,9 +1136,17 @@ export default function AdminDashboard() {
               <nav className="space-y-1.5 px-1">
                 {[
                   { key: 'overview', label: 'Dashboard', icon: LayoutGrid },
-                  { key: 'teachers', label: 'Teachers', icon: BookOpen },
+                  { key: 'teachers', label: 'Teacher', icon: BookOpen },
+                  { key: 'queries', label: 'Student', icon: Users },
+                  { key: 'attributes', label: 'Attributes', icon: Tag },
+                  { key: 'ai', label: 'AI Extract', icon: Sparkles },
+                  { key: 'questions', label: 'Question Bank', icon: Database },
+                  { key: 'premium_questions', label: 'Premium Question Bank', icon: Database, isPremium: true },
+                  { key: 'tests', label: 'Create Test', icon: Trophy },
+                  { key: 'analytics', label: 'Analytics', icon: BarChart2 },
+                  { key: 'reported', label: 'Reported Questions', icon: ShieldCheck, danger: true },
+                  { key: 'test_feedback', label: 'Feedback', icon: Star, warning: true },
                   { key: 'typists', label: 'Data Entry Pairs', icon: Book },
-                  { key: 'queries', label: 'Students', icon: Users },
                   { key: 'fees', label: 'Fees Tracker', icon: Wallet },
                   { key: 'salary', label: 'Staff Salary', icon: IndianRupee },
                   { key: 'courses', label: 'Course Setup', icon: Package },
@@ -1146,24 +1154,24 @@ export default function AdminDashboard() {
                   { key: 'welcome_letter', label: 'Welcome Letter', icon: Mail },
                   { key: 'notes', label: 'Study Notes', icon: FileText },
                   { key: 'recordings', label: 'Live Recordings', icon: Video },
-                  { key: 'attributes', label: 'Attributes', icon: Tag },
-                  { key: 'analytics', label: 'Analytics', icon: BarChart2 },
-                  { key: 'questions', label: 'Question Bank', icon: Database },
-                  { key: 'logs', label: 'Logs and Activities', icon: ScrollText },
-                  { key: 'tests', label: 'Create Test', icon: Trophy },
-                  { key: 'reported', label: "Reported Q's", icon: ShieldCheck, danger: true },
-                  { key: 'premium_questions', label: 'Premium Questions', icon: Database },
-                  { key: 'blogs', label: 'Blogs', icon: FileText },
-                  { key: 'gallery', label: 'Gallery', icon: Images },
                   { key: 'popup', label: 'Popup', icon: Megaphone },
-                  { key: 'ai', label: 'AI Generator', icon: Sparkles },
-                ].map(({ key, label, icon: Icon, danger }) => (
+                  { key: 'logs', label: 'Logs', icon: ScrollText },
+                  { key: 'gallery', label: 'Gallery', icon: Images },
+                  { key: 'blogs', label: 'Blog', icon: FileText },
+                ].map(({ key, label, icon: Icon, danger, warning, isPremium }) => (
                   <button
                     key={key}
                     onClick={() => { setActiveTab(key); setIsMobileNavOpen(false); }}
-                    className={`w-full relative flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === key ? (danger ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg') : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                    className={`w-full relative flex items-center gap-4 px-4 py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${(activeTab === key || (key === 'logs' && activeTab === 'question_logs')) ? (danger ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg' : warning ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg' : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg') : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
                   >
-                    <Icon size={20} className={activeTab === key ? 'text-white' : 'text-slate-400'} />
+                    {isPremium ? (
+                      <div className="relative">
+                        <Icon size={20} className="text-amber-500" />
+                        <span className="absolute -top-1.5 -right-1.5 text-amber-500 text-[12px]">★</span>
+                      </div>
+                    ) : (
+                      <Icon size={20} className={(activeTab === key || (key === 'logs' && activeTab === 'question_logs')) ? 'text-white' : (warning ? 'text-amber-400' : 'text-slate-400')} />
+                    )}
                     <span>{label}</span>
                     {key === 'reported' && <ReportCountBadge count={pendingReports} />}
                   </button>
@@ -1221,6 +1229,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('overview')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'overview' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Dashboard" : ""}
               >
                 <LayoutGrid size={20} className={activeTab === 'overview' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Dashboard</span>}
@@ -1229,30 +1238,110 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('teachers')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'teachers' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Teacher" : ""}
               >
                 <BookOpen size={20} className={activeTab === 'teachers' ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>Teachers</span>}
+                {!isCollapsed && <span>Teacher</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('queries')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'queries' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Student" : ""}
+              >
+                <Users size={20} className={activeTab === 'queries' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Student</span>}
+              </button>
+
+              <button 
+                onClick={() => setActiveTab('attributes')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'attributes' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Attributes" : ""}
+              >
+                <Tag size={20} className={activeTab === 'attributes' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Attributes</span>}
+              </button>
+
+              <button 
+                onClick={() => setActiveTab('ai')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'ai' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "AI Extract" : ""}
+              >
+                <Sparkles size={20} className={activeTab === 'ai' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>AI Extract</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('questions')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'questions' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Question Bank" : ""}
+              >
+                <Database size={20} className={activeTab === 'questions' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Question Bank</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('premium_questions')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'premium_questions' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Premium Question Bank" : ""}
+              >
+                <div className="relative">
+                  <Database size={20} className={activeTab === 'premium_questions' ? 'text-amber-500' : 'text-amber-500'} />
+                  <span className="absolute -top-1.5 -right-1.5 text-amber-500 text-[12px]">★</span>
+                </div>
+                {!isCollapsed && <span>Premium Question Bank</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('tests')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'tests' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Create Test" : ""}
+              >
+                <Trophy size={20} className={activeTab === 'tests' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Create Test</span>}
+              </button>
+
+              <button 
+                onClick={() => setActiveTab('analytics')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'analytics' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Analytics" : ""}
+              >
+                <BarChart2 size={20} className={activeTab === 'analytics' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Analytics</span>}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('reported')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'reported' ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Reported Questions" : ""}
+              >
+                <ShieldCheck size={20} className={activeTab === 'reported' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Reported Questions</span>}
+                <ReportCountBadge count={pendingReports} collapsed={isCollapsed} />
+              </button>
+
+              <button
+                onClick={() => setActiveTab('test_feedback')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'test_feedback' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Feedback" : ""}
+              >
+                <Star size={20} className={activeTab === 'test_feedback' ? 'text-white' : 'text-amber-400'} />
+                {!isCollapsed && <span>Feedback</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('typists')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'typists' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Data Entry Pairs" : ""}
               >
                 <Book size={20} className={activeTab === 'typists' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Data Entry Pairs</span>}
               </button>
 
               <button
-                onClick={() => setActiveTab('queries')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'queries' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-              >
-                <Users size={20} className="text-slate-400" />
-                {!isCollapsed && <span>Students</span>}
-              </button>
-
-              <button
                 onClick={() => setActiveTab('fees')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'fees' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Fees Tracker" : ""}
               >
                 <Wallet size={20} className={activeTab === 'fees' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Fees Tracker</span>}
@@ -1261,6 +1350,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('salary')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'salary' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Staff Salary" : ""}
               >
                 <IndianRupee size={20} className={activeTab === 'salary' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Staff Salary</span>}
@@ -1269,6 +1359,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('courses')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'courses' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Course Setup" : ""}
               >
                 <Package size={20} className={activeTab === 'courses' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Course Setup</span>}
@@ -1277,6 +1368,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('invoice')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'invoice' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Invoice" : ""}
               >
                 <FileText size={20} className={activeTab === 'invoice' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Invoice</span>}
@@ -1285,6 +1377,7 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setActiveTab('welcome_letter')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'welcome_letter' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Welcome Letter" : ""}
               >
                 <Mail size={20} className={activeTab === 'welcome_letter' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Welcome Letter</span>}
@@ -1310,102 +1403,39 @@ export default function AdminDashboard() {
               </button>
 
               <button 
-                onClick={() => setActiveTab('attributes')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'attributes' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                onClick={() => setActiveTab('popup')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'popup' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Popup" : ""}
               >
-                <Tag size={20} className="text-slate-400" />
-                {!isCollapsed && <span>Attributes</span>}
-              </button>
-
-              <button 
-                onClick={() => setActiveTab('analytics')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'analytics' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-              >
-                <BarChart2 size={20} className="text-slate-400" />
-                {!isCollapsed && <span>Analytics</span>}
-              </button>
-
-              <button
-                onClick={() => setActiveTab('questions')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'questions' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-              >
-                <Database size={20} className={activeTab === 'questions' ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>Question Bank</span>}
+                <Megaphone size={20} className={activeTab === 'popup' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Popup</span>}
               </button>
 
               <button
                 onClick={() => setActiveTab('logs')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${(activeTab === 'logs' || activeTab === 'question_logs') ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Logs" : ""}
               >
                 <ScrollText size={20} className={(activeTab === 'logs' || activeTab === 'question_logs') ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>Logs and Activities</span>}
-              </button>
-
-              <button
-                onClick={() => setActiveTab('tests')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'tests' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-              >
-                <Trophy size={20} className={activeTab === 'tests' ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>Create Test</span>}
-              </button>
-
-              <button
-                onClick={() => setActiveTab('test_feedback')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'test_feedback' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-              >
-                <Star size={20} className={activeTab === 'test_feedback' ? 'text-white' : 'text-amber-400'} />
-                {!isCollapsed && <span>Test Feedback</span>}
-              </button>
-              <button
-                onClick={() => setActiveTab('reported')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'reported' ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-              >
-                <ShieldCheck size={20} className={activeTab === 'reported' ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>Reported Q's</span>}
-                <ReportCountBadge count={pendingReports} collapsed={isCollapsed} />
-              </button>
-
-              <button
-                onClick={() => setActiveTab('premium_questions')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'premium_questions' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-              >
-                <div className="relative">
-                  <Database size={20} className={activeTab === 'premium_questions' ? 'text-amber-500' : 'text-amber-500'} />
-                  <span className="absolute -top-1.5 -right-1.5 text-amber-500 text-[12px]">★</span>
-                </div>
-                {!isCollapsed && <span>Premium Questions</span>}
-              </button>
-
-              <button 
-                onClick={() => setActiveTab('blogs')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'blogs' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-              >
-                <FileText size={20} className={activeTab === 'blogs' ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>Blogs</span>}
+                {!isCollapsed && <span>Logs</span>}
               </button>
 
               <button 
                 onClick={() => setActiveTab('gallery')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'gallery' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'gallery' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Gallery" : ""}
               >
                 <Images size={20} className={activeTab === 'gallery' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Gallery</span>}
               </button>
 
               <button 
-                onClick={() => setActiveTab('popup')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'popup' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                onClick={() => setActiveTab('blogs')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'blogs' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Blog" : ""}
               >
-                <Megaphone size={20} className="text-slate-400" />
-                {!isCollapsed && <span>Popup</span>}
-              </button>
-
-              <button 
-                onClick={() => setActiveTab('ai')}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'ai' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-              >
-                <Sparkles size={20} className={activeTab === 'ai' ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>AI Generator</span>}
+                <FileText size={20} className={activeTab === 'blogs' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Blog</span>}
               </button>
 
             </nav>
