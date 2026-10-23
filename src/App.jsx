@@ -31,6 +31,7 @@ const EsCourse = lazy(() => import('./components/courses/Es'));
 const XlCourse = lazy(() => import('./components/courses/Xl'));
 const AeCourse = lazy(() => import('./components/courses/Ae'));
 const StCourse = lazy(() => import('./components/courses/St'));
+const PricingDemo = lazy(() => import('./components/ui/demo'));
 import MorphPanel from './components/ui/ai-input';
 import EnquiryForm from './components/ui/EnquiryForm';
 import ProgrammingCourses from './components/ProgrammingCourses';
@@ -495,6 +496,7 @@ export default function App() {
         <Route path="/courses/xl" element={<XlCourse />} />
         <Route path="/courses/ae" element={<AeCourse />} />
         <Route path="/courses/st" element={<StCourse />} />
+        <Route path="/pricing" element={<PricingDemo />} />
         <Route path="/gate-courses" element={<GateCourses />} />
         <Route path="/programming" element={<ProgrammingCourses />} />
         <Route path="/careers" element={<Careers />} />

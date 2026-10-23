@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-import { Lock, FileText, ZoomIn, ZoomOut, ShieldAlert, Crown, ChevronRight } from 'lucide-react';
+import { Lock, FileText, ZoomIn, ZoomOut, ShieldAlert, Crown, ChevronRight, Sparkles, CheckCheck, Star, ShieldCheck, X } from 'lucide-react';
+import NumberFlow from '@number-flow/react';
 import { sameDepartment } from '../utils/subjects';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = '//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -46,6 +48,37 @@ const PdfPage = ({ page, scale }) => {
   );
 };
 
+// Inclusions helper mirroring Academy Test
+const extractBundleInclusions = (bundle) => {
+  if (!bundle) return [];
+  const features = (bundle.features || [])
+    .map(f => (typeof f === 'string' ? f.trim() : ''))
+    .filter(Boolean);
+  if (features.length > 0) return features;
+
+  const perms = bundle.permissions;
+  if (Array.isArray(perms) && perms.length > 0) {
+    const items = [];
+    if (perms.includes('tests')) items.push('Academy Tests');
+    if (perms.includes('live_classes')) items.push('Live Classes');
+    if (perms.includes('recordings')) items.push('Class Recordings');
+    if (perms.includes('notes')) items.push('Study Notes');
+    return items;
+  }
+  return ['Full Study Notes Access', 'Downloadable PDF'];
+};
+
+const extractDiscountInfo = (bundle) => {
+  const orig = Number(bundle.price);
+  const disc = Number(bundle.discountedPrice);
+  if (!isNaN(orig) && !isNaN(disc) && orig > disc && disc > 0) {
+    const diff = orig - disc;
+    const pct = Math.round((diff / orig) * 100);
+    return { hasDiscount: true, saveAmount: diff, percent: pct };
+  }
+  return { hasDiscount: false, saveAmount: 0, percent: 0 };
+};
+
 // Blurred continuation page rendered with in-page suggested bundles to purchase
 const BlurredLockedPage = ({ 
   page, 
@@ -54,13 +87,16 @@ const BlurredLockedPage = ({
   numPages, 
   suggestedBundles = [], 
   suggestedNoteBundles = [], 
+  bundles = [],
   onBuyBundle, 
   onBuyNoteBundle, 
   payingBundleId, 
-  onUpgrade 
+  onUpgrade,
+  note
 }) => {
   const canvasRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 750, height: 950 });
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   useEffect(() => {
     if (!page) return;
@@ -98,10 +134,36 @@ const BlurredLockedPage = ({
   }, [page, scale]);
 
   const remainingAfterThis = Math.max(0, numPages - pageNumber);
+  const noteTitle = note?.title || (note?.subject ? `${note.subject} - STUDY NOTES` : 'STUDY MATERIAL');
+  const noteDept = note?.department || 'Mechanical (ME)';
+
+  // Combine only the actual matching suggested bundles (no artificial extra bundles)
+  const combinedBundles = [
+    ...(suggestedBundles || []),
+    ...(suggestedNoteBundles || []).map(nb => ({ ...nb, isNoteBundle: true })),
+  ].filter(Boolean);
+
+  let bundlesToDisplay = combinedBundles;
+
+  // Fallback only if no bundles at all were matched
+  if (bundlesToDisplay.length === 0) {
+    bundlesToDisplay = [
+      {
+        id: "bundle-elite",
+        name: "GATE ELITE COURSE - MECHANICAL",
+        department: "MECHANICAL (ME)",
+        tagline: "IGNITE YOUR DREAMS",
+        price: 90000,
+        discountedPrice: 70000,
+        permissions: ["tests", "live_classes", "recordings", "notes"],
+        isPopular: true,
+      },
+    ];
+  }
 
   return (
     <div 
-      className="relative bg-white shadow-2xl mb-12 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-amber-200/90 mx-auto w-full"
+      className="relative bg-white shadow-2xl mb-12 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-blue-200/90 mx-auto w-full"
       style={{ 
         width: dimensions.width ? `${dimensions.width}px` : '100%', 
         minHeight: dimensions.height ? `${dimensions.height}px` : '650px',
@@ -125,174 +187,236 @@ const BlurredLockedPage = ({
         <span>Page {pageNumber} Locked</span>
       </div>
 
-      {/* Suggested Bundles Card in normal document flow over the blur */}
+      {/* Inline banner on blurred page - clean card with only Buy Bundle button */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-[580px] p-4 sm:p-8">
-        <div className="w-full max-w-xl bg-white/95 rounded-2xl sm:rounded-3xl border-2 border-amber-200 shadow-2xl p-5 sm:p-7 backdrop-blur-xl animate-in zoom-in-95 duration-200 text-left my-auto pointer-events-auto">
-          {/* Top accent bar */}
-          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 rounded-t-2xl sm:rounded-t-3xl" />
+        <div className="w-full max-w-lg bg-white/95 rounded-2xl sm:rounded-3xl border-2 border-blue-200 shadow-2xl p-6 sm:p-8 backdrop-blur-xl animate-in zoom-in-95 duration-200 text-center my-auto pointer-events-auto">
+          {/* Top accent bar in blue theme */}
+          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600 rounded-t-2xl sm:rounded-t-3xl" />
 
-          {/* Header */}
-          <div className="text-center mb-4 pt-1">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
-              <Lock size={28} className="text-amber-600 drop-shadow-sm" />
-            </div>
-
-            <span className="inline-block text-[10px] sm:text-[11px] font-[900] tracking-widest uppercase px-3 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 mb-1.5">
-              Locked Content
-            </span>
-
-            <h3 className="text-xl sm:text-2xl font-[900] text-slate-900 tracking-tight leading-snug">
-              Unlock the Full Material
-            </h3>
-            
-            <p className="text-slate-600 text-xs sm:text-sm font-medium leading-relaxed max-w-md mx-auto mt-1">
-              You've reached the end of the free preview. {remainingAfterThis > 0 ? (
-                <>There are <strong className="text-slate-900 font-bold">{remainingAfterThis} more pages</strong> waiting for you!</>
-              ) : null} Purchase a bundle below to instantly unlock this entire high-quality document:
-            </p>
+          {/* Lock icon */}
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <Lock size={30} className="text-blue-600 drop-shadow-sm" />
           </div>
 
-          {/* Suggested Bundles List */}
-          <div className="space-y-3 mb-4 max-h-[38vh] overflow-y-auto pr-1">
-            {suggestedBundles.filter(Boolean).map(bundle => {
-              const isPaying = payingBundleId === bundle.id;
-              const price = bundle.discountedPrice || bundle.price;
-              const hasDiscount = bundle.discountedPrice && bundle.discountedPrice !== bundle.price;
-              return (
-                <div 
-                  key={bundle.id}
-                  className="bg-gradient-to-br from-slate-50 to-amber-50/40 rounded-xl sm:rounded-2xl border-2 border-amber-200/90 p-3.5 sm:p-4 hover:border-amber-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                        {bundle.department || 'All Departments'}
-                      </span>
-                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                        Recommended
-                      </span>
-                    </div>
-                    <h4 className="font-[900] text-slate-900 text-sm sm:text-[15px] leading-tight">
-                      {bundle.name}
-                    </h4>
-                    <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
-                      Includes full study notes, unlimited tests & live classes
-                    </p>
-                  </div>
+          <span className="inline-block text-[11px] font-[900] tracking-widest uppercase px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 mb-2">
+            Locked Content
+          </span>
 
-                  <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2 shrink-0">
-                    <div className="text-left sm:text-right">
-                      <div className="text-lg sm:text-xl font-[900] text-slate-900">
-                        ₹{price}
-                      </div>
-                      {hasDiscount && (
-                        <div className="text-[10px] font-bold text-slate-400 line-through">
-                          ₹{bundle.price}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onBuyBundle) onBuyBundle(bundle.id);
-                        else if (onUpgrade) onUpgrade();
-                      }}
-                      disabled={isPaying}
-                      className="px-4 py-2 sm:py-2.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-[900] text-xs sm:text-sm rounded-xl shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 cursor-pointer hover:-translate-y-0.5 disabled:opacity-60"
-                    >
-                      <Crown size={15} />
-                      <span>{isPaying ? 'Opening...' : 'Buy Bundle'}</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <h3 className="text-2xl sm:text-3xl font-[900] text-slate-900 tracking-tight leading-snug mb-2">
+            Unlock the Full Material
+          </h3>
+          
+          <p className="text-slate-600 text-xs sm:text-sm font-medium leading-relaxed max-w-md mx-auto mb-6">
+            You've reached the end of the free preview. {remainingAfterThis > 0 ? (
+              <>There are <strong className="text-slate-900 font-bold">{remainingAfterThis} more pages</strong> waiting for you! </>
+            ) : null}
+            Purchase a course bundle to instantly unlock the entire high-quality document.
+          </p>
 
-            {/* If there are specific Notes Bundles (e.g. Civil Full Notes) */}
-            {suggestedNoteBundles.filter(Boolean).map(nb => {
-              const isPaying = payingBundleId === nb.id;
-              const price = nb.discountedPrice || nb.price;
-              const hasDiscount = nb.discountedPrice && nb.discountedPrice !== nb.price;
-              return (
-                <div 
-                  key={nb.id}
-                  className="bg-indigo-50/50 rounded-xl sm:rounded-2xl border border-indigo-200 p-3.5 sm:p-4 hover:border-indigo-300 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
-                        Notes Bundle
-                      </span>
-                    </div>
-                    <h4 className="font-[900] text-slate-900 text-sm sm:text-[15px] leading-tight">
-                      {nb.name}
-                    </h4>
-                    <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
-                      All subjects study notes for your department
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between sm:flex-col sm:items-end gap-2 shrink-0">
-                    <div className="text-left sm:text-right">
-                      <div className="text-lg sm:text-xl font-[900] text-slate-900">
-                        ₹{price}
-                      </div>
-                      {hasDiscount && (
-                        <div className="text-[10px] font-bold text-slate-400 line-through">
-                          ₹{nb.price}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onBuyNoteBundle) onBuyNoteBundle(nb.id);
-                        else if (onUpgrade) onUpgrade();
-                      }}
-                      disabled={isPaying}
-                      className="px-4 py-2 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-[900] text-xs sm:text-sm rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center gap-1.5 cursor-pointer hover:-translate-y-0.5 disabled:opacity-60"
-                    >
-                      <FileText size={15} />
-                      <span>{isPaying ? 'Opening...' : 'Buy Notes'}</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-
-            {suggestedBundles.length === 0 && suggestedNoteBundles.length === 0 && (
-              <div className="text-center py-4">
-                <button
-                  type="button"
-                  onClick={onUpgrade}
-                  className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-[900] text-sm shadow-md inline-flex items-center gap-2 cursor-pointer"
-                >
-                  <Crown size={16} /> Upgrade to Pro
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Footer Navigation */}
-          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
-            {onUpgrade && (
-              <button
-                type="button"
-                onClick={onUpgrade}
-                className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer"
-              >
-                <span>Explore all course bundles</span>
-                <ChevronRight size={13} />
-              </button>
-            )}
-            {remainingAfterThis > 0 && (
-              <span className="text-slate-400 font-bold ml-auto text-[11px]">
-                +{remainingAfterThis} more pages locked
-              </span>
-            )}
-          </div>
+          {/* ONLY Buy Bundle button in that place */}
+          <button
+            type="button"
+            onClick={() => setShowUnlockModal(true)}
+            className="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-[900] text-sm sm:text-base rounded-xl shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer hover:-translate-y-0.5 active:scale-[0.98] mx-auto"
+          >
+            <Crown size={18} />
+            <span>Buy Bundle</span>
+          </button>
         </div>
       </div>
+
+      {/* POPUP MODAL (when Buy Bundle is clicked, styled exactly like Image 2) */}
+      {showUnlockModal && createPortal(
+        <div 
+          className="fixed inset-0 z-[120] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-200"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowUnlockModal(false); }}
+        >
+          <div 
+            className={`relative w-full ${
+              bundlesToDisplay.length <= 1 
+                ? 'max-w-xl' 
+                : bundlesToDisplay.length === 2 
+                  ? 'max-w-4xl' 
+                  : 'max-w-6xl'
+            } bg-neutral-100 rounded-3xl shadow-[0_25px_80px_rgba(0,0,0,0.85)] p-6 sm:p-8 border border-neutral-300 animate-in zoom-in-95 duration-200 text-center custom-scrollbar max-h-[92vh] overflow-y-auto my-auto`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={() => setShowUnlockModal(false)}
+              className="absolute top-5 right-5 z-20 w-10 h-10 rounded-full bg-white hover:bg-neutral-200 border border-gray-300 text-gray-700 hover:text-black flex items-center justify-center shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95"
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+
+            {/* Header */}
+            <div className="text-center mb-5">
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-blue-100 border border-blue-300 text-blue-700 text-xs font-bold uppercase tracking-wider mb-2.5 shadow-sm">
+                <Sparkles size={13} className="text-blue-600" />
+                <span>UNLOCK MATERIAL ACCESS</span>
+              </div>
+
+              <h2 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight mb-1 uppercase">
+                {noteTitle}
+              </h2>
+
+              <p className="text-xs sm:text-sm text-gray-600 font-medium max-w-lg mx-auto mb-2">
+                Unlock this document by choosing a bundle below
+              </p>
+            </div>
+
+            {/* Bundles Grid - adopts dynamically (1 card centered, 2 cards side-by-side, 3 cards in 3 cols) */}
+            <div className={`grid ${
+              bundlesToDisplay.length <= 1
+                ? 'grid-cols-1 max-w-md mx-auto'
+                : bundlesToDisplay.length === 2
+                  ? 'grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto'
+                  : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto'
+            } gap-5 my-4 text-left`}>
+              {bundlesToDisplay.map((bundle) => {
+                const finalPrice = Number(bundle.discountedPrice || bundle.price) || 0;
+                const { hasDiscount, saveAmount, percent } = extractDiscountInfo(bundle);
+                const isPaying = payingBundleId === bundle.id;
+                const inclusions = extractBundleInclusions(bundle);
+                const tagline = bundle.tagline || bundle.description || "";
+                const isPopular = Boolean(
+                  bundle.isPopular ||
+                  bundle.tier === "elite" ||
+                  bundle.isElite ||
+                  /elite/i.test(bundle.name || "")
+                );
+
+                return (
+                  <div
+                    key={bundle.id}
+                    className={`relative transition-all duration-200 flex flex-col justify-between h-full rounded-2xl bg-white shadow-md hover:shadow-xl p-5 sm:p-6 ${
+                      isPopular
+                        ? "border-2 border-blue-500 ring-2 ring-blue-500/20 shadow-blue-500/10"
+                        : "border-2 border-blue-400/50 hover:border-blue-500"
+                    }`}
+                  >
+                    <div>
+                      {/* Top Badges */}
+                      <div className="flex justify-between items-start gap-2 mb-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {bundle.department && (
+                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 tracking-wider">
+                              {bundle.department}
+                            </span>
+                          )}
+                          {isPopular && (
+                            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-xs flex items-center gap-1">
+                              <Star size={10} className="fill-white" /> MOST POPULAR
+                            </span>
+                          )}
+                        </div>
+
+                        {hasDiscount && (
+                          <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                            {percent}% OFF
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Bundle Name */}
+                      <h3 className="text-xl sm:text-2xl font-black text-gray-900 uppercase tracking-tight">
+                        {bundle.name}
+                      </h3>
+
+                      {/* Tagline / Description (e.g. IGNITE YOUR DREAMS) */}
+                      {tagline ? (
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mt-1">
+                          {tagline}
+                        </p>
+                      ) : null}
+
+                      {/* Price with NumberFlow */}
+                      <div className="mt-3 flex items-baseline gap-2">
+                        <span className="text-3xl sm:text-4xl font-black text-gray-950 flex items-baseline">
+                          ₹<NumberFlow value={finalPrice} />
+                        </span>
+                        {hasDiscount && (
+                          <span className="text-xs sm:text-sm text-gray-400 line-through font-bold">
+                            ₹{Number(bundle.price).toLocaleString("en-IN")}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Save Amount */}
+                      {hasDiscount && (
+                        <div className="text-xs font-black text-emerald-600 mt-1">
+                          Save ₹{saveAmount.toLocaleString("en-IN")} instantly
+                        </div>
+                      )}
+
+                      {/* Inclusions List - only the actual inclusions from bundle, no extra words */}
+                      {inclusions.length > 0 && (
+                        <ul className="space-y-2 font-semibold pt-3.5 mt-3 border-t border-neutral-200 mb-6">
+                          {inclusions.map((featureText, idx) => (
+                            <li key={idx} className="flex items-center text-gray-800 text-sm">
+                              <span className="w-5 h-5 rounded-full bg-blue-50 border border-blue-300 flex items-center justify-center mr-2.5 shrink-0">
+                                <CheckCheck className="w-3.5 h-3.5 text-blue-600" />
+                              </span>
+                              <span className="font-semibold text-gray-900">{featureText}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    {/* CTA Button: Both cards share the same vibrant blue primary button theme */}
+                    <div className="mt-auto pt-2">
+                      <button
+                        type="button"
+                        disabled={isPaying}
+                        onClick={() => {
+                          setShowUnlockModal(false);
+                          if (bundle.isNoteBundle && onBuyNoteBundle) {
+                            onBuyNoteBundle(bundle.id);
+                          } else if (onBuyBundle) {
+                            onBuyBundle(bundle.id);
+                          } else if (onUpgrade) {
+                            onUpgrade();
+                          }
+                        }}
+                        className="w-full py-3.5 px-4 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25 active:scale-[0.98] disabled:opacity-60"
+                      >
+                        <span>
+                          {isPaying
+                            ? "Opening Checkout..."
+                            : `Buy Bundle • ₹${finalPrice.toLocaleString("en-IN")}`}
+                        </span>
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="mt-4 pt-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left text-xs">
+              <div className="flex items-center gap-2 text-gray-600 font-medium">
+                <ShieldCheck size={16} className="text-emerald-600 shrink-0" />
+                <span>Unlock your learning potential • Instant access upon enrollment</span>
+              </div>
+
+              <div className="flex items-center gap-4 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowUnlockModal(false)}
+                  className="text-xs font-bold text-gray-500 hover:text-gray-900 transition-colors cursor-pointer px-3 py-1.5 rounded-lg hover:bg-gray-200"
+                >
+                  Maybe later
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
@@ -513,6 +637,8 @@ export default function PDFViewer({
             onBuyNoteBundle={onBuyNoteBundle}
             payingBundleId={payingBundleId}
             onUpgrade={onUpgrade}
+            note={note}
+            bundles={bundles}
           />
         )}
       </div>
