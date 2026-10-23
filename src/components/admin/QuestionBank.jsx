@@ -486,16 +486,28 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
   // Topics for the selected subject (or department) in table filter
   const topics = useMemo(() => {
-    // 1. From attributes
+    // If a specific subject is selected, strictly return only the subtopics configured in attributes for that subject
+    if (selectedSubjectObj) {
+      const attrTopics = attributes
+        .filter(a => a.type === 'topic' && a.parentId === selectedSubjectObj.id)
+        .map(a => a.name.trim());
+      return Array.from(new Set(attrTopics)).filter(Boolean).sort((a, b) => a.localeCompare(b));
+    }
+
+    // When "All" subjects is selected, show attributes topics for the active department
     const attrTopics = attributes
-      .filter(a => a.type === 'topic' && (!selectedSubjectObj || a.parentId === selectedSubjectObj.id))
+      .filter(a => a.type === 'topic' && (!selectedDeptObj || (
+        // check if parent subject belongs to this department
+        attributes.some(sub => sub.id === a.parentId && sub.parentId === selectedDeptObj.id)
+      )))
       .map(a => a.name.trim());
 
-    // 2. From actual questions
-    const questionTopics = Object.keys(topicCounts);
+    if (attrTopics.length > 0) {
+      return Array.from(new Set(attrTopics)).filter(Boolean).sort((a, b) => a.localeCompare(b));
+    }
 
-    return Array.from(new Set([...attrTopics, ...questionTopics])).filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [attributes, selectedSubjectObj, topicCounts]);
+    return [];
+  }, [attributes, selectedSubjectObj, selectedDeptObj]);
 
   // Subject attribute object for the add/edit form (cascades directly from formData.subject)
   const formSubjectObj = useMemo(() => {
@@ -511,21 +523,22 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     ) || null;
   }, [formData.subject, attributes, selectedDeptObj]);
 
-  // Topics specifically for the add/edit form: show all topics belonging to formData.subject
+  // Topics specifically for the add/edit form: show ONLY the subtopics defined in attributes for formData.subject
   const formTopics = useMemo(() => {
     if (formSubjectObj) {
       const attrTopics = attributes
         .filter(a => a.type === 'topic' && a.parentId === formSubjectObj.id)
         .map(a => a.name.trim());
-      const existingQTopics = deptQuestions
-        .filter(q => (q.subject || '').trim().toLowerCase() === (formData.subject || '').trim().toLowerCase())
-        .map(q => (q.topic || '').trim())
-        .filter(Boolean);
-      const current = formData.topic ? [formData.topic.trim()] : [];
-      return Array.from(new Set([...attrTopics, ...existingQTopics, ...current])).filter(Boolean).sort((a, b) => a.localeCompare(b));
+      
+      // Preserve current question's topic only if editing a legacy question with a topic not in attributes
+      const current = (formData.topic && !attrTopics.some(t => t.toLowerCase() === formData.topic.trim().toLowerCase()))
+        ? [formData.topic.trim()]
+        : [];
+
+      return Array.from(new Set([...attrTopics, ...current])).filter(Boolean).sort((a, b) => a.localeCompare(b));
     }
-    return topics;
-  }, [formSubjectObj, formData.subject, formData.topic, attributes, deptQuestions, topics]);
+    return [];
+  }, [formSubjectObj, formData.topic, attributes]);
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({length: currentYear - 1990 + 1}, (_, i) => (currentYear - i).toString()); // 1990 to current year, descending
@@ -2345,8 +2358,15 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                 <div className="space-y-1">
                   <label className="text-[12px] font-[800] text-[#111827]">Topic <span className="text-red-500">*</span></label>
                   <div className="relative">
-                    <select name="topic" required value={formData.topic} onChange={handleInputChange} className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm">
-                      <option value="">-- Select Topic --</option>
+                    <select 
+                      name="topic" 
+                      required 
+                      disabled={!formData.subject}
+                      value={formData.topic} 
+                      onChange={handleInputChange} 
+                      className="w-full appearance-none bg-white border border-slate-200 text-slate-500 text-[13px] font-[600] rounded-xl pl-4 pr-10 py-2 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer hover:border-slate-300 transition-colors shadow-sm disabled:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <option value="">{formData.subject ? '-- Select Topic --' : '-- Select Subject First --'}</option>
                       {formTopics.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
