@@ -26,7 +26,9 @@ import {
   Send,
   UserPlus,
   CalendarDays,
-  Mail
+  Mail,
+  Plus,
+  Loader2
 } from 'lucide-react';
 import AdmissionFormViewer from './AdmissionFormViewer';
 import { needsAdmissionForm, isAdmissionFormExempt } from '../../utils/admissionForm';
@@ -102,6 +104,8 @@ const StudentDirectory = ({
   const [viewingForm, setViewingForm] = useState(null); // student whose admission form is open
   const [detailTab, setDetailTab] = useState('overview'); // Student Details tab: overview | practice | bundles
   const [sendingForm, setSendingForm] = useState(false);
+  const [selectedBundleId, setSelectedBundleId] = useState('');
+  const [isAssigningBundle, setIsAssigningBundle] = useState(false);
 
   // Syncs student updates across any matching email records in Firestore
   const syncStudentUpdatesByEmail = async (email, updates) => {
@@ -387,7 +391,10 @@ const StudentDirectory = ({
 
   // Recently Joined tab: newest students first. joinedAt is the exact time (saved for new students);
   // older records only have the day ("Oct 04, 2026"), so same-day students keep their list order.
-  useEffect(() => { setDetailTab('overview'); }, [selectedStudent?.id]);
+  useEffect(() => { 
+    setDetailTab('overview'); 
+    setSelectedBundleId('');
+  }, [selectedStudent?.id]);
 
   const RECENT_COUNT = 5;
   const joinedMs = (st) => st.joinedAt?.toMillis?.() ?? (Date.parse(st.joinedDate) || 0);
@@ -1236,11 +1243,12 @@ const StudentDirectory = ({
                                         isPro: Boolean(full)
                                       };
                                       await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), bundleUpdates);
+                                      await syncStudentUpdatesByEmail(selectedStudent.email, bundleUpdates);
 
                                       const updatedStudent = { ...selectedStudent, ...bundleUpdates };
                                       setSelectedStudent(updatedStudent);
-                                      setJoinedStudents(joinedStudents.map(s => 
-                                        s.id === selectedStudent.id ? updatedStudent : s
+                                      setJoinedStudents(prev => prev.map(s => 
+                                        String(s.id) === String(selectedStudent.id) ? updatedStudent : s
                                       ));
                                       showToast('Bundle cancelled successfully.', 'success');
                                     } catch (error) {
@@ -1261,46 +1269,73 @@ const StudentDirectory = ({
                     </div>
                   )}
                 
-                  <div className="mt-2">
-                    <select 
-                      className="w-full border border-[#EEF2F7] rounded-[12px] px-4 py-2.5 text-[14px] font-medium text-[#0F172A] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-[#F8FAFC]"
-                      onChange={async (e) => {
-                        const bundleId = e.target.value;
-                        if (!bundleId) return;
-                        try {
-                          const updatedBundles = [...(selectedStudent.purchasedBundles || []), bundleId];
-                          const targetBundle = bundles.find(b => b.id === bundleId);
-                          const isTargetElite = isFullBundle(targetBundle) || 
-                                                targetBundle?.tier === 'elite' || 
-                                                targetBundle?.isElite === true || 
-                                                /elite/i.test(targetBundle?.name || '') ||
-                                                /full/i.test(targetBundle?.name || '');
-                          const full = isTargetElite || fullBundleOf({ purchasedBundles: updatedBundles, bundles, department: selectedStudent.department });
-                          const shouldBeElite = Boolean(selectedStudent.isPro || full || isTargetElite);
-                          const bundleUpdates = {
-                            purchasedBundles: updatedBundles,
-                            isPro: shouldBeElite
-                          };
-                          await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), bundleUpdates);
-                          await syncStudentUpdatesByEmail(selectedStudent.email, bundleUpdates);
-                          const updatedStudent = { ...selectedStudent, ...bundleUpdates };
-                          setSelectedStudent(updatedStudent);
-                          setJoinedStudents(joinedStudents.map(s => s.id === selectedStudent.id ? updatedStudent : s));
-                          showToast(`Bundle assigned successfully!${shouldBeElite ? ' Student is Elite.' : ''}`, 'success');
-                        } catch (error) {
-                          console.error('Error adding bundle:', error);
-                          showToast(`Failed to add bundle: ${error.message}`, 'error');
-                        }
-                        e.target.value = '';
-                      }}
-                    >
-                      <option value="">+ Assign New Bundle (Online & Offline)...</option>
-                      {bundles.filter(b => !(selectedStudent.purchasedBundles || []).includes(b.id)).map(b => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}{b.department ? ` • ${b.department}` : ''}{b.isHidden ? ' [Offline Only / Hidden from Store]' : ''}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="mt-4 pt-4 border-t border-[#EEF2F7]">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      Assign New Bundle (Online & Offline)
+                    </label>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                      <select 
+                        value={selectedBundleId}
+                        onChange={(e) => setSelectedBundleId(e.target.value)}
+                        disabled={isAssigningBundle}
+                        className="flex-1 border border-[#EEF2F7] rounded-[12px] px-4 py-2.5 text-[14px] font-medium text-[#0F172A] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-[#F8FAFC] disabled:opacity-60"
+                      >
+                        <option value="">Select Bundle to Assign...</option>
+                        {bundles.filter(b => !(selectedStudent.purchasedBundles || []).includes(b.id)).map(b => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}{b.department ? ` • ${b.department}` : ''}{b.isHidden ? ' [Offline Only / Hidden from Store]' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!selectedBundleId || isAssigningBundle}
+                        onClick={async () => {
+                          if (!selectedBundleId || !selectedStudent) return;
+                          setIsAssigningBundle(true);
+                          try {
+                            const updatedBundles = [...(selectedStudent.purchasedBundles || []), selectedBundleId];
+                            const targetBundle = bundles.find(b => b.id === selectedBundleId);
+                            const isTargetElite = isFullBundle(targetBundle) || 
+                                                  targetBundle?.tier === 'elite' || 
+                                                  targetBundle?.isElite === true || 
+                                                  /elite/i.test(targetBundle?.name || '') ||
+                                                  /full/i.test(targetBundle?.name || '');
+                            const full = isTargetElite || fullBundleOf({ purchasedBundles: updatedBundles, bundles, department: selectedStudent.department });
+                            const shouldBeElite = Boolean(selectedStudent.isPro || full || isTargetElite);
+                            const bundleUpdates = {
+                              purchasedBundles: updatedBundles,
+                              isPro: shouldBeElite
+                            };
+                            await updateDoc(doc(db, 'joined_students', String(selectedStudent.id)), bundleUpdates);
+                            await syncStudentUpdatesByEmail(selectedStudent.email, bundleUpdates);
+                            const updatedStudent = { ...selectedStudent, ...bundleUpdates };
+                            setSelectedStudent(updatedStudent);
+                            setJoinedStudents(prev => prev.map(s => String(s.id) === String(selectedStudent.id) ? updatedStudent : s));
+                            setSelectedBundleId('');
+                            showToast(`Bundle assigned successfully!${shouldBeElite ? ' Student is Elite.' : ''}`, 'success');
+                          } catch (error) {
+                            console.error('Error adding bundle:', error);
+                            showToast(`Failed to add bundle: ${error.message}`, 'error');
+                          } finally {
+                            setIsAssigningBundle(false);
+                          }
+                        }}
+                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-[12px] font-semibold text-[14px] flex items-center justify-center gap-2 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all"
+                      >
+                        {isAssigningBundle ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            <span>Assigning...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus size={16} />
+                            <span>Assign Bundle</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
