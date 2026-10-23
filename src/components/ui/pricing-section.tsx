@@ -1,7 +1,7 @@
 "use client";
 import React, { useRef, useState } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { TimelineContent } from "@/components/ui/timeline-animation";
+import { Card, CardContent, CardHeader } from "./card";
+import { TimelineContent } from "./timeline-animation";
 import NumberFlow from "@number-flow/react";
 import {
   Briefcase,
