@@ -35,6 +35,8 @@ export default function Analytics({ joinedStudents = [], department = null, stud
   // Drill-down states for Global
   const [detailedGlobalTestId, setDetailedGlobalTestId] = useState(null);
   const [globalTestTab, setGlobalTestTab] = useState('overview'); // 'overview' | 'questions'
+  const [viewingFromGlobalTestId, setViewingFromGlobalTestId] = useState(null);
+  const [leaderboardSearch, setLeaderboardSearch] = useState('');
   
   // Drill-down states for Student
   const [studentSearch, setStudentSearch] = useState('');
@@ -390,7 +392,11 @@ export default function Analytics({ joinedStudents = [], department = null, stud
   const filteredStudentNames = allStudentNames.filter(name => name.toLowerCase().includes(studentSearch.toLowerCase()));
   
   const activeStudentData = selectedStudentName ? (computedStudentHistory[selectedStudentName] || []) : [];
-  const activeDetailedTest = detailedTestId ? activeStudentData.find(t => t.id === detailedTestId) : null;
+  const activeDetailedTest = detailedTestId ? (
+    (activeStudentData && activeStudentData.find(t => t.id === detailedTestId)) ||
+    Object.values(computedStudentHistory).flat().find(t => t.id === detailedTestId) ||
+    null
+  ) : null;
   // A student looking at a test whose solutions aren't released yet sees their answers, not the key
   const hideKey = !!studentViewOnlyEmail && !!activeDetailedTest && !activeDetailedTest.solutionsVisible;
 
@@ -431,15 +437,28 @@ export default function Analytics({ joinedStudents = [], department = null, stud
 
   const closeStudentTestDetail = () => {
     setDetailedTestId(null);
+    setViewingFromGlobalTestId(null);
   };
 
   const openGlobalTestDetail = (id) => {
     setDetailedGlobalTestId(id);
     setGlobalTestTab('overview');
+    setViewingFromGlobalTestId(null);
+    setLeaderboardSearch('');
   };
 
   const closeGlobalTestDetail = () => {
     setDetailedGlobalTestId(null);
+    setViewingFromGlobalTestId(null);
+    setDetailedTestId(null);
+    setLeaderboardSearch('');
+  };
+
+  const openStudentTestFromGlobal = (student) => {
+    setSelectedStudentName(student.name);
+    setDetailedTestId(student.id);
+    setViewingFromGlobalTestId(detailedGlobalTestId);
+    setFilterStatus('All');
   };
 
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -472,6 +491,8 @@ export default function Analytics({ joinedStudents = [], department = null, stud
     setDetailedTestId(null);
     setSelectedStudentName(null);
     setDetailedGlobalTestId(null);
+    setViewingFromGlobalTestId(null);
+    setLeaderboardSearch('');
   };
 
   // If search changes, reset detailed view
@@ -484,6 +505,220 @@ export default function Analytics({ joinedStudents = [], department = null, stud
     if (percent >= 60) return 'text-emerald-500 bg-emerald-500';
     if (percent >= 40) return 'text-amber-500 bg-amber-500';
     return 'text-rose-500 bg-rose-500';
+  };
+
+  const renderTestReportView = (attempt, studentName, onBackHandler) => {
+    if (!attempt) return null;
+    const isKeyHidden = !!studentViewOnlyEmail && !attempt.solutionsVisible;
+
+    return (
+      <TestReport
+        attempt={attempt}
+        studentName={studentName}
+        hideKey={isKeyHidden}
+        onBack={onBackHandler}
+        onReviewSolutions={onReviewSolutions}
+        solutions={(
+          <div className="flex flex-col">
+            {/* Filter Bar */}
+            <div className="flex flex-wrap items-center gap-2 mb-8 bg-slate-50 p-2 rounded-xl border border-slate-200">
+              {['All', 'Correct', 'Wrong', 'Unattempted'].map(status => (
+                <button
+                  key={status}
+                  onClick={() => setFilterStatus(status)}
+                  className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${filterStatus === status ? 'bg-white shadow-sm border border-slate-200 text-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
+                >
+                  {status} ({status === 'All' ? (attempt.allQuestions || []).length : (attempt.allQuestions || []).filter(q => q.status === status).length})
+                </button>
+              ))}
+            </div>
+
+            {isKeyHidden && (
+              <div className="mb-6 flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-5 py-4 text-sm font-semibold">
+                <AlertCircle size={18} className="shrink-0 text-amber-500" />
+                Correct answers and explanations will appear here once your teacher releases the solutions for this test.
+              </div>
+            )}
+
+            {/* Detailed Questions List */}
+            <div className="space-y-6">
+              {(() => {
+                const allQ = attempt.allQuestions || [];
+                const filteredQuestions = filterStatus === 'All' 
+                  ? allQ 
+                  : allQ.filter(q => q.status === filterStatus);
+
+                return filteredQuestions.length > 0 ? (
+                  filteredQuestions.map((q, i) => (
+                    <div key={i} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-300">
+                      
+                      {/* Header of Question */}
+                      <div className={`px-6 py-4 border-b flex justify-between items-center ${q.status === 'Correct' ? 'bg-emerald-50 border-emerald-100' : q.status === 'Wrong' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-black text-slate-500 bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded-xl shadow-sm">
+                            Q{q.qIndex}
+                          </span>
+                          {q.shownAs && q.shownAs !== q.qIndex && (
+                            <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-lg" title="Questions are shuffled for each student - this is the number this student saw">
+                              Seen as Q{q.shownAs}
+                            </span>
+                          )}
+                          {q.status === 'Correct' && <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700"><CheckCircle2 size={16} className="text-emerald-500"/> Correct</span>}
+                          {q.status === 'Wrong' && <span className="flex items-center gap-1.5 text-xs font-bold text-red-700"><XCircle size={16} className="text-red-500"/> Wrong</span>}
+                          {q.status === 'Unattempted' && <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600"><MinusCircle size={16} className="text-slate-400"/> Unattempted</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{(q.questionType === 'Multiple Choice' || q.questionType === 'Multiple Select') ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
+                          {(() => {
+                            const topperQ = topperAttempt
+                              ? topperAttempt.allQuestions.find(tq => (q.questionId ? tq.questionId === q.questionId : tq.q === q.q))
+                              : null;
+                            const topperBorder = isKeyHidden ? 'border border-amber-200'
+                              : topperQ?.status === 'Correct' ? 'border-2 border-emerald-500'
+                              : topperQ?.status === 'Wrong' ? 'border-2 border-red-500'
+                              : 'border-2 border-slate-300';
+                            return topperQ ? (
+                              <div className={`flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl shadow-sm ${topperBorder}`} title={isKeyHidden ? "Topper's Time" : `Topper's Time - ${topperQ.status}`}>
+                                👑 <Clock size={14} className="text-amber-500" />
+                                {topperQ.timeSpent}
+                              </div>
+                            ) : null;
+                          })()}
+                          <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm" title="Student's Time">
+                            <Clock size={14} className="text-blue-500" />
+                            {q.timeSpent}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-6">
+                        <p className="font-[800] text-slate-800 mb-6 text-base leading-relaxed tracking-tight" dangerouslySetInnerHTML={{ __html: q.q }} />
+                        {q.qImage && <img src={q.qImage} alt="Question" className="max-w-full h-auto mb-6 rounded-lg border border-slate-200 shadow-sm" />}
+                        <MatchColumns question={q} className="mb-6" />
+                        
+                        {q.options ? (
+                          <div className="flex flex-col gap-3 mb-6">
+                            {['A', 'B', 'C', 'D'].map(optKey => {
+                              const opt = q.options[optKey];
+                              if (!opt || (!opt.text && !opt.image)) return null;
+                              
+                              const letters = (ans) => String(ans || '').replace(/^Option\s+/, '').split(',').map(s => s.trim());
+                              const isSelected = letters(q.selected).includes(optKey);
+                              const isCorrect = !isKeyHidden && letters(q.correct).includes(optKey);
+                              
+                              let ringClass = "border-slate-200";
+                              let bgClass = "bg-white";
+                              let badges = null;
+                              
+                              if (isSelected && isCorrect) {
+                                ringClass = "border-emerald-500";
+                                bgClass = "bg-emerald-50";
+                                badges = (
+                                  <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
+                                    <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-200/50 px-2 py-1 rounded border border-emerald-200/50">
+                                      <CheckCircle2 size={12} /> Correct & Selected
+                                    </span>
+                                  </div>
+                                );
+                              } else if (isSelected && isKeyHidden) {
+                                ringClass = "border-blue-400";
+                                bgClass = "bg-blue-50";
+                                badges = (
+                                  <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
+                                    <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-blue-700 bg-blue-200/50 px-2 py-1 rounded border border-blue-200/50">
+                                      Your Answer
+                                    </span>
+                                  </div>
+                                );
+                              } else if (isSelected && !isCorrect) {
+                                ringClass = "border-red-400";
+                                bgClass = "bg-red-50";
+                                badges = (
+                                  <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
+                                    <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-700 bg-red-200/50 px-2 py-1 rounded border border-red-200/50">
+                                      <XCircle size={12} /> Student Selected
+                                    </span>
+                                  </div>
+                                );
+                              } else if (!isSelected && isCorrect) {
+                                ringClass = "border-emerald-500";
+                                bgClass = "bg-white";
+                                badges = (
+                                  <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
+                                    <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-200/50 px-2 py-1 rounded border border-emerald-200/50">
+                                      <CheckCircle2 size={12} /> Correct Answer
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              
+                              return (
+                                <div key={optKey} className={`flex items-start gap-3 p-3 rounded-xl border-2 transition-colors ${ringClass} ${bgClass}`}>
+                                  <div className="flex items-center justify-center w-6 h-6 rounded bg-slate-100 text-slate-500 font-bold text-sm shrink-0 border border-slate-200">
+                                    {optKey}
+                                  </div>
+                                  <div className="flex-1 flex flex-col gap-2 overflow-hidden mt-0.5">
+                                    {opt.text && <div className="text-sm font-semibold text-slate-700 break-words" dangerouslySetInnerHTML={{ __html: opt.text }} />}
+                                    {opt.image && <img src={opt.image} alt={`Option ${optKey}`} className="max-w-full h-auto rounded border border-slate-200 shadow-sm" />}
+                                  </div>
+                                  {badges}
+                                </div>
+                              );
+                            })}
+                            {!q.selected && <div className="text-sm font-bold text-slate-500 mt-2 flex items-center gap-2"><MinusCircle size={16}/> Left Blank</div>}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-4 mb-6">
+                            {/* Student Selected */}
+                            <div className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                              <div className="mt-0.5 shrink-0 bg-white p-1.5 rounded-full shadow-sm border border-slate-200">
+                                {q.status === 'Correct' ? <CheckCircle2 className="text-emerald-500" size={18} /> : q.status === 'Wrong' ? <XCircle className="text-red-500" size={18} /> : <MinusCircle className="text-slate-400" size={18} />}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Student Selected</span>
+                                <span className={`font-[700] text-[15px] ${q.status === 'Correct' ? 'text-emerald-700' : q.status === 'Wrong' ? 'text-red-700' : 'text-slate-600'}`}>{q.selected || "Left Blank"}</span>
+                              </div>
+                            </div>
+                            
+                            {/* Correct Answer */}
+                            {q.status !== 'Correct' && !isKeyHidden && (
+                              <div className="flex items-start gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
+                                <div className="mt-0.5 shrink-0 bg-white p-1.5 rounded-full shadow-sm border border-emerald-200">
+                                  <CheckCircle2 className="text-emerald-500" size={18} />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[11px] font-bold text-emerald-600/70 uppercase tracking-widest mb-1.5">Correct Answer</span>
+                                  <span className="font-[700] text-[15px] text-emerald-800">{q.correct}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {!isKeyHidden && (
+                        <div className="pt-5 border-t border-slate-100">
+                          <div className="flex items-center gap-3 text-[15px] text-slate-600 bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50">
+                            <AlertCircle className="shrink-0 text-blue-500" size={20} />
+                            <p className="leading-relaxed"><span className="font-bold text-slate-800 mr-1">Explanation:</span> <span dangerouslySetInnerHTML={{ __html: q.explanation }} /></p>
+                          </div>
+                        </div>
+                        )}
+                      </div>
+
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-8 text-center border-2 border-dashed border-slate-300 bg-slate-50 rounded-2xl flex flex-col items-center justify-center mt-4">
+                    <Filter size={32} className="text-slate-300 mb-3" />
+                    <p className="text-base font-bold text-slate-600">No questions found matching this filter.</p>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+      />
+    );
   };
 
   return (
@@ -760,6 +995,40 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                   </div>
                 );
               })()
+            ) : (viewingFromGlobalTestId && detailedTestId && activeDetailedTest) ? (
+              // DRILLED-DOWN STUDENT INDIVIDUAL ANALYSIS FROM LEADERBOARD
+              <div className="flex flex-col animate-in fade-in duration-300">
+                <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => {
+                        setDetailedTestId(null);
+                        setViewingFromGlobalTestId(null);
+                      }}
+                      className="flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors bg-slate-50 hover:bg-blue-50 px-4 py-2 rounded-xl border border-slate-200"
+                    >
+                      <ArrowLeft size={16} /> Back to Leaderboard
+                    </button>
+                    <div>
+                      <span className="text-xs font-black text-blue-600 uppercase tracking-widest block">Individual Test Analysis</span>
+                      <h4 className="text-xl md:text-2xl font-[900] tracking-tight text-slate-800">{activeGlobalTest.title}</h4>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 bg-blue-50/80 px-4 py-2.5 rounded-2xl border border-blue-100">
+                    <UserCircle2 size={20} className="text-blue-600" />
+                    <span className="font-extrabold text-blue-900 text-sm">{selectedStudentName || activeDetailedTest.name}</span>
+                  </div>
+                </div>
+
+                {renderTestReportView(
+                  activeDetailedTest,
+                  selectedStudentName || activeDetailedTest.name,
+                  () => {
+                    setDetailedTestId(null);
+                    setViewingFromGlobalTestId(null);
+                  }
+                )}
+              </div>
             ) : (
               // DRILLED-DOWN VIEW
               <div className="flex flex-col">
@@ -873,7 +1142,9 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                         <input
                           type="text"
                           placeholder="Search leaderboard..."
-                          className="bg-transparent border-none outline-none text-xs text-slate-600 font-medium placeholder:text-slate-400 w-32"
+                          value={leaderboardSearch}
+                          onChange={(e) => setLeaderboardSearch(e.target.value)}
+                          className="bg-transparent border-none outline-none text-xs text-slate-600 font-medium placeholder:text-slate-400 w-32 focus:w-44 transition-all"
                         />
                       </div>
                     </div>
@@ -887,47 +1158,72 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                       </div>
 
                       {/* Leaderboard Rows */}
-                      {activeGlobalTest.students.sort((a, b) => b.score - a.score).map((student, idx) => {
-                        const percent = Math.round((student.score / student.maxScore) * 100);
-                        const colorClass = getScoreColor(percent).split(' ')[1]; // bg-color
-                        const textClass = getScoreColor(percent).split(' ')[0]; // text-color
-                        
-                        return (
-                          <div key={student.id} className="grid grid-cols-12 gap-4 px-4 py-4 items-center bg-white border border-slate-100 hover:border-slate-300 rounded-2xl transition-colors hover:shadow-sm">
-                            
-                            {/* Student Profile Info */}
-                            <div className="col-span-5 flex items-center gap-3">
-                              <div className="relative">
-                                <div className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 font-[900] text-sm flex items-center justify-center border border-slate-200">
-                                  {student.name.split(' ').map(n => n[0]).join('')}
+                      {(() => {
+                        const filteredLeaderboard = activeGlobalTest.students
+                          .filter(s => (s.name || '').toLowerCase().includes(leaderboardSearch.toLowerCase()))
+                          .sort((a, b) => b.score - a.score);
+
+                        if (filteredLeaderboard.length === 0) {
+                          return (
+                            <div className="text-center py-8 text-slate-400 font-medium text-xs bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                              No students found matching "{leaderboardSearch}".
+                            </div>
+                          );
+                        }
+
+                        return filteredLeaderboard.map((student, idx) => {
+                          const percent = Math.round((student.score / student.maxScore) * 100);
+                          const colorClass = getScoreColor(percent).split(' ')[1]; // bg-color
+                          const textClass = getScoreColor(percent).split(' ')[0]; // text-color
+                          
+                          return (
+                            <div 
+                              key={student.id} 
+                              onClick={() => openStudentTestFromGlobal(student)}
+                              title={`Click to view ${student.name}'s individual test analysis`}
+                              className="grid grid-cols-12 gap-4 px-4 py-3.5 items-center bg-white border border-slate-100 hover:border-blue-400 hover:bg-blue-50/20 rounded-2xl transition-all hover:shadow-sm cursor-pointer group"
+                            >
+                              
+                              {/* Student Profile Info */}
+                              <div className="col-span-5 flex items-center gap-3 min-w-0">
+                                <div className="relative shrink-0">
+                                  <div className="w-9 h-9 rounded-full bg-slate-100 group-hover:bg-blue-100 text-slate-600 group-hover:text-blue-700 font-[900] text-sm flex items-center justify-center border border-slate-200 group-hover:border-blue-300 transition-colors">
+                                    {(student.name || 'S').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                  </div>
+                                  {idx === 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 border-2 border-white rounded-full flex items-center justify-center shadow-sm text-[10px]">👑</div>}
                                 </div>
-                                {idx === 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 border-2 border-white rounded-full flex items-center justify-center shadow-sm">👑</div>}
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-[800] text-slate-800 text-[14px] truncate group-hover:text-blue-600 transition-colors">{student.name}</span>
+                                  <span className="text-[11px] font-semibold text-slate-400 group-hover:text-blue-500/70 transition-colors flex items-center gap-1">
+                                    View individual analysis &rarr;
+                                  </span>
+                                </div>
                               </div>
-                              <span className="font-[800] text-slate-800 text-[14px] truncate">{student.name}</span>
-                            </div>
 
-                            {/* Performance Bar */}
-                            <div className="col-span-4 flex flex-col justify-center gap-1.5">
-                              <div className="flex justify-between items-end">
-                                <span className="font-bold text-slate-800 text-[13px]">{student.score} <span className="text-[10px] text-slate-400">/ {student.maxScore}</span></span>
-                                <span className={`font-black text-[11px] ${textClass}`}>{percent}%</span>
+                              {/* Performance Bar */}
+                              <div className="col-span-4 flex flex-col justify-center gap-1.5">
+                                <div className="flex justify-between items-end">
+                                  <span className="font-bold text-slate-800 text-[13px]">{student.score} <span className="text-[10px] text-slate-400">/ {student.maxScore}</span></span>
+                                  <span className={`font-black text-[11px] ${textClass}`}>{percent}%</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${colorClass}`} style={{ width: `${percent}%` }}></div>
+                                </div>
                               </div>
-                              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${colorClass}`} style={{ width: `${percent}%` }}></div>
-                              </div>
-                            </div>
 
-                            {/* Time Taken */}
-                            <div className="col-span-3 flex justify-end">
-                              <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">
-                                <Clock size={12} className="text-slate-400" />
-                                <span className="text-xs font-bold text-slate-600 tracking-tight">{student.timeTaken}</span>
+                              {/* Time Taken & Action */}
+                              <div className="col-span-3 flex items-center justify-end gap-2">
+                                <div className="flex items-center gap-1.5 bg-slate-50 group-hover:bg-white px-2.5 py-1.5 rounded-lg border border-slate-100 group-hover:border-blue-200 transition-colors">
+                                  <Clock size={12} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
+                                  <span className="text-xs font-bold text-slate-600 tracking-tight">{student.timeTaken}</span>
+                                </div>
+                                <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
                               </div>
-                            </div>
 
-                          </div>
-                        );
-                      })}
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -1156,213 +1452,11 @@ export default function Analytics({ joinedStudents = [], department = null, stud
               </div>
             ) : (
               // 3. DRILLED-DOWN DETAILED TEST VIEW - GATE test-series style report (analytics/TestReport)
-              <TestReport
-                attempt={activeDetailedTest}
-                studentName={selectedStudentName}
-                hideKey={hideKey}
-                onBack={closeStudentTestDetail}
-                onReviewSolutions={onReviewSolutions}
-                solutions={(
-              <div className="flex flex-col">
-                {/* Filter Bar */}
-                <div className="flex flex-wrap items-center gap-2 mb-8 bg-slate-50 p-2 rounded-xl border border-slate-200">
-                  {['All', 'Correct', 'Wrong', 'Unattempted'].map(status => (
-                    <button
-                      key={status}
-                      onClick={() => setFilterStatus(status)}
-                      className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${filterStatus === status ? 'bg-white shadow-sm border border-slate-200 text-slate-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'}`}
-                    >
-                      {status} ({status === 'All' ? activeDetailedTest.allQuestions.length : activeDetailedTest.allQuestions.filter(q => q.status === status).length})
-                    </button>
-                  ))}
-                </div>
-
-                {hideKey && (
-                  <div className="mb-6 flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-5 py-4 text-sm font-semibold">
-                    <AlertCircle size={18} className="shrink-0 text-amber-500" />
-                    Correct answers and explanations will appear here once your teacher releases the solutions for this test.
-                  </div>
-                )}
-
-                {/* Detailed Questions List */}
-                <div className="space-y-6">
-                  {(() => {
-                    const filteredQuestions = filterStatus === 'All' 
-                      ? activeDetailedTest.allQuestions 
-                      : activeDetailedTest.allQuestions.filter(q => q.status === filterStatus);
-
-                    return filteredQuestions.length > 0 ? (
-                      filteredQuestions.map((q, i) => (
-                        <div key={i} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-300">
-                          
-                          {/* Header of Question */}
-                          <div className={`px-6 py-4 border-b flex justify-between items-center ${q.status === 'Correct' ? 'bg-emerald-50 border-emerald-100' : q.status === 'Wrong' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm font-black text-slate-500 bg-white border border-slate-200 w-8 h-8 flex items-center justify-center rounded-xl shadow-sm">
-                                Q{q.qIndex}
-                              </span>
-                              {q.shownAs && q.shownAs !== q.qIndex && (
-                                <span className="text-[11px] font-bold text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-lg" title="Questions are shuffled for each student - this is the number this student saw">
-                                  Seen as Q{q.shownAs}
-                                </span>
-                              )}
-                              {q.status === 'Correct' && <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-700"><CheckCircle2 size={16} className="text-emerald-500"/> Correct</span>}
-                              {q.status === 'Wrong' && <span className="flex items-center gap-1.5 text-xs font-bold text-red-700"><XCircle size={16} className="text-red-500"/> Wrong</span>}
-                              {q.status === 'Unattempted' && <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600"><MinusCircle size={16} className="text-slate-400"/> Unattempted</span>}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{(q.questionType === 'Multiple Choice' || q.questionType === 'Multiple Select') ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
-                              {(() => {
-                                const topperQ = topperAttempt
-                                  ? topperAttempt.allQuestions.find(tq => (q.questionId ? tq.questionId === q.questionId : tq.q === q.q))
-                                  : null;
-                                // Border shows how the topper did on this question; colours only once the key is visible
-                                const topperBorder = hideKey ? 'border border-amber-200'
-                                  : topperQ?.status === 'Correct' ? 'border-2 border-emerald-500'
-                                  : topperQ?.status === 'Wrong' ? 'border-2 border-red-500'
-                                  : 'border-2 border-slate-300';
-                                return topperQ ? (
-                                  <div className={`flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl shadow-sm ${topperBorder}`} title={hideKey ? "Topper's Time" : `Topper's Time - ${topperQ.status}`}>
-                                    👑 <Clock size={14} className="text-amber-500" />
-                                    {topperQ.timeSpent}
-                                  </div>
-                                ) : null;
-                              })()}
-                              <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm" title="Student's Time">
-                                <Clock size={14} className="text-blue-500" />
-                                {q.timeSpent}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="p-6">
-                            <p className="font-[800] text-slate-800 mb-6 text-base leading-relaxed tracking-tight" dangerouslySetInnerHTML={{ __html: q.q }} />
-                            {q.qImage && <img src={q.qImage} alt="Question" className="max-w-full h-auto mb-6 rounded-lg border border-slate-200 shadow-sm" />}
-                            <MatchColumns question={q} className="mb-6" />
-                            
-                            {q.options ? (
-                              <div className="flex flex-col gap-3 mb-6">
-                                {['A', 'B', 'C', 'D'].map(optKey => {
-                                  const opt = q.options[optKey];
-                                  if (!opt || (!opt.text && !opt.image)) return null;
-                                  
-                                  // "Option A, D" -> ['A', 'D']: a substring check would only find the first letter of an MSQ answer
-                                  const letters = (ans) => String(ans || '').replace(/^Option\s+/, '').split(',').map(s => s.trim());
-                                  const isSelected = letters(q.selected).includes(optKey);
-                                  const isCorrect = !hideKey && letters(q.correct).includes(optKey);
-                                  
-                                  let ringClass = "border-slate-200";
-                                  let bgClass = "bg-white";
-                                  let badges = null;
-                                  
-                                  if (isSelected && isCorrect) {
-                                    ringClass = "border-emerald-500";
-                                    bgClass = "bg-emerald-50";
-                                    badges = (
-                                      <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
-                                        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-200/50 px-2 py-1 rounded border border-emerald-200/50">
-                                          <CheckCircle2 size={12} /> Correct & Selected
-                                        </span>
-                                      </div>
-                                    );
-                                  } else if (isSelected && hideKey) {
-                                    ringClass = "border-blue-400";
-                                    bgClass = "bg-blue-50";
-                                    badges = (
-                                      <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
-                                        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-blue-700 bg-blue-200/50 px-2 py-1 rounded border border-blue-200/50">
-                                          Your Answer
-                                        </span>
-                                      </div>
-                                    );
-                                  } else if (isSelected && !isCorrect) {
-                                    ringClass = "border-red-400";
-                                    bgClass = "bg-red-50";
-                                    badges = (
-                                      <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
-                                        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-700 bg-red-200/50 px-2 py-1 rounded border border-red-200/50">
-                                          <XCircle size={12} /> Student Selected
-                                        </span>
-                                      </div>
-                                    );
-                                  } else if (!isSelected && isCorrect) {
-                                    ringClass = "border-emerald-500";
-                                    bgClass = "bg-white";
-                                    badges = (
-                                      <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
-                                        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-200/50 px-2 py-1 rounded border border-emerald-200/50">
-                                          <CheckCircle2 size={12} /> Correct Answer
-                                        </span>
-                                      </div>
-                                    );
-                                  }
-                                  
-                                  return (
-                                    <div key={optKey} className={`flex items-start gap-3 p-3 rounded-xl border-2 transition-colors ${ringClass} ${bgClass}`}>
-                                      <div className="flex items-center justify-center w-6 h-6 rounded bg-slate-100 text-slate-500 font-bold text-sm shrink-0 border border-slate-200">
-                                        {optKey}
-                                      </div>
-                                      <div className="flex-1 flex flex-col gap-2 overflow-hidden mt-0.5">
-                                        {opt.text && <div className="text-sm font-semibold text-slate-700 break-words" dangerouslySetInnerHTML={{ __html: opt.text }} />}
-                                        {opt.image && <img src={opt.image} alt={`Option ${optKey}`} className="max-w-full h-auto rounded border border-slate-200 shadow-sm" />}
-                                      </div>
-                                      {badges}
-                                    </div>
-                                  );
-                                })}
-                                {!q.selected && <div className="text-sm font-bold text-slate-500 mt-2 flex items-center gap-2"><MinusCircle size={16}/> Left Blank</div>}
-                              </div>
-                            ) : (
-                              <div className="flex flex-col gap-4 mb-6">
-                                {/* Student Selected */}
-                                <div className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                                  <div className="mt-0.5 shrink-0 bg-white p-1.5 rounded-full shadow-sm border border-slate-200">
-                                    {q.status === 'Correct' ? <CheckCircle2 className="text-emerald-500" size={18} /> : q.status === 'Wrong' ? <XCircle className="text-red-500" size={18} /> : <MinusCircle className="text-slate-400" size={18} />}
-                                  </div>
-                                  <div className="flex flex-col">
-                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Student Selected</span>
-                                    <span className={`font-[700] text-[15px] ${q.status === 'Correct' ? 'text-emerald-700' : q.status === 'Wrong' ? 'text-red-700' : 'text-slate-600'}`}>{q.selected || "Left Blank"}</span>
-                                  </div>
-                                </div>
-                                
-                                {/* Correct Answer */}
-                                {q.status !== 'Correct' && !hideKey && (
-                                  <div className="flex items-start gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
-                                    <div className="mt-0.5 shrink-0 bg-white p-1.5 rounded-full shadow-sm border border-emerald-200">
-                                      <CheckCircle2 className="text-emerald-500" size={18} />
-                                    </div>
-                                    <div className="flex flex-col">
-                                      <span className="text-[11px] font-bold text-emerald-600/70 uppercase tracking-widest mb-1.5">Correct Answer</span>
-                                      <span className="font-[700] text-[15px] text-emerald-800">{q.correct}</span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            
-                            {!hideKey && (
-                            <div className="pt-5 border-t border-slate-100">
-                              <div className="flex items-center gap-3 text-[15px] text-slate-600 bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50">
-                                <AlertCircle className="shrink-0 text-blue-500" size={20} />
-                                <p className="leading-relaxed"><span className="font-bold text-slate-800 mr-1">Explanation:</span> <span dangerouslySetInnerHTML={{ __html: q.explanation }} /></p>
-                              </div>
-                            </div>
-                            )}
-                          </div>
-
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-8 text-center border-2 border-dashed border-slate-300 bg-slate-50 rounded-2xl flex flex-col items-center justify-center mt-4">
-                        <Filter size={32} className="text-slate-300 mb-3" />
-                        <p className="text-base font-bold text-slate-600">No questions found matching this filter.</p>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-                )}
-              />
+              renderTestReportView(
+                activeDetailedTest,
+                selectedStudentName,
+                closeStudentTestDetail
+              )
             )}
           </div>
             )}
