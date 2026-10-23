@@ -371,7 +371,7 @@ export default function QuestionImportLogs() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-[22px] sm:text-[26px] font-extrabold text-[#0F172A] tracking-tight">
-                Question Activity & Import Logs
+                Logs and Activities
               </h1>
               <span className="text-[12px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
                 Live Audit Trail

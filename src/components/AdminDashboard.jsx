@@ -77,6 +77,7 @@ const pctChange = (curr, prev) => (prev > 0 ? Math.round(((curr - prev) / prev) 
 
 const VALID_ADMIN_TABS = [
   'overview', 'teachers', 'typists', 'queries', 'questions', 'premium_questions',
+  'logs', 'question_logs',
   'reported', 'notes', 'recordings', 'attributes', 'analytics', 'popup',
   'courses', 'invoice', 'welcome_letter', 'fees', 'salary', 'ai', 'tests', 'test_feedback',
   'blogs', 'gallery'
@@ -1148,7 +1149,7 @@ export default function AdminDashboard() {
                   { key: 'attributes', label: 'Attributes', icon: Tag },
                   { key: 'analytics', label: 'Analytics', icon: BarChart2 },
                   { key: 'questions', label: 'Question Bank', icon: Database },
-                  { key: 'question_logs', label: 'Question Logs', icon: ScrollText },
+                  { key: 'logs', label: 'Logs and Activities', icon: ScrollText },
                   { key: 'tests', label: 'Create Test', icon: Trophy },
                   { key: 'reported', label: "Reported Q's", icon: ShieldCheck, danger: true },
                   { key: 'premium_questions', label: 'Premium Questions', icon: Database },
@@ -1333,11 +1334,11 @@ export default function AdminDashboard() {
               </button>
 
               <button
-                onClick={() => setActiveTab('question_logs')}
-                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'question_logs' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                onClick={() => setActiveTab('logs')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${(activeTab === 'logs' || activeTab === 'question_logs') ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
               >
-                <ScrollText size={20} className={activeTab === 'question_logs' ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>Question Logs</span>}
+                <ScrollText size={20} className={(activeTab === 'logs' || activeTab === 'question_logs') ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Logs and Activities</span>}
               </button>
 
               <button
@@ -2188,8 +2189,8 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Question Activity & Import Logs Tab */}
-        {activeTab === 'question_logs' && (
+        {/* Logs and Activities Tab */}
+        {(activeTab === 'logs' || activeTab === 'question_logs') && (
           <QuestionImportLogs />
         )}
         
