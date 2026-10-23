@@ -1204,16 +1204,12 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                   {/* Action Button */}
                   <div className="pt-2">
                     {!canAccessTest(test) ? (
-                      <button 
+                      <button
                         type="button"
                         onClick={() => setUnlockModalTest(test)}
-                        className="w-full py-4 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 hover:from-amber-500 hover:to-orange-500 text-amber-800 hover:text-white font-[800] text-sm rounded-2xl flex items-center justify-center gap-2 border border-amber-300/80 hover:border-transparent transition-all shadow-sm hover:shadow-lg hover:shadow-orange-500/20 cursor-pointer group"
+                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-[800] text-sm rounded-2xl transition-all shadow-[0_4px_14px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] flex items-center justify-center gap-2 hover:-translate-y-0.5 cursor-pointer"
                       >
-                        <Lock size={18} className="text-amber-600 group-hover:text-white transition-colors" />
-                        <span>Locked (Pro Required)</span>
-                        <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-100 group-hover:bg-white/20 text-amber-900 group-hover:text-white font-extrabold ml-1 transition-colors">
-                          View Bundles
-                        </span>
+                        Start Test Now <ArrowRight size={18} />
                       </button>
                     ) : isUnfinished ? (
                       <button
