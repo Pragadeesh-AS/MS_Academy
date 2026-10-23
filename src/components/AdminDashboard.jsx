@@ -1139,7 +1139,7 @@ export default function AdminDashboard() {
                   { key: 'teachers', label: 'Teacher', icon: BookOpen },
                   { key: 'queries', label: 'Student', icon: Users },
                   { key: 'attributes', label: 'Attributes', icon: Tag },
-                  { key: 'ai', label: 'AI Extract', icon: Sparkles },
+                  { key: 'ai', label: 'Question Extracter', icon: Sparkles },
                   { key: 'questions', label: 'Question Bank', icon: Database },
                   { key: 'premium_questions', label: 'Premium Question Bank', icon: Database, isPremium: true },
                   { key: 'tests', label: 'Create Test', icon: Trophy },
@@ -1265,10 +1265,10 @@ export default function AdminDashboard() {
               <button 
                 onClick={() => setActiveTab('ai')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'ai' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-                title={isCollapsed ? "AI Extract" : ""}
+                title={isCollapsed ? "Question Extracter" : ""}
               >
                 <Sparkles size={20} className={activeTab === 'ai' ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>AI Extract</span>}
+                {!isCollapsed && <span>Question Extracter</span>}
               </button>
 
               <button
