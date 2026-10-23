@@ -7,7 +7,7 @@ export const WEBSITE_DEPARTMENTS = [
   'Engineering Mathematics',
   'General Aptitude',
 ];
-import { Plus, Edit2, Trash2, ChevronDown, Search, MoreHorizontal, CheckCircle2, Bookmark, LayoutList, Trophy, Star, Clock, Landmark, FileText } from 'lucide-react';
+import { Plus, Edit2, Trash2, ChevronDown, Search, MoreHorizontal, CheckCircle2, Bookmark, LayoutList, Trophy, Star, Clock, Landmark, FileText, X } from 'lucide-react';
 import { db } from '../../firebase';
 import { collection, onSnapshot, addDoc, deleteDoc, updateDoc, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 
@@ -163,6 +163,18 @@ export default function AttributesManager({ lockedDepartment = null }) {
     ? attributes.filter(a => a.type === activeAttribute.childOf)
     : [];
 
+  const filteredValues = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return currentValues;
+    return currentValues.filter(val => {
+      const matchName = val.name?.toLowerCase().includes(q);
+      const parentName = val.parentId 
+        ? attributes.find(a => a.id === val.parentId)?.name?.toLowerCase() 
+        : '';
+      return matchName || parentName?.includes(q);
+    });
+  }, [currentValues, searchQuery, attributes]);
+
   const getInitials = (name) => {
     if (!name) return 'EC';
     const words = name.split(' ');
@@ -226,6 +238,7 @@ export default function AttributesManager({ lockedDepartment = null }) {
                   setActiveTab(attr.id);
                   setNewValue('');
                   setNewParent('');
+                  setSearchQuery('');
                 }}
                 className={`relative flex items-center justify-between p-3 rounded-[16px] transition-all duration-200 ${
                   isActive 
@@ -342,14 +355,24 @@ export default function AttributesManager({ lockedDepartment = null }) {
               </div>
             ) : (
               <div className="flex-1 w-full relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Search size={20} className="text-[#94A3B8]" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#2563EB]">
+                  <activeAttribute.icon size={20} />
                 </div>
                 <input 
                   type="text"
                   placeholder={`Type new ${activeAttribute.name.toLowerCase()}...`}
                   value={newValue}
                   onChange={(e) => setNewValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (!newValue.trim() || (activeAttribute.childOf && !parentValue)) {
+                        setEditingAttr({ id: 'NEW', name: newValue });
+                      } else {
+                        handleAdd();
+                      }
+                    }
+                  }}
                   className="w-full h-[52px] pl-12 pr-4 bg-white border border-[#EEF2F7] rounded-[12px] text-[15px] font-[500] text-[#0F172A] placeholder-[#94A3B8] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all shadow-sm"
                 />
               </div>
@@ -394,7 +417,41 @@ export default function AttributesManager({ lockedDepartment = null }) {
           {notice && (
             <div className="mb-4 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[13px] font-[700] text-emerald-800">{notice}</div>
           )}
-          <h3 className="text-[18px] font-[800] text-[#0F172A] mb-4 tracking-tight">Current Values</h3>
+          
+          {/* Section Header with Search Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-2.5">
+              <h3 className="text-[18px] font-[800] text-[#0F172A] tracking-tight">Current Values</h3>
+              <span className="text-[12px] font-[700] px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                {filteredValues.length} {filteredValues.length === 1 ? activeAttribute.name : `${activeAttribute.name}s`}
+                {searchQuery.trim() && ` (filtered from ${currentValues.length})`}
+              </span>
+            </div>
+
+            {/* Real Working Search Bar */}
+            <div className="relative w-full sm:w-[280px] md:w-[320px]">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <Search size={16} />
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={`Search ${activeAttribute.name.toLowerCase()}s by name or parent...`}
+                className="w-full h-[42px] pl-10 pr-9 bg-[#F8FAFC] hover:bg-white border border-[#EEF2F7] focus:border-[#2563EB] focus:bg-white rounded-[12px] text-[13px] font-[500] text-[#0F172A] placeholder-[#94A3B8] outline-none transition-all focus:ring-4 focus:ring-[#2563EB]/10 shadow-sm"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                  title="Clear search"
+                >
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+          </div>
           
           {loading ? (
             <div className="h-[200px] flex items-center justify-center">
@@ -403,8 +460,28 @@ export default function AttributesManager({ lockedDepartment = null }) {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
               
+              {/* Empty Search Results */}
+              {searchQuery.trim() && filteredValues.length === 0 && (
+                <div className="col-span-full py-12 flex flex-col items-center justify-center text-center bg-white border border-dashed border-slate-200 rounded-[16px]">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                    <Search size={22} />
+                  </div>
+                  <p className="text-[15px] font-bold text-slate-700">No {activeAttribute.name.toLowerCase()}s found</p>
+                  <p className="text-[13px] font-medium text-slate-400 mt-1">
+                    No results matching &ldquo;{searchQuery}&rdquo;
+                  </p>
+                  <button 
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="mt-3 px-4 py-1.5 text-[12px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                  >
+                    Clear search
+                  </button>
+                </div>
+              )}
+
               {/* Value Cards */}
-              {currentValues.filter(val => val.name.toLowerCase().includes(searchQuery.toLowerCase())).map((val, index) => {
+              {filteredValues.map((val, index) => {
                 const parentName = val.parentId 
                   ? attributes.find(a => a.id === val.parentId)?.name 
                   : null;
