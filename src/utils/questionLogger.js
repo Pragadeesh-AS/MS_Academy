@@ -108,6 +108,22 @@ export const logQuestionActivity = async (entry = {}) => {
         : (questionsList.length > 0 ? questionsList.filter(hasDiagram).length : 0)
     );
 
+    let pageCount = Number(entry.pagesExtracted ?? entry.pageCount ?? 0);
+    if (!pageCount && questionsList.length > 0) {
+      const pNums = new Set();
+      questionsList.forEach(q => {
+        if (q.page) pNums.add(Number(q.page));
+        if (Array.isArray(q.images)) {
+          q.images.forEach(img => {
+            if (img && img.page != null) pNums.add(Number(img.page));
+          });
+        }
+      });
+      if (pNums.size > 0) {
+        pageCount = Math.max(...pNums);
+      }
+    }
+
     const payload = sanitizePayload({
       batchId: entry.batchId || `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
       type: entry.type || 'import', // 'import', 'direct_push', 'approval', 'rejection'
@@ -116,6 +132,8 @@ export const logQuestionActivity = async (entry = {}) => {
       department: entry.department || '',
       subject: entry.subject || '',
       topic: entry.topic || '',
+      pagesExtracted: pageCount,
+      pageCount: pageCount,
       totalExtracted: Number(entry.totalExtracted || importedCount || 0),
       importedCount,
       pushedCount: Number(entry.pushedCount ?? importedCount),

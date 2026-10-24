@@ -27,7 +27,8 @@ import {
   Layers, 
   Eye,
   Trash2,
-  CheckCircle
+  CheckCircle,
+  BookOpen
 } from 'lucide-react';
 import { hasDiagram, countQuestionTypes } from '../../utils/questionLogger';
 
@@ -80,6 +81,25 @@ export default function QuestionImportLogs() {
       nat: 0,
       match: 0
     };
+  };
+
+  const resolvePageCount = (log) => {
+    if (!log) return 0;
+    if (log.pagesExtracted && Number(log.pagesExtracted) > 0) return Number(log.pagesExtracted);
+    if (log.pageCount && Number(log.pageCount) > 0) return Number(log.pageCount);
+    if (Array.isArray(log.questions) && log.questions.length > 0) {
+      const pages = new Set();
+      log.questions.forEach(q => {
+        if (q.page) pages.add(Number(q.page));
+        if (Array.isArray(q.images)) {
+          q.images.forEach(img => {
+            if (img && img.page != null) pages.add(Number(img.page));
+          });
+        }
+      });
+      if (pages.size > 0) return Math.max(...pages);
+    }
+    return 0;
   };
 
   // 1. Live subscribe to question_import_logs
@@ -145,6 +165,17 @@ export default function QuestionImportLogs() {
         const inReviewCount = batchQuestions.filter(q => q.status === 'In Review').length;
         const draftCount = batchQuestions.filter(q => q.status === 'Draft').length;
 
+        const pagesSeen = new Set();
+        batchQuestions.forEach(q => {
+          if (q.page) pagesSeen.add(Number(q.page));
+          if (Array.isArray(q.images)) {
+            q.images.forEach(img => {
+              if (img && img.page != null) pagesSeen.add(Number(img.page));
+            });
+          }
+        });
+        const batchPages = pagesSeen.size > 0 ? Math.max(...pagesSeen) : 0;
+
         const importerName = sample.typedBy || 'Admin';
         const importerEmail = sample.typedByEmail || '';
         const pusherName = sample.reviewedBy || (sample.status === 'Approved' ? importerName : '');
@@ -157,6 +188,8 @@ export default function QuestionImportLogs() {
           department: sample.department || 'Multiple / General',
           subject: sample.subject || '',
           topic: sample.topic || '',
+          pagesExtracted: batchPages,
+          pageCount: batchPages,
           totalExtracted: batchQuestions.length,
           importedCount: batchQuestions.length,
           pushedCount: approvedCount,
@@ -290,6 +323,7 @@ export default function QuestionImportLogs() {
       acc.totalSkipped += Number(l.skippedCount || 0);
       acc.totalRejected += Number(l.rejectedCount || 0);
       acc.totalDiagrams += Number(l.diagramCount || 0);
+      acc.totalPages += resolvePageCount(l);
       acc.totalBatches += 1;
       return acc;
     }, {
@@ -298,6 +332,7 @@ export default function QuestionImportLogs() {
       totalSkipped: 0,
       totalRejected: 0,
       totalDiagrams: 0,
+      totalPages: 0,
       totalBatches: 0
     });
   }, [filteredLogs]);
@@ -323,6 +358,7 @@ export default function QuestionImportLogs() {
       'Imported By Role',
       'Pushed By Name',
       'Total Extracted',
+      'Pages Extracted',
       'Imported Count',
       'Pushed to Bank Count',
       'Skipped Count',
@@ -350,6 +386,7 @@ export default function QuestionImportLogs() {
       `"${(l.importedBy?.role || l.user?.role || '').replace(/"/g, '""')}"`,
       `"${(l.pushedBy?.name || '').replace(/"/g, '""')}"`,
       l.totalExtracted || l.importedCount || 0,
+      resolvePageCount(l) || 0,
       l.importedCount || 0,
       l.pushedCount || 0,
       l.skippedCount || 0,
@@ -454,7 +491,23 @@ export default function QuestionImportLogs() {
       )}
 
       {/* ================= STATS CARDS ================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3.5 sm:gap-4">
+        {/* Total Pages Extracted */}
+        <div className="bg-white p-4 sm:p-5 rounded-[20px] border border-indigo-100 shadow-sm bg-gradient-to-br from-white to-indigo-50/30 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[12px] font-bold uppercase tracking-wider text-indigo-600">Pages Extracted</span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <BookOpen size={16} />
+            </div>
+          </div>
+          <div className="mt-2">
+            <span className="text-[24px] sm:text-[28px] font-extrabold text-indigo-700 leading-tight">
+              {stats.totalPages.toLocaleString()}
+            </span>
+            <p className="text-[11px] font-medium text-indigo-500/80 mt-0.5">Total Pages</p>
+          </div>
+        </div>
+
         {/* Total Imported */}
         <div className="bg-white p-4 sm:p-5 rounded-[20px] border border-[#EEF2F7] shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
@@ -684,9 +737,10 @@ export default function QuestionImportLogs() {
               <thead>
                 <tr className="bg-[#F8FAFC] border-b border-[#EEF2F7] text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                   <th className="py-3 px-3 w-[115px]">Date & Time</th>
-                  <th className="py-3 px-3 w-[28%]">Uploaded File</th>
-                  <th className="py-3 px-3 w-[18%]">Imported By</th>
-                  <th className="py-3 px-3 w-[14%]">Pushed By</th>
+                  <th className="py-3 px-3 w-[26%]">Uploaded File</th>
+                  <th className="py-3 px-3 w-[95px] text-center">Pages</th>
+                  <th className="py-3 px-3 w-[17%]">Imported By</th>
+                  <th className="py-3 px-3 w-[13%]">Pushed By</th>
                   <th className="py-3 px-3">Department / Subject</th>
                   <th className="py-3 px-3 w-[70px] text-right">Details</th>
                 </tr>
@@ -733,9 +787,29 @@ export default function QuestionImportLogs() {
                             <span className="font-bold text-slate-800 truncate text-[12.5px]" title={resolvedFileName}>
                               {resolvedFileName}
                             </span>
-                            <span className="text-[10px] font-medium text-slate-400">PDF Document</span>
+                            <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1.5">
+                              <span>PDF Document</span>
+                              {resolvePageCount(log) > 0 && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-indigo-600 font-semibold">{resolvePageCount(log)} {resolvePageCount(log) === 1 ? 'page' : 'pages'}</span>
+                                </>
+                              )}
+                            </span>
                           </div>
                         </div>
+                      </td>
+
+                      {/* Pages Extracted */}
+                      <td className="py-3 px-3 w-[95px] text-center">
+                        {resolvePageCount(log) > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-700 text-[11.5px] font-bold shadow-2xs" title={`${resolvePageCount(log)} pages extracted`}>
+                            <BookOpen size={12} className="text-indigo-500 shrink-0" />
+                            <span>{resolvePageCount(log)} {resolvePageCount(log) === 1 ? 'page' : 'pages'}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[12px] font-semibold text-slate-300">-</span>
+                        )}
                       </td>
 
                       {/* Imported By */}
@@ -908,6 +982,12 @@ export default function QuestionImportLogs() {
                             : 'Extracted_Questions.pdf'}
                     </span>
                   </div>
+                  {resolvePageCount(selectedLog) > 0 && (
+                    <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-lg">
+                      <BookOpen size={13} className="text-indigo-500" />
+                      <span>{resolvePageCount(selectedLog)} {resolvePageCount(selectedLog) === 1 ? 'Page Extracted' : 'Pages Extracted'}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -916,7 +996,15 @@ export default function QuestionImportLogs() {
                 <h4 className="text-[13px] font-bold uppercase tracking-wider text-slate-400 mb-3">
                   Questions Breakdown
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div className="p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/40 flex flex-col">
+                    <span className="text-[11px] font-bold text-indigo-600">Pages Extracted</span>
+                    <span className="text-[22px] font-extrabold text-indigo-700 mt-1">
+                      {resolvePageCount(selectedLog) > 0 ? resolvePageCount(selectedLog) : '-'}
+                    </span>
+                    <span className="text-[11px] text-indigo-500/80">Document Length</span>
+                  </div>
+
                   <div className="p-3.5 rounded-xl border border-blue-100 bg-blue-50/40 flex flex-col">
                     <span className="text-[11px] font-bold text-blue-600">Imported</span>
                     <span className="text-[22px] font-extrabold text-blue-700 mt-1">

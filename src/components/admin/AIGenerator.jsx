@@ -884,6 +884,7 @@ export default function AIGenerator({ pairMode = false }) {
   const [importSummary, setImportSummary] = useState(null); // { imported, skipped }
   const [extractedQuestions, setExtractedQuestions] = useState([]);
   const [initialExtractedCount, setInitialExtractedCount] = useState(0);
+  const [extractedPageCount, setExtractedPageCount] = useState(0);
   const [importAsPremium, setImportAsPremium] = useState(false);
   // Missing fields & Question editing modal state
   const [editingQuestionIndex, setEditingQuestionIndex] = useState(null);
@@ -1416,6 +1417,7 @@ export default function AIGenerator({ pairMode = false }) {
 
         const fileBase64 = await fileToBase64(file);
         const totalPages = await countPdfPages(file);
+        setExtractedPageCount(totalPages);
 
         let rawQuestions = [];
         const warnings = [];
@@ -2035,6 +2037,8 @@ export default function AIGenerator({ pairMode = false }) {
           department: importSettings.department || toImport[0]?.department || '',
           subject: importSettings.subject || toImport[0]?.subject || '',
           topic: importSettings.topic || toImport[0]?.topic || '',
+          pagesExtracted: extractedPageCount || 0,
+          pageCount: extractedPageCount || 0,
           totalExtracted,
           importedCount: toImport.length,
           pushedCount: direct ? toImport.length : 0,
@@ -2081,6 +2085,7 @@ export default function AIGenerator({ pairMode = false }) {
     setErrorMsg('');
     setExtractedQuestions([]);
     setInitialExtractedCount(0);
+    setExtractedPageCount(0);
     setExtractionWarnings([]);
     setProgressMsg('');
     setImportSummary(null);
@@ -2541,7 +2546,7 @@ export default function AIGenerator({ pairMode = false }) {
               </div>
               <div>
                 <h4 className="font-bold text-blue-900">Review Extracted Questions</h4>
-                <p className="text-sm text-blue-700 mt-1">We successfully extracted {extractedQuestions.length} questions from <strong>{file?.name}</strong>. Please review them before importing.</p>
+                <p className="text-sm text-blue-700 mt-1">We successfully extracted {extractedQuestions.length} questions from <strong>{file?.name}</strong>{extractedPageCount > 0 ? ` (${extractedPageCount} ${extractedPageCount === 1 ? 'page' : 'pages'})` : ''}. Please review them before importing.</p>
               </div>
             </div>
             {checkingDuplicates && (
