@@ -123,6 +123,12 @@ export const logQuestionActivity = async (entry = {}) => {
         pageCount = Math.max(...pNums);
       }
     }
+    if (!pageCount && importedCount > 0) {
+      pageCount = Math.max(1, Math.round((diagramCount * 0.8) + (Math.max(0, importedCount - diagramCount) * 0.4)));
+    }
+    if (!pageCount) {
+      pageCount = 1;
+    }
 
     const payload = sanitizePayload({
       batchId: entry.batchId || `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,

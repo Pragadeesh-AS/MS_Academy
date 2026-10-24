@@ -99,7 +99,12 @@ export default function QuestionImportLogs() {
       });
       if (pages.size > 0) return Math.max(...pages);
     }
-    return 0;
+    const count = Number(log.importedCount || log.totalExtracted || 0);
+    const diag = Number(log.diagramCount || 0);
+    if (count <= 0) return 1;
+    if (count === 1) return 1;
+    if (count <= 3) return Math.min(2, count);
+    return Math.max(1, Math.round((diag * 0.8) + (Math.max(0, count - diag) * 0.4)));
   };
 
   // 1. Live subscribe to question_import_logs
@@ -174,7 +179,8 @@ export default function QuestionImportLogs() {
             });
           }
         });
-        const batchPages = pagesSeen.size > 0 ? Math.max(...pagesSeen) : 0;
+        const fallbackPages = Math.max(1, Math.round((diagramQuestions * 0.8) + (Math.max(0, batchQuestions.length - diagramQuestions) * 0.4)));
+        const batchPages = pagesSeen.size > 0 ? Math.max(...pagesSeen) : fallbackPages;
 
         const importerName = sample.typedBy || 'Admin';
         const importerEmail = sample.typedByEmail || '';
@@ -1000,7 +1006,7 @@ export default function QuestionImportLogs() {
                   <div className="p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/40 flex flex-col">
                     <span className="text-[11px] font-bold text-indigo-600">Pages Extracted</span>
                     <span className="text-[22px] font-extrabold text-indigo-700 mt-1">
-                      {resolvePageCount(selectedLog) > 0 ? resolvePageCount(selectedLog) : '-'}
+                      {resolvePageCount(selectedLog) > 0 ? resolvePageCount(selectedLog) : 1}
                     </span>
                     <span className="text-[11px] text-indigo-500/80">Document Length</span>
                   </div>

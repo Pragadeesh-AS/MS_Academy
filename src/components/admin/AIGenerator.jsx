@@ -517,10 +517,17 @@ const findNumberGaps = (questions) => {
 };
 
 const countPdfPages = async (fileObj) => {
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await fileObj.arrayBuffer()) }).promise;
-  const count = pdf.numPages;
-  pdf.destroy();
-  return count;
+  try {
+    if (!fileObj) return 1;
+    const arrayBuffer = await fileObj.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+    const count = Number(pdf.numPages) || 1;
+    try { pdf.destroy(); } catch (_) {}
+    return count;
+  } catch (err) {
+    console.warn("countPdfPages error:", err);
+    return 1;
+  }
 };
 
 // ---------- Diagram extraction ----------
@@ -949,11 +956,20 @@ export default function AIGenerator({ pairMode = false }) {
   // Same two labels the Question Bank editor uses, so an imported mark can always be edited there
   const markOptions = ['1 Mark (-0.33)', '2 Mark (-0.66)'];
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile && selectedFile.type === 'application/pdf') {
       setFile(selectedFile);
       setErrorMsg('');
+      try {
+        const pages = await countPdfPages(selectedFile);
+        if (pages > 0) {
+          setExtractedPageCount(pages);
+          selectedFile._pageCount = pages;
+        }
+      } catch (err) {
+        console.warn("Could not count pdf pages on select:", err);
+      }
     } else {
       setErrorMsg("Please upload a valid PDF file.");
     }
@@ -963,12 +979,21 @@ export default function AIGenerator({ pairMode = false }) {
     e.preventDefault();
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = async (e) => {
     e.preventDefault();
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile && droppedFile.type === 'application/pdf') {
       setFile(droppedFile);
       setErrorMsg('');
+      try {
+        const pages = await countPdfPages(droppedFile);
+        if (pages > 0) {
+          setExtractedPageCount(pages);
+          droppedFile._pageCount = pages;
+        }
+      } catch (err) {
+        console.warn("Could not count pdf pages on drop:", err);
+      }
     } else {
       setErrorMsg("Please upload a valid PDF file.");
     }
@@ -2029,6 +2054,16 @@ export default function AIGenerator({ pairMode = false }) {
         const totalExtracted = initialExtractedCount || toImport.length;
         const skippedCount = Math.max(0, totalExtracted - toImport.length) + (keptDuplicates || 0);
 
+        let finalPageCount = Number(extractedPageCount || file?._pageCount || 0);
+        if (finalPageCount <= 0 && file) {
+          try {
+            finalPageCount = await countPdfPages(file);
+          } catch (_) {}
+        }
+        if (finalPageCount <= 0) {
+          finalPageCount = Math.max(1, Math.round((diagCount * 0.8) + (Math.max(0, toImport.length - diagCount) * 0.4)));
+        }
+
         await logQuestionActivity({
           batchId: `BATCH-${Date.now()}`,
           type: direct ? 'direct_push' : 'import_for_review',
@@ -2037,8 +2072,8 @@ export default function AIGenerator({ pairMode = false }) {
           department: importSettings.department || toImport[0]?.department || '',
           subject: importSettings.subject || toImport[0]?.subject || '',
           topic: importSettings.topic || toImport[0]?.topic || '',
-          pagesExtracted: extractedPageCount || 0,
-          pageCount: extractedPageCount || 0,
+          pagesExtracted: finalPageCount,
+          pageCount: finalPageCount,
           totalExtracted,
           importedCount: toImport.length,
           pushedCount: direct ? toImport.length : 0,
