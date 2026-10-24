@@ -2043,6 +2043,10 @@ export default function AIGenerator({ pairMode = false }) {
         imported.add(original);
       }
 
+      const diagCount = toImport.filter(q => hasDiagram(q)).length;
+      const totalExtracted = initialExtractedCount || toImport.length;
+      const skippedCount = Math.max(0, totalExtracted - toImport.length) + (keptDuplicates || 0);
+
       // Record detailed extraction & import log
       try {
         const currentUser = {
@@ -2050,9 +2054,6 @@ export default function AIGenerator({ pairMode = false }) {
           email: (sessionStorage.getItem('auth_email') || '').toLowerCase(),
           role: pairMode ? 'Typist' : (sessionStorage.getItem('user_role') || 'Admin')
         };
-        const diagCount = toImport.filter(q => hasDiagram(q)).length;
-        const totalExtracted = initialExtractedCount || toImport.length;
-        const skippedCount = Math.max(0, totalExtracted - toImport.length) + (keptDuplicates || 0);
 
         let finalPageCount = Number(extractedPageCount || file?._pageCount || 0);
         if (finalPageCount <= 0 && file) {
