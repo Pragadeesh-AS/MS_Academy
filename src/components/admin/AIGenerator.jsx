@@ -248,6 +248,89 @@ const renderMath = (math, displayMode = false) => {
   return latexToReadableHTML(math);
 };
 
+// Strip unwanted dollar signs ($) from plain numbers, values with units, or plain words
+const cleanUnwantedDollars = (text) => {
+  if (!text || typeof text !== 'string') return text;
+
+  // 1. Remove empty or whitespace-only dollar wrappers: $$ $$, $$, $ $
+  let cleaned = text.replace(/\$\$\s*\$\$/g, '').replace(/\$\s*\$/g, '');
+
+  // 2. Helper to test if content inside $...$ is just a plain number, number with unit, or plain text
+  const isUnwantedMath = (inner) => {
+    const trimmed = inner.trim();
+    if (!trimmed) return true;
+
+    // Normalize \text{...} or \mathrm{...} inside the dollar (e.g. $8 \text{ kg}$ -> 8 kg)
+    const unwrapped = trimmed
+      .replace(/\\(?:text|mathrm|mathbf|mathit)\s*\{([^{}]*)\}/g, '$1')
+      .trim();
+
+    // Check if it has genuine math commands or symbols
+    // Math commands: \frac, \sqrt, \alpha-\omega, \sum, \int, \partial, \infty, etc.
+    const hasMathCommand = /\\(?!text|mathrm|mathbf|mathit)[a-zA-Z]+/.test(unwrapped);
+    if (hasMathCommand) return false;
+
+    // If it has '=' or '<' or '>' or '\approx' or '\neq', it's an equation/relation
+    if (/[=<>]/.test(unwrapped)) return false;
+
+    // Check if it has algebraic operators like +, * between variables (e.g. a + b, 2x * y)
+    // Note: slash '/' is commonly used in units (rad/s, m/s, N/m), so only + and * or - between letters indicate algebra
+    if (/[a-zA-Z]\s*[+*]\s*[a-zA-Z0-9]/.test(unwrapped) || /[0-9]\s*[+*]\s*[a-zA-Z]/.test(unwrapped)) {
+      return false;
+    }
+    if (/[a-zA-Z]\s*-\s*[a-zA-Z]/.test(unwrapped)) {
+      return false;
+    }
+
+    // Check if it's a single letter variable like $x$, $y$, $k$, $m$, $t$, $T$
+    if (/^[a-zA-Z]$/.test(unwrapped)) return false;
+
+    // If it has superscripts/subscripts on variables like x_1 or k_e
+    if (/[a-zA-Z][_^]\{?[a-zA-Z0-9+-]+\}?/.test(unwrapped)) {
+      // Check if it's just a unit power like m^2, m^3, s^-1, cm^2
+      if (!/^\s*\d*(?:\.\d+)?\s*(?:[a-zA-Z]+\s*\/)?\s*[a-zA-Z]+\^[0-9+-]+\s*$/i.test(unwrapped)) {
+        return false;
+      }
+    }
+
+    // Plain numbers: $8$, $3200$, $-15$, $0.25$, $+10$
+    if (/^[-+]?\s*\d+(?:\.\d+)?\s*%?$/.test(unwrapped)) {
+      return true;
+    }
+
+    // Numbers with units:
+    // e.g. "8 kg", "10 rad/s", "3200 N/m", "25 m/s", "100 N", "50 Hz", "300 K", "12 V", "5 A", "100 rpm"
+    if (/^[-+]?\s*\d+(?:\.\d+)?\s*(?:[a-zA-Z°%µΩ]+|\b)(?:\s*[\/·•]\s*[a-zA-Z°%µΩ]+)*(?:\^[0-9+-]+)?\s*$/.test(unwrapped)) {
+      return true;
+    }
+
+    // Plain prose words without math symbols (e.g. "$mass$", "$spring$", "$True$", "$None of the above$")
+    if (/^[A-Za-z\s.,;:()'"\-_/]+$/.test(unwrapped) && !trimmed.includes('\\')) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Replace $$...$$ where inner is unwanted
+  cleaned = cleaned.replace(/\$\$([^$]+)\$\$/g, (match, inner) => {
+    if (isUnwantedMath(inner)) {
+      return inner.trim().replace(/\\(?:text|mathrm|mathbf|mathit)\s*\{([^{}]*)\}/g, '$1');
+    }
+    return match;
+  });
+
+  // Replace $...$ where inner is unwanted
+  cleaned = cleaned.replace(/\$([^$\n]+)\$/g, (match, inner) => {
+    if (isUnwantedMath(inner)) {
+      return inner.trim().replace(/\\(?:text|mathrm|mathbf|mathit)\s*\{([^{}]*)\}/g, '$1');
+    }
+    return match;
+  });
+
+  return cleaned;
+};
+
 // Stray LaTeX the AI left outside $...$ in normal text: turn known commands into their symbols
 const cleanBareLatex = (text) => text
   .replace(/\\(?:text|textbf|mathrm)\s*\{([^{}]*)\}/g, '$1')
@@ -386,9 +469,8 @@ const repairLine = (line) => {
 
   return fixed.split('$').map((part, k) => {
     if (k % 2 === 0) return LATEX_TRIGGER.test(part) ? wrapBareLatexRuns(part) : part;
-    // "$5 and $10": money - the pair starts with an amount, then words, and holds no LaTeX.
-    // Anything else is maths, even with letter runs in it: "$GM$", "$GM > 0$", "$v = u + at$".
-    if (!/[\\^_]/.test(part) && /^\s*\d/.test(part) && countProseWords(part) > 0) return `${LITERAL_DOLLAR}${part}${LITERAL_DOLLAR}`;
+    // Plain numbers or quantities with units (e.g. "8 kg", "10 rad/s") should not retain dollar signs
+    if (!/[\\^_]/.test(part) && /^\s*\d/.test(part) && countProseWords(part) > 0) return part;
     return `$${part}$`;
   }).join('');
 };
@@ -1095,7 +1177,8 @@ export default function AIGenerator({ pairMode = false }) {
   // escaped so text like <class 'dict'> shows up instead of being swallowed as an HTML tag.
   const formatExtractedText = (text) => {
     if (!text) return text;
-    const parts = String(text)
+    const cleaned = cleanUnwantedDollars(text);
+    const parts = String(cleaned)
       // The AI sometimes escapes the delimiters ("\$Re\$") - treat them as ordinary "$" (a real
       // price like "\$5 and \$10" is still recognised as money by repairLine)
       .replace(/\\\$/g, '$')
@@ -1536,21 +1619,21 @@ export default function AIGenerator({ pairMode = false }) {
             topic: (importSettings.topic && importSettings.topic.trim()) ? importSettings.topic.trim() : (q.topic || ''),
             subject: (importSettings.subject && importSettings.subject.trim()) ? importSettings.subject.trim() : (q.subject || ''),
             department: (importSettings.department && importSettings.department.trim()) ? importSettings.department.trim() : (q.department || ''),
-            rawQuestionText: q.questionText || '',
-            rawOptionA: q.optionA || '',
-            rawOptionB: q.optionB || '',
-            rawOptionC: q.optionC || '',
-            rawOptionD: q.optionD || '',
-            rawExplanation: q.explanation || '',
-            questionText: formatExtractedText(q.questionText) || '',
-            optionA: formatExtractedText(q.optionA) || '',
-            optionB: formatExtractedText(q.optionB) || '',
-            optionC: formatExtractedText(q.optionC) || '',
-            optionD: formatExtractedText(q.optionD) || '',
+            rawQuestionText: cleanUnwantedDollars(q.questionText || ''),
+            rawOptionA: cleanUnwantedDollars(q.optionA || ''),
+            rawOptionB: cleanUnwantedDollars(q.optionB || ''),
+            rawOptionC: cleanUnwantedDollars(q.optionC || ''),
+            rawOptionD: cleanUnwantedDollars(q.optionD || ''),
+            rawExplanation: cleanUnwantedDollars(q.explanation || ''),
+            questionText: formatExtractedText(cleanUnwantedDollars(q.questionText)) || '',
+            optionA: formatExtractedText(cleanUnwantedDollars(q.optionA)) || '',
+            optionB: formatExtractedText(cleanUnwantedDollars(q.optionB)) || '',
+            optionC: formatExtractedText(cleanUnwantedDollars(q.optionC)) || '',
+            optionD: formatExtractedText(cleanUnwantedDollars(q.optionD)) || '',
             correctAnswer: q.correctAnswer || '',
             correctAnswers: Array.isArray(q.correctAnswers) ? q.correctAnswers : (q.correctAnswer ? [q.correctAnswer] : []),
-            fillBlankAnswer: q.fillBlankAnswer || '',
-            explanation: formatExtractedText(q.explanation) || ''
+            fillBlankAnswer: cleanUnwantedDollars(q.fillBlankAnswer || '').replace(/[\$\s]/g, ''),
+            explanation: formatExtractedText(cleanUnwantedDollars(q.explanation)) || ''
           }));
 
           try {
@@ -1587,8 +1670,8 @@ export default function AIGenerator({ pairMode = false }) {
       // Match items may contain $...$ LaTeX; render them like the question text so they show as symbols
       parsedQuestions = parsedQuestions.map(q => (q.questionType === 'Match' ? {
         ...q,
-        matchColumn1: (q.matchColumn1 || []).map(item => formatExtractedText(wrapBareLatex(item))),
-        matchColumn2: (q.matchColumn2 || []).map(item => formatExtractedText(wrapBareLatex(item)))
+        matchColumn1: (q.matchColumn1 || []).map(item => formatExtractedText(wrapBareLatex(cleanUnwantedDollars(item)))),
+        matchColumn2: (q.matchColumn2 || []).map(item => formatExtractedText(wrapBareLatex(cleanUnwantedDollars(item))))
       } : q));
       // Stable id per extracted question, so a duplicate flag can point at "question #3 of this PDF"
       // even after other questions are edited or removed
@@ -1681,30 +1764,30 @@ export default function AIGenerator({ pairMode = false }) {
         questionType: q.questionType || 'Single Choice',
         questionCategory: q.questionCategory || (isNat ? 'Numerical' : 'Theory'),
         difficultyLevel: q.difficultyLevel || 'Medium',
-        rawQuestionText: q.rawQuestionText ?? stripTags(q.questionText) ?? '',
-        questionText: q.questionText || '',
+        rawQuestionText: cleanUnwantedDollars(q.rawQuestionText ?? stripTags(q.questionText) ?? ''),
+        questionText: cleanUnwantedDollars(q.questionText || ''),
         questionImageUrl: q.questionImageUrl || '',
-        rawOptionA: q.rawOptionA ?? (q.optionA ? stripTags(q.optionA) : '') ?? '',
-        optionA: q.optionA || '',
+        rawOptionA: cleanUnwantedDollars(q.rawOptionA ?? (q.optionA ? stripTags(q.optionA) : '') ?? ''),
+        optionA: cleanUnwantedDollars(q.optionA || ''),
         optionAImage: q.optionAImage || '',
-        rawOptionB: q.rawOptionB ?? (q.optionB ? stripTags(q.optionB) : '') ?? '',
-        optionB: q.optionB || '',
+        rawOptionB: cleanUnwantedDollars(q.rawOptionB ?? (q.optionB ? stripTags(q.optionB) : '') ?? ''),
+        optionB: cleanUnwantedDollars(q.optionB || ''),
         optionBImage: q.optionBImage || '',
-        rawOptionC: q.rawOptionC ?? (q.optionC ? stripTags(q.optionC) : '') ?? '',
-        optionC: q.optionC || '',
+        rawOptionC: cleanUnwantedDollars(q.rawOptionC ?? (q.optionC ? stripTags(q.optionC) : '') ?? ''),
+        optionC: cleanUnwantedDollars(q.optionC || ''),
         optionCImage: q.optionCImage || '',
-        rawOptionD: q.rawOptionD ?? (q.optionD ? stripTags(q.optionD) : '') ?? '',
-        optionD: q.optionD || '',
+        rawOptionD: cleanUnwantedDollars(q.rawOptionD ?? (q.optionD ? stripTags(q.optionD) : '') ?? ''),
+        optionD: cleanUnwantedDollars(q.optionD || ''),
         optionDImage: q.optionDImage || '',
         correctAnswer: q.correctAnswer || '',
         correctAnswers: Array.isArray(q.correctAnswers) ? [...q.correctAnswers] : (q.correctAnswer ? [q.correctAnswer] : []),
-        fillBlankAnswer: q.fillBlankAnswer !== undefined && q.fillBlankAnswer !== null ? String(q.fillBlankAnswer) : '',
+        fillBlankAnswer: q.fillBlankAnswer !== undefined && q.fillBlankAnswer !== null ? cleanUnwantedDollars(String(q.fillBlankAnswer)).replace(/[\$\s]/g, '') : '',
         fillBlankMode: q.fillBlankMode || 'Exact Match',
         fillBlankPrecision: q.fillBlankPrecision || 'None',
-        fillBlankRangeStart: q.fillBlankRangeStart !== undefined && q.fillBlankRangeStart !== null ? String(q.fillBlankRangeStart) : '',
-        fillBlankRangeEnd: q.fillBlankRangeEnd !== undefined && q.fillBlankRangeEnd !== null ? String(q.fillBlankRangeEnd) : '',
-        rawExplanation: q.rawExplanation ?? (q.explanation ? stripTags(q.explanation) : '') ?? '',
-        explanation: q.explanation || '',
+        fillBlankRangeStart: q.fillBlankRangeStart !== undefined && q.fillBlankRangeStart !== null ? cleanUnwantedDollars(String(q.fillBlankRangeStart)).replace(/[\$\s]/g, '') : '',
+        fillBlankRangeEnd: q.fillBlankRangeEnd !== undefined && q.fillBlankRangeEnd !== null ? cleanUnwantedDollars(String(q.fillBlankRangeEnd)).replace(/[\$\s]/g, '') : '',
+        rawExplanation: cleanUnwantedDollars(q.rawExplanation ?? (q.explanation ? stripTags(q.explanation) : '') ?? ''),
+        explanation: cleanUnwantedDollars(q.explanation || ''),
         explanationImageUrl: q.explanationImageUrl || '',
         matchColumn1: Array.isArray(q.matchColumn1) ? [...q.matchColumn1] : ['', ''],
         matchColumn2: Array.isArray(q.matchColumn2) ? [...q.matchColumn2] : ['', ''],
@@ -1780,12 +1863,12 @@ export default function AIGenerator({ pairMode = false }) {
   const handleSaveModal = () => {
     if (editingQuestionIndex === null || !modalFormData) return;
 
-    const rawQText = modalFormData.rawQuestionText ?? modalFormData.questionText ?? '';
-    const rawA = modalFormData.rawOptionA ?? modalFormData.optionA ?? '';
-    const rawB = modalFormData.rawOptionB ?? modalFormData.optionB ?? '';
-    const rawC = modalFormData.rawOptionC ?? modalFormData.optionC ?? '';
-    const rawD = modalFormData.rawOptionD ?? modalFormData.optionD ?? '';
-    const rawExp = modalFormData.rawExplanation ?? modalFormData.explanation ?? '';
+    const rawQText = cleanUnwantedDollars(modalFormData.rawQuestionText ?? modalFormData.questionText ?? '');
+    const rawA = cleanUnwantedDollars(modalFormData.rawOptionA ?? modalFormData.optionA ?? '');
+    const rawB = cleanUnwantedDollars(modalFormData.rawOptionB ?? modalFormData.optionB ?? '');
+    const rawC = cleanUnwantedDollars(modalFormData.rawOptionC ?? modalFormData.optionC ?? '');
+    const rawD = cleanUnwantedDollars(modalFormData.rawOptionD ?? modalFormData.optionD ?? '');
+    const rawExp = cleanUnwantedDollars(modalFormData.rawExplanation ?? modalFormData.explanation ?? '');
 
     const candidate = {
       ...extractedQuestions[editingQuestionIndex],

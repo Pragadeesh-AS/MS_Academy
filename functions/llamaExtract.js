@@ -28,12 +28,12 @@ const QUESTION_EXTRACTION_SCHEMA = {
           },
           questionText: {
             type: "string",
-            description: "The COMPLETE question text exactly as printed, word for word. Use LaTeX inside $...$ for all math/equations. Do NOT include question number or header."
+            description: "The COMPLETE question text exactly as printed, word for word. Use LaTeX inside $...$ ONLY for genuine mathematical formulas, equations, variables, or Greek letters. Do NOT put dollar signs ($) around plain numbers or numbers with units (e.g., write 8 kg, 3200 N/m, 10 rad/s as plain text without dollars). Do NOT include question number or header."
           },
-          optionA: { type: "string", description: "Option A text" },
-          optionB: { type: "string", description: "Option B text" },
-          optionC: { type: "string", description: "Option C text" },
-          optionD: { type: "string", description: "Option D text" },
+          optionA: { type: "string", description: "Option A text as plain text without dollar signs (e.g. 10 rad/s). Use $...$ only if it is an actual mathematical formula." },
+          optionB: { type: "string", description: "Option B text as plain text without dollar signs (e.g. 20 rad/s). Use $...$ only if it is an actual mathematical formula." },
+          optionC: { type: "string", description: "Option C text as plain text without dollar signs (e.g. 25 rad/s). Use $...$ only if it is an actual mathematical formula." },
+          optionD: { type: "string", description: "Option D text as plain text without dollar signs (e.g. 40 rad/s). Use $...$ only if it is an actual mathematical formula." },
           correctAnswer: { type: "string", description: "A, B, C, or D (For Single Choice/Match)" },
           correctAnswers: {
             type: "array",
@@ -42,7 +42,7 @@ const QUESTION_EXTRACTION_SCHEMA = {
           },
           fillBlankAnswer: {
             type: "string",
-            description: "For NAT only: exact numerical answer as plain digits (no units, no commas)"
+            description: "For NAT only: exact numerical answer as plain digits (no units, no commas, no dollar signs)"
           },
           fillBlankMode: {
             type: "string",
@@ -59,7 +59,7 @@ const QUESTION_EXTRACTION_SCHEMA = {
           },
           explanation: {
             type: "string",
-            description: "The COMPLETE solution/explanation exactly as printed, with all steps, concepts, formulas, calculations. Use LaTeX inside $...$."
+            description: "The COMPLETE solution/explanation exactly as printed, with all steps, concepts, formulas, calculations. Use LaTeX inside $...$ ONLY for math/equations, never around plain numbers or units."
           },
           matchColumn1: {
             type: "array",
@@ -104,7 +104,10 @@ Extract each question object strictly adhering to the schema.
 IMPORTANT:
 - COMPLETENESS IS THE TOP PRIORITY. Extract every question - never skip one, including long questions and ones with diagrams, tables, code or unusual layouts. Transcribe everything; never shorten, summarize, paraphrase, merge or "clean up" any text in the question, options or solution. When unsure whether something belongs, include it.
 - Keep the structure: separate paragraphs, calculation steps, list items and sub-parts with \\n, keep their numbering/bullets, and put each equation step of a calculation on its own line.
-- For equations, fractions, subscripts, or math symbols, use standard LaTeX formatting enclosed in $...$ (e.g., $m^2K$, $\\frac{1}{U}$).
+- DO NOT wrap plain numbers or values with units in dollar signs ($). Plain values like "8 kg", "10 rad/s", "3200 N/m", "25 m/s", "100 N", "50 Hz", "20 s", "300 K", "12 V", "5 A", "100%" or plain numbers like "8", "500", "0.25" must be written as PLAIN TEXT without any dollar symbols ($).
+- ONLY use $...$ for genuine mathematical expressions, formulas, equations, fractions, variables, Greek letters, square roots, integrals, or sub/superscripts (e.g., $\\omega_n = \\sqrt{k/m}$, $\\frac{1}{U}$, $\\sigma_x$, $x^2 + y^2 = r^2$, $x$, $y$).
+- Options (optionA, optionB, optionC, optionD) MUST be plain text without dollar signs ($) unless an option is an actual mathematical formula. Never wrap option values and units (such as "10 rad/s", "20 rad/s") in dollar signs.
+- Never produce empty dollar signs ($$ or $ $) or wrap ordinary English words in dollar signs.
 - Every $...$ must compile in KaTeX: balanced braces, never two superscripts or two subscripts in a row (write $25^{\\circ}\\text{C}$, never $10^1^\\circ$), degrees as ^{\\circ}, only standard LaTeX math commands (no siunitx such as \\SI or \\si, no custom macros, no \\( \\) or \\[ \\] delimiters).
 - Copy every number, unit and symbol exactly as printed in the PDF. Never rewrite a value into another form. Do not add, drop, summarize or reword any text; keep the full question and full explanation.
 - This applies to matchColumn1 and matchColumn2 too - every expression containing a LaTeX command (\\sigma, \\Delta, \\frac, subscripts like R_1, etc.) MUST be wrapped in $...$. Never output a bare backslash command outside $...$ anywhere in the JSON.
@@ -182,6 +185,108 @@ async function pollJob(jobId, apiKey, maxWaitSeconds = 280) {
     }
   }
   throw new Error('LlamaIndex extraction timed out.');
+}
+
+// Strip unwanted dollar signs ($) from plain numbers, values with units, or plain words
+function cleanUnwantedDollars(text) {
+  if (!text || typeof text !== 'string') return text;
+
+  // 1. Remove empty or whitespace-only dollar wrappers: $$ $$, $$, $ $
+  let cleaned = text.replace(/\$\$\s*\$\$/g, '').replace(/\$\s*\$/g, '');
+
+  // 2. Helper to test if content inside $...$ is just a plain number, number with unit, or plain text
+  const isUnwantedMath = (inner) => {
+    const trimmed = inner.trim();
+    if (!trimmed) return true;
+
+    // Normalize \text{...} or \mathrm{...} inside the dollar (e.g. $8 \text{ kg}$ -> 8 kg)
+    const unwrapped = trimmed
+      .replace(/\\(?:text|mathrm|mathbf|mathit)\s*\{([^{}]*)\}/g, '$1')
+      .trim();
+
+    // Check if it has genuine math commands or symbols
+    // Math commands: \frac, \sqrt, \alpha-\omega, \sum, \int, \partial, \infty, etc.
+    const hasMathCommand = /\\(?!text|mathrm|mathbf|mathit)[a-zA-Z]+/.test(unwrapped);
+    if (hasMathCommand) return false;
+
+    // If it has '=' or '<' or '>' or '\approx' or '\neq', it's an equation/relation
+    if (/[=<>]/.test(unwrapped)) return false;
+
+    // Check if it has algebraic operators like +, * between variables (e.g. a + b, 2x * y)
+    // Note: slash '/' is commonly used in units (rad/s, m/s, N/m), so only + and * or - between letters indicate algebra
+    if (/[a-zA-Z]\s*[+*]\s*[a-zA-Z0-9]/.test(unwrapped) || /[0-9]\s*[+*]\s*[a-zA-Z]/.test(unwrapped)) {
+      return false;
+    }
+    if (/[a-zA-Z]\s*-\s*[a-zA-Z]/.test(unwrapped)) {
+      return false;
+    }
+
+    // Check if it's a single letter variable like $x$, $y$, $k$, $m$, $t$, $T$
+    if (/^[a-zA-Z]$/.test(unwrapped)) return false;
+
+    // If it has superscripts/subscripts on variables like x_1 or k_e
+    if (/[a-zA-Z][_^]\{?[a-zA-Z0-9+-]+\}?/.test(unwrapped)) {
+      // Check if it's just a unit power like m^2, m^3, s^-1, cm^2
+      if (!/^\s*\d*(?:\.\d+)?\s*(?:[a-zA-Z]+\s*\/)?\s*[a-zA-Z]+\^[0-9+-]+\s*$/i.test(unwrapped)) {
+        return false;
+      }
+    }
+
+    // Plain numbers: $8$, $3200$, $-15$, $0.25$, $+10$
+    if (/^[-+]?\s*\d+(?:\.\d+)?\s*%?$/.test(unwrapped)) {
+      return true;
+    }
+
+    // Numbers with units:
+    // e.g. "8 kg", "10 rad/s", "3200 N/m", "25 m/s", "100 N", "50 Hz", "300 K", "12 V", "5 A", "100 rpm"
+    if (/^[-+]?\s*\d+(?:\.\d+)?\s*(?:[a-zA-Z°%µΩ]+|\b)(?:\s*[\/·•]\s*[a-zA-Z°%µΩ]+)*(?:\^[0-9+-]+)?\s*$/.test(unwrapped)) {
+      return true;
+    }
+
+    // Plain prose words without math symbols (e.g. "$mass$", "$spring$", "$True$", "$None of the above$")
+    if (/^[A-Za-z\s.,;:()'"\-_/]+$/.test(unwrapped) && !trimmed.includes('\\')) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Replace $$...$$ where inner is unwanted
+  cleaned = cleaned.replace(/\$\$([^$]+)\$\$/g, (match, inner) => {
+    if (isUnwantedMath(inner)) {
+      return inner.trim().replace(/\\(?:text|mathrm|mathbf|mathit)\s*\{([^{}]*)\}/g, '$1');
+    }
+    return match;
+  });
+
+  // Replace $...$ where inner is unwanted
+  cleaned = cleaned.replace(/\$([^$\n]+)\$/g, (match, inner) => {
+    if (isUnwantedMath(inner)) {
+      return inner.trim().replace(/\\(?:text|mathrm|mathbf|mathit)\s*\{([^{}]*)\}/g, '$1');
+    }
+    return match;
+  });
+
+  return cleaned;
+}
+
+function sanitizeQuestionObject(q) {
+  if (!q || typeof q !== 'object') return q;
+  const sanitized = { ...q };
+  if (typeof sanitized.questionText === 'string') sanitized.questionText = cleanUnwantedDollars(sanitized.questionText);
+  if (typeof sanitized.optionA === 'string') sanitized.optionA = cleanUnwantedDollars(sanitized.optionA);
+  if (typeof sanitized.optionB === 'string') sanitized.optionB = cleanUnwantedDollars(sanitized.optionB);
+  if (typeof sanitized.optionC === 'string') sanitized.optionC = cleanUnwantedDollars(sanitized.optionC);
+  if (typeof sanitized.optionD === 'string') sanitized.optionD = cleanUnwantedDollars(sanitized.optionD);
+  if (typeof sanitized.explanation === 'string') sanitized.explanation = cleanUnwantedDollars(sanitized.explanation);
+  if (typeof sanitized.fillBlankAnswer === 'string') sanitized.fillBlankAnswer = cleanUnwantedDollars(sanitized.fillBlankAnswer).replace(/[\$\s]/g, '');
+  if (Array.isArray(sanitized.matchColumn1)) {
+    sanitized.matchColumn1 = sanitized.matchColumn1.map(item => cleanUnwantedDollars(item));
+  }
+  if (Array.isArray(sanitized.matchColumn2)) {
+    sanitized.matchColumn2 = sanitized.matchColumn2.map(item => cleanUnwantedDollars(item));
+  }
+  return sanitized;
 }
 
 exports.extractQuestions = onRequest({
@@ -277,11 +382,13 @@ exports.extractQuestions = onRequest({
         }
       }
 
+      const sanitizedQuestions = Array.isArray(questions) ? questions.map(sanitizeQuestionObject) : questions;
+
       return res.status(200).json({
         success: true,
         fileId,
         jobId: job.id,
-        questions
+        questions: sanitizedQuestions
       });
     } catch (err) {
       console.error('extractQuestions error:', err);
