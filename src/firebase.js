@@ -1,8 +1,11 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, setLogLevel } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+
+// Silence internal Firestore SDK logs
+setLogLevel('silent');
 
 // Your web app's Firebase configuration
 const firebaseConfig = {

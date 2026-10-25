@@ -7,6 +7,14 @@ import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import { initClarity } from './utils/clarity.js'
 
+// In production, suppress console logs and info so internal website data and statistics are never exposed
+if (import.meta.env.PROD) {
+  console.log = () => {};
+  console.info = () => {};
+  console.debug = () => {};
+  console.warn = () => {};
+}
+
 // Initialize Microsoft Clarity tracking
 initClarity();
 
@@ -21,11 +29,15 @@ const root = createRoot(document.getElementById('root'));
 // the correct, narrower mechanism for that. These two just log now, so a stray rejection doesn't
 // end an active class or wipe unsaved work.
 window.addEventListener('error', (event) => {
-  console.error("Caught global error:", event.error);
+  if (!import.meta.env.PROD) {
+    console.error("Caught global error:", event.error);
+  }
 });
 
 window.addEventListener('unhandledrejection', (event) => {
-  console.error("Caught unhandled rejection:", event.reason);
+  if (!import.meta.env.PROD) {
+    console.error("Caught unhandled rejection:", event.reason);
+  }
 });
 
 root.render(

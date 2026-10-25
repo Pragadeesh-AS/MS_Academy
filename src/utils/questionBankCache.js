@@ -79,15 +79,12 @@ function openIndexedDB() {
       };
       request.onsuccess = (event) => resolve(event.target.result);
       request.onerror = (err) => {
-        console.warn('IndexedDB open error:', err);
         resolve(null);
       };
       request.onblocked = () => {
-        console.warn('IndexedDB blocked');
         resolve(null);
       };
     } catch (e) {
-      console.warn('IndexedDB exception:', e);
       resolve(null);
     }
   });
@@ -120,7 +117,6 @@ async function idbSet(key, value) {
       store.put(value, key);
       tx.oncomplete = () => resolve(true);
       tx.onerror = (err) => {
-        console.warn('IndexedDB put error:', err);
         resolve(false);
       };
     } catch (e) {
@@ -266,7 +262,6 @@ export const loadQuestionBankData = async ({
         return;
       }
     } catch (e) {
-      console.warn('Failed to load from IndexedDB cache, falling back to network', e);
     }
   }
 
@@ -280,7 +275,6 @@ export const loadQuestionBankData = async ({
       onBackgroundUpdate({ questions, attributes, source: 'network' });
     }
   } catch (err) {
-    console.warn('[QuestionBankCache] Network fetch failed, checking if any cached data exists:', err);
     try {
       const storedQ = await idbGet(`questions_${cacheKey}`);
       const storedAttr = await idbGet('attributes');
@@ -319,7 +313,6 @@ export const fetchAttributes = async (force = false) => {
     idbSet('attributes', attrData);
     return attrData;
   } catch (err) {
-    console.error('Failed to fetch question attributes:', err);
     return memoryCache.attributes || [];
   }
 };
@@ -387,7 +380,6 @@ async function triggerBackgroundSync({ lockedDepartment, cacheKey, onBackgroundU
       }
 
       if (deltaDocs.size > 0) {
-        console.log(`[QuestionBankCache] Merging ${deltaDocs.size} delta questions...`);
         const updatedMap = new Map(existing.map(q => [q.id, q]));
         deltaDocs.forEach((docData, id) => {
           // If lockedDepartment, check if doc matches department
@@ -425,7 +417,6 @@ async function triggerBackgroundSync({ lockedDepartment, cacheKey, onBackgroundU
       }
     }
   } catch (err) {
-    console.warn('[QuestionBankCache] Background sync failed (cache still active):', err);
   } finally {
     memoryCache.isSyncing[cacheKey] = false;
     if (onSyncStateChange) onSyncStateChange(false);
@@ -459,12 +450,10 @@ export const prewarmQuestionBankCache = (lockedDepartment = null) => {
         memoryCache.questions[cacheKey] = storedQ;
         if (storedAttr) memoryCache.attributes = storedAttr;
         if (storedMeta?.lastSync) memoryCache.lastSync[cacheKey] = storedMeta.lastSync;
-        console.log(`[QuestionBankCache] Pre-warmed ${storedQ.length} questions into memory`);
         // Silently sync delta
         triggerBackgroundSync({ lockedDepartment, cacheKey });
       }
     } catch (e) {
-      console.warn('Pre-warm error:', e);
     }
   });
 };
