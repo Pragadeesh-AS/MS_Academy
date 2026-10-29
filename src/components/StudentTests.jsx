@@ -427,8 +427,9 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         if (data.responses && Array.isArray(data.responses)) {
           data.responses.forEach(r => {
             const qId = r.questionId;
-            if (!stats[qId]) stats[qId] = { total: 0, correct: 0, wrong: 0, unattempted: 0 };
+            if (!stats[qId]) stats[qId] = { total: 0, correct: 0, wrong: 0, unattempted: 0, totalTime: 0 };
             stats[qId].total++;
+            stats[qId].totalTime = (stats[qId].totalTime || 0) + (r.timeSpent || 0);
             
             let isCorrect = false;
             let hasAnswer = Array.isArray(r.selectedAnswer) ? r.selectedAnswer.length > 0 : !!String(r.selectedAnswer || '').trim();
@@ -809,7 +810,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                         <div className="flex items-center gap-1.5 font-bold text-slate-800 text-xs mb-3">
                           <Target size={14} className="text-blue-500" /> Class Performance for this Question
                         </div>
-                        <div className="grid grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
                           <div>
                             <div className="text-xl font-[900] text-slate-700">{globalQuestionStats[q.id].total}</div>
                             <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total Attempts</div>
@@ -825,6 +826,12 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                           <div>
                             <div className="text-xl font-[900] text-slate-400">{Math.round((globalQuestionStats[q.id].unattempted / globalQuestionStats[q.id].total) * 100)}%</div>
                             <div className="text-[9px] font-bold text-slate-400/70 uppercase tracking-wider">Unattempted ({globalQuestionStats[q.id].unattempted})</div>
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <div className="text-xl font-[900] text-indigo-600">
+                              {formatTimer(Math.round(globalQuestionStats[q.id].totalTime / globalQuestionStats[q.id].total))}
+                            </div>
+                            <div className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">Avg Time</div>
                           </div>
                         </div>
                       </div>

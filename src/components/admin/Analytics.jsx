@@ -45,6 +45,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
   const [detailedTestId, setDetailedTestId] = useState(null);
   const [filterStatus, setFilterStatus] = useState('All'); 
   const [expandedFolders, setExpandedFolders] = useState({});
+  const [showLegend, setShowLegend] = useState(true);
   const toggleFolder = (folder) => setExpandedFolders(prev => ({ ...prev, [folder]: !prev[folder] }));
   const [testSearch, setTestSearch] = useState(''); // Global Tests list search
   
@@ -349,13 +350,19 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                 total: 0,
                 correct: 0,
                 wrong: 0,
-                unattempted: 0
+                unattempted: 0,
+                totalTimeSeconds: 0
               };
             }
             testSummary.questionStats[qKey].total++;
+            testSummary.questionStats[qKey].totalTimeSeconds = (testSummary.questionStats[qKey].totalTimeSeconds || 0) + (q.timeSeconds || 0);
             if (q.status === 'Correct') testSummary.questionStats[qKey].correct++;
             else if (q.status === 'Wrong') testSummary.questionStats[qKey].wrong++;
             else testSummary.questionStats[qKey].unattempted++;
+
+            if (q.questionId) testSummary.questionStats[q.questionId] = testSummary.questionStats[qKey];
+            if (q.qIndex) testSummary.questionStats[q.qIndex] = testSummary.questionStats[qKey];
+            testSummary.questionStats[idx + 1] = testSummary.questionStats[qKey];
           });
 
           // Leaderboard row for this test (also what the Excel / PDF export writes out)
@@ -764,6 +771,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
   const renderTestReportView = (attempt, studentName, onBackHandler) => {
     if (!attempt) return null;
     const isKeyHidden = !!studentViewOnlyEmail && !attempt.solutionsVisible;
+    const activeTestSummary = attempt?.testId ? computedTestAnalytics[attempt.testId] : null;
 
     return (
       <TestReport
@@ -774,6 +782,146 @@ export default function Analytics({ joinedStudents = [], department = null, stud
         onReviewSolutions={onReviewSolutions}
         solutions={(
           <div className="flex flex-col">
+            {/* Declaration & Symbol Legend Guide */}
+            <div className="mb-8 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white p-5 md:p-6 shadow-md border border-slate-700/80">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-400/20 text-amber-300 border border-amber-300/30 flex items-center justify-center text-xl shrink-0 shadow-sm">
+                    👑
+                  </div>
+                  <div>
+                    <h4 className="text-base md:text-lg font-[900] tracking-tight text-white flex items-center gap-2">
+                      Analytics Legend &amp; Symbol Declaration
+                    </h4>
+                    <p className="text-xs text-slate-300">
+                      Understand your timings, topper comparison, border colors, and question badges.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300 bg-amber-400/15 border border-amber-400/30 px-3 py-1 rounded-full">
+                    Declaration
+                  </span>
+                  <button
+                    onClick={() => setShowLegend(prev => !prev)}
+                    className="text-xs font-bold px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 transition-colors"
+                  >
+                    {showLegend ? 'Hide Guide' : 'Show Guide'}
+                  </button>
+                </div>
+              </div>
+
+              {showLegend && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  {/* 1. Golden Crown & Colored Borders */}
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="px-2 py-0.5 rounded-lg bg-amber-400/20 text-amber-300 font-black flex items-center gap-1 border border-amber-300/30 text-[11px]">
+                        👑 Topper
+                      </div>
+                      <span className="font-bold text-slate-200">Gold Crown &amp; Border Colors</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed text-[11.5px]">
+                      The <strong>Gold Crown (👑)</strong> shows the time taken by the <strong>Rank 1 Topper</strong> on this question. The border color reveals if the topper answered correctly:
+                    </p>
+                    <div className="flex flex-col gap-2 pt-1">
+                      <div className="flex items-center gap-2.5 bg-black/30 px-3 py-2 rounded-lg border border-emerald-500/30">
+                        <span className="w-3.5 h-3.5 rounded-full border-2 border-emerald-400 bg-emerald-500/20 shrink-0" />
+                        <div>
+                          <span className="text-emerald-400 font-bold block text-[11px]">Green Border</span>
+                          <span className="text-slate-300 text-[11px]">Topper answered this question <strong>Correctly</strong></span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 bg-black/30 px-3 py-2 rounded-lg border border-rose-500/30">
+                        <span className="w-3.5 h-3.5 rounded-full border-2 border-rose-400 bg-rose-500/20 shrink-0" />
+                        <div>
+                          <span className="text-rose-400 font-bold block text-[11px]">Red Border</span>
+                          <span className="text-slate-300 text-[11px]">Topper answered this question <strong>Wrong</strong></span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 bg-black/30 px-3 py-2 rounded-lg border border-slate-500/30">
+                        <span className="w-3.5 h-3.5 rounded-full border-2 border-slate-400 bg-slate-500/20 shrink-0" />
+                        <div>
+                          <span className="text-slate-300 font-bold block text-[11px]">Gray Border</span>
+                          <span className="text-slate-300 text-[11px]">Topper left this question <strong>Unattempted</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Timing Benchmarks */}
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="px-2 py-0.5 rounded-lg bg-indigo-400/20 text-indigo-300 font-black flex items-center gap-1 border border-indigo-300/30 text-[11px]">
+                        <Clock size={12} /> Timings
+                      </div>
+                      <span className="font-bold text-slate-200">Question Time Benchmarks</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed text-[11.5px]">
+                      Compare your speed against the class average and the test topper to refine your pacing:
+                    </p>
+                    <div className="flex flex-col gap-2 pt-1">
+                      <div className="flex items-center gap-2.5 bg-black/30 px-3 py-2 rounded-lg border border-blue-500/30">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-slate-800 border border-slate-300 shrink-0">You</span>
+                        <div>
+                          <span className="text-blue-300 font-bold block text-[11px]">Your Time (Blue Clock)</span>
+                          <span className="text-slate-300 text-[11px]">Exact time you spent on this question</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 bg-black/30 px-3 py-2 rounded-lg border border-indigo-500/30">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 shrink-0">Avg</span>
+                        <div>
+                          <span className="text-indigo-300 font-bold block text-[11px]">Average Time (Indigo Clock)</span>
+                          <span className="text-slate-300 text-[11px]">Mean time taken by all students on this question</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 bg-black/30 px-3 py-2 rounded-lg border border-amber-500/30">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-300/30 shrink-0">👑</span>
+                        <div>
+                          <span className="text-amber-300 font-bold block text-[11px]">Topper's Time (Gold Clock)</span>
+                          <span className="text-slate-300 text-[11px]">Benchmark time achieved by Rank 1</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Question Evaluation & Types */}
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="px-2 py-0.5 rounded-lg bg-emerald-400/20 text-emerald-300 font-black flex items-center gap-1 border border-emerald-300/30 text-[11px]">
+                        <CheckCircle2 size={12} /> Evaluation
+                      </div>
+                      <span className="font-bold text-slate-200">Marks &amp; Question Types</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed text-[11.5px]">
+                      Understand marking scheme and question structure:
+                    </p>
+                    <div className="flex flex-col gap-1.5 pt-1">
+                      <div className="flex items-center gap-2 text-[11.5px]">
+                        <span className="text-emerald-400 flex items-center gap-1 font-bold shrink-0"><CheckCircle2 size={13} /> Correct:</span>
+                        <span className="text-slate-300">+Marks awarded (full marks)</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11.5px]">
+                        <span className="text-rose-400 flex items-center gap-1 font-bold shrink-0"><XCircle size={13} /> Wrong:</span>
+                        <span className="text-slate-300">Negative marks applied (MCQ only)</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11.5px]">
+                        <span className="text-slate-400 flex items-center gap-1 font-bold shrink-0"><MinusCircle size={13} /> Unattempted:</span>
+                        <span className="text-slate-300">0 marks change (question was skipped)</span>
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-white/10 text-[11px] text-slate-300 flex flex-wrap gap-1.5 items-center">
+                      <span className="font-bold text-slate-400">Types:</span>
+                      <span className="px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-400/30 text-blue-200 font-mono font-bold" title="Multiple Choice Question (Single correct)">MCQ</span>
+                      <span className="px-1.5 py-0.5 rounded bg-purple-500/20 border border-purple-400/30 text-purple-200 font-mono font-bold" title="Multiple Select Question (No negative marks)">MSQ</span>
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/30 text-amber-200 font-mono font-bold" title="Numerical Answer Type (No negative marks)">NAT</span>
+                      <span className="px-1.5 py-0.5 rounded bg-teal-500/20 border border-teal-400/30 text-teal-200 font-mono font-bold" title="Match the Columns">MATCH</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Filter Bar */}
             <div className="flex flex-wrap items-center gap-2 mb-8 bg-slate-50 p-2 rounded-xl border border-slate-200">
               {['All', 'Correct', 'Wrong', 'Unattempted'].map(status => (
@@ -821,28 +969,64 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                           {q.status === 'Wrong' && <span className="flex items-center gap-1.5 text-xs font-bold text-red-700"><XCircle size={16} className="text-red-500"/> Wrong</span>}
                           {q.status === 'Unattempted' && <span className="flex items-center gap-1.5 text-xs font-bold text-slate-600"><MinusCircle size={16} className="text-slate-400"/> Unattempted</span>}
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{(q.questionType === 'Multiple Choice' || q.questionType === 'Multiple Select') ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
-                          {(() => {
-                            const topperQ = topperAttempt
-                              ? topperAttempt.allQuestions.find(tq => (q.questionId ? tq.questionId === q.questionId : tq.q === q.q))
-                              : null;
-                            const topperBorder = isKeyHidden ? 'border border-amber-200'
-                              : topperQ?.status === 'Correct' ? 'border-2 border-emerald-500'
-                              : topperQ?.status === 'Wrong' ? 'border-2 border-red-500'
-                              : 'border-2 border-slate-300';
-                            return topperQ ? (
-                              <div className={`flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-xl shadow-sm ${topperBorder}`} title={isKeyHidden ? "Topper's Time" : `Topper's Time - ${topperQ.status}`}>
-                                👑 <Clock size={14} className="text-amber-500" />
-                                {topperQ.timeSpent}
+                        {(() => {
+                          const qStat = activeTestSummary?.questionStats?.[q.questionId]
+                            || activeTestSummary?.questionStats?.[q.qIndex]
+                            || activeTestSummary?.questionStats?.[i + 1]
+                            || (activeTestSummary?.questionStats ? Object.values(activeTestSummary.questionStats).find(s => s.qText === q.q) : null);
+                          const qAvgSecs = qStat && qStat.total > 0 ? Math.round((qStat.totalTimeSeconds || 0) / qStat.total) : null;
+                          const qAvgTime = qAvgSecs !== null ? formatTime(qAvgSecs) : null;
+
+                          const topperQ = topperAttempt
+                            ? topperAttempt.allQuestions.find(tq => (q.questionId ? tq.questionId === q.questionId : tq.q === q.q))
+                            : null;
+                          const topperBorder = isKeyHidden ? 'border border-amber-300'
+                            : topperQ?.status === 'Correct' ? 'border-2 border-emerald-500'
+                            : topperQ?.status === 'Wrong' ? 'border-2 border-red-500'
+                            : 'border-2 border-slate-300';
+                          const topperStatusLabel = isKeyHidden ? '' : ` (${topperQ?.status || 'Unattempted'})`;
+
+                          return (
+                            <div className="flex items-center gap-2 flex-wrap justify-end">
+                              {/* Question Type */}
+                              <div className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">
+                                {(q.questionType === 'Multiple Choice' || q.questionType === 'Multiple Select') ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}
                               </div>
-                            ) : null;
-                          })()}
-                          <div className="flex items-center gap-2 text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm" title="Student's Time">
-                            <Clock size={14} className="text-blue-500" />
-                            {q.timeSpent}
-                          </div>
-                        </div>
+
+                              {/* Topper's Time Badge with Gold Crown and Colored Border */}
+                              {topperQ && (
+                                <div 
+                                  className={`flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl shadow-sm ${topperBorder}`} 
+                                  title={`Topper's Time: ${topperQ.timeSpent}${topperStatusLabel} - Gold Crown represents Rank 1 Topper`}
+                                >
+                                  <span className="text-sm">👑</span>
+                                  <Clock size={13} className="text-amber-500" />
+                                  <span>Topper: {topperQ.timeSpent}</span>
+                                </div>
+                              )}
+
+                              {/* Average Time Badge for this Question */}
+                              {qAvgTime && (
+                                <div 
+                                  className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl shadow-sm"
+                                  title={`Average Time: ${qAvgTime} (Mean time taken by all test takers on this question)`}
+                                >
+                                  <Clock size={13} className="text-indigo-500" />
+                                  <span>Avg: {qAvgTime}</span>
+                                </div>
+                              )}
+
+                              {/* Student's Actual Time */}
+                              <div 
+                                className="flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-sm" 
+                                title="Time you spent on this question"
+                              >
+                                <Clock size={13} className="text-blue-500" />
+                                <span>You: {q.timeSpent}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <div className="p-6">
