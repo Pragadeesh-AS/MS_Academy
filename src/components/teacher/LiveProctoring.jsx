@@ -287,6 +287,7 @@ export default function LiveProctoring({ department, teacherName }) {
         warningMessage: msg,
         warningTimestamp: serverTimestamp(),
         warningId: 'w_' + Date.now(),
+        warningAcknowledged: false,
         sentBy: teacherName || 'Invigilator'
       });
       setWarningSentSuccess(true);

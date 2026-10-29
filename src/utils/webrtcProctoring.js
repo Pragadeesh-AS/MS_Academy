@@ -124,16 +124,26 @@ export function startStudentProctoringSession({
       }, { merge: true });
 
       // 3. Listen for invigilator warning updates
+      let lastDispatchedWarningId = null;
+
       unsubStudentDoc = onSnapshot(studentDocRef, (snap) => {
-        if (!snap.exists()) return;
+        if (!snap.exists() || isCleanedUp) return;
         const data = snap.data();
-        if (data.warningMessage && onWarningReceived) {
-          onWarningReceived({
-            message: data.warningMessage,
-            timestamp: data.warningTimestamp,
-            id: data.warningId || String(data.warningTimestamp?.seconds || Date.now()),
-            sentBy: data.sentBy || 'Exam Invigilator'
-          });
+        if (
+          data.warningMessage && 
+          !data.warningAcknowledged && 
+          data.warningId && 
+          data.warningId !== lastDispatchedWarningId
+        ) {
+          lastDispatchedWarningId = data.warningId;
+          if (onWarningReceived) {
+            onWarningReceived({
+              message: data.warningMessage,
+              timestamp: data.warningTimestamp,
+              id: data.warningId,
+              sentBy: data.sentBy || 'Exam Invigilator'
+            });
+          }
         }
       }, (err) => {
         console.warn('Proctoring studentDoc listener error:', err);
@@ -236,6 +246,18 @@ export function startStudentProctoringSession({
         });
       } catch (e) {
         console.warn('Failed to record tab switch:', e);
+      }
+    },
+    acknowledgeWarning: async (warningId) => {
+      if (isCleanedUp) return;
+      try {
+        await updateDoc(studentDocRef, {
+          warningAcknowledged: true,
+          warningAcknowledgedAt: serverTimestamp(),
+          warningMessage: null
+        });
+      } catch (e) {
+        console.warn('Failed to update warning acknowledgment:', e);
       }
     },
     cleanup: async () => {

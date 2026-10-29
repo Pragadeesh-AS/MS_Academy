@@ -293,6 +293,7 @@ export default function LiveProctoringManager() {
         warningMessage: msg,
         warningTimestamp: serverTimestamp(),
         warningId: 'w_' + Date.now(),
+        warningAcknowledged: false,
         sentBy: 'Academy Chief Invigilator (Admin)'
       });
       setWarningSentSuccess(true);

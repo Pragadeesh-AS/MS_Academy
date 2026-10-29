@@ -138,6 +138,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
   const tabSwitchCountRef = useRef(0);
   const proctoringSessionRef = useRef(null);
   const [activeInvigilatorWarning, setActiveInvigilatorWarning] = useState(null);
+  const acknowledgedWarningsRef = useRef(new Set());
   const [isPipMinimized, setIsPipMinimized] = useState(false);
   const verificationVideoRef = useRef(null);
   const pipVideoRef = useRef(null);
@@ -399,6 +400,9 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
       totalQuestions: testQuestions.length,
       localStream: localStreamRef.current,
       onWarningReceived: (warn) => {
+        if (warn?.id && acknowledgedWarningsRef.current.has(warn.id)) {
+          return;
+        }
         setActiveInvigilatorWarning(warn);
       },
       onError: (err) => {
@@ -1449,7 +1453,13 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
               </p>
               <button
                 type="button"
-                onClick={() => setActiveInvigilatorWarning(null)}
+                onClick={() => {
+                  if (activeInvigilatorWarning?.id) {
+                    acknowledgedWarningsRef.current.add(activeInvigilatorWarning.id);
+                    proctoringSessionRef.current?.acknowledgeWarning(activeInvigilatorWarning.id);
+                  }
+                  setActiveInvigilatorWarning(null);
+                }}
                 className="w-full py-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black rounded-xl text-sm transition-all shadow-lg shadow-rose-600/30 hover:scale-[1.02] active:scale-[0.98]"
               >
                 I Acknowledge and Comply
