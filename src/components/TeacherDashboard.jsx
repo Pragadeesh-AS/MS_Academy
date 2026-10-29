@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { BookOpen, LogOut, Settings, Users, Video, Calendar, ChevronLeft, ChevronRight, Menu, X, FileText, ArrowRight, Clock, Sparkles } from 'lucide-react';
+import { BookOpen, LogOut, Settings, Users, Video, Calendar, ChevronLeft, ChevronRight, Menu, X, FileText, ArrowRight, Clock, Sparkles, Camera } from 'lucide-react';
 import logoImg from '../assets/msgate_logo.png';
 import { db } from '../firebase';
 import { collection, query, where, getDocs, getCountFromServer } from 'firebase/firestore';
 import LiveClasses from './teacher/LiveClasses';
+import LiveProctoring from './teacher/LiveProctoring';
 import TeacherQuestionBank from './teacher/TeacherQuestionBank';
 import TestsManager from './TestsManager';
 import TeacherStudents from './teacher/TeacherStudents';
@@ -20,7 +21,7 @@ import RoleSwitcher from './shared/RoleSwitcher';
 import ReportCountBadge, { usePendingReportCount } from './shared/ReportCountBadge';
 
 const VALID_TEACHER_TABS = [
-  'courses', 'live', 'students', 'questions', 'attributes', 'tests', 'analytics', 'reported'
+  'courses', 'live', 'students', 'questions', 'attributes', 'tests', 'proctoring', 'analytics', 'reported'
 ];
 
 const sidebarNavItems = [
@@ -30,6 +31,7 @@ const sidebarNavItems = [
   { key: 'questions', label: 'Question Bank', icon: BookOpen },
   { key: 'attributes', label: 'Attributes', icon: Tag },
   { key: 'tests', label: 'Test Modules', icon: Calendar },
+  { key: 'proctoring', label: 'Live Proctoring', icon: Camera },
   { key: 'analytics', label: 'Analytics', icon: TrendingUp },
   { key: 'reported', label: "Reported Q's", icon: ShieldAlert },
 ];
@@ -539,6 +541,7 @@ export default function TeacherDashboard() {
             onEditQuestion={(qId) => { setEditQuestionId(qId); setActiveTab('questions'); }}
           />
         )}
+        {activeTab === 'proctoring' && <LiveProctoring department={teacherDepartment} teacherName={teacherName} />}
         {/* Same attributes as the admin panel, limited to this teacher's department's subjects/topics */}
         {activeTab === 'attributes' && <AttributesManager lockedDepartment={teacherDepartment || '__none__'} />}
         {activeTab === 'analytics' && <Analytics joinedStudents={joinedStudents} department={teacherDepartment} />}

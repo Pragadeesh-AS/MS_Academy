@@ -7,7 +7,7 @@ import {
   Search, Filter, Check, X, Eye, BookOpen, Book, Clock, Tag, RefreshCw,
   ChevronLeft, ChevronRight, ChevronDown, UserCheck, Database, BarChart2, Megaphone, Sparkles,
   Plus, Trophy, CheckCircle2, TrendingUp, MailPlus, Trash2, Package, Calendar, Edit2, ArrowRight, MoreHorizontal, Bell, ArrowUpRight, Wallet, IndianRupee, Video, ShieldCheck, Menu, Images, MessageSquareText,
-  PhoneCall, Phone, MessageCircle, Star, ScrollText
+  PhoneCall, Phone, MessageCircle, Star, ScrollText, Camera
 } from 'lucide-react';
 import emailjs from '@emailjs/browser';
 import logoImg from '../assets/msgate_logo.png';
@@ -31,6 +31,7 @@ import TeacherDirectory from './admin/TeacherDirectory';
 import FeesTracker from './admin/FeesTracker';
 import SalaryManager from './admin/SalaryManager';
 import TestsManager from './TestsManager';
+import LiveProctoringManager from './admin/LiveProctoringManager';
 import TestFeedbackViewer from './admin/TestFeedbackViewer';
 import ReportedQuestions from './admin/ReportedQuestions';
 import ReportCountBadge, { usePendingReportCount } from './shared/ReportCountBadge';
@@ -79,7 +80,7 @@ const VALID_ADMIN_TABS = [
   'overview', 'teachers', 'typists', 'queries', 'questions', 'premium_questions',
   'logs', 'question_logs',
   'reported', 'notes', 'recordings', 'attributes', 'analytics', 'popup',
-  'courses', 'invoice', 'welcome_letter', 'fees', 'salary', 'ai', 'tests', 'test_feedback',
+  'courses', 'invoice', 'welcome_letter', 'fees', 'salary', 'ai', 'tests', 'proctoring', 'test_feedback',
   'blogs', 'gallery'
 ];
 
@@ -1143,6 +1144,7 @@ export default function AdminDashboard() {
                   { key: 'questions', label: 'Question Bank', icon: Database },
                   { key: 'premium_questions', label: 'Premium Question Bank', icon: Database, isPremium: true },
                   { key: 'tests', label: 'Create Test', icon: Trophy },
+                  { key: 'proctoring', label: 'Exam Proctoring', icon: Camera },
                   { key: 'analytics', label: 'Analytics', icon: BarChart2 },
                   { key: 'reported', label: 'Reported Questions', icon: ShieldCheck, danger: true },
                   { key: 'test_feedback', label: 'Feedback', icon: Star, warning: true },
@@ -1299,6 +1301,15 @@ export default function AdminDashboard() {
               >
                 <Trophy size={20} className={activeTab === 'tests' ? 'text-white' : 'text-slate-400'} />
                 {!isCollapsed && <span>Create Test</span>}
+              </button>
+
+<button
+                onClick={() => setActiveTab('proctoring')}
+                className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'proctoring' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
+                title={isCollapsed ? "Exam Proctoring" : ""}
+              >
+                <Camera size={20} className={activeTab === 'proctoring' ? 'text-white' : 'text-slate-400'} />
+                {!isCollapsed && <span>Exam Proctoring</span>}
               </button>
 
               <button 
@@ -2274,6 +2285,9 @@ export default function AdminDashboard() {
 
         {/* AI Generator Tab */}
         {activeTab === 'ai' && <AIGenerator />}
+
+        {/* Exam Live Proctoring Tab */}
+        {activeTab === 'proctoring' && <LiveProctoringManager />}
 
         {/* Tests Manager Tab */}
         {activeTab === 'tests' && (

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Clock, User, ChevronRight, ChevronLeft, Info, HelpCircle, AlertTriangle, Calculator } from 'lucide-react';
+import { Clock, User, ChevronRight, ChevronLeft, Info, HelpCircle, AlertTriangle, Calculator, Camera, VideoOff, ShieldCheck, ShieldAlert, RefreshCw, Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react';
+import { getLowBandwidthWebcamStream, startStudentProctoringSession } from '../../utils/webrtcProctoring';
 import Draggable from 'react-draggable';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -124,6 +125,138 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
   
   // Instructions State
   const [agreed, setAgreed] = useState(false);
+
+  // --- Ephemeral Free WebRTC Live Proctoring State ---
+  const [localStream, setLocalStream] = useState(null);
+  const localStreamRef = useRef(null);
+  const [cameraStatus, setCameraStatus] = useState('prompt'); // 'prompt' | 'requesting' | 'active' | 'denied'
+  const [cameraError, setCameraError] = useState('');
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const tabSwitchCountRef = useRef(0);
+  const proctoringSessionRef = useRef(null);
+  const [activeInvigilatorWarning, setActiveInvigilatorWarning] = useState(null);
+  const [isPipMinimized, setIsPipMinimized] = useState(false);
+  const verificationVideoRef = useRef(null);
+  const pipVideoRef = useRef(null);
+
+  const startWebcam = async () => {
+    setCameraStatus('requesting');
+    setCameraError('');
+    try {
+      const stream = await getLowBandwidthWebcamStream();
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+      setCameraStatus('active');
+    } catch (err) {
+      console.error('Camera access error:', err);
+      setCameraStatus('denied');
+      setCameraError(err.message || 'Camera permission denied or no webcam detected.');
+    }
+  };
+
+  // Auto trigger webcam on camera_check screen
+  useEffect(() => {
+    if (mode === 'camera_check' && !localStreamRef.current && cameraStatus !== 'requesting') {
+      startWebcam();
+    }
+  }, [mode]);
+
+  // Bind video element refs
+  useEffect(() => {
+    if (verificationVideoRef.current && localStream) {
+      verificationVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream, mode]);
+
+  useEffect(() => {
+    if (pipVideoRef.current && localStream) {
+      pipVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream, mode]);
+
+  // Listen to tab switching / window minimize
+  useEffect(() => {
+    if (mode !== 'taking') return;
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        setTabSwitchCount((prev) => {
+          const next = prev + 1;
+          tabSwitchCountRef.current = next;
+          proctoringSessionRef.current?.recordTabSwitch(next);
+          return next;
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [mode]);
+
+  // Initialize ephemeral student proctoring session in taking mode
+  useEffect(() => {
+    if (mode !== 'taking') return;
+
+    if (pipVideoRef.current && localStreamRef.current) {
+      pipVideoRef.current.srcObject = localStreamRef.current;
+    }
+
+    const authEmail = sessionStorage.getItem('auth_email') || '';
+    const authRegNo = sessionStorage.getItem('auth_regNo') || '';
+    const authName = sessionStorage.getItem('auth_name') || studentName || 'Student';
+
+    const session = startStudentProctoringSession({
+      testId: test.id,
+      testTitle: test.title || 'GATE Examination',
+      department: test.department || 'General',
+      studentId: authEmail || studentName,
+      studentName: authName,
+      studentEmail: authEmail,
+      regNo: authRegNo,
+      totalQuestions: testQuestions.length,
+      localStream: localStreamRef.current,
+      onWarningReceived: (warn) => {
+        setActiveInvigilatorWarning(warn);
+      },
+      onError: (err) => {
+        console.warn('Student proctoring session notice:', err);
+      }
+    });
+
+    proctoringSessionRef.current = session;
+
+    return () => {
+      // Keep running during taking mode
+    };
+  }, [mode]);
+
+  // Pulse answer count updates to proctor
+  useEffect(() => {
+    if (mode !== 'taking') return;
+    const answeredCount = Object.keys(selectedAnswers).filter((k) => isAnswered(selectedAnswers[k])).length;
+    proctoringSessionRef.current?.updateProgress({
+      questionsAnswered: answeredCount,
+      currentIdx
+    });
+  }, [mode, selectedAnswers, currentIdx]);
+
+  // Cleanup on unmount or beforeunload
+  useEffect(() => {
+    const handleUnload = () => {
+      if (proctoringSessionRef.current) {
+        proctoringSessionRef.current.cleanup();
+      }
+      if (localStreamRef.current) {
+        try {
+          localStreamRef.current.getTracks().forEach((t) => t.stop());
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      handleUnload();
+    };
+  }, []);
+
 
   // Taking State
   const [currentIdx, setCurrentIdx] = useState(() => Math.min(savedProgress?.currentIdx || 0, Math.max(testQuestions.length - 1, 0)));
@@ -447,7 +580,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
               </div>
               <p className="text-xs text-gray-600">The timer kept running while you were away.</p>
               <button
-                onClick={() => setMode('taking')}
+                onClick={() => setMode(localStreamRef.current ? 'taking' : 'camera_check')}
                 disabled={timeUp}
                 className="w-full bg-[#3EA9F5] hover:bg-[#2B8CCF] disabled:bg-gray-400 text-white py-2 text-sm font-bold"
               >
@@ -650,7 +783,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     const totalMarks = testQuestions.reduce((sum, q) => sum + (parseFloat(q.mark) || 1), 0);
 
     return (
-      <InstructionsLayout title="Other Important Instructions" onPrev={() => setMode('instructions1')} onReady={() => setMode('taking')} showPrev isReady>
+      <InstructionsLayout title="Other Important Instructions" onPrev={() => setMode('instructions1')} onReady={() => setMode('camera_check')} showPrev isReady>
         <div className="max-w-4xl mx-auto space-y-6 text-sm text-gray-900 pb-10">
           <h2 className="text-center font-bold text-lg mb-4">{test?.subject || 'Paper'}-specific instructions</h2>
           
@@ -724,6 +857,112 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
           <p className="mt-2 text-red-600 font-bold">⚠ Warning: Do not click refresh or back button during the examination.</p>
         </div>
       </InstructionsLayout>
+    );
+  };
+
+
+  const CameraVerificationScreen = () => {
+    return (
+      <div className="fixed inset-0 z-50 bg-[#F4F6F9] flex flex-col font-sans">
+        <Header />
+        <div className="flex-1 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200 max-w-2xl w-full p-6 sm:p-8 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center space-y-1">
+              <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-wider inline-flex items-center gap-1.5">
+                <Camera size={13} /> Step 3: Hardware & Proctoring Check
+              </span>
+              <h2 className="text-2xl font-[900] text-slate-900 tracking-tight">Webcam Proctoring Verification</h2>
+              <p className="text-xs text-slate-500 font-medium">
+                Please verify your webcam before entering fullscreen examination mode.
+              </p>
+            </div>
+
+            {/* Live Camera Preview Box */}
+            <div className="relative aspect-[4/3] max-w-md mx-auto w-full bg-slate-950 rounded-2xl overflow-hidden border-2 border-slate-800 shadow-inner flex items-center justify-center">
+              <video
+                ref={verificationVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${
+                  cameraStatus === 'active' ? 'opacity-100' : 'opacity-0'
+                }`}
+              />
+
+              {cameraStatus === 'requesting' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 gap-3 p-4 text-center">
+                  <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm font-bold">Requesting camera access...</p>
+                  <p className="text-xs text-slate-400">Please click "Allow" when prompted by your browser</p>
+                </div>
+              )}
+
+              {cameraStatus === 'denied' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-rose-400 gap-2 p-6 text-center bg-slate-950">
+                  <VideoOff size={36} className="text-rose-500 mb-1" />
+                  <p className="text-sm font-black text-white">Camera Access Denied or Unavailable</p>
+                  <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+                    {cameraError || 'Webcam access is required for proctored examination. Please click the camera icon in your browser address bar to allow access.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={startWebcam}
+                    className="mt-3 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md"
+                  >
+                    <RefreshCw size={13} /> Retry Camera Access
+                  </button>
+                </div>
+              )}
+
+              {cameraStatus === 'active' && (
+                <div className="absolute top-3 left-3 bg-emerald-600/90 text-white px-2.5 py-1 rounded-full text-[11px] font-black flex items-center gap-1.5 shadow-lg backdrop-blur-md">
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  🟢 Camera Verified & Working
+                </div>
+              )}
+            </div>
+
+            {/* Privacy & Rules Card */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs text-slate-700">
+              <div className="flex items-start gap-2 text-slate-900 font-bold">
+                <ShieldCheck size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                <span>100% Free & Privacy-Protected P2P Invigilation</span>
+              </div>
+              <p className="text-slate-600 leading-relaxed pl-6">
+                This test uses zero-cost ephemeral peer-to-peer WebRTC streaming. <strong>Your live feed is strictly ephemeral and is NEVER recorded, saved, or uploaded to cloud storage.</strong>
+              </p>
+              <div className="border-t border-slate-200/80 pt-2 pl-6 space-y-1 text-slate-600 font-medium">
+                <p>&bull; Keep your face centered and clearly visible throughout the exam.</p>
+                <p>&bull; The exam runs in strict fullscreen mode. Switching tabs or windows will be logged.</p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setMode('instructions2')}
+                className="w-full sm:w-auto px-5 py-2.5 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition order-2 sm:order-1"
+              >
+                &larr; Back to Instructions
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  enterFullscreen();
+                  setMode('taking');
+                }}
+                disabled={cameraStatus !== 'active'}
+                className="w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-slate-400 disabled:to-slate-400 disabled:cursor-not-allowed text-white font-black text-sm rounded-xl transition shadow-lg shadow-indigo-600/20 order-1 sm:order-2 flex items-center justify-center gap-2"
+              >
+                <span>I am Ready &bull; Enter Fullscreen Exam</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="bg-[#5B7184] text-white text-center py-1 text-xs">Version : 17.07.00</div>
+      </div>
     );
   };
 
@@ -1132,8 +1371,88 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
       {mode === 'login' && LoginScreen()}
       {mode === 'instructions1' && Instructions1()}
       {mode === 'instructions2' && Instructions2()}
+      {mode === 'camera_check' && CameraVerificationScreen()}
       {mode === 'resume' && ResumeScreen()}
       {mode === 'taking' && TakingScreen()}
+
+
+        {/* Floating Picture-in-Picture (PIP) Camera Preview */}
+        <div className="fixed bottom-4 right-4 z-40 bg-slate-900/95 backdrop-blur-md border-2 border-emerald-500 rounded-2xl shadow-2xl overflow-hidden w-48 sm:w-56 text-white transition-all select-none">
+          <div className="px-3 py-1.5 bg-slate-950 flex items-center justify-between border-b border-slate-800">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 truncate">
+                Proctor Active (Not Recorded)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsPipMinimized(!isPipMinimized)}
+              className="p-1 text-slate-400 hover:text-white rounded ml-1"
+              title={isPipMinimized ? "Expand Camera" : "Minimize Camera"}
+            >
+              {isPipMinimized ? <Maximize2 size={12} /> : <Minimize2 size={12} />}
+            </button>
+          </div>
+
+          {!isPipMinimized && (
+            <div className="relative aspect-[4/3] bg-black flex items-center justify-center overflow-hidden">
+              <video
+                ref={pipVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover scale-x-[-1]"
+              />
+              {!localStream && (
+                <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">
+                  Connecting camera...
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="px-2.5 py-1.5 bg-slate-950 flex items-center justify-between text-[10px] font-semibold text-slate-400">
+            <span>Live invigilation</span>
+            {tabSwitchCount > 0 ? (
+              <span className="text-rose-400 font-bold flex items-center gap-0.5">
+                <AlertTriangle size={11} /> {tabSwitchCount} switch{tabSwitchCount > 1 ? 'es' : ''}
+              </span>
+            ) : (
+              <span className="text-emerald-400">0 violations</span>
+            )}
+          </div>
+        </div>
+
+        {/* Invigilator Warning Overlay Modal */}
+        {activeInvigilatorWarning && (
+          <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border-4 border-rose-500 rounded-3xl max-w-md w-full p-6 text-center shadow-2xl text-white animate-in zoom-in-95 duration-200">
+              <div className="w-16 h-16 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto mb-4 animate-bounce">
+                <ShieldAlert size={36} />
+              </div>
+              <span className="px-3 py-1 bg-rose-600 text-white rounded-full text-xs font-black uppercase tracking-widest inline-block mb-2">
+                Official Invigilator Notice
+              </span>
+              <h3 className="text-xl font-[900] text-white mb-3">
+                Exam Proctor Warning
+              </h3>
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl text-sm font-medium text-rose-200 mb-5 leading-relaxed">
+                "{activeInvigilatorWarning.message}"
+              </div>
+              <p className="text-xs text-slate-400 mb-6 font-medium">
+                Sent by: <strong className="text-slate-200">{activeInvigilatorWarning.sentBy || 'Invigilator'}</strong>. Please correct your action immediately. Repeated violations will disqualify your submission.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveInvigilatorWarning(null)}
+                className="w-full py-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black rounded-xl text-sm transition-all shadow-lg shadow-rose-600/30 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                I Acknowledge and Comply
+              </button>
+            </div>
+          </div>
+        )}
 
       {/* Draggable Calculator */}
       {showCalculator && mode === 'taking' && (
