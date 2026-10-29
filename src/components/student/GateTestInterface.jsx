@@ -95,6 +95,9 @@ const NatKeypad = ({ value, onChange }) => {
   );
 };
 
+// Helper: is a question response recorded
+const isAnswered = (answer) => Array.isArray(answer) ? answer.length > 0 : (answer !== undefined && answer !== null && answer !== '');
+
 // savedProgress: a test this student started earlier and didn't submit (utils/testProgress) - the
 // exam reopens on a "Resume" screen with their answers. onProgress(progress) is called as they work
 // so it can be saved.
@@ -153,110 +156,6 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
       setCameraError(err.message || 'Camera permission denied or no webcam detected.');
     }
   };
-
-  // Auto trigger webcam on camera_check screen
-  useEffect(() => {
-    if (mode === 'camera_check' && !localStreamRef.current && cameraStatus !== 'requesting') {
-      startWebcam();
-    }
-  }, [mode]);
-
-  // Bind video element refs
-  useEffect(() => {
-    if (verificationVideoRef.current && localStream) {
-      verificationVideoRef.current.srcObject = localStream;
-    }
-  }, [localStream, mode]);
-
-  useEffect(() => {
-    if (pipVideoRef.current && localStream) {
-      pipVideoRef.current.srcObject = localStream;
-    }
-  }, [localStream, mode]);
-
-  // Listen to tab switching / window minimize
-  useEffect(() => {
-    if (mode !== 'taking') return;
-    const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        setTabSwitchCount((prev) => {
-          const next = prev + 1;
-          tabSwitchCountRef.current = next;
-          proctoringSessionRef.current?.recordTabSwitch(next);
-          return next;
-        });
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [mode]);
-
-  // Initialize ephemeral student proctoring session in taking mode
-  useEffect(() => {
-    if (mode !== 'taking') return;
-
-    if (pipVideoRef.current && localStreamRef.current) {
-      pipVideoRef.current.srcObject = localStreamRef.current;
-    }
-
-    const authEmail = sessionStorage.getItem('auth_email') || '';
-    const authRegNo = sessionStorage.getItem('auth_regNo') || '';
-    const authName = sessionStorage.getItem('auth_name') || studentName || 'Student';
-
-    const session = startStudentProctoringSession({
-      testId: test.id,
-      testTitle: test.title || 'GATE Examination',
-      department: test.department || 'General',
-      studentId: authEmail || studentName,
-      studentName: authName,
-      studentEmail: authEmail,
-      regNo: authRegNo,
-      totalQuestions: testQuestions.length,
-      localStream: localStreamRef.current,
-      onWarningReceived: (warn) => {
-        setActiveInvigilatorWarning(warn);
-      },
-      onError: (err) => {
-        console.warn('Student proctoring session notice:', err);
-      }
-    });
-
-    proctoringSessionRef.current = session;
-
-    return () => {
-      // Keep running during taking mode
-    };
-  }, [mode]);
-
-  // Pulse answer count updates to proctor
-  useEffect(() => {
-    if (mode !== 'taking') return;
-    const answeredCount = Object.keys(selectedAnswers).filter((k) => isAnswered(selectedAnswers[k])).length;
-    proctoringSessionRef.current?.updateProgress({
-      questionsAnswered: answeredCount,
-      currentIdx
-    });
-  }, [mode, selectedAnswers, currentIdx]);
-
-  // Cleanup on unmount or beforeunload
-  useEffect(() => {
-    const handleUnload = () => {
-      if (proctoringSessionRef.current) {
-        proctoringSessionRef.current.cleanup();
-      }
-      if (localStreamRef.current) {
-        try {
-          localStreamRef.current.getTracks().forEach((t) => t.stop());
-        } catch (e) {}
-      }
-    };
-    window.addEventListener('beforeunload', handleUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleUnload);
-      handleUnload();
-    };
-  }, []);
-
 
   // Taking State
   const [currentIdx, setCurrentIdx] = useState(() => Math.min(savedProgress?.currentIdx || 0, Math.max(testQuestions.length - 1, 0)));
@@ -437,6 +336,111 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     if (!flagged.includes(qId)) setFlagged([...flagged, qId]);
     goToNextQuestion();
   };
+
+  
+  // --- Ephemeral Live Proctoring Effects ---
+  // Auto trigger webcam on camera_check screen
+  useEffect(() => {
+    if (mode === 'camera_check' && !localStreamRef.current && cameraStatus !== 'requesting') {
+      startWebcam();
+    }
+  }, [mode]);
+
+  // Bind video element refs
+  useEffect(() => {
+    if (verificationVideoRef.current && localStream) {
+      verificationVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream, mode]);
+
+  useEffect(() => {
+    if (pipVideoRef.current && localStream) {
+      pipVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream, mode]);
+
+  // Listen to tab switching / window minimize
+  useEffect(() => {
+    if (mode !== 'taking') return;
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        setTabSwitchCount((prev) => {
+          const next = prev + 1;
+          tabSwitchCountRef.current = next;
+          proctoringSessionRef.current?.recordTabSwitch(next);
+          return next;
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [mode]);
+
+  // Initialize ephemeral student proctoring session in taking mode
+  useEffect(() => {
+    if (mode !== 'taking') return;
+
+    if (pipVideoRef.current && localStreamRef.current) {
+      pipVideoRef.current.srcObject = localStreamRef.current;
+    }
+
+    const authEmail = sessionStorage.getItem('auth_email') || '';
+    const authRegNo = sessionStorage.getItem('auth_regNo') || '';
+    const authName = sessionStorage.getItem('auth_name') || studentName || 'Student';
+
+    const session = startStudentProctoringSession({
+      testId: test.id,
+      testTitle: test.title || 'GATE Examination',
+      department: test.department || 'General',
+      studentId: authEmail || studentName,
+      studentName: authName,
+      studentEmail: authEmail,
+      regNo: authRegNo,
+      totalQuestions: testQuestions.length,
+      localStream: localStreamRef.current,
+      onWarningReceived: (warn) => {
+        setActiveInvigilatorWarning(warn);
+      },
+      onError: (err) => {
+        console.warn('Student proctoring session notice:', err);
+      }
+    });
+
+    proctoringSessionRef.current = session;
+
+    return () => {
+      // Keep running during taking mode
+    };
+  }, [mode]);
+
+  // Pulse answer count updates to proctor
+  useEffect(() => {
+    if (mode !== 'taking') return;
+    const answeredCount = Object.keys(selectedAnswers).filter((k) => isAnswered(selectedAnswers[k])).length;
+    proctoringSessionRef.current?.updateProgress({
+      questionsAnswered: answeredCount,
+      currentIdx
+    });
+  }, [mode, selectedAnswers, currentIdx]);
+
+  // Cleanup on unmount or beforeunload
+  useEffect(() => {
+    const handleUnload = () => {
+      if (proctoringSessionRef.current) {
+        proctoringSessionRef.current.cleanup();
+      }
+      if (localStreamRef.current) {
+        try {
+          localStreamRef.current.getTracks().forEach((t) => t.stop());
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      handleUnload();
+    };
+  }, []);
 
   const handleSaveNext = () => {
     const qId = testQuestions[currentIdx].id;
