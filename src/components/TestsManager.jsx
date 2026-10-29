@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where, Timestamp, documentId } from 'firebase/firestore';
-import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2, FolderOpen, ArrowLeft, Star, Image as ImageIcon } from 'lucide-react';
+import { Plus, Trash2, Camera, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2, FolderOpen, ArrowLeft, Star, Image as ImageIcon } from 'lucide-react';
 import { hasDiagram } from '../utils/questionLogger';
 
 import { isNumericalQuestion, getQuestionCategory } from '../utils/questionCategory';
@@ -124,7 +124,8 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [theoryCount, setTheoryCount] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [closesAt, setClosesAt] = useState(''); // optional - no new starts after this (see utils/testSchedule)
-  const [goLiveNow, setGoLiveNow] = useState(false); // new tests only: opens the moment it is saved
+  const [goLiveNow, setGoLiveNow] = useState(false);
+  const [enableProctoring, setEnableProctoring] = useState(false); // new tests only: opens the moment it is saved
   const [view, setView] = useState(initialView || 'templates'); // 'templates' | 'schedule' (calendar)
 
   useEffect(() => {
@@ -774,6 +775,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
         pct: Object.fromEntries(TYPE_KEYS.map(k => [k, parseFloat(typeSplit.pct?.[k]) || 0])),
         count: Object.fromEntries(TYPE_KEYS.map(k => [k, parseInt(typeSplit.count?.[k]) || 0]))
       } : null,
+      enableProctoring: !!enableProctoring,
       ...(isTeacher ? { bundleId: '', bundleIds: [] } : accessFields(bundleAccess))
     };
 
@@ -829,6 +831,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setTotal2Mark(35);
     setNumericalCount('');
     setTheoryCount('');
+    setEnableProctoring(false);
     setScheduledTime('');
     setClosesAt('');
     setGoLiveNow(false);
@@ -861,6 +864,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setTotal2Mark(test.total2Mark ?? 35);
     setNumericalCount(test.numericalCount ?? '');
     setTheoryCount(test.theoryCount ?? '');
+    setEnableProctoring(!!test.enableProctoring);
     setScheduledTime(test.scheduledTime || '');
     setClosesAt(test.closesAt || '');
     setGoLiveNow(false);
@@ -1607,6 +1611,35 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                       <BundleAccessPicker bundles={bundles} value={bundleAccess} onChange={setBundleAccess} allowFree />
                     </div>
                   )}
+
+                  {/* Camera Proctoring / Live Exam Monitoring Toggle */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                        enableProctoring ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' : 'bg-slate-200 text-slate-500'
+                      }`}>
+                        <Camera size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-[13px] font-[800] text-slate-800">
+                          Webcam Proctoring & Live Exam Monitoring
+                        </h4>
+                        <p className="text-[11px] font-medium text-slate-500 mt-0.5 max-w-md">
+                          Require students to verify camera access and stream live webcam video to the Exam Monitoring dashboard. If turned off, students can take the exam normally without camera access.
+                        </p>
+                      </div>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={!!enableProctoring}
+                        onChange={(e) => setEnableProctoring(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
 
                   {/* Total 1-Mark and 2-Mark questions count */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

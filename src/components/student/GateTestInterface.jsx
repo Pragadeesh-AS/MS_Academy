@@ -102,6 +102,7 @@ const isAnswered = (answer) => Array.isArray(answer) ? answer.length > 0 : (answ
 // exam reopens on a "Resume" screen with their answers. onProgress(progress) is called as they work
 // so it can be saved.
 export default function GateTestInterface({ test, testQuestions: rawTestQuestions, onSubmit, onCancel, studentName, savedProgress = null, onProgress }) {
+  const isProctoringEnabled = !!(test?.enableProctoring || test?.requireCamera);
   // Standard order (attempts are saved in it, so every student's Q5 is the same question in
   // analytics) and this student's own shuffled order, which is what they see. A resumed test keeps
   // the order it was started with.
@@ -342,10 +343,11 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
   // --- Ephemeral Live Proctoring Effects ---
   // Auto trigger webcam on camera_check screen
   useEffect(() => {
+    if (!isProctoringEnabled) return;
     if (mode === 'camera_check' && !localStreamRef.current && cameraStatus !== 'requesting') {
       startWebcam();
     }
-  }, [mode]);
+  }, [mode, isProctoringEnabled]);
 
   // Bind video element refs
   useEffect(() => {
@@ -368,18 +370,20 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
         setTabSwitchCount((prev) => {
           const next = prev + 1;
           tabSwitchCountRef.current = next;
-          proctoringSessionRef.current?.recordTabSwitch(next);
+          if (isProctoringEnabled) {
+            proctoringSessionRef.current?.recordTabSwitch(next);
+          }
           return next;
         });
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [mode]);
+  }, [mode, isProctoringEnabled]);
 
   // Initialize ephemeral student proctoring session in taking mode
   useEffect(() => {
-    if (mode !== 'taking') return;
+    if (mode !== 'taking' || !isProctoringEnabled) return;
 
     if (pipVideoRef.current && localStreamRef.current) {
       pipVideoRef.current.srcObject = localStreamRef.current;
@@ -419,13 +423,13 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
 
   // Pulse answer count updates to proctor
   useEffect(() => {
-    if (mode !== 'taking') return;
+    if (mode !== 'taking' || !isProctoringEnabled) return;
     const answeredCount = Object.keys(selectedAnswers).filter((k) => isAnswered(selectedAnswers[k])).length;
     proctoringSessionRef.current?.updateProgress({
       questionsAnswered: answeredCount,
       currentIdx
     });
-  }, [mode, selectedAnswers, currentIdx]);
+  }, [mode, selectedAnswers, currentIdx, isProctoringEnabled]);
 
   // Cleanup on unmount or beforeunload
   useEffect(() => {
@@ -588,7 +592,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
               </div>
               <p className="text-xs text-gray-600">The timer kept running while you were away.</p>
               <button
-                onClick={() => setMode(localStreamRef.current ? 'taking' : 'camera_check')}
+                onClick={() => setMode(isProctoringEnabled && !localStreamRef.current ? 'camera_check' : 'taking')}
                 disabled={timeUp}
                 className="w-full bg-[#3EA9F5] hover:bg-[#2B8CCF] disabled:bg-gray-400 text-white py-2 text-sm font-bold"
               >
@@ -791,7 +795,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     const totalMarks = testQuestions.reduce((sum, q) => sum + (parseFloat(q.mark) || 1), 0);
 
     return (
-      <InstructionsLayout title="Other Important Instructions" onPrev={() => setMode('instructions1')} onReady={() => setMode('camera_check')} showPrev isReady>
+      <InstructionsLayout title="Other Important Instructions" onPrev={() => setMode('instructions1')} onReady={() => setMode(isProctoringEnabled ? 'camera_check' : 'taking')} showPrev isReady>
         <div className="max-w-4xl mx-auto space-y-6 text-sm text-gray-900 pb-10">
           <h2 className="text-center font-bold text-lg mb-4">{test?.subject || 'Paper'}-specific instructions</h2>
           
@@ -856,11 +860,19 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
           </div>
 
           {/* Fullscreen Notice */}
-          <div className="border border-orange-300 bg-orange-50 rounded p-4">
-            <p className="font-bold text-orange-800 mb-1">⚠ Fullscreen Mode Required</p>
-            <p className="text-orange-700">This examination must be taken in <strong>fullscreen mode</strong>. The browser will automatically enter fullscreen when you click "I am ready to begin".</p>
-            <p className="text-orange-700 mt-1">Exiting fullscreen will generate a warning. <strong>After 3 warnings, the exam will be automatically submitted.</strong></p>
-          </div>
+          {isProctoringEnabled ? (
+            <div className="border border-indigo-300 bg-indigo-50/60 rounded p-4 space-y-1.5">
+              <p className="font-bold text-indigo-900 flex items-center gap-1.5"><Camera size={16} /> ⚠ Webcam Proctoring & Fullscreen Required</p>
+              <p className="text-indigo-800 text-xs">This examination requires active <strong>live webcam monitoring</strong> and fullscreen mode. You will be prompted to verify your camera feed before the test starts.</p>
+              <p className="text-indigo-700 text-xs">Exiting fullscreen or switching tabs will be logged and flagged to exam invigilators.</p>
+            </div>
+          ) : (
+            <div className="border border-orange-300 bg-orange-50 rounded p-4">
+              <p className="font-bold text-orange-800 mb-1">⚠ Fullscreen Mode Required</p>
+              <p className="text-orange-700">This examination must be taken in <strong>fullscreen mode</strong>. The browser will automatically enter fullscreen when you click "I am ready to begin".</p>
+              <p className="text-orange-700 mt-1">Exiting fullscreen will generate a warning. <strong>After 3 warnings, the exam will be automatically submitted.</strong></p>
+            </div>
+          )}
 
           <p className="mt-2 text-red-600 font-bold">⚠ Warning: Do not click refresh or back button during the examination.</p>
         </div>
@@ -1385,55 +1397,57 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
 
 
         {/* Floating Picture-in-Picture (PIP) Camera Preview */}
-        <div className="fixed bottom-4 right-4 z-40 bg-slate-900/95 backdrop-blur-md border-2 border-emerald-500 rounded-2xl shadow-2xl overflow-hidden w-48 sm:w-56 text-white transition-all select-none">
-          <div className="px-3 py-1.5 bg-slate-950 flex items-center justify-between border-b border-slate-800">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 truncate">
-                Proctor Active (Not Recorded)
-              </span>
+        {isProctoringEnabled && mode === 'taking' && (
+          <div className="fixed bottom-4 right-4 z-40 bg-slate-900/95 backdrop-blur-md border-2 border-emerald-500 rounded-2xl shadow-2xl overflow-hidden w-48 sm:w-56 text-white transition-all select-none">
+            <div className="px-3 py-1.5 bg-slate-950 flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 truncate">
+                  Proctor Active (Not Recorded)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPipMinimized(!isPipMinimized)}
+                className="p-1 text-slate-400 hover:text-white rounded ml-1"
+                title={isPipMinimized ? "Expand Camera" : "Minimize Camera"}
+              >
+                {isPipMinimized ? <Maximize2 size={12} /> : <Minimize2 size={12} />}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsPipMinimized(!isPipMinimized)}
-              className="p-1 text-slate-400 hover:text-white rounded ml-1"
-              title={isPipMinimized ? "Expand Camera" : "Minimize Camera"}
-            >
-              {isPipMinimized ? <Maximize2 size={12} /> : <Minimize2 size={12} />}
-            </button>
-          </div>
 
-          {!isPipMinimized && (
-            <div className="relative aspect-[4/3] bg-black flex items-center justify-center overflow-hidden">
-              <video
-                ref={pipVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover scale-x-[-1]"
-              />
-              {!localStream && (
-                <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">
-                  Connecting camera...
-                </div>
+            {!isPipMinimized && (
+              <div className="relative aspect-[4/3] bg-black flex items-center justify-center overflow-hidden">
+                <video
+                  ref={pipVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover scale-x-[-1]"
+                />
+                {!localStream && (
+                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">
+                    Connecting camera...
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="px-2.5 py-1.5 bg-slate-950 flex items-center justify-between text-[10px] font-semibold text-slate-400">
+              <span>Live invigilation</span>
+              {tabSwitchCount > 0 ? (
+                <span className="text-rose-400 font-bold flex items-center gap-0.5">
+                  <AlertTriangle size={11} /> {tabSwitchCount} switch{tabSwitchCount > 1 ? 'es' : ''}
+                </span>
+              ) : (
+                <span className="text-emerald-400">0 violations</span>
               )}
             </div>
-          )}
-
-          <div className="px-2.5 py-1.5 bg-slate-950 flex items-center justify-between text-[10px] font-semibold text-slate-400">
-            <span>Live invigilation</span>
-            {tabSwitchCount > 0 ? (
-              <span className="text-rose-400 font-bold flex items-center gap-0.5">
-                <AlertTriangle size={11} /> {tabSwitchCount} switch{tabSwitchCount > 1 ? 'es' : ''}
-              </span>
-            ) : (
-              <span className="text-emerald-400">0 violations</span>
-            )}
           </div>
-        </div>
+        )}
 
         {/* Invigilator Warning Overlay Modal */}
-        {activeInvigilatorWarning && (
+        {isProctoringEnabled && activeInvigilatorWarning && mode === 'taking' && (
           <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-slate-900 border-4 border-rose-500 rounded-3xl max-w-md w-full p-6 text-center shadow-2xl text-white animate-in zoom-in-95 duration-200">
               <div className="w-16 h-16 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center mx-auto mb-4 animate-bounce">

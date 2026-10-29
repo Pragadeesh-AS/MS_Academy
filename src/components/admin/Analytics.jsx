@@ -782,121 +782,136 @@ export default function Analytics({ joinedStudents = [], department = null, stud
         onReviewSolutions={onReviewSolutions}
         solutions={(
           <div className="flex flex-col">
-            {/* Question Timing & Symbol Reference Guide */}
-            <div className="mb-6 bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
-              <div className="px-5 py-3.5 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between gap-3">
+            {/* Timing Benchmarks & Symbol Reference Guide */}
+            <div className="mb-6 bg-slate-50/80 border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+              <div className="px-5 py-3 border-b border-slate-200/70 flex items-center justify-between gap-3 bg-white/70">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-                    <HelpCircle size={15} />
+                  <div className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                    <HelpCircle size={14} />
                   </div>
                   <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <span className="text-[13.5px] font-bold text-slate-800">Question Guide &amp; Timing Reference</span>
-                    <span className="text-[11.5px] font-medium text-slate-400 hidden sm:inline">
-                      • Topper benchmark, class average time &amp; border definitions
+                    <span className="text-[13px] font-bold text-slate-800">Timing Benchmarks &amp; Symbol Guide</span>
+                    <span className="text-[11px] font-medium text-slate-400 hidden sm:inline">
+                      • Topper comparison, average speed &amp; status indicators
                     </span>
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowLegend(prev => !prev)}
-                  className="text-[12px] font-semibold text-slate-500 hover:text-indigo-600 px-2.5 py-1 rounded-md hover:bg-slate-100 transition-colors shrink-0"
+                  className="text-[11.5px] font-semibold text-slate-600 hover:text-indigo-600 px-2.5 py-1 rounded-md hover:bg-slate-100 transition-colors shrink-0"
                 >
-                  {showLegend ? 'Hide' : 'Show Guide'}
+                  {showLegend ? 'Hide Guide' : 'Show Guide'}
                 </button>
               </div>
 
               {showLegend && (
-                <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs bg-white">
-                  {/* 1. Topper Benchmark & Border Colors */}
-                  <div className="rounded-xl border border-slate-200/70 bg-slate-50/50 p-3.5 flex flex-col justify-between gap-2.5">
+                <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
+                  {/* 1. Topper Result & Border Meaning */}
+                  <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 flex flex-col justify-between shadow-xs">
                     <div>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[11px]">
-                          <Crown size={12} className="text-amber-500" /> Topper
-                        </span>
-                        <span className="font-bold text-slate-700 text-[12.5px]">Topper Benchmark</span>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Crown size={13} className="text-amber-500" />
+                        <span className="font-bold text-slate-800 text-[12px]">Topper Border Indicators</span>
                       </div>
-                      <p className="text-slate-500 text-[11.5px] leading-relaxed">
-                        Time recorded by the test's <strong>Rank 1 Topper</strong>. The border color reveals if the topper answered correctly:
+                      <p className="text-slate-500 text-[11px] leading-relaxed mb-3">
+                        The Rank 1 Topper badge uses colored borders to indicate their result on each question:
                       </p>
                     </div>
-                    <div className="space-y-1.5 pt-2 border-t border-slate-200/60">
-                      <div className="flex items-center gap-2 text-[11.5px]">
-                        <span className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-emerald-50 shrink-0" />
-                        <span className="font-semibold text-emerald-700">Green Border:</span>
-                        <span className="text-slate-600">Topper was <strong>Correct</strong></span>
+                    <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700">
+                          <span className="w-2.5 h-2.5 rounded-full border-2 border-emerald-500 bg-emerald-50" />
+                          Green Border
+                        </span>
+                        <span className="text-slate-600 font-medium">Topper was Correct</span>
                       </div>
-                      <div className="flex items-center gap-2 text-[11.5px]">
-                        <span className="w-2.5 h-2.5 rounded-full border-2 border-rose-500 bg-rose-50 shrink-0" />
-                        <span className="font-semibold text-rose-700">Red Border:</span>
-                        <span className="text-slate-600">Topper was <strong>Wrong</strong></span>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-rose-700">
+                          <span className="w-2.5 h-2.5 rounded-full border-2 border-rose-500 bg-rose-50" />
+                          Red Border
+                        </span>
+                        <span className="text-slate-600 font-medium">Topper was Wrong</span>
                       </div>
-                      <div className="flex items-center gap-2 text-[11.5px]">
-                        <span className="w-2.5 h-2.5 rounded-full border-2 border-slate-300 bg-slate-50 shrink-0" />
-                        <span className="font-semibold text-slate-500">Gray Border:</span>
-                        <span className="text-slate-600">Topper <strong>Unattempted</strong></span>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-slate-500">
+                          <span className="w-2.5 h-2.5 rounded-full border-2 border-slate-300 bg-slate-50" />
+                          Gray Border
+                        </span>
+                        <span className="text-slate-600 font-medium">Topper Skipped</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* 2. Time Comparisons */}
-                  <div className="rounded-xl border border-slate-200/70 bg-slate-50/50 p-3.5 flex flex-col justify-between gap-2.5">
+                  {/* 2. Speed & Timing Comparisons */}
+                  <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 flex flex-col justify-between shadow-xs">
                     <div>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-[11px]">
-                          <Clock size={11} className="text-indigo-500" /> Timings
-                        </span>
-                        <span className="font-bold text-slate-700 text-[12.5px]">Speed &amp; Pacing</span>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <Clock size={13} className="text-indigo-500" />
+                        <span className="font-bold text-slate-800 text-[12px]">Question Pacing</span>
                       </div>
-                      <p className="text-slate-500 text-[11.5px] leading-relaxed">
-                        Compare your pacing on each question against the class average and the test topper:
+                      <p className="text-slate-500 text-[11px] leading-relaxed mb-3">
+                        Benchmark your speed against the batch average and the top-ranking candidate:
                       </p>
                     </div>
-                    <div className="space-y-2 pt-2 border-t border-slate-200/60">
-                      <div className="flex items-center gap-2 text-[11.5px]">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 font-bold text-[10.5px] shrink-0">
+                    <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 font-bold text-slate-700 text-[10px]">
                           <Clock size={10} className="text-blue-500" /> You
                         </span>
-                        <span className="text-slate-600">Time you spent on this question</span>
+                        <span className="text-slate-600 font-medium">Your time spent on this question</span>
                       </div>
-                      <div className="flex items-center gap-2 text-[11.5px]">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-[10.5px] shrink-0">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 font-bold text-indigo-700 text-[10px]">
                           <Clock size={10} className="text-indigo-500" /> Avg
                         </span>
-                        <span className="text-slate-600">Class average across all test attempts</span>
+                        <span className="text-slate-600 font-medium">Class average across all test takers</span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 font-bold text-amber-800 text-[10px]">
+                          <Crown size={10} className="text-amber-500" /> Topper
+                        </span>
+                        <span className="text-slate-600 font-medium">Time achieved by Rank 1 Topper</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* 3. Status & Question Types */}
-                  <div className="rounded-xl border border-slate-200/70 bg-slate-50/50 p-3.5 flex flex-col justify-between gap-2.5">
+                  {/* 3. Evaluation & Marking Format */}
+                  <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 flex flex-col justify-between shadow-xs">
                     <div>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-bold text-[11px]">
-                          <CheckCircle2 size={11} className="text-emerald-500" /> Evaluation
-                        </span>
-                        <span className="font-bold text-slate-700 text-[12.5px]">Scoring &amp; Format</span>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <CheckCircle2 size={13} className="text-emerald-500" />
+                        <span className="font-bold text-slate-800 text-[12px]">Scoring &amp; Question Format</span>
                       </div>
-                      <div className="space-y-1 text-[11.5px] text-slate-600 pt-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                          <span className="font-semibold text-emerald-700">Correct:</span> Full marks awarded
+                      <div className="space-y-1 text-[11px] text-slate-600 mb-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-emerald-700 flex items-center gap-1">
+                            <CheckCircle2 size={12} className="text-emerald-500" /> Correct
+                          </span>
+                          <span>Full marks awarded</span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <XCircle size={13} className="text-rose-500 shrink-0" />
-                          <span className="font-semibold text-rose-700">Wrong:</span> Negative deduction (MCQ)
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-rose-700 flex items-center gap-1">
+                            <XCircle size={12} className="text-rose-500" /> Wrong
+                          </span>
+                          <span>Negative marks (MCQ only)</span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <MinusCircle size={13} className="text-slate-400 shrink-0" />
-                          <span className="font-semibold text-slate-500">Unattempted:</span> 0 marks change
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-slate-500 flex items-center gap-1">
+                            <MinusCircle size={12} className="text-slate-400" /> Unattempted
+                          </span>
+                          <span>0 marks change</span>
                         </div>
                       </div>
                     </div>
-                    <div className="pt-2 border-t border-slate-200/60 flex items-center gap-1.5 flex-wrap text-[11px]">
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
                       <span className="text-slate-400 font-medium">Types:</span>
-                      <span className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700 font-mono font-bold text-[10px]">MCQ</span>
-                      <span className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700 font-mono font-bold text-[10px]">MSQ</span>
-                      <span className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700 font-mono font-bold text-[10px]">NAT</span>
-                      <span className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-700 font-mono font-bold text-[10px]">MATCH</span>
+                      <div className="flex items-center gap-1 font-mono font-bold text-[9.5px]">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">MCQ</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">MSQ</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">NAT</span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">MATCH</span>
+                      </div>
                     </div>
                   </div>
                 </div>
