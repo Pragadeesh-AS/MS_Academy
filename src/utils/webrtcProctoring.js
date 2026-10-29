@@ -92,6 +92,7 @@ export function startStudentProctoringSession({
   const peerConnections = new Map(); // viewerId -> RTCPeerConnection
   let unsubViewers = null;
   let unsubStudentDoc = null;
+  let heartbeatTimer = null;
   let isCleanedUp = false;
 
   const init = async () => {
@@ -104,7 +105,8 @@ export function startStudentProctoringSession({
         lastActiveAt: serverTimestamp()
       }, { merge: true });
 
-      // 2. Register student session
+      // 2. Register student session with explicit initial ping
+      const initialPing = Date.now();
       await setDoc(studentDocRef, {
         studentId: sanitizedId,
         studentName: studentName || 'Student',
@@ -116,12 +118,30 @@ export function startStudentProctoringSession({
         cameraStatus: 'active',
         joinedAt: serverTimestamp(),
         lastSeen: serverTimestamp(),
+        lastPingMillis: initialPing,
         tabSwitchCount: 0,
         questionsAnswered: 0,
         totalQuestions: totalQuestions || 0,
         warningMessage: null,
         warningTimestamp: null
       }, { merge: true });
+
+      // 2b. Regular liveness heartbeat (every 5 seconds)
+      heartbeatTimer = setInterval(async () => {
+        if (isCleanedUp) {
+          if (heartbeatTimer) clearInterval(heartbeatTimer);
+          return;
+        }
+        try {
+          await updateDoc(studentDocRef, {
+            lastPingMillis: Date.now(),
+            cameraStatus: 'active'
+          });
+        } catch (e) {
+          // If document was removed or session ended
+          if (isCleanedUp && heartbeatTimer) clearInterval(heartbeatTimer);
+        }
+      }, 5000);
 
       // 3. Listen for invigilator warning updates
       let lastDispatchedWarningId = null;
@@ -231,7 +251,8 @@ export function startStudentProctoringSession({
         await updateDoc(studentDocRef, {
           questionsAnswered: typeof questionsAnswered === 'number' ? questionsAnswered : 0,
           currentQuestionIndex: typeof currentIdx === 'number' ? currentIdx : 0,
-          lastSeen: serverTimestamp()
+          lastSeen: serverTimestamp(),
+          lastPingMillis: Date.now()
         });
       } catch (e) {
         // Silent fail for non-critical progress pulse
@@ -242,7 +263,8 @@ export function startStudentProctoringSession({
       try {
         await updateDoc(studentDocRef, {
           tabSwitchCount: newCount,
-          lastTabSwitchAt: serverTimestamp()
+          lastTabSwitchAt: serverTimestamp(),
+          lastPingMillis: Date.now()
         });
       } catch (e) {
         console.warn('Failed to record tab switch:', e);
@@ -254,7 +276,8 @@ export function startStudentProctoringSession({
         await updateDoc(studentDocRef, {
           warningAcknowledged: true,
           warningAcknowledgedAt: serverTimestamp(),
-          warningMessage: null
+          warningMessage: null,
+          lastPingMillis: Date.now()
         });
       } catch (e) {
         console.warn('Failed to update warning acknowledgment:', e);
@@ -262,6 +285,10 @@ export function startStudentProctoringSession({
     },
     cleanup: async () => {
       isCleanedUp = true;
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
       if (unsubViewers) unsubViewers();
       if (unsubStudentDoc) unsubStudentDoc();
 
@@ -278,14 +305,13 @@ export function startStudentProctoringSession({
         } catch (e) {}
       }
 
-      // Remove or mark student session as ended
+      // Mark session as ended and delete student doc immediately
+      try {
+        await updateDoc(studentDocRef, { cameraStatus: 'left', endedAt: serverTimestamp() });
+      } catch (err) {}
       try {
         await deleteDoc(studentDocRef);
-      } catch (e) {
-        try {
-          await updateDoc(studentDocRef, { cameraStatus: 'ended', endedAt: serverTimestamp() });
-        } catch (err) {}
-      }
+      } catch (e) {}
     }
   };
 }
@@ -308,13 +334,24 @@ export function connectToStudentLiveFeed({
   let unsubDoc = null;
   let hasSetRemote = false;
   let isCleanedUp = false;
+  let answerTimeout = null;
 
   const start = async () => {
     try {
       pc = new RTCPeerConnection(RTC_CONFIGURATION);
 
       pc.onconnectionstatechange = () => {
-        onConnectionStateChange?.(pc.connectionState);
+        if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+          onConnectionStateChange?.('disconnected');
+        } else {
+          onConnectionStateChange?.(pc.connectionState);
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+          onConnectionStateChange?.('disconnected');
+        }
       };
 
       pc.ontrack = (event) => {
@@ -345,12 +382,20 @@ export function connectToStudentLiveFeed({
         createdAt: serverTimestamp()
       });
 
+      // Handshake timeout: if student tab is closed / unresponsive, mark disconnected after 7 seconds
+      answerTimeout = setTimeout(() => {
+        if (!hasSetRemote && !isCleanedUp) {
+          onConnectionStateChange?.('disconnected');
+        }
+      }, 7000);
+
       // Listen for answer
       unsubDoc = onSnapshot(viewerDocRef, async (snap) => {
         if (!snap.exists() || isCleanedUp) return;
         const data = snap.data();
         if (data?.answer && !hasSetRemote && pc && pc.signalingState !== 'closed') {
           hasSetRemote = true;
+          if (answerTimeout) clearTimeout(answerTimeout);
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
           } catch (err) {
@@ -371,6 +416,7 @@ export function connectToStudentLiveFeed({
 
   return () => {
     isCleanedUp = true;
+    if (answerTimeout) clearTimeout(answerTimeout);
     if (unsubDoc) unsubDoc();
     if (pc) {
       try { pc.close(); } catch (e) {}

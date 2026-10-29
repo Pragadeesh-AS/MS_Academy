@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Video, Eye, AlertTriangle, ShieldAlert, ShieldCheck, Search, 
   ChevronLeft, ChevronRight, Maximize2, X, RefreshCw, Send, CheckCircle2, 
-  Clock, BookOpen, User, Sparkles, Filter, ChevronDown, Layers
+  Clock, BookOpen, User, Sparkles, Filter, ChevronDown, Layers, WifiOff
 } from 'lucide-react';
 import { db } from '../../firebase';
 import { 
@@ -17,7 +17,7 @@ import { paletteFor, NEUTRAL } from '../../utils/departmentColors';
  * Individual Student Live Video Tile
  * Direct WebRTC connection to student's webcam
  */
-function StudentProctorTile({ testId, student, onSpotlight, onWarn }) {
+function StudentProctorTile({ testId, student, onSpotlight, onWarn, onDismiss }) {
   const videoRef = useRef(null);
   const [stream, setStream] = useState(null);
   const [connectionState, setConnectionState] = useState('connecting');
@@ -60,9 +60,11 @@ function StudentProctorTile({ testId, student, onSpotlight, onWarn }) {
     ? Math.round(((student.questionsAnswered || 0) / student.totalQuestions) * 100) 
     : 0;
 
+  const isDisconnected = connectionState === 'disconnected' || connectionState === 'failed' || student.cameraStatus === 'left' || student.cameraStatus === 'ended';
+
   return (
     <div className={`relative bg-slate-900 rounded-2xl overflow-hidden border transition-all duration-300 shadow-md group ${
-      hasTabSwitches ? 'border-amber-500/80 shadow-amber-500/10' : 'border-slate-800 hover:border-slate-700'
+      isDisconnected ? 'border-rose-900/50 opacity-80' : hasTabSwitches ? 'border-amber-500/80 shadow-amber-500/10' : 'border-slate-800 hover:border-slate-700'
     }`}>
       {/* Video Stream Container (Aspect 4:3) */}
       <div className="relative aspect-[4/3] w-full bg-slate-950 flex items-center justify-center overflow-hidden">
@@ -83,6 +85,21 @@ function StudentProctorTile({ testId, student, onSpotlight, onWarn }) {
                 <span className="text-xs font-bold">Camera Blocked</span>
                 <span className="text-[10px] text-slate-500">Student denied access</span>
               </div>
+            ) : isDisconnected ? (
+              <div className="flex flex-col items-center text-rose-400 gap-1.5 p-3 text-center">
+                <div className="w-10 h-10 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                  <WifiOff size={20} />
+                </div>
+                <span className="text-xs font-bold text-rose-400">Student Disconnected</span>
+                <span className="text-[10px] text-slate-400">Tab closed or network lost</span>
+                <button
+                  type="button"
+                  onClick={() => onDismiss?.(testId, student.studentId || student.id)}
+                  className="mt-2 text-[10px] font-bold px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors pointer-events-auto"
+                >
+                  Dismiss Session
+                </button>
+              </div>
             ) : (
               <div className="flex flex-col items-center text-slate-400 gap-2">
                 <div className="w-8 h-8 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
@@ -98,12 +115,12 @@ function StudentProctorTile({ testId, student, onSpotlight, onWarn }) {
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-md ${
             stream 
               ? 'bg-emerald-500/90 text-white shadow-sm' 
-              : connectionState === 'connecting'
-              ? 'bg-amber-500/80 text-white'
-              : 'bg-rose-500/80 text-white'
+              : isDisconnected
+              ? 'bg-rose-500/80 text-white'
+              : 'bg-amber-500/80 text-white'
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${stream ? 'bg-white animate-pulse' : 'bg-slate-200'}`} />
-            {stream ? 'LIVE' : connectionState}
+            {stream ? 'LIVE' : isDisconnected ? 'OFFLINE' : 'CONNECTING'}
           </span>
 
           {hasTabSwitches && (
@@ -205,14 +222,46 @@ export default function LiveProctoringManager() {
     return () => unsub();
   }, []);
 
-  // 2. Subscribe to students for each active test
+  // Dismiss / purge a disconnected student session
+  const handleDismissStudent = (tId, sId) => {
+    if (!tId || !sId) return;
+    deleteDoc(doc(db, 'active_proctoring', tId, 'students', sId)).catch(() => {});
+    setTestStudentsMap((prev) => {
+      const list = prev[tId] || [];
+      return {
+        ...prev,
+        [tId]: list.filter((s) => (s.studentId || s.id) !== sId)
+      };
+    });
+  };
+
+  // 2. Subscribe to students for each active test with staleness filtering
   useEffect(() => {
     const unsubs = [];
     activeTests.forEach((t) => {
       const unsub = onSnapshot(collection(db, 'active_proctoring', t.id, 'students'), (snap) => {
         const students = [];
+        const now = Date.now();
         snap.forEach((docSnap) => {
-          students.push({ id: docSnap.id, ...docSnap.data(), testId: t.id, testTitle: t.title, department: t.department });
+          const data = docSnap.data();
+          const pingTime = typeof data.lastPingMillis === 'number'
+            ? data.lastPingMillis
+            : data.lastSeen?.toMillis
+            ? data.lastSeen.toMillis()
+            : data.lastSeen?.seconds
+            ? data.lastSeen.seconds * 1000
+            : data.joinedAt?.toMillis
+            ? data.joinedAt.toMillis()
+            : 0;
+
+          const isStale = data.cameraStatus === 'left' || data.cameraStatus === 'ended' || (pingTime > 0 && (now - pingTime) > 15000);
+
+          if (isStale) {
+            // Tab was closed or abandoned - clean up ghost doc from Firestore
+            deleteDoc(doc(db, 'active_proctoring', t.id, 'students', docSnap.id)).catch(() => {});
+          } else {
+            students.push({ id: docSnap.id, ...data, testId: t.id, testTitle: t.title, department: t.department });
+          }
         });
         setTestStudentsMap((prev) => ({
           ...prev,
@@ -228,6 +277,43 @@ export default function LiveProctoringManager() {
       unsubs.forEach((u) => u());
     };
   }, [activeTests]);
+
+  // Periodic staleness sweep (every 4 seconds) to auto-remove students who closed tab
+  useEffect(() => {
+    const sweepInterval = setInterval(() => {
+      const now = Date.now();
+      setTestStudentsMap((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        Object.entries(next).forEach(([tId, students]) => {
+          const fresh = students.filter((s) => {
+            const pingTime = typeof s.lastPingMillis === 'number'
+              ? s.lastPingMillis
+              : s.lastSeen?.toMillis
+              ? s.lastSeen.toMillis()
+              : s.lastSeen?.seconds
+              ? s.lastSeen.seconds * 1000
+              : s.joinedAt?.toMillis
+              ? s.joinedAt.toMillis()
+              : 0;
+            const isStale = s.cameraStatus === 'left' || s.cameraStatus === 'ended' || (pingTime > 0 && (now - pingTime) > 15000);
+            if (isStale) {
+              changed = true;
+              deleteDoc(doc(db, 'active_proctoring', tId, 'students', s.studentId || s.id)).catch(() => {});
+              return false;
+            }
+            return true;
+          });
+          if (fresh.length !== students.length) {
+            next[tId] = fresh;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }, 4000);
+
+    return () => clearInterval(sweepInterval);
+  }, []);
 
   // Aggregate student counts
   const allStudents = Object.values(testStudentsMap).flat();
@@ -559,6 +645,7 @@ export default function LiveProctoringManager() {
                   setWarningTestId(tId || student.testId || selectedTestId);
                   setWarningText('');
                 }}
+                onDismiss={handleDismissStudent}
               />
             ))}
           </div>

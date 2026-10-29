@@ -191,6 +191,16 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
   }, [mode, currentIdx]); // eslint-disable-line react-hooks/exhaustive-deps
   // Every submit path (button, timer, full-screen violations) goes through here
   const finishTest = (answers) => {
+    if (proctoringSessionRef.current) {
+      proctoringSessionRef.current.cleanup();
+      proctoringSessionRef.current = null;
+    }
+    if (localStreamRef.current) {
+      try {
+        localStreamRef.current.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
+      } catch (e) {}
+    }
     flushQuestionTime();
     const timeSpent = {};
     Object.entries(timeSpentRef.current).forEach(([id, secs]) => { timeSpent[id] = Math.round(secs); });
@@ -431,7 +441,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     });
   }, [mode, selectedAnswers, currentIdx, isProctoringEnabled]);
 
-  // Cleanup on unmount or beforeunload
+  // Cleanup on unmount or beforeunload / pagehide
   useEffect(() => {
     const handleUnload = () => {
       if (proctoringSessionRef.current) {
@@ -444,8 +454,10 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
       }
     };
     window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
     return () => {
       window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
       handleUnload();
     };
   }, []);
