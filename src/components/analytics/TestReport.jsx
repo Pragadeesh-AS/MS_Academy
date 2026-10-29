@@ -257,8 +257,8 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
                 </div>
               )}
               <div className="mt-6 p-3 rounded-xl bg-indigo-50/70 border border-indigo-100 flex items-center gap-2 text-xs font-semibold text-indigo-900 text-left">
-                <span className="text-base">👑</span>
-                <span>In the <strong>Solutions</strong> tab, see each question's <strong>Average Time</strong> and compare with the <strong>Topper's Time (👑)</strong> with color-coded result borders.</span>
+                <Crown size={15} className="text-amber-500 shrink-0" />
+                <span>In the <strong>Solutions</strong> tab, see each question's <strong>Average Time</strong> and compare with the <strong>Topper's Time</strong> with color-coded result borders.</span>
               </div>
             </Card>
 
