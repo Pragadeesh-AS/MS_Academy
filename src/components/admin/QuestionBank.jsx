@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Loader from '../Loader';
 import { BookOpen, Plus, Trash2, Edit2, Search, X, Save, Image as ImageIcon, CheckCircle2, ChevronRight, FileText, Bold, Italic, List, ChevronDown, ListTodo, Calculator, Eraser, Tag, Check, Sparkles, Circle, Bookmark, AlertCircle, AlertTriangle, Layers, Clock, Trophy, Star, Filter, ArrowLeft, Upload, ClipboardPaste, RotateCw } from 'lucide-react';
 import { db } from '../../firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, where, writeBatch, onSnapshot } from 'firebase/firestore';
 import { questionFingerprint, isEmptyQuestion } from '../../utils/questionDuplicates';
 import { QUESTION_CATEGORIES, getQuestionCategory, inferQuestionCategory } from '../../utils/questionCategory';
 import { markNumberOf, markLabelFor, negativeMarkFor } from '../../utils/marking';
@@ -256,6 +256,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const [filterStatus, setFilterStatus] = useState(externalFilter || 'All');
   const [filterType, setFilterType] = useState('All');
   const [filterCategory, setFilterCategory] = useState('All');
+  const [filterDiagram, setFilterDiagram] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [goToPage, setGoToPage] = useState('');
@@ -264,7 +265,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   useEffect(() => {
     setCurrentPage(1);
     setSelectedIds([]);
-  }, [search, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, filterCategory, pageSize]);
+  }, [search, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, filterCategory, filterDiagram, pageSize]);
 
   useEffect(() => {
     if (externalFilter !== null) {
@@ -435,6 +436,15 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     });
     return map;
   }, [deptQuestions, filterSubject]);
+
+  // Diagram question counts inside the active department
+  const { diagramCount, nonDiagramCount } = useMemo(() => {
+    let diag = 0;
+    deptQuestions.forEach(q => {
+      if (hasDiagram(q)) diag++;
+    });
+    return { diagramCount: diag, nonDiagramCount: deptQuestions.length - diag };
+  }, [deptQuestions]);
 
   // Department attribute object for cascading
   const selectedDeptObj = useMemo(() => {
@@ -816,7 +826,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setIsCreatorOpen(false);
     
     if (isEditing) {
-      const before = questions.find(q => q.id === currentId);
+      let before = questions.find(q => q.id === currentId);
+      if (!before) {
+        try {
+          const bSnap = await getDoc(doc(db, 'question_bank', currentId));
+          if (bSnap.exists()) before = { id: bSnap.id, ...bSnap.data() };
+        } catch (_) {}
+      }
       // Merge - fields the form doesn't carry (pairId, typedByEmail...) stay on the question
       setQuestions(prev => prev.map(q => q.id === currentId ? { ...q, ...payload, id: currentId } : q));
       cacheUpdateQuestion({ id: currentId, ...payload }, cacheKey);
@@ -955,7 +971,13 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     openAddCreator();
     
     if (isEditing) {
-      const before = questions.find(q => q.id === currentId);
+      let before = questions.find(q => q.id === currentId);
+      if (!before) {
+        try {
+          const bSnap = await getDoc(doc(db, 'question_bank', currentId));
+          if (bSnap.exists()) before = { id: bSnap.id, ...bSnap.data() };
+        } catch (_) {}
+      }
       // Merge - fields the form doesn't carry (pairId, typedByEmail...) stay on the question
       setQuestions(prev => prev.map(q => q.id === currentId ? { ...q, ...payload, id: currentId } : q));
       cacheUpdateQuestion({ id: currentId, ...payload }, cacheKey);
@@ -1254,12 +1276,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     setFilterDept(name);
     setFilterSubject('All');
     setFilterTopic('All');
+    setFilterDiagram('All');
   };
   const closeFolder = () => {
     setSelectedFolder(null);
     setFilterDept(lockedDepartment || 'All');
     setFilterSubject('All');
     setFilterTopic('All');
+    setFilterDiagram('All');
   };
 
   const filteredQuestions = useMemo(() => {
@@ -1293,6 +1317,9 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           : q.status === filterStatus);
       const matchesType = filterType === 'All' || q.questionType === filterType;
       const matchesCategory = filterCategory === 'All' || getQuestionCategory(q) === filterCategory;
+      const matchesDiagram = filterDiagram === 'All'
+        || (filterDiagram === 'Diagrammatic' && hasDiagram(q))
+        || (filterDiagram === 'Non-Diagrammatic' && !hasDiagram(q));
 
       // Questions still with a reviewer (In Review) or sent back (Draft) belong to the typist/reviewer
       // pair only - nobody else sees them until the reviewer approves them.
@@ -1320,7 +1347,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
         premiumMatches = q.isPremium !== true;
       }
 
-      return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && matchesType && matchesCategory && roleMatches && premiumMatches;
+      return matchesSearch && matchesDept && matchesSubject && matchesTopic && matchesYear && matchesMark && matchesDifficulty && matchesStatus && matchesType && matchesCategory && matchesDiagram && roleMatches && premiumMatches;
     });
 
     // Always ensure the latest extracted or added questions come first
@@ -1330,7 +1357,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
       if (bTime !== aTime) return bTime - aTime;
       return (a.importOrder ?? 0) - (b.importOrder ?? 0);
     });
-  }, [questions, search, lockedDepartment, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, filterCategory, userRole, externalFilter, isPremiumView, isMyQuestion]);
+  }, [questions, search, lockedDepartment, selectedFolder, filterDept, filterSubject, filterTopic, filterYear, filterMark, filterDifficulty, filterStatus, filterType, filterCategory, filterDiagram, userRole, externalFilter, isPremiumView, isMyQuestion]);
 
   const totalPages = Math.max(1, Math.ceil(filteredQuestions.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
@@ -1526,6 +1553,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                   { label: 'Status', plural: 'Statuses', val: filterStatus, setter: setFilterStatus, icon: Circle, opts: (userRole === 'typist' && externalFilter !== 'Approved') ? ['Draft', 'In Review', 'Approved'] : ['Approved', 'Not Reviewed'] },
                   { label: 'Type', plural: 'Types', val: filterType, setter: setFilterType, icon: Layers, opts: questionTypes },
                   { label: 'Category', plural: 'Categories', val: filterCategory, setter: setFilterCategory, icon: Calculator, opts: QUESTION_CATEGORIES },
+                  { label: 'Diagram', plural: 'Formats', val: filterDiagram, setter: setFilterDiagram, icon: ImageIcon, opts: ['Diagrammatic', 'Non-Diagrammatic'] },
                   { label: 'Subject', plural: 'Subjects', val: filterSubject, setter: setFilterSubject, icon: Bookmark, opts: subjects },
                   { label: 'Topic', plural: 'Topics', val: filterTopic, setter: setFilterTopic, icon: FileText, opts: topics },
                   { label: 'Year', plural: 'Years', val: filterYear, setter: setFilterYear, icon: Clock, opts: years },
@@ -1539,10 +1567,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                       className={`h-[48px] pl-11 pr-10 appearance-none bg-white border ${f.val !== 'All' ? 'border-[#2563EB] bg-blue-50/20 text-[#2563EB] font-[700]' : 'border-[#E5E7EB] text-[#0F172A] font-[600]'} rounded-[14px] text-[13px] focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/10 outline-none transition-all cursor-pointer min-w-[140px] hover:border-[#CBD5E1] shadow-sm`}
                     >
                       <option value="All">
-                        All {f.plural} {f.label === 'Subject' && selectedFolder ? `(${deptQuestions.length})` : ''}
+                        {f.label === 'Diagram' ? 'All (Diagrams & Text)' : `All ${f.plural} ${f.label === 'Subject' && selectedFolder ? `(${deptQuestions.length})` : ''}`}
                       </option>
                       {f.opts.map((opt, idx) => {
-                        const count = f.label === 'Subject'
+                        const count = f.label === 'Diagram' ? (opt === 'Diagrammatic' ? diagramCount : nonDiagramCount) : f.label === 'Subject'
                           ? subjectCounts[opt]
                           : f.label === 'Topic'
                             ? topicCounts[opt]
@@ -1560,7 +1588,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
 
                 <button
                   onClick={() => {
-                    setSearch(''); setFilterStatus(externalFilter || 'All'); setFilterDept(selectedFolder || lockedDepartment || 'All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All'); setFilterType('All'); setFilterCategory('All');
+                    setSearch(''); setFilterStatus(externalFilter || 'All'); setFilterDept(selectedFolder || lockedDepartment || 'All'); setFilterSubject('All'); setFilterTopic('All'); setFilterYear('All'); setFilterMark('All'); setFilterDifficulty('All'); setFilterType('All'); setFilterCategory('All'); setFilterDiagram('All');
                   }}
                   className="h-[48px] px-6 bg-white border border-[#E5E7EB] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] font-[600] text-[13px] rounded-[14px] transition-all flex items-center gap-2 cursor-pointer shadow-sm"
                 >
@@ -1732,6 +1760,14 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                                 title={q.questionCategory ? 'Set on this question' : 'Auto-detected'}
                               >
                                 NUM
+                              </span>
+                            )}
+                            {hasDiagram(q) && (
+                              <span
+                                className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-[800] bg-indigo-50 text-indigo-700 border-indigo-200"
+                                title="Diagrammatic Question (Contains diagram / image)"
+                              >
+                                <ImageIcon size={11} className="shrink-0" /> DIAG
                               </span>
                             )}
                           </div>

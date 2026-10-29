@@ -14,7 +14,8 @@ import TestReport from '../analytics/TestReport';
 import MatchColumns from '../shared/MatchColumns';
 import { paletteFor, monogramOf } from '../../utils/departmentColors';
 import { sameDepartment, isCommonDeptName } from '../../utils/subjects';
-import { collection, getDocs, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, getDoc, setDoc, documentId } from 'firebase/firestore';
+import { getCachedQuestionsSync } from '../../utils/questionBankCache';
 
 // Helper
 const formatTime = (seconds) => {
@@ -70,10 +71,9 @@ export default function Analytics({ joinedStudents = [], department = null, stud
           attemptsQuery = query(collection(db, 'test_attempts'), where('studentEmail', '==', studentViewOnlyEmail));
         }
 
-        const [testsSnap, attemptsSnap, questionsSnap, attributesSnap] = await Promise.all([
+        const [testsSnap, attemptsSnap, attributesSnap] = await Promise.all([
           getDocs(collection(db, 'tests')),
           getDocs(attemptsQuery),
-          getDocs(collection(db, 'question_bank')),
           getDocs(collection(db, 'question_attributes'))
         ]);
 
@@ -82,8 +82,62 @@ export default function Analytics({ joinedStudents = [], department = null, stud
           fetchedTests = fetchedTests.filter(t => sameDepartment(t.department, department));
         }
         const fetchedAttempts = attemptsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+
+        // Collect all question IDs needed across attempts and tests
+        const neededQuestionIds = new Set();
+        fetchedAttempts.forEach(attempt => {
+          if (Array.isArray(attempt.responses)) {
+            attempt.responses.forEach(r => {
+              if (r?.questionId && typeof r.questionId === 'string' && !r.questionId.includes('/')) {
+                neededQuestionIds.add(r.questionId);
+              }
+            });
+          }
+        });
+        fetchedTests.forEach(test => {
+          if (Array.isArray(test.questions)) {
+            test.questions.forEach(qId => {
+              if (qId && typeof qId === 'string' && !qId.includes('/')) {
+                neededQuestionIds.add(qId);
+              }
+            });
+          }
+        });
+
         const questionsMap = {};
-        questionsSnap.docs.forEach(d => { questionsMap[d.id] = { id: d.id, ...d.data() }; });
+        // Populate from in-memory cache if available
+        const cachedQ = getCachedQuestionsSync('all') || [];
+        cachedQ.forEach(q => {
+          if (q?.id && neededQuestionIds.has(q.id)) {
+            questionsMap[q.id] = q;
+          }
+        });
+
+        // Fetch remaining uncached questions in batches of 30
+        const missingIds = Array.from(neededQuestionIds).filter(id => !questionsMap[id]);
+        if (missingIds.length > 0) {
+          const batchPromises = [];
+          for (let i = 0; i < missingIds.length; i += 30) {
+            const chunk = missingIds.slice(i, i + 30);
+            batchPromises.push(
+              getDocs(query(collection(db, 'question_bank'), where(documentId(), 'in', chunk)))
+                .catch(err => {
+                  console.warn('Batch question fetch failed in Analytics:', err);
+                  return { docs: [] };
+                })
+            );
+          }
+          try {
+            const batchResults = await Promise.all(batchPromises);
+            batchResults.forEach(snap => {
+              snap.docs?.forEach(d => {
+                questionsMap[d.id] = { id: d.id, ...d.data() };
+              });
+            });
+          } catch (err) {
+            console.warn('Error fetching question batch in Analytics:', err);
+          }
+        }
         const fetchedAttributes = attributesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         const deptAttrs = fetchedAttributes.filter(a => a.type === 'department' && !isCommonDeptName(a.name));
 
@@ -339,10 +393,16 @@ export default function Analytics({ joinedStudents = [], department = null, stud
         setComputedStudentHistory(sHistory);
       } catch (err) {
         console.error("Failed to fetch analytics data", err);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
-    fetchData();
+    // Failsafe timeout to prevent infinite spinner if network stalls
+    const safetyTimer = setTimeout(() => {
+      setIsLoading(false);
+    }, 10000);
+    fetchData().finally(() => clearTimeout(safetyTimer));
+    return () => clearTimeout(safetyTimer);
   }, [department, joinedStudents?.length, reloadKey, studentViewOnlyEmail]);
 
   // Admin one-time clean-up: refund negative marks saved on MSQ / NAT answers (see utils/regradeAttempts).

@@ -322,13 +322,23 @@ async function fetchFullQuestionBank({ lockedDepartment, cacheKey }) {
   const questionsRef = collection(db, 'question_bank');
   let qSnapshot;
 
-  if (lockedDepartment) {
-    const attributes = await fetchAttributes();
-    const commonNames = attributes.filter(a => a.type === 'department' && isCommonDeptName(a.name)).map(a => a.name);
-    const allowed = [...new Set([...deptNameVariants(lockedDepartment), ...commonNames])].slice(0, 30);
-    qSnapshot = await getDocs(query(questionsRef, where('department', 'in', allowed)));
-  } else {
-    qSnapshot = await getDocs(questionsRef);
+  try {
+    if (lockedDepartment) {
+      const attributes = await fetchAttributes();
+      const commonNames = attributes.filter(a => a.type === 'department' && isCommonDeptName(a.name)).map(a => a.name);
+      const allowed = [...new Set([...deptNameVariants(lockedDepartment), ...commonNames])].slice(0, 30);
+      qSnapshot = await getDocs(query(questionsRef, where('department', 'in', allowed)));
+    } else {
+      qSnapshot = await getDocs(questionsRef);
+    }
+  } catch (err) {
+    console.warn("fetchFullQuestionBank error, trying IDB fallback:", err);
+    const fallback = await idbGet(`questions_${cacheKey}`);
+    if (fallback && Array.isArray(fallback) && fallback.length > 0) {
+      memoryCache.questions[cacheKey] = fallback;
+      return fallback;
+    }
+    throw err;
   }
 
   const qData = sortQuestionsList(qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -372,8 +382,8 @@ async function triggerBackgroundSync({ lockedDepartment, cacheKey, onBackgroundU
       const serverCount = countSnap ? countSnap.data().count : null;
 
       // If server count changed significantly (e.g. external deletions) and delta is empty,
-      // reconcile in the background
-      if (serverCount !== null && !lockedDepartment && Math.abs(serverCount - existing.length) > 2 && deltaDocs.size === 0) {
+      // reconcile in the background (only for department-scoped views to avoid massive full downloads)
+      if (serverCount !== null && lockedDepartment && Math.abs(serverCount - existing.length) > 2 && deltaDocs.size === 0) {
         const fullQ = await fetchFullQuestionBank({ lockedDepartment, cacheKey });
         if (onBackgroundUpdate) onBackgroundUpdate({ questions: fullQ, attributes: memoryCache.attributes });
         return;
@@ -409,8 +419,8 @@ async function triggerBackgroundSync({ lockedDepartment, cacheKey, onBackgroundU
         memoryCache.lastSync[cacheKey] = nowIso;
         idbSet(`meta_${cacheKey}`, { lastSync: nowIso, count: existing.length });
       }
-    } else {
-      // First background sync without timestamp
+    } else if (lockedDepartment) {
+      // First background sync without timestamp (only for scoped department)
       const questions = await fetchFullQuestionBank({ lockedDepartment, cacheKey });
       if (onBackgroundUpdate) {
         onBackgroundUpdate({ questions, attributes: memoryCache.attributes });

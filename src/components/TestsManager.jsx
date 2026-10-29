@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where, Timestamp } from 'firebase/firestore';
-import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2, FolderOpen, ArrowLeft, Star } from 'lucide-react';
+import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where, Timestamp, documentId } from 'firebase/firestore';
+import { Plus, Trash2, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2, FolderOpen, ArrowLeft, Star, Image as ImageIcon } from 'lucide-react';
+import { hasDiagram } from '../utils/questionLogger';
 
 import { isNumericalQuestion, getQuestionCategory } from '../utils/questionCategory';
 import { markNumberOf } from '../utils/marking';
@@ -58,6 +59,29 @@ const shortType = (type) => ({
   'Fill in the Blanks': 'NAT',
   'Match': 'Match'
 }[type] || type);
+
+// Reads only the question_bank documents a test uses, in batches of 30
+const fetchQuestionDocs = async (ids) => {
+  const unique = [...new Set((Array.isArray(ids) ? ids : []).filter(id => typeof id === 'string' && id && !id.includes('/')))];
+  if (!unique.length) return [];
+  const groups = [];
+  for (let i = 0; i < unique.length; i += 30) groups.push(unique.slice(i, i + 30));
+  try {
+    const snaps = await Promise.all(
+      groups.map(group =>
+        getDocs(query(collection(db, 'question_bank'), where(documentId(), 'in', group)))
+          .catch(err => {
+            console.warn('Batch question fetch error in TestsManager:', err);
+            return { docs: [] };
+          })
+      )
+    );
+    return snaps.flatMap(snap => snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  } catch (err) {
+    console.warn('Failed to fetch test question docs in TestsManager:', err);
+    return [];
+  }
+};
 
 export default function TestsManager({ department = '', isTeacher = false, onEditQuestion = null, initialView = 'templates', onBack = null }) {
   const [tests, setTests] = useState([]);
@@ -116,7 +140,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const [allocations, setAllocations] = useState({}); // { topicName: { q1: count, q2: count } }
   const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'manual' | 'both'
   const [manualSelectedIds, setManualSelectedIds] = useState([]);
-  const [manualFilters, setManualFilters] = useState({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
+  const [manualFilters, setManualFilters] = useState({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All', diagram: 'All' });
   // Step 4 MCQ / MSQ / NAT / Match mix: { mode, autoAdjusted, fromDefault, pct: { MCQ: '25', ... }, count: { MCQ: 16, ... } }
   const [typeSplit, setTypeSplit] = useState(null);
 
@@ -124,11 +148,34 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   useEffect(() => {
     fetchTests();
     fetchAttributes();
-    fetchQuestions();
+    if (department) {
+      fetchQuestions(department);
+    }
     if (!isTeacher) {
       fetchBundles();
     }
   }, [department]);
+
+  // When tests are loaded, fetch only the questions referenced in existing tests (for badges/stats)
+  useEffect(() => {
+    if (!tests.length) return;
+    const testQIds = [...new Set(tests.flatMap(t => t.questions || []))];
+    if (testQIds.length > 0) {
+      fetchQuestionDocs(testQIds).then(docs => {
+        if (docs.length > 0) {
+          setQuestions(prev => {
+            const map = new Map(prev.map(q => [q.id, q]));
+            docs.forEach(q => {
+              if (q.status === 'Approved' || !q.status) {
+                map.set(q.id, q);
+              }
+            });
+            return Array.from(map.values());
+          });
+        }
+      });
+    }
+  }, [tests]);
 
   const fetchBundles = async () => {
     try {
@@ -174,13 +221,13 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     });
   }, [tests, questions]);
 
-  // Always pull the latest counts from database when the creator modal opens or step changes
+  // Pull department questions when creator modal opens or department changes
   useEffect(() => {
     if (isCreatorOpen) {
-      fetchQuestions();
+      if (selectedDept) fetchQuestions(selectedDept);
       fetchAttributes();
     }
-  }, [isCreatorOpen, step]);
+  }, [isCreatorOpen, step, selectedDept]);
 
   // Sync allocations when selected topics change
   useEffect(() => {
@@ -195,6 +242,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   const fetchTests = async () => {
     setLoading(true);
+    const safetyTimer = setTimeout(() => setLoading(false), 8000);
     try {
       const q = collection(db, 'tests');
       const snapshot = await getDocs(q);
@@ -207,6 +255,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     } catch (err) {
       console.error("Error fetching tests:", err);
     } finally {
+      clearTimeout(safetyTimer);
       setLoading(false);
     }
   };
@@ -220,14 +269,18 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     }
   };
 
-  const fetchQuestions = async () => {
-    const cached = getCachedQuestionsSync('all');
+  const fetchQuestions = async (deptToLoad = null) => {
+    const targetDept = deptToLoad || selectedDept || department || null;
+    if (!targetDept) return;
+    const cacheKey = `dept_${targetDept}`;
+    const cached = getCachedQuestionsSync(cacheKey);
     if (cached && cached.length > 0) {
       setQuestions(cached.filter(q => q.status === 'Approved' || !q.status));
       return;
     }
     try {
       await loadQuestionBankData({
+        lockedDepartment: targetDept,
         onCacheHit: ({ questions: qData }) => {
           setQuestions(qData.filter(q => q.status === 'Approved' || !q.status));
         },
@@ -236,7 +289,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
         }
       });
     } catch (err) {
-      console.error("Error fetching questions:", err);
+      console.error("Error fetching questions for " + targetDept + ":", err);
     }
   };
 
@@ -785,7 +838,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setAllocations({});
     setSelectionMode('auto');
     setManualSelectedIds([]);
-    setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
+    setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All', diagram: 'All' });
     setTypeSplit(null);
     setBundleAccess({ mode: 'default', ids: [] });
     setStep(1);
@@ -822,7 +875,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setAllocations(test.allocations || {});
     setSelectionMode('manual');
     setManualSelectedIds(test.questions || []);
-    setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All' });
+    setManualFilters({ type: 'All', difficulty: 'All', mark: 'All', topic: 'All', category: 'All', diagram: 'All' });
     setTypeSplit(test.typeSplit || null);
     setStep(3);
     setIsCreatorOpen(true);
@@ -1762,6 +1815,11 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   if (manualFilters.difficulty !== 'All' && q.difficultyLevel !== manualFilters.difficulty) return false;
                   if (manualFilters.mark !== 'All' && markValue(q) !== Number(manualFilters.mark)) return false;
                   if ((manualFilters.category || 'All') !== 'All' && getQuestionCategory(q) !== manualFilters.category) return false;
+                  if ((manualFilters.diagram || 'All') !== 'All') {
+                    const isDiag = hasDiagram(q);
+                    if (manualFilters.diagram === 'Diagrammatic' && !isDiag) return false;
+                    if (manualFilters.diagram === 'Non-Diagrammatic' && isDiag) return false;
+                  }
                   return true;
                 });
                 
@@ -2099,6 +2157,11 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                           <option value="Numerical">Numerical</option>
                           <option value="Theory">Theory</option>
                         </select>
+                        <select className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-semibold outline-none text-slate-700" value={manualFilters.diagram || 'All'} onChange={e => setManualFilters({...manualFilters, diagram: e.target.value})}>
+                          <option value="All">All Formats</option>
+                          <option value="Diagrammatic">Diagrammatic Only ({topicPool.filter(hasDiagram).length})</option>
+                          <option value="Non-Diagrammatic">Non-Diagrammatic</option>
+                        </select>
 
                         <div className="ml-auto flex items-center gap-3">
                            <div className="text-xs font-bold text-slate-500">
@@ -2131,6 +2194,11 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-500">{q.topic}</span>
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">{q.questionType}</span>
                                     {categoryBadge(q, 'text-[10px] px-2 py-0.5')}
+                                    {hasDiagram(q) && (
+                                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1" title="Diagrammatic Question">
+                                        <ImageIcon size={10} /> DIAG
+                                      </span>
+                                    )}
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">{q.difficultyLevel || 'Easy'}</span>
                                     <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">{markText(markValue(q))}</span>
                                   </div>

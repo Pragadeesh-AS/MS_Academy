@@ -1,7 +1,8 @@
 import React from 'react';
-import { ArrowRight, Layers, Building2, Trophy, BookMarked } from 'lucide-react';
+import { ArrowRight, Layers, Building2, Trophy, BookMarked, Image as ImageIcon } from 'lucide-react';
 import { TYPE_KEYS, questionTypeKey } from '../../utils/questionTypeSplit';
 import { paletteFor, monogramOf, NEUTRAL } from '../../utils/departmentColors';
+import { hasDiagram } from '../../utils/questionLogger';
 
 // Same colours as the question-type chips on the test cards
 const TYPE_COLORS = { MCQ: 'bg-blue-500', MSQ: 'bg-violet-500', NAT: 'bg-amber-500', Match: 'bg-emerald-500' };
@@ -18,9 +19,13 @@ export default function DepartmentFolderGrid({ departments, onOpen, title = 'Dep
   const cards = departments
     .map(d => {
       const typeCounts = Object.fromEntries(TYPE_KEYS.map(k => [k, 0]));
-      d.questions.forEach(q => { typeCounts[questionTypeKey(q)] += 1; });
+      let diagramCount = 0;
+      d.questions.forEach(q => {
+        typeCounts[questionTypeKey(q)] += 1;
+        if (hasDiagram(q)) diagramCount += 1;
+      });
       const subjects = new Set(d.questions.map(q => (q.subject || '').trim().toLowerCase()).filter(Boolean)).size;
-      return { ...d, count: d.questions.length, typeCounts, subjects };
+      return { ...d, count: d.questions.length, typeCounts, subjects, diagramCount };
     })
     .filter(d => d.count > 0 || d.always);
   if (sortBySize) cards.sort((a, b) => b.count - a.count);
@@ -87,9 +92,17 @@ export default function DepartmentFolderGrid({ departments, onOpen, title = 'Dep
                   {d.tag && (
                     <span className={`inline-block mt-1.5 px-2 py-0.5 rounded-md border text-[10.5px] font-[800] uppercase tracking-wide ${d.common ? 'bg-violet-50 text-violet-600 border-violet-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{d.tag}</span>
                   )}
-                  <div className="mt-1 flex items-center gap-1.5 text-[12.5px] font-semibold text-slate-500">
-                    <BookMarked size={13} className="shrink-0" />
-                    {d.subjects} {d.subjects === 1 ? 'subject' : 'subjects'}
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[12.5px] font-semibold text-slate-500">
+                    <span className="flex items-center gap-1.5">
+                      <BookMarked size={13} className="shrink-0" />
+                      {d.subjects} {d.subjects === 1 ? 'subject' : 'subjects'}
+                    </span>
+                    {d.diagramCount > 0 && (
+                      <span className="flex items-center gap-1 text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 text-[11px]" title={`${d.diagramCount} diagrammatic question${d.diagramCount === 1 ? '' : 's'}`}>
+                        <ImageIcon size={11} className="shrink-0" />
+                        {d.diagramCount} {d.diagramCount === 1 ? 'diagram' : 'diagrams'}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

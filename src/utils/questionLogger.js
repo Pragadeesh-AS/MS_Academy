@@ -6,13 +6,17 @@ import { collection, addDoc } from 'firebase/firestore';
  */
 export const hasDiagram = (q) => {
   if (!q) return false;
+  if (q.hasDiagram === true) return true;
+  const hasStr = (val) => typeof val === 'string' && val.trim().length > 0;
   return Boolean(
-    q.questionImageUrl ||
-    q.optionAImage ||
-    q.optionBImage ||
-    q.optionCImage ||
-    q.optionDImage ||
-    q.explanationImage ||
+    hasStr(q.questionImageUrl) ||
+    hasStr(q.optionAImage) ||
+    hasStr(q.optionBImage) ||
+    hasStr(q.optionCImage) ||
+    hasStr(q.optionDImage) ||
+    hasStr(q.explanationImage) ||
+    hasStr(q.explanationImageUrl) ||
+    (typeof q.questionText === 'string' && q.questionText.includes('<img')) ||
     (q.crops && typeof q.crops === 'object' && Object.keys(q.crops).some(k => Array.isArray(q.crops[k]) && q.crops[k].length > 0)) ||
     (Array.isArray(q.images) && q.images.length > 0)
   );

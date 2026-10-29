@@ -4,8 +4,8 @@
 // new key, so students who picked the new answer gain the marks and students who picked the old
 // one lose them (including negative marking). Runs whether or not the solutions are released.
 import { db } from '../firebase';
-import { collection, getDocs, query, where, writeBatch, doc, updateDoc } from 'firebase/firestore';
-import { gradeAnswer } from './testGrading';
+import { collection, getDocs, query, where, writeBatch, doc, updateDoc, documentId } from 'firebase/firestore';
+import { gradeAnswer, correctAnswerText } from './testGrading';
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
@@ -16,8 +16,25 @@ const NO_NEGATIVE_TYPES = new Set(['Multiple Choice', 'Fill in Blanks', 'Fill in
 
 // Preview: [{ id, student, test, answers, oldScore, newScore, responses }]
 export const findMsqNatNegativeFixes = async () => {
-  const [qSnap, aSnap] = await Promise.all([getDocs(collection(db, 'question_bank')), getDocs(collection(db, 'test_attempts'))]);
-  const typeOf = new Map(qSnap.docs.map(d => [d.id, d.data().questionType]));
+  const aSnap = await getDocs(collection(db, 'test_attempts'));
+  const neededQIds = new Set();
+  aSnap.docs.forEach(d => {
+    const attempt = d.data();
+    (Array.isArray(attempt.responses) ? attempt.responses : []).forEach(r => {
+      if (r?.questionId && typeof r.questionId === 'string' && !r.questionId.includes('/')) {
+        neededQIds.add(r.questionId);
+      }
+    });
+  });
+  const idList = Array.from(neededQIds);
+  const typeOf = new Map();
+  for (let i = 0; i < idList.length; i += 30) {
+    const chunk = idList.slice(i, i + 30);
+    try {
+      const snap = await getDocs(query(collection(db, 'question_bank'), where(documentId(), 'in', chunk)));
+      snap.docs.forEach(d => typeOf.set(d.id, d.data().questionType));
+    } catch (_) {}
+  }
   const fixes = [];
   aSnap.docs.forEach(d => {
     const attempt = d.data();
@@ -139,14 +156,21 @@ export const regradeAttemptsForQuestion = async (before, after) => {
     try {
       const reports = await getDocs(query(collection(db, 'reported_questions'), where('questionId', '==', questionId)));
       const resolver = sessionStorage.getItem('auth_name') || 'Teacher';
-      await Promise.all(reports.docs
-        .filter(d => d.data().status !== 'resolved')
-        .map(d => updateDoc(d.ref, {
+      const keyAnswerText = correctAnswerText(after);
+      await Promise.all(reports.docs.map(d => {
+        const repData = d.data();
+        const payload = {
+          keyAnswer: keyAnswerText,
           status: 'resolved',
           resolvedBy: resolver,
           resolvedAt: new Date(),
-          resolution: `Answer key corrected - ${regradedCount} attempt(s) re-graded (${gained} gained, ${lost} lost marks)`,
-        })));
+        };
+        // Update resolution if attempts were regraded or if previous resolution had 0 or was unset
+        if (regradedCount > 0 || !repData.resolution || repData.resolution.includes('0 attempt(s) re-graded')) {
+          payload.resolution = `Answer key corrected - ${regradedCount} attempt(s) re-graded (${gained} gained, ${lost} lost marks)`;
+        }
+        return updateDoc(d.ref, payload);
+      }));
     } catch (err) {
       console.error('Re-graded, but could not resolve the reports for this question', err);
     }

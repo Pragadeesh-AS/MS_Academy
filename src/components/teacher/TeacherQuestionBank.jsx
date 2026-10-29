@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { Layers, Search, Filter, BookOpen, AlertCircle, FileText, Sparkles, ChevronDown } from 'lucide-react';
+import { Layers, Search, Filter, BookOpen, AlertCircle, FileText, Sparkles, ChevronDown, Image as ImageIcon } from 'lucide-react';
 import Loader from '../Loader';
+import { hasDiagram } from '../../utils/questionLogger';
 
 export default function TeacherQuestionBank({ department }) {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [filterDiagram, setFilterDiagram] = useState('All');
   const [expandedId, setExpandedId] = useState(null);
 
   const relativeTime = (isoString) => {
@@ -62,11 +64,15 @@ export default function TeacherQuestionBank({ department }) {
     fetchQuestions();
   }, [department, teacherFullDept]);
 
-  const filteredQuestions = questions.filter(q => 
-    (q.questionText || '').toLowerCase().includes(search.toLowerCase()) ||
-    (q.topic || '').toLowerCase().includes(search.toLowerCase()) ||
-    (q.subject || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredQuestions = questions.filter(q => {
+    const matchesSearch = (q.questionText || '').toLowerCase().includes(search.toLowerCase()) ||
+      (q.topic || '').toLowerCase().includes(search.toLowerCase()) ||
+      (q.subject || '').toLowerCase().includes(search.toLowerCase());
+    const matchesDiagram = filterDiagram === 'All'
+      || (filterDiagram === 'Diagrammatic' && hasDiagram(q))
+      || (filterDiagram === 'Non-Diagrammatic' && !hasDiagram(q));
+    return matchesSearch && matchesDiagram;
+  });
 
   return (
     <div className="bg-white rounded-3xl p-4 sm:p-6 md:p-8 border border-slate-200 shadow-sm mt-6 min-h-[500px]">
@@ -82,6 +88,17 @@ export default function TeacherQuestionBank({ department }) {
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="relative w-full sm:w-56">
+            <select
+              value={filterDiagram}
+              onChange={(e) => setFilterDiagram(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold rounded-xl px-3 py-2.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 cursor-pointer text-slate-700 shadow-sm"
+            >
+              <option value="All">All Formats</option>
+              <option value="Diagrammatic">Diagrammatic Only ({questions.filter(hasDiagram).length})</option>
+              <option value="Non-Diagrammatic">Non-Diagrammatic</option>
+            </select>
+          </div>
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input 
@@ -153,9 +170,16 @@ export default function TeacherQuestionBank({ department }) {
                         </div>
                       </td>
                       <td className="py-4 px-6 h-[82px]">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-50 text-purple-600 border border-purple-100 text-[12px] font-[700] whitespace-nowrap">
-                          {q.questionType}
-                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-50 text-purple-600 border border-purple-100 text-[12px] font-[700] whitespace-nowrap">
+                            {q.questionType}
+                          </span>
+                          {hasDiagram(q) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-bold whitespace-nowrap" title="Diagrammatic Question">
+                              <ImageIcon size={11} /> DIAG
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-4 px-6 h-[82px]">
                         <span className="text-[14px] font-[600] text-[#0F172A]">{q.mark?.split(' ')[0] || '1'} Mark</span>

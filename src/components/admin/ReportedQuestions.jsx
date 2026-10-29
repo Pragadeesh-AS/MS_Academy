@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, query, where, getDocs, updateDoc, doc, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, updateDoc, doc, orderBy, documentId } from 'firebase/firestore';
 import { AlertTriangle, CheckCircle2, Search, Clock, Check, X, ShieldAlert, ChevronDown } from 'lucide-react';
+import { correctAnswerText } from '../../utils/testGrading';
 
 export default function ReportedQuestions({ role = 'admin', department = '', onViewQuestion }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('pending');
   const [expandedId, setExpandedId] = useState(null); // resolved report opened in the list
+  const [liveQuestions, setLiveQuestions] = useState({});
 
   useEffect(() => {
     fetchReports();
@@ -27,6 +29,20 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
       const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       data.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
       setReports(data);
+
+      // Fetch live questions from question_bank to display current answer keys and text
+      const qIds = [...new Set(data.map(r => r.questionId).filter(id => typeof id === 'string' && id && !id.includes('/')))];
+      if (qIds.length > 0) {
+        const qMap = {};
+        for (let i = 0; i < qIds.length; i += 30) {
+          const chunk = qIds.slice(i, i + 30);
+          try {
+            const qSnap = await getDocs(query(collection(db, 'question_bank'), where(documentId(), 'in', chunk)));
+            qSnap.docs.forEach(d => { qMap[d.id] = { id: d.id, ...d.data() }; });
+          } catch (_) {}
+        }
+        setLiveQuestions(qMap);
+      }
     } catch (err) {
       console.error("Error fetching reported questions:", err);
     } finally {
@@ -38,12 +54,17 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
     try {
       const resolverName = sessionStorage.getItem('auth_name') || (role === 'admin' ? 'Admin' : 'Teacher');
       const now = new Date();
-      await updateDoc(doc(db, 'reported_questions', id), {
+      const rep = reports.find(r => r.id === id);
+      const liveQ = rep ? liveQuestions[rep.questionId] : null;
+      const keyAns = liveQ ? correctAnswerText(liveQ) : (rep?.keyAnswer || '');
+      const updateData = {
         status: 'resolved',
         resolvedBy: resolverName,
-        resolvedAt: now
-      });
-      setReports(reports.map(r => r.id === id ? { ...r, status: 'resolved', resolvedBy: resolverName, resolvedAt: now } : r));
+        resolvedAt: now,
+        ...(keyAns ? { keyAnswer: keyAns } : {})
+      };
+      await updateDoc(doc(db, 'reported_questions', id), updateData);
+      setReports(reports.map(r => r.id === id ? { ...r, ...updateData } : r));
     } catch (err) {
       console.error("Error updating status:", err);
     }
@@ -55,7 +76,12 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
   const visibleReports = reports.filter(r => (activeTab === 'resolved' ? isResolved(r) : !isResolved(r)));
 
   // Full details of one report (reason, question, reporter, resolution, actions)
-  const renderDetails = (report) => (
+  const renderDetails = (report) => {
+    const liveQ = liveQuestions[report.questionId];
+    const currentKey = liveQ ? correctAnswerText(liveQ) : (report.keyAnswer || '-');
+    const wasRevised = liveQ && report.keyAnswer && currentKey !== report.keyAnswer;
+
+    return (
     <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-4">
         <div>
@@ -64,12 +90,19 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
             "{report.reason}"
           </div>
           {report.source === 'solution-review' && (
-            <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+            <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold items-center">
               <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">Reported from the solutions</span>
               <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
                 Student answered: {Array.isArray(report.studentAnswer) ? (report.studentAnswer.join(', ') || '(blank)') : (report.studentAnswer || '(blank)')}
               </span>
-              <span className="px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-100">Answer key: {report.keyAnswer || '-'}</span>
+              <span className="px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-100 flex items-center gap-1.5">
+                <span>Answer key: <strong>{currentKey}</strong></span>
+                {wasRevised && (
+                  <span className="text-[11px] text-green-600 bg-green-100/70 px-1.5 py-0.5 rounded font-normal">
+                    (revised from {report.keyAnswer})
+                  </span>
+                )}
+              </span>
             </div>
           )}
           {report.reportType === 'The correct answer is wrong' && report.status !== 'resolved' && (
@@ -81,12 +114,15 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
         <div>
           <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Question Context</div>
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm max-h-48 overflow-y-auto">
-            <div dangerouslySetInnerHTML={{ __html: report.questionText || '<i class="text-slate-400">No text provided</i>' }} />
+            <div dangerouslySetInnerHTML={{ __html: liveQ?.questionText || report.questionText || '<i class="text-slate-400">No text provided</i>' }} />
+            {liveQ?.questionImageUrl && (
+              <img src={liveQ.questionImageUrl} alt="Question Graphic" className="max-h-40 object-contain rounded-lg border border-slate-200 p-1.5 mt-2 bg-white" />
+            )}
             <div className="mt-4 pt-3 border-t border-slate-200 flex flex-wrap gap-2 items-center justify-between text-xs font-bold text-slate-500">
               <span className="flex items-center gap-1" title={report.questionId}>
                 Question Ref: <span className="text-slate-700 bg-slate-200 px-2 py-0.5 rounded uppercase">{report.questionId.substring(0, 6)}</span>
               </span>
-              <span>Author: {report.teacher}</span>
+              <span>Author: {liveQ?.typedBy || report.teacher || 'Unknown'}</span>
             </div>
           </div>
         </div>
@@ -138,7 +174,8 @@ export default function ReportedQuestions({ role = 'admin', department = '', onV
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const resolvedOn = (r) => {
     const d = r.resolvedAt?.toDate ? r.resolvedAt.toDate() : r.resolvedAt ? new Date(r.resolvedAt) : null;
