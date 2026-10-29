@@ -31,7 +31,7 @@ const sidebarNavItems = [
   { key: 'questions', label: 'Question Bank', icon: BookOpen },
   { key: 'attributes', label: 'Attributes', icon: Tag },
   { key: 'tests', label: 'Test Modules', icon: Calendar },
-  { key: 'proctoring', label: 'Live Proctoring', icon: Camera },
+  { key: 'proctoring', label: 'Exam Monitoring', icon: Camera },
   { key: 'analytics', label: 'Analytics', icon: TrendingUp },
   { key: 'reported', label: "Reported Q's", icon: ShieldAlert },
 ];

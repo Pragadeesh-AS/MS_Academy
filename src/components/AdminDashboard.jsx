@@ -1144,7 +1144,7 @@ export default function AdminDashboard() {
                   { key: 'questions', label: 'Question Bank', icon: Database },
                   { key: 'premium_questions', label: 'Premium Question Bank', icon: Database, isPremium: true },
                   { key: 'tests', label: 'Create Test', icon: Trophy },
-                  { key: 'proctoring', label: 'Exam Proctoring', icon: Camera },
+                  { key: 'proctoring', label: 'Exam Monitoring', icon: Camera },
                   { key: 'analytics', label: 'Analytics', icon: BarChart2 },
                   { key: 'reported', label: 'Reported Questions', icon: ShieldCheck, danger: true },
                   { key: 'test_feedback', label: 'Feedback', icon: Star, warning: true },
@@ -1306,10 +1306,10 @@ export default function AdminDashboard() {
 <button
                 onClick={() => setActiveTab('proctoring')}
                 className={`w-full relative flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-4 px-4'} py-3.5 rounded-2xl font-bold text-[14.5px] transition-all duration-300 ${activeTab === 'proctoring' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}`}
-                title={isCollapsed ? "Exam Proctoring" : ""}
+                title={isCollapsed ? "Exam Monitoring" : ""}
               >
                 <Camera size={20} className={activeTab === 'proctoring' ? 'text-white' : 'text-slate-400'} />
-                {!isCollapsed && <span>Exam Proctoring</span>}
+                {!isCollapsed && <span>Exam Monitoring</span>}
               </button>
 
               <button 

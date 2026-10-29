@@ -329,7 +329,7 @@ export default function LiveProctoring({ department, teacherName }) {
                 100% Free P2P WebRTC
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-[900] tracking-tight">Live Exam Proctoring</h1>
+            <h1 className="text-2xl sm:text-3xl font-[900] tracking-tight">Live Exam Monitoring</h1>
             <p className="text-slate-300 text-sm max-w-2xl font-medium">
               Zero-cost, peer-to-peer live webcam monitoring with automatic tab-switch detection and direct invigilator warning broadcast.
             </p>

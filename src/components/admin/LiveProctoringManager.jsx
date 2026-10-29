@@ -327,7 +327,7 @@ export default function LiveProctoringManager() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Academy Live Proctoring Command Center
+                Academy Live Exam Monitoring Command Center
               </span>
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 100% Free Peer-to-Peer WebRTC
