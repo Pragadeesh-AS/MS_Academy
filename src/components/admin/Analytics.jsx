@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart2, TrendingUp, Users, Award, Search, Clock, CheckCircle2, XCircle, AlertCircle, ChevronRight, MinusCircle, UserCircle2, Globe2, Filter, ArrowLeft, Target, FileText, Download, FileSpreadsheet } from 'lucide-react';
+import { BarChart2, TrendingUp, Users, Award, Search, Clock, CheckCircle2, XCircle, AlertCircle, ChevronRight, MinusCircle, UserCircle2, Globe2, Filter, ArrowLeft, Target, FileText, Download, FileSpreadsheet, GraduationCap } from 'lucide-react';
 import { exportTestReportCsv, exportTestReportPdf } from '../../utils/testReportExport';
 import { findMsqNatNegativeFixes, applyMsqNatNegativeFixes } from '../../utils/regradeAttempts';
 import { 
@@ -48,6 +48,18 @@ export default function Analytics({ joinedStudents = [], department = null, stud
   const toggleFolder = (folder) => setExpandedFolders(prev => ({ ...prev, [folder]: !prev[folder] }));
   const [testSearch, setTestSearch] = useState(''); // Global Tests list search
   
+  // Department grouping states for Student Directory
+  const [expandedStudentDepts, setExpandedStudentDepts] = useState({});
+  const toggleStudentDept = (dept) => setExpandedStudentDepts(prev => ({ ...prev, [dept]: !prev[dept] }));
+  const [selectedStudentDeptFilter, setSelectedStudentDeptFilter] = useState('All');
+  const [enrolledStudents, setEnrolledStudents] = useState(joinedStudents || []);
+
+  useEffect(() => {
+    if (joinedStudents && joinedStudents.length > 0) {
+      setEnrolledStudents(joinedStudents);
+    }
+  }, [joinedStudents]);
+  
   // Enforce student view
   useEffect(() => {
     if (studentViewOnlyEmail && studentViewOnlyName) {
@@ -76,6 +88,17 @@ export default function Analytics({ joinedStudents = [], department = null, stud
           getDocs(attemptsQuery),
           getDocs(collection(db, 'question_attributes'))
         ]);
+
+        let currentJoined = joinedStudents;
+        if ((!currentJoined || currentJoined.length === 0) && !studentViewOnlyEmail) {
+          try {
+            const jsSnap = await getDocs(collection(db, 'joined_students'));
+            currentJoined = jsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+            setEnrolledStudents(currentJoined);
+          } catch (jsErr) {
+            console.warn("Could not fetch joined_students in Analytics", jsErr);
+          }
+        }
 
         let fetchedTests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
         if (department) {
@@ -356,6 +379,9 @@ export default function Analytics({ joinedStudents = [], department = null, stud
             testId: attempt.testId,
             testName: attempt.testTitle || 'Untitled Test',
             subject: testSummary.subject || 'General',
+            department: testSummary.department || '',
+            studentEmail: attempt.studentEmail || '',
+            studentName: attempt.studentName || sName,
             maxScore: maxScore,
             score: attempt.score || 0,
             timeTaken: formatTime(attemptTimeTaken),
@@ -448,10 +474,178 @@ export default function Analytics({ joinedStudents = [], department = null, stud
     }
   };
 
-  const allStudentNames = Object.keys(computedStudentHistory);
-  const filteredStudentNames = allStudentNames.filter(name => name.toLowerCase().includes(studentSearch.toLowerCase()));
-  
-  const activeStudentData = selectedStudentName ? (computedStudentHistory[selectedStudentName] || []) : [];
+  // Helper to resolve student department
+  const resolveStudentDept = (sName, sEmail, historyAttempts) => {
+    if (sEmail) {
+      const byEmail = enrolledStudents.find(s => s.email && s.email.trim().toLowerCase() === sEmail.trim().toLowerCase());
+      if (byEmail?.department?.trim()) return byEmail.department.trim();
+    }
+    if (sName) {
+      const byName = enrolledStudents.find(s => s.name && s.name.trim().toLowerCase() === sName.trim().toLowerCase());
+      if (byName?.department?.trim()) return byName.department.trim();
+    }
+    if (Array.isArray(historyAttempts) && historyAttempts.length > 0) {
+      const deptAttempt = historyAttempts.find(a => a.test?.department || a.department);
+      const d = deptAttempt?.test?.department || deptAttempt?.department;
+      if (d && d.trim()) return d.trim();
+    }
+    return 'General';
+  };
+
+  // Build unified student directory list
+  const studentDirectoryList = React.useMemo(() => {
+    const map = new Map();
+
+    // 1. Enrolled students
+    (enrolledStudents || []).forEach(st => {
+      if (department && !sameDepartment(st.department, department)) return;
+      const key = (st.name || st.email || '').trim();
+      if (!key) return;
+      map.set(key.toLowerCase(), {
+        id: st.id,
+        name: st.name || st.email || 'Unknown',
+        email: (st.email || '').trim(),
+        department: (st.department || 'General').trim(),
+        college: st.college || '',
+      });
+    });
+
+    // 2. Students from computedStudentHistory
+    Object.entries(computedStudentHistory).forEach(([sName, attempts]) => {
+      const first = attempts[0] || {};
+      const sEmail = (first.studentEmail || '').trim();
+      const key = sName.trim().toLowerCase();
+
+      let existingKey = map.has(key) ? key : null;
+      if (!existingKey && sEmail) {
+        for (const [k, v] of map.entries()) {
+          if (v.email && v.email.toLowerCase() === sEmail.toLowerCase()) {
+            existingKey = k;
+            break;
+          }
+        }
+      }
+
+      const dept = resolveStudentDept(sName, sEmail, attempts);
+      if (department && !sameDepartment(dept, department)) return;
+
+      if (existingKey) {
+        const existing = map.get(existingKey);
+        if (!existing.email && sEmail) existing.email = sEmail;
+        if (!existing.department || existing.department === 'General') existing.department = dept;
+      } else {
+        map.set(key, {
+          id: first.id || sName,
+          name: sName,
+          email: sEmail,
+          department: dept,
+          college: '',
+        });
+      }
+    });
+
+    return Array.from(map.values()).map(st => {
+      let history = computedStudentHistory[st.name];
+      if (!history && st.email) {
+        const matchEntry = Object.entries(computedStudentHistory).find(([_, list]) => 
+          list.some(a => (a.studentEmail || '').toLowerCase() === st.email.toLowerCase())
+        );
+        if (matchEntry) history = matchEntry[1];
+      }
+      if (!history) history = [];
+
+      const totalTests = history.length;
+      const avgScore = totalTests > 0 
+        ? Math.round((history.reduce((acc, t) => acc + (t.score || 0), 0) / totalTests) * 100) / 100 
+        : 0;
+
+      return {
+        ...st,
+        history,
+        totalTests,
+        avgScore
+      };
+    });
+  }, [enrolledStudents, computedStudentHistory, department]);
+
+  const availableStudentDepts = React.useMemo(() => {
+    return Array.from(new Set(studentDirectoryList.map(s => s.department).filter(Boolean))).sort();
+  }, [studentDirectoryList]);
+
+  const filteredStudents = React.useMemo(() => {
+    const q = studentSearch.trim().toLowerCase();
+    return studentDirectoryList.filter(st => {
+      if (selectedStudentDeptFilter !== 'All' && !sameDepartment(st.department, selectedStudentDeptFilter)) {
+        return false;
+      }
+      if (q) {
+        const matchName = (st.name || '').toLowerCase().includes(q);
+        const matchEmail = (st.email || '').toLowerCase().includes(q);
+        const matchDept = (st.department || '').toLowerCase().includes(q);
+        const matchCollege = (st.college || '').toLowerCase().includes(q);
+        return matchName || matchEmail || matchDept || matchCollege;
+      }
+      return true;
+    });
+  }, [studentDirectoryList, studentSearch, selectedStudentDeptFilter]);
+
+  const studentsByDept = React.useMemo(() => {
+    const groups = {};
+    filteredStudents.forEach(st => {
+      const d = st.department || 'General';
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(st);
+    });
+    Object.keys(groups).forEach(d => {
+      groups[d].sort((a, b) => (b.totalTests - a.totalTests) || a.name.localeCompare(b.name));
+    });
+    return groups;
+  }, [filteredStudents]);
+
+  const studentDepts = Object.keys(studentsByDept).sort();
+  const allStudentDeptsExpanded = studentDepts.length > 0 && studentDepts.every(d => expandedStudentDepts[d]);
+
+  const selectedStudentObj = React.useMemo(() => {
+    if (!selectedStudentName) return null;
+    return studentDirectoryList.find(s => 
+      s.name.trim().toLowerCase() === selectedStudentName.trim().toLowerCase() ||
+      (studentViewOnlyEmail && s.email.toLowerCase() === studentViewOnlyEmail.toLowerCase())
+    ) || null;
+  }, [selectedStudentName, studentDirectoryList, studentViewOnlyEmail]);
+
+  const activeStudentData = React.useMemo(() => {
+    if (!selectedStudentName) return [];
+    if (computedStudentHistory[selectedStudentName]?.length) {
+      return computedStudentHistory[selectedStudentName];
+    }
+    if (selectedStudentObj?.history?.length) {
+      return selectedStudentObj.history;
+    }
+    const studentEmail = selectedStudentObj?.email?.toLowerCase();
+    for (const [key, attempts] of Object.entries(computedStudentHistory)) {
+      if (key.trim().toLowerCase() === selectedStudentName.trim().toLowerCase()) {
+        return attempts;
+      }
+      if (studentEmail && attempts.some(a => (a.studentEmail || '').toLowerCase() === studentEmail)) {
+        return attempts;
+      }
+    }
+    return [];
+  }, [selectedStudentName, computedStudentHistory, selectedStudentObj]);
+
+  const selectedStudentDept = selectedStudentObj?.department || 
+    resolveStudentDept(selectedStudentName, selectedStudentObj?.email, activeStudentData);
+  const selectedStudentPalette = paletteFor(selectedStudentDept);
+
+  const studentTotalAttempts = studentDirectoryList.reduce((acc, s) => acc + s.totalTests, 0);
+  const studentActiveCount = studentDirectoryList.filter(s => s.totalTests > 0).length;
+
+  const studentOverviewStats = [
+    { label: 'Total Students', value: studentDirectoryList.length, icon: Users, tile: 'bg-blue-50/70 border-blue-100', iconBg: 'from-blue-500 to-indigo-600' },
+    { label: 'Active Test Takers', value: studentActiveCount, icon: Target, tile: 'bg-emerald-50/70 border-emerald-100', iconBg: 'from-emerald-500 to-teal-600' },
+    { label: 'Total Attempts', value: studentTotalAttempts, icon: Award, tile: 'bg-violet-50/70 border-violet-100', iconBg: 'from-violet-500 to-purple-600' },
+    { label: 'Departments', value: availableStudentDepts.length, icon: GraduationCap, tile: 'bg-amber-50/70 border-amber-100', iconBg: 'from-amber-500 to-orange-600' },
+  ];
   const activeDetailedTest = detailedTestId ? (
     (activeStudentData && activeStudentData.find(t => t.id === detailedTestId)) ||
     Object.values(computedStudentHistory).flat().find(t => t.id === detailedTestId) ||
@@ -1360,72 +1554,161 @@ export default function Analytics({ joinedStudents = [], department = null, stud
         {/* INDIVIDUAL STUDENT ANALYTICS */}
         {/* ============================================================== */}
         {activeInnerTab === 'student' && (
-          <div className="max-w-5xl mx-auto flex flex-col gap-8 pb-12">
+          <div className="max-w-6xl mx-auto flex flex-col gap-6 pb-12">
             
             {!selectedStudentName ? (
-              // 1. STUDENT DIRECTORY LIST VIEW
-              <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-10 shadow-sm flex flex-col">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-10 gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                      <Users size={20} />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-slate-800">Student Directory</h3>
-                      <p className="text-sm font-semibold text-slate-500">Select a student to view their detailed performance analysis.</p>
-                    </div>
-                  </div>
-                  <div className="relative w-full sm:w-[300px]">
-                    <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input 
-                      type="text" 
-                      placeholder="Search student by name..."
-                      value={studentSearch}
-                      onChange={handleSearchChange}
-                      className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-inner"
-                    />
+              // 1. STUDENT DIRECTORY LIST VIEW (GROUPED BY DEPARTMENT)
+              <div className="flex flex-col gap-6">
+                
+                {/* Overview Stats */}
+                <div className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_10px_28px_rgba(15,23,42,0.04)] p-4 sm:p-5">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {studentOverviewStats.map(st => (
+                      <div key={st.label} className={`rounded-[18px] border px-4 py-3.5 flex items-center gap-3 ${st.tile}`}>
+                        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${st.iconBg} text-white flex items-center justify-center shrink-0 shadow-md`}>
+                          <st.icon size={20} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[24px] font-bold text-[#0F172A] leading-none">{st.value}</div>
+                          <div className="text-[12.5px] font-medium text-[#64748B] mt-1 truncate">{st.label}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredStudentNames.length > 0 ? (
-                    filteredStudentNames.map(name => {
-                      const data = computedStudentHistory[name];
-                      const totalTests = data.length;
-                      const avgScore = totalTests > 0 ? Math.round((data.reduce((acc, t) => acc + (t.score || 0), 0) / totalTests) * 100) / 100 : 0;
-                      
-                      return (
-                        <div 
-                          key={name}
-                          onClick={() => selectStudent(name)}
-                          className="group border border-slate-200 rounded-2xl bg-white hover:border-indigo-300 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden p-5 flex items-center justify-between"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-700 font-black text-xl flex items-center justify-center border border-indigo-200 group-hover:scale-105 transition-transform">
-                              {name.charAt(0)}
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="font-[800] text-slate-800 text-[17px] group-hover:text-indigo-600 transition-colors tracking-tight">{name}</span>
-                              <div className="flex items-center gap-2 text-xs font-bold text-slate-500 mt-1">
-                                <span className="bg-slate-100 px-2 py-0.5 rounded-md">{totalTests} Tests</span>
-                                <span>•</span>
-                                <span className="text-emerald-600">Avg {avgScore} Marks</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="p-2 rounded-full bg-slate-50 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors text-slate-400">
-                            <ChevronRight size={20} />
-                          </div>
-                        </div>
-                      )
-                    })
-                  ) : (
-                    <div className="col-span-2 flex flex-col items-center justify-center p-12 text-slate-400 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                      <Search size={48} className="mb-4 opacity-30" />
-                      <p className="text-lg font-bold text-slate-600">No students found matching "{studentSearch}"</p>
+                {/* Search & Department Filter Bar */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative group flex-1 min-w-[240px]">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#64748B] group-focus-within:text-[#2563EB] transition-colors" size={19} />
+                    <input
+                      value={studentSearch}
+                      onChange={handleSearchChange}
+                      placeholder="Search students by name, email or department..."
+                      className="w-full h-[46px] pl-11 pr-4 bg-white border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-[14px] text-[14px] font-medium text-[#0F172A] placeholder:text-[#94A3B8] placeholder:font-normal outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all"
+                    />
+                  </div>
+
+                  {availableStudentDepts.length > 1 && (
+                    <div className="w-full sm:w-auto min-w-[200px]">
+                      <select
+                        value={selectedStudentDeptFilter}
+                        onChange={(e) => setSelectedStudentDeptFilter(e.target.value)}
+                        className="w-full h-[46px] px-3.5 bg-white border border-[#E2E8F0] hover:border-[#CBD5E1] rounded-[14px] text-[13.5px] font-bold text-[#0F172A] outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer"
+                      >
+                        <option value="All">All Departments ({studentDirectoryList.length})</option>
+                        {availableStudentDepts.map(d => {
+                          const count = studentDirectoryList.filter(s => sameDepartment(s.department, d)).length;
+                          return <option key={d} value={d}>{d} ({count})</option>;
+                        })}
+                      </select>
                     </div>
                   )}
+
+                  {studentDepts.length > 0 && (
+                    <button
+                      onClick={() => setExpandedStudentDepts(allStudentDeptsExpanded ? {} : Object.fromEntries(studentDepts.map(d => [d, true])))}
+                      className="h-[46px] px-4 rounded-[14px] bg-white border border-[#E2E8F0] hover:border-[#CBD5E1] text-[13px] font-bold text-[#2563EB] hover:bg-blue-50 transition-colors shrink-0"
+                    >
+                      {allStudentDeptsExpanded ? 'Collapse all' : 'Expand all'}
+                    </button>
+                  )}
                 </div>
+
+                {/* Department Accordion Cards */}
+                {studentDepts.length === 0 ? (
+                  <div className="bg-white rounded-[24px] border border-[#EEF2F7] p-12 text-center text-slate-400 font-bold flex flex-col items-center justify-center">
+                    <Search size={40} className="mb-3 opacity-30 text-slate-500" />
+                    <p className="text-base text-slate-600">No students found matching "{studentSearch}"</p>
+                    {selectedStudentDeptFilter !== 'All' && (
+                      <button 
+                        onClick={() => setSelectedStudentDeptFilter('All')} 
+                        className="mt-3 text-xs font-bold text-blue-600 hover:underline"
+                      >
+                        Clear department filter
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  studentDepts.map(dept => {
+                    const deptStudents = studentsByDept[dept];
+                    const isExpanded = !!expandedStudentDepts[dept] || !!studentSearch.trim() || studentDepts.length === 1;
+                    const p = paletteFor(dept);
+                    const mono = dept === 'General' ? 'GN' : monogramOf(dept);
+                    const deptAttempts = deptStudents.reduce((sum, s) => sum + s.totalTests, 0);
+                    const deptActiveCount = deptStudents.filter(s => s.totalTests > 0).length;
+
+                    return (
+                      <div key={dept} className="bg-white rounded-[24px] border border-[#EEF2F7] shadow-[0_10px_28px_rgba(15,23,42,0.04)] overflow-hidden">
+                        <button
+                          onClick={() => toggleStudentDept(dept)}
+                          className="w-full text-left px-5 py-4 flex items-center gap-4 hover:bg-[#F8FAFF] transition-colors"
+                        >
+                          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${p.badge} text-white flex items-center justify-center shrink-0 shadow-md`}>
+                            <span className={`font-[900] tracking-tight ${mono.length > 2 ? 'text-[13px]' : 'text-[16px]'}`}>{mono}</span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-bold text-[16px] text-[#0F172A] truncate">{dept}</h4>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[12.5px] font-semibold text-[#64748B]">
+                              <span>{deptStudents.length} {deptStudents.length === 1 ? 'student' : 'students'}</span>
+                              <span className="text-slate-300">•</span>
+                              <span>{deptActiveCount} active test takers</span>
+                              <span className="text-slate-300">•</span>
+                              <span>{deptAttempts} total attempts</span>
+                            </div>
+                          </div>
+                          <ChevronRight size={20} className={`text-slate-400 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                        </button>
+
+                        {isExpanded && (
+                          <div className="px-5 pb-5 pt-2 border-t border-[#EEF2F7] bg-slate-50/40">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-2">
+                              {deptStudents.map(student => (
+                                <div 
+                                  key={student.id || student.name}
+                                  onClick={() => selectStudent(student.name)}
+                                  className="group border border-slate-200/90 rounded-2xl bg-white hover:border-indigo-300 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden p-4 flex items-center justify-between"
+                                >
+                                  <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${p.badge} text-white font-black text-lg flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform`}>
+                                      {student.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="flex flex-col min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-[800] text-slate-800 text-[15.5px] group-hover:text-indigo-600 transition-colors tracking-tight truncate">
+                                          {student.name}
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200/60">
+                                          <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-br ${p.badge}`} />
+                                          {student.department}
+                                        </span>
+                                      </div>
+                                      {student.email && (
+                                        <span className="text-[12px] font-medium text-slate-400 truncate mt-0.5">
+                                          {student.email}
+                                        </span>
+                                      )}
+                                      <div className="flex items-center gap-2 text-xs font-bold text-slate-500 mt-1">
+                                        <span className="bg-slate-100 px-2 py-0.5 rounded-md">{student.totalTests} Tests</span>
+                                        <span>•</span>
+                                        <span className={student.totalTests > 0 ? "text-emerald-600 font-semibold" : "text-slate-400 font-normal"}>
+                                          {student.totalTests > 0 ? `Avg ${student.avgScore} Marks` : 'No tests taken'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-slate-50 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors text-slate-400 shrink-0 ml-2">
+                                    <ChevronRight size={18} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             ) : !detailedTestId ? (
               // 2. STUDENT OVERVIEW (Graph + List of Tests)
@@ -1441,18 +1724,47 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                   </div>
                 )}
 
-                {activeStudentData.length > 0 ? (
-                  <>
-                    <div className="flex items-center gap-4 mb-8 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
-                      <div className="w-16 h-16 rounded-full bg-indigo-600 text-white font-black text-2xl flex items-center justify-center shadow-md">
-                        {selectedStudentName.charAt(0)}
+                {/* Student Profile & Department Banner */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${selectedStudentPalette.badge} text-white font-black text-2xl flex items-center justify-center shadow-md shrink-0`}>
+                      {selectedStudentName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <h4 className="text-2xl font-[900] text-slate-800 truncate">{selectedStudentName}</h4>
+                        {selectedStudentDept && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white border border-slate-200 shadow-sm text-slate-700">
+                            <span className={`w-2 h-2 rounded-full bg-gradient-to-br ${selectedStudentPalette.badge}`} />
+                            {selectedStudentDept}
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <h4 className="text-2xl font-[900] text-slate-800">{selectedStudentName}</h4>
-                        <p className="text-sm font-bold text-indigo-500 mt-0.5">Historical Test Trajectory (Marks Scored)</p>
+                      {selectedStudentObj?.email && (
+                        <p className="text-xs font-medium text-slate-500 mt-0.5">{selectedStudentObj.email}</p>
+                      )}
+                      <p className="text-xs font-bold text-indigo-600 mt-1">Historical Test Trajectory (Marks Scored)</p>
+                    </div>
+                  </div>
+                  {activeStudentData.length > 0 && (
+                    <div className="flex items-center gap-3 bg-white/80 border border-indigo-100 rounded-xl px-4 py-2.5 self-start sm:self-auto shadow-sm shrink-0">
+                      <div className="text-center px-2">
+                        <div className="text-lg font-black text-slate-800">{activeStudentData.length}</div>
+                        <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tests</div>
+                      </div>
+                      <div className="w-px h-8 bg-slate-200" />
+                      <div className="text-center px-2">
+                        <div className="text-lg font-black text-emerald-600">
+                          {Math.round((activeStudentData.reduce((acc, t) => acc + (t.score || 0), 0) / activeStudentData.length) * 100) / 100}
+                        </div>
+                        <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Avg Marks</div>
                       </div>
                     </div>
+                  )}
+                </div>
 
+                {activeStudentData.length > 0 ? (
+                  <>
                     <div className="w-full h-[280px] mb-12">
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={activeStudentData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -1468,45 +1780,66 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                       </ResponsiveContainer>
                     </div>
 
-                    {/* Clean List of Test Cards */}
+                    {/* Clean List of Test Cards with Department and Subject Badges */}
                     <div>
                       <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 text-center">Test History</h4>
                       <div className="flex flex-col gap-4">
-                        {activeStudentData.map(test => (
-                          <div 
-                            key={test.id} 
-                            onClick={() => openStudentTestDetail(test.id)}
-                            className="group border border-slate-200 rounded-2xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden"
-                          >
-                            <div className="p-5 flex items-center justify-between">
-                              <div className="flex flex-col">
-                                <span className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors">{test.testName}</span>
-                                <span className="text-sm font-bold text-slate-500 mt-0.5">
-                                  Score: <span className="text-blue-600 font-bold">{test.score}</span>
-                                  {test.totalMarks || test.maxScore ? (
-                                    <span className="text-slate-400 font-semibold"> / {test.totalMarks || test.maxScore}</span>
-                                  ) : ''}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-5 text-slate-400">
-                                <div className="flex items-center gap-1.5 text-sm font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg">
-                                  <Clock size={16} className="text-blue-500" /> {test.timeTaken}
+                        {activeStudentData.map(test => {
+                          const testDept = test.test?.department || test.department;
+                          const testSubj = test.subject || test.test?.subject;
+                          const testPalette = paletteFor(testDept || 'General');
+
+                          return (
+                            <div 
+                              key={test.id} 
+                              onClick={() => openStudentTestDetail(test.id)}
+                              className="group border border-slate-200 rounded-2xl bg-white hover:border-blue-300 hover:shadow-md transition-all duration-300 cursor-pointer overflow-hidden"
+                            >
+                              <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                                    <span className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors">{test.testName}</span>
+                                    {testDept && (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200/60">
+                                        <span className={`w-1.5 h-1.5 rounded-full bg-gradient-to-br ${testPalette.badge}`} />
+                                        {testDept}
+                                      </span>
+                                    )}
+                                    {testSubj && (
+                                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
+                                        {testSubj}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-sm font-bold text-slate-500 mt-0.5">
+                                    Score: <span className="text-blue-600 font-bold">{test.score}</span>
+                                    {test.totalMarks || test.maxScore ? (
+                                      <span className="text-slate-400 font-semibold"> / {test.totalMarks || test.maxScore}</span>
+                                    ) : ''}
+                                  </span>
                                 </div>
-                                <div className="p-2 rounded-full bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                                  <ChevronRight size={20} />
+                                <div className="flex items-center gap-4 text-slate-400 shrink-0">
+                                  <div className="flex items-center gap-1.5 text-sm font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg">
+                                    <Clock size={16} className="text-blue-500" /> {test.timeTaken}
+                                  </div>
+                                  <div className="p-2 rounded-full bg-slate-50 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                                    <ChevronRight size={20} />
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </>
                 ) : (
-                  <div className="flex flex-col items-center justify-center flex-1 text-slate-400 min-h-[400px]">
-                    <Users size={64} className="mb-6 opacity-30" />
-                    <p className="text-xl font-bold text-slate-600 mb-2">No Student Data Found</p>
-                    <p className="text-sm font-medium text-slate-400">Search for an enrolled student to view their analytics trajectory.</p>
+                  <div className="flex flex-col items-center justify-center flex-1 text-slate-400 min-h-[360px] py-12">
+                    <Users size={64} className="mb-4 opacity-30 text-indigo-400" />
+                    <p className="text-lg font-bold text-slate-700 mb-1">No Test Attempts Found</p>
+                    <p className="text-sm font-medium text-slate-400 text-center max-w-md">
+                      This student is enrolled in <strong className="text-slate-700">{selectedStudentDept}</strong>, but has not completed any test attempts yet.
+                    </p>
                   </div>
                 )}
               </div>
@@ -1519,7 +1852,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
               )
             )}
           </div>
-            )}
+        )}
           </>
         )}
 
