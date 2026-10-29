@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Trophy, Star, CheckCircle2, XCircle, Info, Lock, FileText, TrendingUp, UserRound } from 'lucide-react';
+import { ArrowLeft, Trophy, Star, CheckCircle2, XCircle, Info, Lock, FileText, TrendingUp, UserRound, Crown } from 'lucide-react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
