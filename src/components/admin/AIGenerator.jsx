@@ -336,6 +336,8 @@ const cleanBareLatex = (text) => text
   .replace(/\\(?:text|textbf|mathrm)\s*\{([^{}]*)\}/g, '$1')
   .replace(/\\([a-zA-Z]+)(?![a-zA-Z])/g, (m, name) => LATEX_SYMBOLS[name] ?? m);
 
+const cleanMathText = (text) => cleanUnwantedDollars(text || '');
+
 // ---------- Missing $ delimiters ----------
 // The AI sometimes drops one "$" of a pair ("Slope = \frac{a}{b} = \frac{c}{d}$.") or none at all,
 // leaving raw LaTeX in the text. Each line is repaired before rendering: the stray "$" is found by
@@ -498,15 +500,30 @@ const callExtractApi = async (payload) => {
     'https://us-central1-msgate-5bad9.cloudfunctions.net/extractQuestions'
   ];
 
+  const clientApiKey = import.meta.env.VITE_LLAMA_INDEX_API_KEY 
+    || import.meta.env.VITE_LLAMA_CLOUD_API_KEY 
+    || import.meta.env.VITE_LAMA_INDEX_API 
+    || import.meta.env.LLAMA_INDEX_API;
+
+  const bodyData = { ...payload };
+  if (clientApiKey && !bodyData.apiKey) {
+    bodyData.apiKey = clientApiKey;
+  }
+
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  if (clientApiKey) {
+    headers['Authorization'] = `Bearer ${clientApiKey}`;
+  }
+
   let lastError = null;
   for (const endpoint of endpoints) {
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
+        headers,
+        body: JSON.stringify(bodyData)
       });
 
       const data = await res.json().catch(() => ({}));
@@ -1165,6 +1182,11 @@ export default function AIGenerator({ pairMode = false }) {
     ));
 
     return processed;
+  };
+
+  const cleanMathText = (text) => {
+    if (!text) return '';
+    return renderLatexToHTML(cleanUnwantedDollars(text));
   };
 
   // Inline styles so code keeps its look wherever the saved HTML is shown (question bank, tests)
