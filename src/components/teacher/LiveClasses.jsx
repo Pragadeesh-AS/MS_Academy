@@ -1964,10 +1964,11 @@ export default function LiveClasses({ department }) {
 
   useEffect(() => {
     if (isInCall && currentSessionId) {
-      // Fetch dynamic token
+      // Fetch dynamic token for this specific session
       const fetchToken = async () => {
         try {
-          const response = await fetch(`https://us-central1-msgate-5bad9.cloudfunctions.net/generateAgoraToken?channelName=MS_ACADEMY&role=publisher&t=${Date.now()}`);
+          const agoraChannel = `session_${currentSessionId}`;
+          const response = await fetch(`https://us-central1-msgate-5bad9.cloudfunctions.net/generateAgoraToken?channelName=${encodeURIComponent(agoraChannel)}&role=publisher&t=${Date.now()}`);
           const data = await response.json();
           if (data.token) {
             console.log("Session token initialized successfully.");
@@ -2080,9 +2081,10 @@ export default function LiveClasses({ department }) {
   };
 
   if (isInCall && currentSessionId) {
+    const agoraChannel = `session_${currentSessionId}`;
     const rtcProps = {
       appId: import.meta.env.VITE_AGORA_APP_ID || '',
-      channel: 'MS_ACADEMY',
+      channel: agoraChannel,
       token: dynamicToken,
       role: 'host',
       layout: 0,

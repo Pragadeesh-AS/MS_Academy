@@ -1052,6 +1052,13 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     const onActivity = () => { lastActivityRef.current = Date.now(); };
     const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'wheel'];
 
+    const onUnload = () => {
+      if (agoraClient) {
+        try { agoraClient.leave(); } catch (e) {}
+      }
+    };
+    window.addEventListener('beforeunload', onUnload);
+    window.addEventListener('pagehide', onUnload);
     document.addEventListener('visibilitychange', onVisibility);
     activityEvents.forEach(ev => window.addEventListener(ev, onActivity, { passive: true }));
     onVisibility(); // already in the background when joining
@@ -1066,6 +1073,8 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
       if (hiddenTimer) clearTimeout(hiddenTimer);
       clearInterval(check);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('beforeunload', onUnload);
+      window.removeEventListener('pagehide', onUnload);
       activityEvents.forEach(ev => window.removeEventListener(ev, onActivity));
       setStillThere(null);
     };
@@ -1121,7 +1130,8 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     if (isInCall && currentSession) {
       const fetchToken = async () => {
         try {
-          const response = await fetch(`https://us-central1-msgate-5bad9.cloudfunctions.net/generateAgoraToken?channelName=MS_ACADEMY&role=subscriber&t=${Date.now()}`);
+          const agoraChannel = `session_${currentSession.id}`;
+          const response = await fetch(`https://us-central1-msgate-5bad9.cloudfunctions.net/generateAgoraToken?channelName=${encodeURIComponent(agoraChannel)}&role=subscriber&t=${Date.now()}`);
           const data = await response.json();
           if (data.token) {
             console.log("Session token initialized successfully.");
@@ -1367,9 +1377,10 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
   }
 
   if (isInCall && currentSession) {
+    const agoraChannel = `session_${currentSession.id}`;
     const rtcProps = {
       appId: import.meta.env.VITE_AGORA_APP_ID || '',
-      channel: 'MS_ACADEMY',
+      channel: agoraChannel,
       token: dynamicToken,
       role: 'audience',
       layout: 0,
