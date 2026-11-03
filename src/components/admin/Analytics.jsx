@@ -335,9 +335,10 @@ export default function Analytics({ joinedStudents = [], department = null, stud
           if (!testSummary.questionStats) testSummary.questionStats = {};
           allQuestions.forEach((q, idx) => {
             // Per question, not per position, so every student's answer to it is counted together
-            const qKey = q.questionId || q.qIndex || (idx + 1);
+            const qKey = q.questionId || (q.qIndex !== undefined ? `q_${q.qIndex}` : `pos_${idx + 1}`);
             if (!testSummary.questionStats[qKey]) {
               testSummary.questionStats[qKey] = {
+                questionId: q.questionId,
                 qIndex: q.qIndex || (idx + 1),
                 qText: q.q,
                 qImage: q.qImage,
@@ -359,10 +360,6 @@ export default function Analytics({ joinedStudents = [], department = null, stud
             if (q.status === 'Correct') testSummary.questionStats[qKey].correct++;
             else if (q.status === 'Wrong') testSummary.questionStats[qKey].wrong++;
             else testSummary.questionStats[qKey].unattempted++;
-
-            if (q.questionId) testSummary.questionStats[q.questionId] = testSummary.questionStats[qKey];
-            if (q.qIndex) testSummary.questionStats[q.qIndex] = testSummary.questionStats[qKey];
-            testSummary.questionStats[idx + 1] = testSummary.questionStats[qKey];
           });
 
           // Leaderboard row for this test (also what the Excel / PDF export writes out)
@@ -967,9 +964,9 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                         </div>
                         {(() => {
                           const qStat = activeTestSummary?.questionStats?.[q.questionId]
-                            || activeTestSummary?.questionStats?.[q.qIndex]
-                            || activeTestSummary?.questionStats?.[i + 1]
-                            || (activeTestSummary?.questionStats ? Object.values(activeTestSummary.questionStats).find(s => s.qText === q.q) : null);
+                            || activeTestSummary?.questionStats?.[`q_${q.qIndex}`]
+                            || activeTestSummary?.questionStats?.[`pos_${i + 1}`]
+                            || (activeTestSummary?.questionStats ? Object.values(activeTestSummary.questionStats).find(s => (q.questionId && s.questionId === q.questionId) || s.qText === q.q || s.qIndex === q.qIndex) : null);
                           const qAvgSecs = qStat && qStat.total > 0 ? Math.round((qStat.totalTimeSeconds || 0) / qStat.total) : null;
                           const qAvgTime = qAvgSecs !== null ? formatTime(qAvgSecs) : null;
 
@@ -1675,19 +1672,19 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                         </div>
                       ) : (
                         <div className="space-y-6">
-                          {Object.values(activeGlobalTest.questionStats)
+                          {Array.from(new Set(Object.values(activeGlobalTest.questionStats)))
                             .sort((a, b) => {
                               const numA = parseInt(a.qIndex);
                               const numB = parseInt(b.qIndex);
                               return (isNaN(numA) || isNaN(numB)) ? String(a.qIndex).localeCompare(String(b.qIndex)) : numA - numB;
                             })
-                            .map((q) => {
+                            .map((q, qArrIdx) => {
                             const correctPct = q.total > 0 ? Math.round((q.correct / q.total) * 100) : 0;
                             const wrongPct = q.total > 0 ? Math.round((q.wrong / q.total) * 100) : 0;
                             const unattemptedPct = q.total > 0 ? Math.round((q.unattempted / q.total) * 100) : 0;
                             
                             return (
-                              <div key={q.qIndex} className="p-5 border border-slate-100 bg-slate-50 rounded-2xl">
+                              <div key={q.questionId || q.qIndex || qArrIdx} className="p-5 border border-slate-100 bg-slate-50 rounded-2xl">
                                 <div className="flex justify-between items-start gap-4 mb-4">
                                   <div>
                                     <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1">Question {q.qIndex}</span>

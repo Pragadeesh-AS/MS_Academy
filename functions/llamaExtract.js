@@ -300,12 +300,12 @@ exports.extractQuestions = onRequest({
     }
 
     try {
-      const apiKey = process.env.LLAMA_INDEX_API
+      const apiKey = req.body?.apiKey
+        || (req.headers.authorization ? req.headers.authorization.replace(/^Bearer\s+/i, '').trim() : null)
+        || process.env.LLAMA_INDEX_API
         || process.env.LLAMA_CLOUD_API_KEY
         || process.env.Lama_INDEX_API
-        || process.env.VITE_LLAMA_INDEX_API_KEY
-        || req.body?.apiKey
-        || (req.headers.authorization ? req.headers.authorization.replace(/^Bearer\s+/i, '').trim() : null);
+        || process.env.VITE_LLAMA_INDEX_API_KEY;
 
       if (!apiKey) {
         return res.status(500).json({ error: 'Question extraction service is not configured on the server.' });

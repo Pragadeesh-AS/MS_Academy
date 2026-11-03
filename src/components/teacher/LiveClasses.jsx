@@ -1524,9 +1524,6 @@ export default function LiveClasses({ department }) {
   useEffect(() => {
     const fetchQuestions = async () => {
       try {
-        const qSnapshot = await getDocs(collection(db, 'question_bank'));
-        const qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
         const departmentMapping = {
           'CSE': 'Computer Science (CSE)',
           'ECE': 'Electronics (ECE)',
@@ -1536,8 +1533,18 @@ export default function LiveClasses({ department }) {
           'DS': 'Data Science (DS)'
         };
         const teacherFullDept = departmentMapping[department] || department || 'All Departments';
-
         const shortCode = ((teacherFullDept.match(/\(([^)]+)\)/) || [])[1] || '').trim();
+
+        let qSnapshot;
+        if (teacherFullDept && teacherFullDept !== 'All Departments') {
+          const allowed = [...new Set([teacherFullDept, shortCode, department, 'Engineering Mathematics', 'Aptitude', 'General'].filter(Boolean))].slice(0, 30);
+          qSnapshot = await getDocs(query(collection(db, 'question_bank'), where('department', 'in', allowed)));
+        } else {
+          qSnapshot = await getDocs(collection(db, 'question_bank'));
+        }
+
+        const qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
         const isCommonBank = (name) => {
           const n = (name || '').trim().toLowerCase();
           return n === 'engineering mathematics' || /ap+titude/.test(n);

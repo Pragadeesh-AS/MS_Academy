@@ -8,7 +8,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
+      '@': path.resolve(__dirname, './src'),
+      'firebase/firestore': path.resolve(__dirname, './src/utils/firestoreTracker.js')
     }
   },
   envPrefix: ['VITE_', 'Lama_', 'LLAMA_'],
