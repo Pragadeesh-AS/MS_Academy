@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Trophy, Star, CheckCircle2, XCircle, Info, Lock, FileText, TrendingUp, UserRound, Crown } from 'lucide-react';
+import { ArrowLeft, Star, CheckCircle2, XCircle, Info, Lock, FileText, TrendingUp, UserRound, Crown } from 'lucide-react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -9,14 +9,14 @@ import logoImg from '../../assets/msgate_logo.png';
 
 // One test attempt's report, laid out like a GATE test-series result page:
 // a dark header with the test details, then four tabs -
-//   Your Performance (result + All India Rank, time, answer evaluation, percentage, trophy,
+//   Your Performance (result + rank, time, answer evaluation, percentage, trophy,
 //                     section-wise and topic-wise results, time used on each question)
 //   Solutions        (the question-by-question review passed in as `solutions`)
 //   Key              (answer key vs your answer + time, per question)
 //   Top Rankers      (top 10 of everyone who took this test)
 // `attempt` is a Student History entry built in admin/Analytics.jsx.
 
-const COLORS = { correct: '#22c55e', wrong: '#dc2626', unattempted: '#d4d4d8', blue: '#0284c7' };
+const COLORS = { correct: '#22c55e', wrong: '#dc2626', unattempted: '#d4d4d8', blue: '#0284c7', yellow: '#eab308' };
 const TOP_N = 10;
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -72,7 +72,7 @@ const Card = ({ title, children, className = '' }) => (
 
 export default function TestReport({ attempt, studentName, hideKey = false, onBack, onReviewSolutions = null, solutions = null }) {
   const [tab, setTab] = useState('performance');
-  const [allAttempts, setAllAttempts] = useState(null); // everyone's attempts at this test (for AIR / Top Rankers)
+  const [allAttempts, setAllAttempts] = useState(null); // everyone's attempts at this test (for rank / Top Rankers)
 
   useEffect(() => { setTab('performance'); }, [attempt?.id]);
 
@@ -92,6 +92,11 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
   const score = round2(attempt.score);
   const negative = round2(questions.reduce((s, q) => s + (q.awarded < 0 ? -q.awarded : 0), 0));
   const percentage = totalMarks > 0 ? round2((attempt.score / totalMarks) * 100) : 0;
+  const percentageColor = percentage < 30
+    ? { stroke: COLORS.wrong, text: 'text-red-600' }
+    : percentage <= 50
+      ? { stroke: COLORS.yellow, text: 'text-amber-500' }
+      : { stroke: COLORS.correct, text: 'text-green-600' };
   const counts = {
     correct: questions.filter(q => q.status === 'Correct').length,
     wrong: questions.filter(q => q.status === 'Wrong').length,
@@ -223,7 +228,7 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
                 </div>
                 <p className="mt-1 text-sm text-slate-500">Negative Marks: {negative}</p>
                 <div className="mt-3 flex items-end justify-center gap-3">
-                  <span className="text-xl text-slate-700 mb-2">AIR</span>
+                  <span className="text-xl text-slate-700 mb-2">Rank</span>
                   <span className="text-7xl font-medium text-sky-600 leading-none tabular-nums">{allAttempts === null ? '…' : (myRank ?? '-')}</span>
                 </div>
                 <p className="mt-3 text-sm text-slate-600">
@@ -286,42 +291,17 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
                   <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                     <circle cx="50" cy="50" r="42" fill="#fafafa" stroke="#d4d4d8" strokeWidth="8" />
                     <circle
-                      cx="50" cy="50" r="42" fill="none" stroke={COLORS.blue} strokeWidth="8"
+                      cx="50" cy="50" r="42" fill="none" stroke={percentageColor.stroke} strokeWidth="8"
                       strokeDasharray={`${(Math.max(0, Math.min(100, percentage)) / 100) * 263.9} 263.9`}
                     />
                   </svg>
-                  <span className={`absolute inset-0 flex items-center justify-center text-3xl tabular-nums ${percentage < 0 ? 'text-red-600' : 'text-slate-800'}`}>{percentage}</span>
+                  <span className={`absolute inset-0 flex items-center justify-center text-3xl tabular-nums ${percentageColor.text}`}>{percentage}</span>
                 </div>
                 <p className="mt-4 text-lg text-slate-700">Your Total Percentage</p>
               </div>
             </Card>
 
-            <Card title="Performance">
-              <div className="flex flex-col items-center text-center py-2">
-                <div className="flex items-end justify-center gap-4 mb-3">
-                  {[2, 1, 3].map(place => {
-                    const won = myRank === place;
-                    const tint = place === 1 ? 'text-yellow-500' : place === 2 ? 'text-slate-400' : 'text-orange-500';
-                    return (
-                      <div key={place} className="flex flex-col items-center">
-                        <Trophy size={place === 1 ? 72 : 52} className={won ? tint : 'text-slate-200'} strokeWidth={1.5} />
-                        <div className={`mt-1 ${place === 1 ? 'w-24 h-4' : 'w-16 h-3'} rounded-sm ${won ? 'bg-slate-300' : 'bg-slate-100'}`} />
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="font-bold text-slate-800">MS GATE Academy</p>
-                <p className="text-sm text-slate-500">{new Date().getFullYear()}</p>
-                <p className="mt-3 text-slate-700">
-                  {allAttempts === null ? 'Working out your rank…'
-                    : myRank && myRank <= 3
-                      ? <>Congratulations! You won the <strong>{myRank === 1 ? 'gold' : myRank === 2 ? 'silver' : 'bronze'}</strong> trophy - Rank <strong>{myRank}</strong>.</>
-                      : <>You didn't get any trophy. Your Rank is <strong>{myRank ?? '-'}</strong>.<br />* You can do better.</>}
-                </p>
-              </div>
-            </Card>
-
-            <Card title="Section Wise Result View">
+            <Card title="Section Wise Result View" className="lg:col-span-2">
               <div className="space-y-5">
                 {sections.map(sec => (
                   <div key={sec.name} className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 gap-x-4">
@@ -486,7 +466,7 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
                   return (
                     <div key={a.id} className={`relative bg-white rounded-xl border shadow-sm p-4 ${isMe ? 'border-sky-400 ring-2 ring-sky-200' : 'border-slate-200'}`}>
                       <span className="absolute top-3 right-3 flex items-center gap-1 bg-sky-500 text-white text-xs font-bold px-2.5 py-1 rounded">
-                        <Star size={12} /> AIR-{a.rank}
+                        <Star size={12} /> Rank {a.rank}
                       </span>
                       <div className="flex items-center gap-3 mb-4 pr-20">
                         <div className="w-14 h-14 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 shrink-0">
@@ -510,7 +490,7 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
               </div>
             )}
             {mine && mine.rank > TOP_N && (
-              <p className="mt-6 text-center text-sm font-semibold text-slate-600">Your rank: <strong>AIR-{mine.rank}</strong> of {ranked.length}</p>
+              <p className="mt-6 text-center text-sm font-semibold text-slate-600">Your rank: <strong>Rank {mine.rank}</strong> of {ranked.length}</p>
             )}
           </div>
         )}

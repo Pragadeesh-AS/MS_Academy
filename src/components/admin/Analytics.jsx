@@ -38,6 +38,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
   const [globalTestTab, setGlobalTestTab] = useState('overview'); // 'overview' | 'questions'
   const [viewingFromGlobalTestId, setViewingFromGlobalTestId] = useState(null);
   const [leaderboardSearch, setLeaderboardSearch] = useState('');
+  const [compareMetric, setCompareMetric] = useState('score'); // 'score' | 'accuracy' | 'attempt' | 'correct' | 'incorrect' | 'time'
   
   // Drill-down states for Student
   const [studentSearch, setStudentSearch] = useState('');
@@ -703,6 +704,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
     setGlobalTestTab('overview');
     setViewingFromGlobalTestId(null);
     setLeaderboardSearch('');
+    setCompareMetric('score');
   };
 
   const closeGlobalTestDetail = () => {
@@ -710,6 +712,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
     setViewingFromGlobalTestId(null);
     setDetailedTestId(null);
     setLeaderboardSearch('');
+    setCompareMetric('score');
   };
 
   const openStudentTestFromGlobal = (student) => {
@@ -1543,23 +1546,165 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                 {/* Chart and Table Grid */}
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
                   
-                  {/* Left: Score Distribution Chart */}
-                  <div className="xl:col-span-5 xl:self-start flex flex-col bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-                    <h4 className="text-[15px] font-[900] text-slate-800 mb-8 flex items-center gap-2">
-                      <BarChart2 size={18} className="text-blue-500"/> Score Distribution
-                    </h4>
-                    <div className="w-full h-[320px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={activeGlobalTest.distribution} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="range" axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#64748b', fontWeight: 600 }} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#64748b', fontWeight: 600 }} />
-                          <RechartsTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)', padding: '12px 16px' }} />
-                          <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={40} isAnimationActive={false} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
+                  {/* Left: COMPARE Chart (You vs Topper vs Average) */}
+                  {(() => {
+                    const studentsList = activeGlobalTest.students || [];
+                    const totalStudents = studentsList.length;
+
+                    const currentEmail = (studentViewOnlyEmail || sessionStorage.getItem('auth_email') || '').toLowerCase().trim();
+                    const currentName = (studentViewOnlyName || selectedStudentName || sessionStorage.getItem('auth_name') || '').toLowerCase().trim();
+                    const youStudent = studentsList.find(s => 
+                      (currentEmail && (s.email || '').toLowerCase().trim() === currentEmail) ||
+                      (currentName && (s.name || '').toLowerCase().trim() === currentName)
+                    ) || null;
+
+                    const topperStudent = totalStudents > 0 
+                      ? [...studentsList].sort((a, b) => (b.score || 0) - (a.score || 0) || (a.timeSeconds || 0) - (b.timeSeconds || 0))[0] 
+                      : null;
+
+                    const getMetrics = (st) => {
+                      if (!st) return { score: 0, accuracy: 0, attempt: 0, correct: 0, incorrect: 0, time: 0 };
+                      const corr = st.correct || 0;
+                      const incorr = st.wrong || 0;
+                      const att = corr + incorr;
+                      const acc = att > 0 ? Math.round((corr / att) * 100) : 0;
+                      const timeMins = Math.round(((st.timeSeconds || 0) / 60) * 10) / 10;
+                      return {
+                        score: Math.round((Number(st.score) || 0) * 100) / 100,
+                        accuracy: acc,
+                        attempt: att,
+                        correct: corr,
+                        incorrect: incorr,
+                        time: timeMins,
+                      };
+                    };
+
+                    const youMetrics = getMetrics(youStudent);
+                    const topperMetrics = getMetrics(topperStudent);
+
+                    const avgMetrics = {
+                      score: totalStudents > 0 ? Math.round((studentsList.reduce((sum, s) => sum + (s.score || 0), 0) / totalStudents) * 100) / 100 : 0,
+                      accuracy: totalStudents > 0 ? Math.round(studentsList.reduce((sum, s) => {
+                        const att = (s.correct || 0) + (s.wrong || 0);
+                        return sum + (att > 0 ? ((s.correct || 0) / att) * 100 : 0);
+                      }, 0) / totalStudents) : 0,
+                      attempt: totalStudents > 0 ? Math.round((studentsList.reduce((sum, s) => sum + (s.correct || 0) + (s.wrong || 0), 0) / totalStudents) * 10) / 10 : 0,
+                      correct: totalStudents > 0 ? Math.round((studentsList.reduce((sum, s) => sum + (s.correct || 0), 0) / totalStudents) * 10) / 10 : 0,
+                      incorrect: totalStudents > 0 ? Math.round((studentsList.reduce((sum, s) => sum + (s.wrong || 0), 0) / totalStudents) * 10) / 10 : 0,
+                      time: totalStudents > 0 ? Math.round((studentsList.reduce((sum, s) => sum + (s.timeSeconds || 0), 0) / totalStudents / 60) * 10) / 10 : 0,
+                    };
+
+                    const compareChartData = [
+                      { name: 'You', value: youMetrics[compareMetric] },
+                      { name: 'Topper', value: topperMetrics[compareMetric] },
+                      { name: 'Average', value: avgMetrics[compareMetric] },
+                    ];
+
+                    const maxVal = Math.max(
+                      Number(youMetrics[compareMetric]) || 0,
+                      Number(topperMetrics[compareMetric]) || 0,
+                      Number(avgMetrics[compareMetric]) || 0,
+                      1
+                    );
+                    const yDomainMax = compareMetric === 'accuracy' ? 100 : Math.max(5, Math.ceil(maxVal * 1.25));
+
+                    const COMPARE_OPTIONS = [
+                      { id: 'score', label: 'Score' },
+                      { id: 'accuracy', label: 'Accuracy' },
+                      { id: 'attempt', label: 'Attempt' },
+                      { id: 'correct', label: 'Correct' },
+                      { id: 'incorrect', label: 'Incorrect' },
+                      { id: 'time', label: 'Time' },
+                    ];
+
+                    const formatVal = (val) => {
+                      if (compareMetric === 'score') return `${val} marks`;
+                      if (compareMetric === 'accuracy') return `${val}%`;
+                      if (compareMetric === 'attempt') return `${val} Qs`;
+                      if (compareMetric === 'correct') return `${val} Qs`;
+                      if (compareMetric === 'incorrect') return `${val} Qs`;
+                      if (compareMetric === 'time') return `${val} min${val === 1 ? '' : 's'}`;
+                      return val;
+                    };
+
+                    return (
+                      <div className="xl:col-span-5 xl:self-start flex flex-col bg-[#1f2228] border border-slate-800 rounded-3xl p-6 shadow-md text-white">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-[13px] font-[900] text-slate-400 uppercase tracking-widest">
+                            COMPARE
+                          </h4>
+                          {youStudent && (
+                            <span className="text-[11px] font-bold text-purple-400 bg-purple-950/60 border border-purple-800/60 px-2.5 py-0.5 rounded-full">
+                              You: {youStudent.name}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 6 Metric Pill Options in 2 rows of 3 */}
+                        <div className="grid grid-cols-3 gap-2 sm:gap-2.5 mb-6">
+                          {COMPARE_OPTIONS.map(opt => {
+                            const isSelected = compareMetric === opt.id;
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => setCompareMetric(opt.id)}
+                                className={`py-2 px-2 sm:px-3 rounded-full text-xs sm:text-sm font-bold transition-all text-center ${
+                                  isSelected
+                                    ? 'bg-[#9d62fc] text-white shadow-lg shadow-purple-900/40 ring-1 ring-purple-400/30'
+                                    : 'bg-transparent border border-slate-700/80 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Comparison Bar Chart */}
+                        <div className="w-full h-[300px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={compareChartData} margin={{ top: 15, right: 15, left: -20, bottom: 0 }}>
+                              <CartesianGrid vertical={false} stroke="#2e333d" strokeDasharray="0" />
+                              <XAxis 
+                                dataKey="name" 
+                                axisLine={false} 
+                                tickLine={false} 
+                                tick={{ fontSize: 13, fill: '#f1f5f9', fontWeight: 700 }} 
+                              />
+                              <YAxis 
+                                axisLine={false} 
+                                tickLine={false} 
+                                tick={{ fontSize: 12, fill: '#848d9a', fontWeight: 600 }} 
+                                domain={[0, yDomainMax]} 
+                              />
+                              <RechartsTooltip 
+                                cursor={{ fill: 'rgba(255, 255, 255, 0.04)' }} 
+                                contentStyle={{ 
+                                  backgroundColor: '#181b21', 
+                                  border: '1px solid #333a46', 
+                                  borderRadius: '14px', 
+                                  color: '#ffffff', 
+                                  fontSize: '13px', 
+                                  fontWeight: '700', 
+                                  padding: '10px 14px', 
+                                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)' 
+                                }} 
+                                formatter={(val) => [formatVal(val), COMPARE_OPTIONS.find(o => o.id === compareMetric)?.label || 'Value']}
+                              />
+                              <Bar 
+                                dataKey="value" 
+                                fill="#9d62fc" 
+                                radius={[8, 8, 0, 0]} 
+                                barSize={44} 
+                                isAnimationActive={false} 
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Right: Innovative Leaderboard */}
                   <div className="xl:col-span-7 flex flex-col bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
