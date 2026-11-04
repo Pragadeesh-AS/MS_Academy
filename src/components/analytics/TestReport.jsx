@@ -302,27 +302,122 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
             </Card>
 
             <Card title="Section Wise Result View" className="lg:col-span-2">
-              <div className="space-y-5">
-                {sections.map(sec => (
-                  <div key={sec.name} className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 gap-x-4 pb-4 border-b border-slate-100 last:border-b-0 last:pb-0">
-                    <p className="col-span-2 text-xl font-bold text-slate-800 break-words">{sec.name}</p>
-                    <div>
-                      <p className="text-slate-500 text-sm">Obtained Marks</p>
-                      <p className={`text-xl font-bold ${sec.obtained < 0 ? 'text-red-600' : 'text-green-700'}`}>
-                        {round2(sec.obtained)} <span className="text-slate-400 text-base font-normal">/ {round2(sec.total)}</span>
-                      </p>
+              <div className="space-y-6">
+                {sections.map(sec => {
+                  const totalQ = sec.correct + sec.wrong + sec.unattempted;
+                  const pct = sec.total ? round2((sec.obtained / sec.total) * 100) : 0;
+                  const correctPct = totalQ > 0 ? (sec.correct / totalQ) * 100 : 0;
+                  const wrongPct = totalQ > 0 ? (sec.wrong / totalQ) * 100 : 0;
+                  const unattemptedPct = totalQ > 0 ? (sec.unattempted / totalQ) * 100 : 0;
+
+                  return (
+                    <div key={sec.name} className="p-4 sm:p-5 rounded-2xl bg-slate-50/60 border border-slate-200/70 space-y-4">
+                      {/* Section Title & Badges */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-3">
+                        <h4 className="text-lg sm:text-xl font-black text-slate-800 break-words">{sec.name}</h4>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="px-3 py-1 rounded-full text-xs font-bold bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                            {totalQ} Questions
+                          </span>
+                          <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700">
+                            Max {round2(sec.total)} Marks
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 5 Stats Metric Tiles filling the width */}
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
+                        {/* Obtained Marks */}
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 sm:p-4 shadow-2xs flex flex-col justify-between">
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Obtained Marks</span>
+                          <p className="text-xl sm:text-2xl font-black mt-2">
+                            <span className={sec.obtained < 0 ? 'text-red-600' : 'text-green-600'}>{round2(sec.obtained)}</span>
+                            <span className="text-slate-400 text-sm font-medium"> / {round2(sec.total)}</span>
+                          </p>
+                        </div>
+
+                        {/* Percentage */}
+                        <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 sm:p-4 shadow-2xs flex flex-col justify-between">
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Percentage</span>
+                          <p className="text-xl sm:text-2xl font-black text-slate-800 mt-2">
+                            {pct}%
+                          </p>
+                        </div>
+
+                        {/* Correct */}
+                        <div className="bg-emerald-50/70 border border-emerald-200/70 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between">
+                          <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider flex items-center justify-between">
+                            Correct <CheckCircle2 size={15} className="text-emerald-600" />
+                          </span>
+                          <p className="text-xl sm:text-2xl font-black text-emerald-700 mt-2">
+                            {sec.correct} <span className="text-xs font-medium text-emerald-600/80">Qs</span>
+                          </p>
+                        </div>
+
+                        {/* Wrong */}
+                        <div className="bg-rose-50/70 border border-rose-200/70 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between">
+                          <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wider flex items-center justify-between">
+                            Wrong <XCircle size={15} className="text-rose-600" />
+                          </span>
+                          <p className="text-xl sm:text-2xl font-black text-rose-700 mt-2">
+                            {sec.wrong} <span className="text-xs font-medium text-rose-600/80">Qs</span>
+                          </p>
+                        </div>
+
+                        {/* Unattempted */}
+                        <div className="col-span-2 sm:col-span-1 bg-white border border-slate-200/80 rounded-2xl p-3.5 sm:p-4 shadow-2xs flex flex-col justify-between">
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                            Unattempted <Info size={15} className="text-slate-400" />
+                          </span>
+                          <p className="text-xl sm:text-2xl font-black text-slate-700 mt-2">
+                            {sec.unattempted} <span className="text-xs font-medium text-slate-400">Qs</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Visual Stacked Progress Bar */}
+                      <div className="space-y-1.5 pt-1">
+                        <div className="w-full h-3 rounded-full bg-slate-200/80 overflow-hidden flex shadow-inner">
+                          {correctPct > 0 && (
+                            <div
+                              style={{ width: `${correctPct}%` }}
+                              className="bg-emerald-500 h-full transition-all"
+                              title={`Correct: ${sec.correct} (${Math.round(correctPct)}%)`}
+                            />
+                          )}
+                          {wrongPct > 0 && (
+                            <div
+                              style={{ width: `${wrongPct}%` }}
+                              className="bg-rose-500 h-full transition-all"
+                              title={`Wrong: ${sec.wrong} (${Math.round(wrongPct)}%)`}
+                            />
+                          )}
+                          {unattemptedPct > 0 && (
+                            <div
+                              style={{ width: `${unattemptedPct}%` }}
+                              className="bg-slate-300 h-full transition-all"
+                              title={`Unattempted: ${sec.unattempted} (${Math.round(unattemptedPct)}%)`}
+                            />
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-500 px-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                            {sec.correct} Correct ({totalQ > 0 ? Math.round(correctPct) : 0}%)
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                            {sec.wrong} Wrong ({totalQ > 0 ? Math.round(wrongPct) : 0}%)
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-slate-300 inline-block" />
+                            {sec.unattempted} Unattempted ({totalQ > 0 ? Math.round(unattemptedPct) : 0}%)
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-slate-500 text-sm">Percentage</p>
-                      <p className="text-xl text-slate-800">{sec.total ? round2((sec.obtained / sec.total) * 100) : 0} %</p>
-                    </div>
-                    <div className="col-span-2 sm:col-span-4 flex items-center gap-8 sm:gap-14 pt-1">
-                      <div><p className="text-green-700 text-sm">Correct</p><p className="text-lg text-green-700 font-semibold">{sec.correct}</p></div>
-                      <div><p className="text-red-600 text-sm">Wrong</p><p className="text-lg text-red-600 font-semibold">{sec.wrong}</p></div>
-                      <div><p className="text-slate-400 text-sm">Unattempted</p><p className="text-lg text-slate-400 font-semibold">{sec.unattempted}</p></div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
 
