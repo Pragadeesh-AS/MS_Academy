@@ -14,7 +14,7 @@ import Analytics from './admin/Analytics';
 import { TrendingUp, ShieldAlert, Tag } from 'lucide-react';
 import ReportedQuestions from './admin/ReportedQuestions';
 import QuestionBank from './admin/QuestionBank';
-import { prewarmQuestionBankCache } from '../utils/questionBankCache';
+import { prewarmQuestionBankCache, deptNameVariants, COMMON_DEPARTMENT_NAMES, getCachedQuestionsSync } from '../utils/questionBankCache';
 import AttributesManager from './admin/AttributesManager';
 import { gateCoursesData } from './GateCourses';
 import RoleSwitcher from './shared/RoleSwitcher';
@@ -70,7 +70,7 @@ const getDeptEmoji = (dept) => DEPT_EMOJI[(dept.match(/\(([^)]+)\)/) || [])[1]] 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [teacherName, setTeacherName] = useState('Teacher');
-  const [teacherDepartment, setTeacherDepartment] = useState('');
+  const [teacherDepartment, setTeacherDepartment] = useState(() => sessionStorage.getItem('auth_department') || '');
 
   useEffect(() => {
     if (teacherDepartment) {
@@ -120,6 +120,7 @@ export default function TeacherDashboard() {
             const data = querySnapshot.docs[0].data();
             if (data.department) {
               setTeacherDepartment(data.department);
+              sessionStorage.setItem('auth_department', data.department);
             }
           }
         }
@@ -159,27 +160,26 @@ export default function TeacherDashboard() {
     if (!teacherDepartment) return;
     const fetchCourseOverview = async () => {
       try {
-        // Count exactly what the teacher's Question Bank shows: their department (stored as
-        // "Mechanical (ME)" or "ME") plus the shared Engineering Mathematics / Aptitude banks,
-        // approved only (reviewed or skip-review) - never questions still with a reviewer.
-        const attrSnap = await getDocs(collection(db, 'question_attributes'));
-        const commonDeptNames = attrSnap.docs
-          .map(d => d.data())
-          .filter(a => a.type === 'department' && (((a.name || '').trim().toLowerCase() === 'engineering mathematics') || /ap+titude/.test((a.name || '').toLowerCase())))
-          .map(a => a.name);
-        const shortCode = ((teacherDepartment.match(/\(([^)]+)\)/) || [])[1] || '').trim();
-        const allowedDepts = [...new Set([teacherDepartment, shortCode, ...commonDeptNames].filter(Boolean))].slice(0, 30);
+        const allowedDepts = [...new Set([...deptNameVariants(teacherDepartment), ...COMMON_DEPARTMENT_NAMES])].slice(0, 30);
 
-        const [testsSnap, questionsSnap, recordingsCountSnap, classesSnap] = await Promise.all([
+        // First check memory/cache for questions to eliminate redundant Firestore reads
+        const cached = getCachedQuestionsSync(`dept_${teacherDepartment}`);
+        let questionsCountPromise;
+        if (cached && cached.length > 0) {
+          questionsCountPromise = Promise.resolve(cached.filter(d => !d.status || d.status === 'Approved').length);
+        } else {
+          // Use getCountFromServer instead of getDocs to avoid downloading hundreds of full documents
+          questionsCountPromise = getCountFromServer(query(collection(db, 'question_bank'), where('department', 'in', allowedDepts)))
+            .then(snap => snap.data().count)
+            .catch(() => 0);
+        }
+
+        const [testsSnap, questionsCount, recordingsCountSnap, classesSnap] = await Promise.all([
           getDocs(query(collection(db, 'tests'), where('department', '==', teacherDepartment))),
-          getDocs(query(collection(db, 'question_bank'), where('department', 'in', allowedDepts))),
+          questionsCountPromise,
           getCountFromServer(query(collection(db, 'recordings'), where('department', '==', teacherDepartment))),
           getDocs(query(collection(db, 'scheduled_classes'), where('department', '==', teacherDepartment))),
         ]);
-        const questionsCount = questionsSnap.docs.filter(d => {
-          const status = d.data().status;
-          return !status || status === 'Approved';
-        }).length;
 
         const tests = testsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         tests.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
@@ -526,12 +526,26 @@ export default function TeacherDashboard() {
           })()
         )}
 
-        {activeTab === 'live' && <LiveClasses department={teacherDepartment} />}
+        {activeTab === 'live' && (
+          teacherDepartment ? (
+            <LiveClasses department={teacherDepartment} />
+          ) : (
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )
+        )}
         {activeTab === 'students' && <TeacherStudents department={teacherDepartment} />}
         {activeTab === 'questions' && (
-          <div>
-             <QuestionBank lockedDepartment={teacherDepartment} initialEditQuestionId={editQuestionId} onClearEdit={() => setEditQuestionId(null)} />
-          </div>
+          teacherDepartment ? (
+            <div>
+               <QuestionBank lockedDepartment={teacherDepartment} initialEditQuestionId={editQuestionId} onClearEdit={() => setEditQuestionId(null)} />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )
         )}
         {activeTab === 'tests' && (
           <TestsManager

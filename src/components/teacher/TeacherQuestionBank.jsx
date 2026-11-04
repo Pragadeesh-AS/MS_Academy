@@ -1,10 +1,11 @@
 import { resolveQuestionType, isMsqQuestion, isMcqQuestion, isNatQuestion } from '../../utils/questionTypeSplit';
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
 import { Layers, Search, Filter, BookOpen, AlertCircle, FileText, Sparkles, ChevronDown, Image as ImageIcon } from 'lucide-react';
 import Loader from '../Loader';
 import { hasDiagram } from '../../utils/questionLogger';
+import { loadQuestionBankData, getCachedQuestionsSync, isCommonDeptName } from '../../utils/questionBankCache';
+import { sameDepartment } from '../../utils/subjects';
 
 export default function TeacherQuestionBank({ department }) {
   const [questions, setQuestions] = useState([]);
@@ -43,27 +44,43 @@ export default function TeacherQuestionBank({ department }) {
   const teacherFullDept = departmentMapping[department] || department || 'All Departments';
 
   useEffect(() => {
-    const fetchQuestions = async () => {
-      setLoading(true);
-      try {
-        const qSnapshot = await getDocs(collection(db, 'question_bank'));
-        const qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        // Filter questions by teacher's department or 'All Departments'
-        const filtered = qData.filter(q => {
-          if (teacherFullDept === 'All Departments') return true;
-          return q.department === teacherFullDept || q.department === 'All Departments' || q.department === 'ALL';
-        });
-        
-        setQuestions(filtered);
-      } catch (e) {
-        console.error("Failed to fetch questions", e);
-      }
+    if (!department) {
       setLoading(false);
-    };
+      return;
+    }
+    const cacheKey = `dept_${department}`;
+    const cached = getCachedQuestionsSync(cacheKey);
+    if (cached && cached.length > 0) {
+      const filtered = cached.filter(q => (!q.status || q.status === 'Approved') && (sameDepartment(q.department, department) || isCommonDeptName(q.department)));
+      setQuestions(filtered);
+      setLoading(false);
+    }
 
-    fetchQuestions();
-  }, [department, teacherFullDept]);
+    loadQuestionBankData({
+      lockedDepartment: department,
+      onCacheHit: ({ questions: cachedQuestions }) => {
+        const filtered = (cachedQuestions || []).filter(q => (!q.status || q.status === 'Approved') && (sameDepartment(q.department, department) || isCommonDeptName(q.department)));
+        setQuestions(filtered);
+        setLoading(false);
+      },
+      onBackgroundUpdate: ({ questions: updatedQuestions }) => {
+        const filtered = (updatedQuestions || []).filter(q => (!q.status || q.status === 'Approved') && (sameDepartment(q.department, department) || isCommonDeptName(q.department)));
+        setQuestions(filtered);
+        setLoading(false);
+      }
+    })
+      .then(res => {
+        if (res?.questions) {
+          const filtered = res.questions.filter(q => (!q.status || q.status === 'Approved') && (sameDepartment(q.department, department) || isCommonDeptName(q.department)));
+          setQuestions(filtered);
+        }
+        setLoading(false);
+      })
+      .catch(e => {
+        console.error("Failed to fetch questions", e);
+        setLoading(false);
+      });
+  }, [department]);
 
   const filteredQuestions = questions.filter(q => {
     const matchesSearch = (q.questionText || '').toLowerCase().includes(search.toLowerCase()) ||

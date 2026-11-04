@@ -39,7 +39,7 @@ export async function resolveUserRoles(email) {
     if (!teacherSnap.empty) {
       const teacherDoc = teacherSnap.docs[0];
       await updateDoc(doc(db, 'invited_teachers', teacherDoc.id), { status: 'Accepted', lastLogin: serverTimestamp() });
-      roles.push({ role: 'teacher', name: teacherDoc.data().name || null });
+      roles.push({ role: 'teacher', name: teacherDoc.data().name || null, department: teacherDoc.data().department || null });
     }
   } catch (e) {
     console.error('Failed to check teacher role', e);
@@ -126,6 +126,9 @@ export function getStoredRoles() {
 export function switchToRole(descriptor, navigate) {
   const sessionRole = descriptor.role === 'reviewer' ? 'typist' : descriptor.role;
   sessionStorage.setItem('auth_role', sessionRole);
+  if (descriptor.department) {
+    sessionStorage.setItem('auth_department', descriptor.department);
+  }
 
   if (descriptor.role === 'typist' || descriptor.role === 'reviewer') {
     localStorage.setItem('pair_id', descriptor.pairId);

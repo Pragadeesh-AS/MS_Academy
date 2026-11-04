@@ -40,7 +40,8 @@ import AgoraRTC, {
 } from "agora-rtc-react";
 import Whiteboard from './Whiteboard';
 import { useLiveRecording } from './hooks/useLiveRecording';
-import { subjectOptionsFor, groupBySubject } from '../../utils/subjects';
+import { subjectOptionsFor, groupBySubject, sameDepartment } from '../../utils/subjects';
+import { loadQuestionBankData, getCachedQuestionsSync, isCommonDeptName } from '../../utils/questionBankCache';
 import MatchColumns from '../shared/MatchColumns';
 import QuestionExplainPanel from '../liveTest/QuestionExplainPanel';
 import TeacherSolutionCard from '../liveTest/TeacherSolutionCard';
@@ -1522,49 +1523,25 @@ export default function LiveClasses({ department }) {
   const [departmentQuestions, setDepartmentQuestions] = useState([]);
 
   useEffect(() => {
-    const fetchQuestions = async () => {
-      try {
-        const departmentMapping = {
-          'CSE': 'Computer Science (CSE)',
-          'ECE': 'Electronics (ECE)',
-          'ME': 'Mechanical (ME)',
-          'CE': 'Civil (CE)',
-          'EE': 'Electrical (EE)',
-          'DS': 'Data Science (DS)'
-        };
-        const teacherFullDept = departmentMapping[department] || department || 'All Departments';
-        const shortCode = ((teacherFullDept.match(/\(([^)]+)\)/) || [])[1] || '').trim();
+    if (!department) return;
+    const cacheKey = `dept_${department}`;
+    const cached = getCachedQuestionsSync(cacheKey);
+    if (cached && cached.length > 0) {
+      const approved = cached.filter(q => (!q.status || q.status === 'Approved') && (sameDepartment(q.department, department) || isCommonDeptName(q.department)));
+      setDepartmentQuestions(approved);
+    }
 
-        let qSnapshot;
-        if (teacherFullDept && teacherFullDept !== 'All Departments') {
-          const allowed = [...new Set([teacherFullDept, shortCode, department, 'Engineering Mathematics', 'Aptitude', 'General'].filter(Boolean))].slice(0, 30);
-          qSnapshot = await getDocs(query(collection(db, 'question_bank'), where('department', 'in', allowed)));
-        } else {
-          qSnapshot = await getDocs(collection(db, 'question_bank'));
-        }
-
-        const qData = qSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        const isCommonBank = (name) => {
-          const n = (name || '').trim().toLowerCase();
-          return n === 'engineering mathematics' || /ap+titude/.test(n);
-        };
-
-        const filtered = qData.filter(q => {
-          // Questions still waiting on (or sent back by) a reviewer must never be shown
-          if (q.status && q.status !== 'Approved') return false;
-          if (teacherFullDept === 'All Departments') return true;
-          return q.department === teacherFullDept || (!!shortCode && q.department === shortCode)
-            || isCommonBank(q.department)
-            || q.department === 'All Departments' || q.department === 'ALL' || !q.department;
-        });
-
-        setDepartmentQuestions(filtered);
-      } catch (e) {
-        console.error("Failed to fetch questions for live classes", e);
+    loadQuestionBankData({
+      lockedDepartment: department,
+      onCacheHit: ({ questions }) => {
+        const approved = (questions || []).filter(q => (!q.status || q.status === 'Approved') && (sameDepartment(q.department, department) || isCommonDeptName(q.department)));
+        setDepartmentQuestions(approved);
+      },
+      onBackgroundUpdate: ({ questions }) => {
+        const approved = (questions || []).filter(q => (!q.status || q.status === 'Approved') && (sameDepartment(q.department, department) || isCommonDeptName(q.department)));
+        setDepartmentQuestions(approved);
       }
-    };
-    fetchQuestions();
+    }).catch(e => console.error("Failed to fetch questions for live classes", e));
   }, [department]);
 
   useEffect(() => {

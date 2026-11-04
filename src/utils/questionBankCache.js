@@ -1,5 +1,6 @@
 import { db } from '../firebase';
-import { collection, getDocs, query, where, getCountFromServer } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { sameDepartment } from './subjects';
 
 const DB_NAME = 'ms_academy_cache';
 const DB_VERSION = 1;
@@ -27,16 +28,42 @@ export const sortQuestionsList = (list) => {
   });
 };
 
-// Check common department names
+// Check common department names (Engineering Mathematics & Aptitude)
 export const isCommonDeptName = (name) => {
   const n = (name || '').trim().toLowerCase();
-  return n === 'engineering mathematics' || /ap+titude/.test(n);
+  return n === 'engineering mathematics' || /ap+titude/.test(n) || n.includes('mathematics') || n.includes('maths') || n === 'general';
 };
+
+export const COMMON_DEPARTMENT_NAMES = [
+  'Engineering Mathematics',
+  'ENGINEERING MATHEMATICS',
+  'Mathematics',
+  'Maths',
+  'Aptitude',
+  'General Aptitude',
+  'APTITUDE',
+  'APPTITUDE',
+  'General',
+  'All',
+  'All Departments'
+];
 
 export const deptNameVariants = (name) => {
   if (!name) return [];
-  const code = (name.match(/\(([^)]+)\)/) || [])[1];
-  return code ? [name, code.trim()] : [name];
+  const n = String(name).trim();
+  const code = (n.match(/\(([^)]+)\)/) || [])[1]?.trim();
+  const base = n.replace(/\([^)]*\)/g, '').trim().replace(/\s+engineering$/i, '').trim();
+  const variants = [
+    n,
+    code,
+    base,
+    base ? `${base} Engineering` : null,
+    n.toUpperCase(),
+    code ? code.toUpperCase() : null,
+    base ? base.toUpperCase() : null,
+    base ? `${base.toUpperCase()} ENGINEERING` : null,
+  ].filter(Boolean);
+  return [...new Set(variants)];
 };
 
 // ==========================================
@@ -322,11 +349,31 @@ async function fetchFullQuestionBank({ lockedDepartment, cacheKey }) {
   const questionsRef = collection(db, 'question_bank');
   let qSnapshot;
 
+  const userRole = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('auth_role') : null;
+  const teacherStoredDept = userRole === 'teacher' && typeof sessionStorage !== 'undefined' ? (sessionStorage.getItem('auth_department') || '') : '';
+  const effectiveDept = (lockedDepartment || teacherStoredDept || '').trim();
+
+  // Guardrail: A teacher must NEVER download all questions across every department!
+  if (userRole === 'teacher' && !effectiveDept) {
+    console.warn("fetchFullQuestionBank blocked: teacher has no department resolved yet.");
+    return [];
+  }
+
   try {
-    if (lockedDepartment) {
+    if (effectiveDept) {
       const attributes = await fetchAttributes();
-      const commonNames = attributes.filter(a => a.type === 'department' && isCommonDeptName(a.name)).map(a => a.name);
-      const allowed = [...new Set([...deptNameVariants(lockedDepartment), ...commonNames])].slice(0, 30);
+      const attrCommon = attributes
+        .filter(a => a.type === 'department' && isCommonDeptName(a.name))
+        .map(a => a.name);
+      const attrDept = attributes
+        .filter(a => a.type === 'department' && sameDepartment(a.name, effectiveDept))
+        .map(a => a.name);
+      const allowed = [...new Set([
+        ...deptNameVariants(effectiveDept),
+        ...attrDept,
+        ...attrCommon,
+        ...COMMON_DEPARTMENT_NAMES
+      ])].filter(Boolean).slice(0, 30);
       qSnapshot = await getDocs(query(questionsRef, where('department', 'in', allowed)));
     } else {
       qSnapshot = await getDocs(questionsRef);
@@ -369,33 +416,22 @@ async function triggerBackgroundSync({ lockedDepartment, cacheKey, onBackgroundU
       const questionsRef = collection(db, 'question_bank');
 
       // Fetch newly updated or created questions since lastSync in parallel
-      const [updatedSnap, createdSnap, countSnap] = await Promise.all([
+      const [updatedSnap, createdSnap] = await Promise.all([
         getDocs(query(questionsRef, where('updatedAt', '>=', lastSync))),
-        getDocs(query(questionsRef, where('createdAt', '>=', lastSync))),
-        getCountFromServer(questionsRef).catch(() => null)
+        getDocs(query(questionsRef, where('createdAt', '>=', lastSync)))
       ]);
 
       const deltaDocs = new Map();
       updatedSnap.docs.forEach(d => deltaDocs.set(d.id, { id: d.id, ...d.data() }));
       createdSnap.docs.forEach(d => deltaDocs.set(d.id, { id: d.id, ...d.data() }));
 
-      const serverCount = countSnap ? countSnap.data().count : null;
-
-      // If server count changed significantly (e.g. external deletions) and delta is empty,
-      // reconcile in the background (only for department-scoped views to avoid massive full downloads)
-      if (serverCount !== null && lockedDepartment && Math.abs(serverCount - existing.length) > 2 && deltaDocs.size === 0) {
-        const fullQ = await fetchFullQuestionBank({ lockedDepartment, cacheKey });
-        if (onBackgroundUpdate) onBackgroundUpdate({ questions: fullQ, attributes: memoryCache.attributes });
-        return;
-      }
-
       if (deltaDocs.size > 0) {
         const updatedMap = new Map(existing.map(q => [q.id, q]));
         deltaDocs.forEach((docData, id) => {
-          // If lockedDepartment, check if doc matches department
+          // If lockedDepartment, check if doc matches department or common
           if (lockedDepartment) {
             const allowed = deptNameVariants(lockedDepartment);
-            if (!allowed.includes(docData.department) && !isCommonDeptName(docData.department)) {
+            if (!allowed.includes(docData.department) && !sameDepartment(docData.department, lockedDepartment) && !isCommonDeptName(docData.department)) {
               return;
             }
           }

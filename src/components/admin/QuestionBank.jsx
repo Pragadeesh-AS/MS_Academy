@@ -30,7 +30,7 @@ import {
 // Engineering Mathematics and Aptitude banks are shared by every department.
 const isCommonDeptName = (name) => {
   const n = (name || '').trim().toLowerCase();
-  return n === 'engineering mathematics' || /ap+titude/.test(n);
+  return n === 'engineering mathematics' || /ap+titude/.test(n) || n.includes('mathematics') || n.includes('maths') || n === 'general';
 };
 const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
@@ -324,6 +324,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   }, [userRole, pairId]);
 
   const fetchQuestions = async (forceRefresh = false) => {
+    if (userRole === 'teacher' && !lockedDepartment) return;
     // Only show full-screen loader if there is NO cached data available
     if (!questions.length || forceRefresh) {
       if (!hasCachedQuestions(cacheKey)) {
@@ -356,6 +357,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   };
 
   useEffect(() => {
+    if (userRole === 'teacher' && !lockedDepartment) return;
     fetchQuestions();
   }, [lockedDepartment]);
 
@@ -382,7 +384,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     || (!!q.reviewerEmail && q.reviewerEmail.toLowerCase() === myEmail)
   );
 
-  const isOwnDeptQuestion = (q) => deptNameVariants(lockedDepartment).includes(q.department);
+  const isOwnDeptQuestion = (q) => sameDepartment(q.department, lockedDepartment) || deptNameVariants(lockedDepartment).includes(q.department);
   const sameFolderName = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
 
   // The active department: either the currently opened folder, lockedDepartment, or filterDept
@@ -1291,7 +1293,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           ? (isOwnDeptQuestion(q) || isCommonDeptName(q.department))
           : selectedFolder === lockedDepartment
             ? isOwnDeptQuestion(q)
-            : sameFolderName(q.department, selectedFolder))
+            : (sameFolderName(q.department, selectedFolder) || sameDepartment(q.department, selectedFolder)))
         : selectedFolder
           ? (selectedFolder === 'Uncategorized' ? (!q.department || q.department.trim() === '') : q.department === selectedFolder)
           : (filterDept === 'All' || q.department === filterDept);
