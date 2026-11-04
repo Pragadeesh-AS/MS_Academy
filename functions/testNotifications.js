@@ -36,28 +36,54 @@ const deptCode = (name) => ((name || '').match(/\(([^)]+)\)/) || [])[1]?.trim().
 const sameDept = (a, b) => {
   const x = (a || '').trim().toLowerCase();
   const y = (b || '').trim().toLowerCase();
-  return !!x && !!y && (x === y || (!!deptCode(a) && deptCode(a) === deptCode(b)));
+  if (!x || !y) return false;
+  if (x === y) return true;
+  if (/ap+titude/.test(x) && /ap+titude/.test(y)) return true;
+  if ((x.includes('mathematics') || x.includes('maths')) && (y.includes('mathematics') || y.includes('maths'))) return true;
+  return (!!deptCode(a) && deptCode(a) === deptCode(b));
 };
+
+const isCommonDeptName = (name) => {
+  const n = (name || '').trim().toLowerCase();
+  return n === 'engineering mathematics' || /ap+titude/.test(n) || n.includes('mathematics') || n.includes('maths');
+};
+
 const FULL_BUNDLE_PERMISSIONS = ['tests', 'live_classes', 'recordings', 'notes'];
 // Elite: owns a bundle with every resource ticked (keep in sync with src/utils/membership.js)
 const isElite = (student, bundles) => {
+  if (student?.isPro === true) return true;
   const purchased = Array.isArray(student.purchasedBundles) ? student.purchasedBundles : [];
-  return bundles.some(b => purchased.includes(b.id)
-    && (b.department === 'General' || sameDept(b.department, student.department))
-    && (!b.permissions || FULL_BUNDLE_PERMISSIONS.every(p => b.permissions.includes(p))));
+  return (bundles || []).some(b => {
+    if (!purchased.includes(b.id)) return false;
+    const isNamedElite = b.tier === 'elite' || b.isElite === true || /elite/i.test(b.name || '');
+    const isFull = (!b.permissions || FULL_BUNDLE_PERMISSIONS.every(p => b.permissions.includes(p))) || isNamedElite;
+    if (!isFull) return false;
+    return b.department === 'General' || b.department === 'All' || !student.department || sameDept(b.department, student.department);
+  });
 };
 
 // Keep in sync with canAccessTest() in src/utils/testAccess.js
 const canAccessTest = (test, student, bundles) => {
-  const purchased = Array.isArray(student.purchasedBundles) ? student.purchasedBundles : [];
+  if (student?.isPro === true) return true;
   if (test.bundleId === 'free') return true;
   if (test.bundleId === undefined && (test.createdBy === 'Admin' || test.createdBy === 'MS Academy Admin')) return true;
+
+  // Elite students get common tests (Aptitude & Mathematics) across all departments, and tests for their own department
+  if (isElite(student, bundles)) {
+    if (isCommonDeptName(test.department) || test.department === 'All' || test.department === 'General' || !student.department || sameDept(student.department, test.department)) {
+      return true;
+    }
+  }
+
   // Limited to specific bundles: bundleIds (any one unlocks it), or the older single bundleId
   const onlyBundles = Array.isArray(test.bundleIds) && test.bundleIds.length ? test.bundleIds : (test.bundleId && test.bundleId !== 'free' ? [test.bundleId] : []);
-  if (onlyBundles.length) return onlyBundles.some(id => purchased.includes(id));
-  if (isElite(student, bundles)) return true;
-  return bundles.some(b =>
-    purchased.includes(b.id) && b.department === test.department && (!b.permissions || b.permissions.includes('tests'))
+  const purchased = Array.isArray(student.purchasedBundles) ? student.purchasedBundles : [];
+  if (onlyBundles.length && onlyBundles.some(id => purchased.includes(id))) return true;
+
+  return (bundles || []).some(b =>
+    purchased.includes(b.id) &&
+    (sameDept(b.department, test.department) || (isCommonDeptName(test.department) && (isCommonDeptName(b.department) || b.department === 'General' || b.department === 'All'))) &&
+    (!b.permissions || b.permissions.includes('tests'))
   );
 };
 
@@ -118,6 +144,7 @@ exports.sendTestNotifications = onSchedule({ schedule: 'every 5 minutes', timeZo
   if (upcoming.empty) return;
 
   let bundles = null;
+  let allStudentsCache = null;
   const studentsByDept = {};
 
   for (const testDoc of upcoming.docs) {
@@ -150,11 +177,23 @@ exports.sendTestNotifications = onSchedule({ schedule: 'every 5 minutes', timeZo
         const snap = await db.collection('course_bundles').get();
         bundles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }
-      if (!studentsByDept[test.department]) {
-        const snap = await db.collection('joined_students').where('department', '==', test.department || '').get();
-        studentsByDept[test.department] = snap.docs.map(d => d.data());
+      
+      let candidateStudents = [];
+      if (isCommonDeptName(test.department) || test.department === 'All' || test.department === 'General') {
+        if (!allStudentsCache) {
+          const snap = await db.collection('joined_students').get();
+          allStudentsCache = snap.docs.map(d => d.data());
+        }
+        candidateStudents = allStudentsCache;
+      } else {
+        if (!studentsByDept[test.department]) {
+          const snap = await db.collection('joined_students').where('department', '==', test.department || '').get();
+          studentsByDept[test.department] = snap.docs.map(d => d.data());
+        }
+        candidateStudents = studentsByDept[test.department];
       }
-      const emails = [...new Set(studentsByDept[test.department]
+
+      const emails = [...new Set(candidateStudents
         .filter(s => s.email && canAccessTest(test, s, bundles))
         .map(s => s.email.trim().toLowerCase()))];
       if (emails.length === 0) continue;

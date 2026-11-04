@@ -3,6 +3,7 @@ import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestor
 import { BellRing, CalendarPlus, X, ArrowRight, Bell } from 'lucide-react';
 import { db } from '../../firebase';
 import { canAccessTest } from '../../utils/testAccess';
+import { sameDepartment, isCommonDeptName } from '../../utils/subjects';
 import { AVAILABILITY, testAvailability, testStartMillis, formatTestTime, formatCountdown } from '../../utils/testSchedule';
 
 const REMINDER_WINDOW_MS = 30 * 60 * 1000;
@@ -34,8 +35,11 @@ export default function TestAlerts({ department, isPro, purchasedBundles, bundle
   useEffect(() => {
     if (!department) return undefined;
     const unsub = onSnapshot(
-      query(collection(db, 'tests'), where('department', '==', department)),
-      snap => setTests(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      collection(db, 'tests'),
+      snap => {
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setTests(all.filter(t => sameDepartment(t.department, department) || isCommonDeptName(t.department) || t.department === 'All' || t.department === 'General'));
+      },
       err => console.error('Failed to watch tests for alerts', err)
     );
     return () => unsub();
@@ -55,8 +59,8 @@ export default function TestAlerts({ department, isPro, purchasedBundles, bundle
   }, []);
 
   const relevant = useMemo(() => tests.filter(t =>
-    testStartMillis(t) !== null && !attemptedIds.has(t.id) && canAccessTest(t, { isPro, purchasedBundles, bundles })
-  ), [tests, attemptedIds, isPro, purchasedBundles, bundles]);
+    testStartMillis(t) !== null && !attemptedIds.has(t.id) && canAccessTest(t, { isPro, purchasedBundles, bundles, department })
+  ), [tests, attemptedIds, isPro, purchasedBundles, bundles, department]);
 
   // Opening within the next 30 minutes
   const startingSoon = relevant

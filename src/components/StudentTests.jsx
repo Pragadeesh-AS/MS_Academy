@@ -926,7 +926,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
   }
 
 
-  const canAccessTest = (test) => canAccessTestFor(test, { isPro, purchasedBundles, bundles });
+  const canAccessTest = (test) => canAccessTestFor(test, { isPro, purchasedBundles, bundles, department });
 
   const formatPrice = (val) => {
     const num = Number(val);

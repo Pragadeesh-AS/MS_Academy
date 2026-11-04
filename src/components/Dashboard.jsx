@@ -13,7 +13,7 @@ import { ref, listAll, getDownloadURL } from 'firebase/storage';
 import StudentLiveClasses from './StudentLiveClasses';
 import RecordingPlayerModal from './shared/RecordingPlayerModal';
 import RoleSwitcher from './shared/RoleSwitcher';
-import { STUDENT_DEPARTMENTS, groupBySubject, NO_SUBJECT } from '../utils/subjects';
+import { STUDENT_DEPARTMENTS, groupBySubject, NO_SUBJECT, sameDepartment, isCommonDeptName } from '../utils/subjects';
 import StudentTests from './StudentTests';
 import TestAlerts from './student/TestAlerts';
 import { canAccessTest } from '../utils/testAccess';
@@ -349,8 +349,11 @@ export default function Dashboard() {
   useEffect(() => {
     if (!studentDepartment) return undefined;
     const unsub = onSnapshot(
-      query(collection(db, 'tests'), where('department', '==', studentDepartment)),
-      snap => setDeptTests(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      collection(db, 'tests'),
+      snap => {
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setDeptTests(all.filter(t => sameDepartment(t.department, studentDepartment) || isCommonDeptName(t.department) || t.department === 'All' || t.department === 'General'));
+      },
       err => console.error('Failed to load scheduled tests', err)
     );
     const email = sessionStorage.getItem('auth_email');
@@ -372,7 +375,7 @@ export default function Dashboard() {
     testStartMillis(t) !== null
     && !attemptedTestIds.has(t.id)
     && testAvailability(t, scheduleNow) !== AVAILABILITY.CLOSED
-    && canAccessTest(t, { isPro, purchasedBundles, bundles: availableBundles })
+    && canAccessTest(t, { isPro, purchasedBundles, bundles: availableBundles, department: studentDepartment })
   );
   // Classes and tests on one timeline
   const classTime = (cls) => {
@@ -427,9 +430,10 @@ export default function Dashboard() {
     const fetchProgress = async () => {
       try {
         // Fetch all tests for this department
-        const tQuery = query(collection(db, 'tests'), where('department', '==', studentDepartment));
-        const tSnap = await getDocs(tQuery);
-        const totalTests = tSnap.docs.length;
+        const tSnap = await getDocs(collection(db, 'tests'));
+        const deptTestsDocs = tSnap.docs.filter(d => sameDepartment(d.data().department, studentDepartment) || isCommonDeptName(d.data().department) || d.data().department === 'All' || d.data().department === 'General');
+
+        const totalTests = deptTestsDocs.length;
 
         // Fetch student attempts
         const aQuery = query(collection(db, 'test_attempts'), where('studentEmail', '==', email));
@@ -439,7 +443,7 @@ export default function Dashboard() {
         const attemptedIds = new Set(aSnap.docs.map(d => d.data().testId));
         
         let validAttempts = 0;
-        tSnap.docs.forEach(doc => {
+        deptTestsDocs.forEach(doc => {
           if (attemptedIds.has(doc.id)) validAttempts++;
         });
         
