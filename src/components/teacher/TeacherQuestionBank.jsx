@@ -1,3 +1,4 @@
+import { resolveQuestionType, isMsqQuestion, isMcqQuestion, isNatQuestion } from '../../utils/questionTypeSplit';
 import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -172,7 +173,7 @@ export default function TeacherQuestionBank({ department }) {
                       <td className="py-4 px-6 h-[82px]">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-50 text-purple-600 border border-purple-100 text-[12px] font-[700] whitespace-nowrap">
-                            {q.questionType}
+                            {resolveQuestionType(q).toUpperCase()}
                           </span>
                           {hasDiagram(q) && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-bold whitespace-nowrap" title="Diagrammatic Question">
@@ -211,7 +212,7 @@ export default function TeacherQuestionBank({ department }) {
                             {q.questionImageUrl && (
                               <img src={q.questionImageUrl} alt="Question" className="max-h-48 rounded-lg mb-4 object-contain border border-slate-200" />
                             )}
-                            {q.questionType === 'Single Choice' && (
+                            {isMcqQuestion(q) && (
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                                 {['A', 'B', 'C', 'D'].map(opt => {
                                   const text = q[`option${opt}`];
@@ -230,7 +231,7 @@ export default function TeacherQuestionBank({ department }) {
                                 })}
                               </div>
                             )}
-                            {q.questionType === 'Multiple Choice' && (
+                            {isMsqQuestion(q) && (
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                                 {['A', 'B', 'C', 'D'].map(opt => {
                                   const text = q[`option${opt}`];
@@ -249,7 +250,7 @@ export default function TeacherQuestionBank({ department }) {
                                 })}
                               </div>
                             )}
-                            {q.questionType === 'Numerical / Fill in the Blanks' && (
+                            {isNatQuestion(q) && (
                               <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl inline-block">
                                 <span className="text-green-800 font-bold text-[14px]">Correct Answer: </span>
                                 <span className="text-green-900 font-[900] text-[14px]">

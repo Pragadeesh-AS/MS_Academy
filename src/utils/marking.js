@@ -1,3 +1,4 @@
+import { resolveQuestionType } from './questionTypeSplit';
 // GATE marking scheme, in one place for the Question Bank, the AI importer, the test screen,
 // scoring and answer-key re-grading. A question stores its marks as a label ("1 Mark (-0.33)" /
 // "2 Mark (-0.66)") plus a numeric `negativeMark`:
@@ -7,7 +8,7 @@
 
 export const MARK_LABELS = { 1: '1 Mark (-0.33)', 2: '2 Mark (-0.66)' };
 
-const NEGATIVE_MARKED_TYPES = ['Single Choice', 'Match'];
+// MCQ and Match lose 1/3 marks for wrong answers; MSQ and NAT have no negative marking
 
 // "1 Mark (-0.33)" -> 1, "2" -> 2
 export const markNumberOf = (mark) => {
@@ -17,7 +18,10 @@ export const markNumberOf = (mark) => {
 
 export const positiveMarkFor = (q) => markNumberOf(q?.mark) || 1;
 
-export const hasNegativeMarking = (q) => NEGATIVE_MARKED_TYPES.includes(q?.questionType);
+export const hasNegativeMarking = (q) => {
+  const type = resolveQuestionType(q);
+  return type === 'MCQ' || type === 'Match';
+};
 
 export const negativeMarkFor = (q) => {
   if (!hasNegativeMarking(q)) return 0;

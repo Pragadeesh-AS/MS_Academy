@@ -10,6 +10,7 @@ import {
 import { db } from '../../firebase';
 import { areSolutionsVisible } from '../../utils/solutionRelease';
 import { positiveMarkFor, negativeMarkFor } from '../../utils/marking';
+import { resolveQuestionType } from '../../utils/questionTypeSplit';
 import TestReport from '../analytics/TestReport';
 import MatchColumns from '../shared/MatchColumns';
 import { paletteFor, monogramOf } from '../../utils/departmentColors';
@@ -986,7 +987,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                             <div className="flex items-center gap-2 flex-wrap justify-end">
                               {/* Question Type */}
                               <div className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">
-                                {(q.questionType === 'Multiple Choice' || q.questionType === 'Multiple Select') ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}
+                                {resolveQuestionType(q).toUpperCase()}
                               </div>
 
                               {/* Topper's Time Badge with Gold Crown and Colored Border */}
@@ -1836,7 +1837,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
                                     <p className="text-sm font-semibold text-slate-700" dangerouslySetInnerHTML={{ __html: q.qText }} />
                                     {q.qImage && <img src={q.qImage} alt="Question" className="mt-3 max-h-40 rounded-lg shadow-sm" />}
                                     <MatchColumns question={q} className="mt-3" />
-                                  </div><div className="shrink-0 text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{(q.questionType === 'Multiple Choice' || q.questionType === 'Multiple Select') ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</div>
+                                  </div><div className="shrink-0 text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{resolveQuestionType(q).toUpperCase()}</div>
                                 </div>
                                 
                                 <div className="grid grid-cols-4 gap-4 mt-6 pt-4 border-t border-slate-200">

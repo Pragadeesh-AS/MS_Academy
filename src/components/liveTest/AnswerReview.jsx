@@ -1,3 +1,4 @@
+import { isNatQuestion, isMsqQuestion } from '../../utils/questionTypeSplit';
 import React from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { CheckCircle2, XCircle, MinusCircle } from 'lucide-react';
@@ -47,8 +48,8 @@ export default function AnswerReview({ items, dark = false }) {
     <div className="space-y-4">
       {items.map(({ question: q, answer, isAnswered, isCorrect, badge }, i) => {
         const status = !isAnswered ? 'unattempted' : isCorrect ? 'correct' : 'wrong';
-        const numerical = q.questionType === 'Fill in Blanks';
-        const multi = q.questionType === 'Multiple Choice';
+        const numerical = isNatQuestion(q);
+        const multi = isMsqQuestion(q);
         const isKey = (opt) => (multi ? (q.correctAnswers || []).includes(opt) : q.correctAnswer === opt);
         const picked = (opt) => (Array.isArray(answer) ? answer.includes(opt) : answer === opt);
         return (

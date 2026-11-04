@@ -11,6 +11,7 @@ import { examSections } from '../utils/testShuffle';
 import logoImg from '../assets/msgate_logo.png';
 import { RELEASE_MODES, releaseMode, releaseAtMillis, areSolutionsVisible, formatReleaseTime } from '../utils/solutionRelease';
 import { gradeAnswer, normalizeQuestion, correctAnswerText } from '../utils/testGrading';
+import { resolveQuestionType, isMsqQuestion } from '../utils/questionTypeSplit';
 import { canAccessTest as canAccessTestFor } from '../utils/testAccess';
 import { bundleIdsOf } from '../utils/bundleAccess';
 import { sameDepartment } from '../utils/subjects';
@@ -663,7 +664,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                         )}
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{q.questionType === 'Multiple Select' ? 'MSQ' : (q.questionType === 'Fill in Blanks' || q.questionType === 'Numerical Answer Type') ? 'NAT' : q.questionType === 'Match' ? 'MATCH' : 'MCQ'}</span>
+                        <span className="text-[10px] font-bold text-blue-700 bg-blue-100/50 border border-blue-200 px-2 py-1 rounded-md uppercase">{resolveQuestionType(q).toUpperCase()}</span>
                         <span className={`px-2.5 py-1 rounded-lg text-xs font-[800] flex items-center gap-1.5 ${badgeStyle}`}>
                           {unattempted ? (
                             <><MinusCircle size={14} /> Unattempted</>
@@ -758,9 +759,9 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                             const isSelectedByStudent = Array.isArray(studentResp.selectedAnswer)
                               ? studentResp.selectedAnswer.includes(opt)
                               : studentResp.selectedAnswer === opt;
-                            const isCorrectOpt = q.questionType === 'Multiple Choice'
-                              ? (q.correctAnswers || []).includes(opt)
-                              : q.correctAnswer === opt;
+                            const isCorrectOpt = isMsqQuestion(q)
+                              ? ((Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0) ? q.correctAnswers : (q.correctAnswer ? [q.correctAnswer] : [])).includes(opt)
+                              : (q.correctAnswer === opt || (Array.isArray(q.correctAnswers) && q.correctAnswers[0] === opt));
   
                             let cardClass = 'border-slate-200 bg-white text-slate-600';
                             let badgeClass = 'border-slate-350 text-slate-400';
@@ -783,7 +784,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                             );
                           })}
                         </div>
-                        {!isCorrect && q.questionType === 'Multiple Choice' && (q.correctAnswers || []).length > 0 && (
+                        {!isCorrect && isMsqQuestion(q) && (q.correctAnswers || []).length > 0 && (
                           <div className="flex flex-col gap-2 text-sm bg-green-50/50 px-4 py-3 rounded-xl border border-green-100 mb-4 mt-2">
                             <span className="font-semibold text-green-700">Correct Answer{q.correctAnswers.length > 1 ? 's' : ''}:</span>
                             {q.correctAnswers.map(opt => (
@@ -793,7 +794,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                             ))}
                           </div>
                         )}
-                        {!isCorrect && q.questionType !== 'Multiple Choice' && q.correctAnswer && (
+                        {!isCorrect && !isMsqQuestion(q) && (q.correctAnswer || (Array.isArray(q.correctAnswers) && q.correctAnswers[0])) && (
                           <div className="flex items-center justify-between text-sm bg-green-50/50 px-4 py-3 rounded-xl border border-green-100 mb-4 mt-2">
                             <span className="font-semibold text-green-700">Correct Answer:</span>
                             <span className="font-bold text-green-600">

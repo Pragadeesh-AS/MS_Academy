@@ -7,14 +7,15 @@ import MatchColumns from '../shared/MatchColumns';
 import { saveLiveReport, REPORT_TYPES } from '../../utils/liveReports';
 import logoImg from '../../assets/msgate_logo.png';
 import { normalizeQuestion } from '../../utils/testGrading';
+import { isNatQuestion, isMsqQuestion } from '../../utils/questionTypeSplit';
 import { Timer, Trophy, CheckCircle2, XCircle, Clock, ChevronRight, Lock, X, Check, Flame, Zap, Eraser, MinusCircle } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Scoring helpers - answers are always checked against the question-bank record
 // that was copied into the session when the test started.
 // ---------------------------------------------------------------------------
-export const isNumericalQuestion = (q) => /fill in (the )?blanks/i.test(q?.questionType || '');
-export const isMultiQuestion = (q) => q?.questionType === 'Multiple Choice';
+export const isNumericalQuestion = (q) => isNatQuestion(q);
+export const isMultiQuestion = (q) => isMsqQuestion(q);
 export const questionMarks = (q) => parseInt(q?.mark) || 1;
 
 export const checkAnswer = (q, answer) => {

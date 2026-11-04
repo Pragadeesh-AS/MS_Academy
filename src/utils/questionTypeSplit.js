@@ -21,23 +21,63 @@ export const TYPE_PRESETS = [
 ];
 export const presetLabel = (key) => TYPE_PRESETS.find(p => p.key === key)?.label || 'Custom';
 
-const TYPE_BY_NAME = {
-  'single choice': 'MCQ',
-  'mcq': 'MCQ',
-  'multiple choice': 'MSQ',
-  'multiple select': 'MSQ',
-  'msq': 'MSQ',
-  'fill in blanks': 'NAT',
-  'fill in the blanks': 'NAT',
-  'numerical answer type': 'NAT',
-  'numerical / fill in the blanks': 'NAT',
-  'nat': 'NAT',
-  'match': 'Match',
-  'match the following': 'Match',
+export const isNatQuestion = (q) => {
+  const raw = String(q?.questionType || '').trim().toLowerCase();
+  return (
+    raw === 'fill in blanks' ||
+    raw === 'fill in the blanks' ||
+    raw === 'numerical answer type' ||
+    raw === 'numerical / fill in the blanks' ||
+    raw === 'nat'
+  );
 };
 
-// A question with no / an unknown type is single choice - that's how the rest of the app shows it
-export const questionTypeKey = (q) => TYPE_BY_NAME[String(q?.questionType || '').trim().toLowerCase()] || 'MCQ';
+export const isMatchQuestion = (q) => {
+  const raw = String(q?.questionType || '').trim().toLowerCase();
+  return raw === 'match' || raw === 'match the following';
+};
+
+export const isMsqQuestion = (q) => {
+  if (!q) return false;
+  if (isNatQuestion(q) || isMatchQuestion(q)) return false;
+
+  const raw = String(q.questionType || '').trim().toLowerCase();
+
+  // Explicit MSQ formats
+  if (raw === 'multiple select' || raw === 'msq') return true;
+
+  // Explicit MCQ formats
+  if (raw === 'single choice' || raw === 'mcq') return false;
+
+  // Question stored as 'multiple choice'
+  if (raw === 'multiple choice') {
+    const arr = Array.isArray(q.correctAnswers) ? q.correctAnswers : [];
+    // If multiple options are selected in correct answers, it's definitely an MSQ
+    if (arr.length > 1) return true;
+    // If single correctAnswer is set and correctAnswers is not multiple, it's an MCQ
+    if (q.correctAnswer && arr.length <= 1) return false;
+    // If only correctAnswers array was set with 1 option and no single correctAnswer
+    if (arr.length === 1 && !q.correctAnswer) return true;
+    // If correctAnswers has elements, treat as MSQ, else default to MCQ
+    return arr.length > 0;
+  }
+
+  return false;
+};
+
+export const isMcqQuestion = (q) => {
+  return !isNatQuestion(q) && !isMatchQuestion(q) && !isMsqQuestion(q);
+};
+
+export const resolveQuestionType = (q) => {
+  if (isNatQuestion(q)) return 'NAT';
+  if (isMatchQuestion(q)) return 'Match';
+  if (isMsqQuestion(q)) return 'MSQ';
+  return 'MCQ';
+};
+
+// Canonical type key ('MCQ' | 'MSQ' | 'NAT' | 'Match')
+export const questionTypeKey = (q) => resolveQuestionType(q);
 
 const zero = () => Object.fromEntries(TYPE_KEYS.map(k => [k, 0]));
 const num = (v) => parseInt(v) || 0;

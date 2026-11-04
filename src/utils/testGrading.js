@@ -1,6 +1,7 @@
 // Marks one answer of a test attempt. Used when a student submits a test (StudentTests) and when a
 // question's answer key is corrected afterwards (utils/regradeAttempts) - both must mark identically.
 import { positiveMarkFor, negativeMarkFor } from './marking';
+import { isNatQuestion, isMsqQuestion } from './questionTypeSplit';
 
 // Older AI imports stored NAT questions as 'Fill in the Blanks'; grading expects 'Fill in Blanks'
 export const normalizeQuestion = (q) => (
@@ -9,13 +10,18 @@ export const normalizeQuestion = (q) => (
 
 // The correct answer as shown to students ("B", "A, C", "12.5", "3 to 4")
 export const correctAnswerText = (q) => {
-  if (q.questionType === 'Fill in Blanks') {
+  if (isNatQuestion(q)) {
     return q.fillBlankMode === 'Numeric Range'
       ? `${q.fillBlankRangeStart} to ${q.fillBlankRangeEnd}`
       : (q.fillBlankAnswer ?? '');
   }
-  if (q.questionType === 'Multiple Choice') return (q.correctAnswers || []).join(', ');
-  return q.correctAnswer ?? '';
+  if (isMsqQuestion(q)) {
+    const list = Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0
+      ? q.correctAnswers
+      : (q.correctAnswer ? [q.correctAnswer] : []);
+    return list.slice().sort().join(', ');
+  }
+  return q.correctAnswer || (Array.isArray(q.correctAnswers) ? q.correctAnswers[0] : '') || '';
 };
 
 /**
@@ -24,15 +30,17 @@ export const correctAnswerText = (q) => {
  */
 export const gradeAnswer = (question, rawAnswer) => {
   const q = normalizeQuestion(question);
-  const selectedAnswer = q.questionType === 'Multiple Choice'
-    ? (Array.isArray(rawAnswer) ? rawAnswer : [])
-    : (rawAnswer || '');
-  const isAnswered = q.questionType === 'Multiple Choice'
+  const isMsq = isMsqQuestion(q);
+  const isNat = isNatQuestion(q);
+  const selectedAnswer = isMsq
+    ? (Array.isArray(rawAnswer) ? rawAnswer : (rawAnswer ? [rawAnswer] : []))
+    : (Array.isArray(rawAnswer) ? (rawAnswer[0] || '') : (rawAnswer || ''));
+  const isAnswered = isMsq
     ? selectedAnswer.length > 0
     : String(selectedAnswer).trim() !== '';
 
   let isCorrect = false;
-  if (q.questionType === 'Fill in Blanks') {
+  if (isNat) {
     const cleanStudent = String(selectedAnswer).trim();
     if (q.fillBlankMode === 'Numeric Range') {
       const studentNum = parseFloat(cleanStudent);
@@ -44,14 +52,18 @@ export const gradeAnswer = (question, rawAnswer) => {
     } else {
       isCorrect = cleanStudent.toLowerCase() === String(q.fillBlankAnswer || '').trim().toLowerCase();
     }
-  } else if (q.questionType === 'Multiple Choice') {
-    const correctSet = (q.correctAnswers || []).slice().sort();
+  } else if (isMsq) {
+    const correctSet = (Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0
+      ? q.correctAnswers
+      : (q.correctAnswer ? [q.correctAnswer] : [])
+    ).slice().sort();
     const studentSet = selectedAnswer.slice().sort();
     isCorrect = correctSet.length > 0 &&
       correctSet.length === studentSet.length &&
       correctSet.every((opt, i) => opt === studentSet[i]);
   } else {
-    isCorrect = selectedAnswer === q.correctAnswer;
+    const expected = q.correctAnswer || (Array.isArray(q.correctAnswers) ? q.correctAnswers[0] : '');
+    isCorrect = selectedAnswer === expected;
   }
 
   const maxMarks = positiveMarkFor(q);

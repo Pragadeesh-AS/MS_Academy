@@ -6,6 +6,7 @@ import Draggable from 'react-draggable';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { positiveMarkFor, negativeMarkFor } from '../../utils/marking';
+import { isNatQuestion, isMsqQuestion, isMcqQuestion, isMatchQuestion, resolveQuestionType } from '../../utils/questionTypeSplit';
 import logoImg from '../../assets/msgate_logo.png';
 import { examSections, shuffledQuestions, shuffleSeed, optionOrderFor } from '../../utils/testShuffle';
 
@@ -801,9 +802,14 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
 
   const Instructions2 = () => {
     // Build question split-up
-    const mcq = testQuestions.filter(q => q.questionType === 'Single Choice').length;
-    const msq = testQuestions.filter(q => q.questionType === 'Multiple Choice').length;
-    const nat = testQuestions.filter(q => q.questionType === 'Fill in Blanks').length;
+    const mcqQuestions = testQuestions.filter(isMcqQuestion);
+    const msqQuestions = testQuestions.filter(isMsqQuestion);
+    const natQuestions = testQuestions.filter(isNatQuestion);
+    const matchQuestions = testQuestions.filter(isMatchQuestion);
+    const mcq = mcqQuestions.length;
+    const msq = msqQuestions.length;
+    const nat = natQuestions.length;
+    const match = matchQuestions.length;
     const totalMarks = testQuestions.reduce((sum, q) => sum + (parseFloat(q.mark) || 1), 0);
 
     return (
@@ -833,10 +839,10 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                     <td className="border border-gray-300 px-4 py-2">Multiple Choice Questions (MCQ)</td>
                     <td className="border border-gray-300 px-4 py-2 text-center font-bold">{mcq}</td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => parseFloat(q.mark) || 1))].join('/')}
+                      {[...new Set(mcqQuestions.map(q => parseFloat(q.mark) || 1))].join('/')}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-red-600">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Single Choice').map(q => negativeMarkFor(q)))].join('/')}
+                      {[...new Set(mcqQuestions.map(q => negativeMarkFor(q)))].join('/')}
                     </td>
                   </tr>
                 )}
@@ -845,7 +851,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                     <td className="border border-gray-300 px-4 py-2">Multiple Select Questions (MSQ)</td>
                     <td className="border border-gray-300 px-4 py-2 text-center font-bold">{msq}</td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Multiple Choice').map(q => parseFloat(q.mark) || 1))].join('/')}
+                      {[...new Set(msqQuestions.map(q => parseFloat(q.mark) || 1))].join('/')}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-red-600">Nil</td>
                   </tr>
@@ -855,9 +861,21 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
                     <td className="border border-gray-300 px-4 py-2">Numerical Answer Type (NAT)</td>
                     <td className="border border-gray-300 px-4 py-2 text-center font-bold">{nat}</td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
-                      {[...new Set(testQuestions.filter(q => q.questionType === 'Fill in Blanks').map(q => parseFloat(q.mark) || 1))].join('/')}
+                      {[...new Set(natQuestions.map(q => parseFloat(q.mark) || 1))].join('/')}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-center text-red-600">Nil</td>
+                  </tr>
+                )}
+                {match > 0 && (
+                  <tr className="hover:bg-blue-50">
+                    <td className="border border-gray-300 px-4 py-2">Match the Following (MATCH)</td>
+                    <td className="border border-gray-300 px-4 py-2 text-center font-bold">{match}</td>
+                    <td className="border border-gray-300 px-4 py-2 text-center text-green-700 font-bold">
+                      {[...new Set(matchQuestions.map(q => parseFloat(q.mark) || 1))].join('/')}
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-center text-red-600">
+                      {[...new Set(matchQuestions.map(q => negativeMarkFor(q)))].join('/')}
+                    </td>
                   </tr>
                 )}
                 <tr className="bg-[#EAF2FA] font-bold">
@@ -1075,7 +1093,7 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
             </div>
             
             <div className="flex items-center justify-between px-4 py-1.5 border-b border-gray-300 text-sm font-bold">
-              <div>Question Type: {currentQ?.questionType === 'Fill in Blanks' ? 'NAT' : 'MCQ'}</div>
+              <div>Question Type: {resolveQuestionType(currentQ).toUpperCase()}</div>
               <div className="font-normal text-gray-600">Marks for correct answer: <span className="text-green-600">{positiveMarkFor(currentQ)}</span> | Negative Marks: <span className="text-red-500">{negativeMarkFor(currentQ)}</span></div>
             </div>
             
@@ -1129,13 +1147,13 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
               </div>
 
               <div className="space-y-4">
-                {currentQ?.questionType === 'Fill in Blanks' ? (
+                {isNatQuestion(currentQ) ? (
                   <NatKeypad
                     key={currentQ.id}
                     value={String(selectedAnswers[currentQ.id] ?? '')}
                     onChange={(v) => handleSelectOption(currentQ.id, v)}
                   />
-                ) : currentQ?.questionType === 'Multiple Choice' ? (
+                ) : isMsqQuestion(currentQ) ? (
                   <div className="flex flex-col gap-4">
                     {(optionOrders.get(currentQ?.id) || []).map(opt => {
                       const text = currentQ?.[`option${opt}`];

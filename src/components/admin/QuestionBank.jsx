@@ -7,6 +7,7 @@ import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, 
 import { questionFingerprint, isEmptyQuestion } from '../../utils/questionDuplicates';
 import { QUESTION_CATEGORIES, getQuestionCategory, inferQuestionCategory } from '../../utils/questionCategory';
 import { markNumberOf, markLabelFor, negativeMarkFor } from '../../utils/marking';
+import { resolveQuestionType } from '../../utils/questionTypeSplit';
 import { sameDepartment } from '../../utils/subjects';
 import { answerKeyChanged } from '../../utils/testGrading';
 import { logQuestionActivity, hasDiagram, countQuestionTypes } from '../../utils/questionLogger';
@@ -579,13 +580,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
   const difficulties = attributes.filter(a => a.type === 'difficulty').map(a => a.name);
   const questionTypes = ['Single Choice', 'Multiple Choice', 'Fill in Blanks', 'Match'];
 
-  const questionTypeShort = (type) => ({
-    'Single Choice': 'MCQ',
-    'Multiple Choice': 'MSQ',
-    'Fill in Blanks': 'NAT',
-    'Fill in the Blanks': 'NAT',
-    'Match': 'Match'
-  }[type] || type);
+  const questionTypeShort = (type) => resolveQuestionType({ questionType: type });
   const optionsList = ['A', 'B', 'C', 'D'];
 
   const handleInputChange = (e) => {
@@ -2013,8 +2008,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
                         onChange={handleInputChange}
                         className="appearance-none bg-white border-[1.5px] border-slate-200 text-[#111827] font-[900] text-[13px] rounded-full pl-5 pr-10 py-2.5 outline-none shadow-sm cursor-pointer hover:border-slate-300"
                       >
-                        <option value="Single Choice">Single Choice</option>
-                        <option value="Multiple Choice">Multiple Choice</option>
+                        <option value="Single Choice">Single Choice (MCQ)</option>
+                        <option value="Multiple Choice">Multiple Select (MSQ)</option>
                         <option value="Fill in Blanks">Fill in Blanks</option>
                         <option value="Match">Match (Column 1 ≤ Column 2)</option>
                       </select>

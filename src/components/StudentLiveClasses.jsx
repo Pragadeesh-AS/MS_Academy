@@ -1,3 +1,4 @@
+import { isNatQuestion, isMsqQuestion } from '../utils/questionTypeSplit';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { sendWebhookEmail } from '../utils/emailWebhook';
 import { 
@@ -1290,7 +1291,9 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
               </div>
             ) : (
               postClassQuiz.questions.map((q, idx) => {
-                const qType = normalizeQuestion(q).questionType || 'Single Choice';
+                const qNorm = normalizeQuestion(q);
+                const isMsq = isMsqQuestion(qNorm);
+                const isNat = isNatQuestion(qNorm);
                 const optionsList = ['A', 'B', 'C', 'D'];
                 const marks = positiveMarkFor(q);
 
@@ -1307,7 +1310,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                     <MatchColumns question={normalizeQuestion(q)} className="mb-4" />
 
                     <div className="space-y-3">
-                      {qType === 'Fill in Blanks' ? (
+                      {isNat ? (
                         <input 
                           type="text" 
                           placeholder="Type your answer here..."
@@ -1319,12 +1322,12 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
                         optionsList.map((opt) => {
                           if (!q[`option${opt}`]) return null;
                           
-                          const isChecked = qType === 'Multiple Choice' 
+                          const isChecked = isMsq 
                             ? (quizAnswers[idx] || []).includes(opt)
                             : quizAnswers[idx] === opt;
 
                           const handleChange = () => {
-                            if (qType === 'Multiple Choice') {
+                            if (isMsq) {
                               setQuizAnswers(prev => {
                                 const current = prev[idx] || [];
                                 return { ...prev, [idx]: current.includes(opt) ? current.filter(x => x !== opt) : [...current, opt] };
@@ -1336,11 +1339,11 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
 
                           return (
                             <label key={opt} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isChecked ? 'border-blue-500 bg-blue-50/50' : 'border-slate-200 hover:border-slate-300 bg-white'}`}>
-                              <div className={`w-5 h-5 rounded${qType === 'Multiple Choice' ? ' cursor-pointer' : '-full'} border-2 flex items-center justify-center ${isChecked ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
+                              <div className={`w-5 h-5 rounded${isMsq ? ' cursor-pointer' : '-full'} border-2 flex items-center justify-center ${isChecked ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
                                 {isChecked && <Check size={12} className="text-white" strokeWidth={4} />}
                               </div>
                               <input
-                                type={qType === 'Multiple Choice' ? 'checkbox' : 'radio'}
+                                type={isMsq ? 'checkbox' : 'radio'}
                                 className="hidden"
                                 checked={isChecked}
                                 onChange={handleChange}
