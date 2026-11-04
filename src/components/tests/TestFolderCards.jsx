@@ -4,6 +4,7 @@ import { TEMPLATE_META } from '../../utils/templateStyles';
 import { TEMPLATE_FOLDERS, OTHER_FOLDER, templateKeyOf, templateMarks, templateQuestions } from '../../utils/testTemplates';
 import { testStartMillis, formatTestTime } from '../../utils/testSchedule';
 import { paletteFor, monogramOf, NEUTRAL } from '../../utils/departmentColors';
+import { isCommonDeptName } from '../../utils/subjects';
 
 const countByTemplate = (tests) => {
   const out = { topic: 0, subject: 0, full: 0, other: 0 };
@@ -53,7 +54,7 @@ export function DepartmentTestFolders({ folders, onOpen }) {
     <div className="space-y-8">
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <SummaryTile label="Total Tests" value={allTests.length} icon={ClipboardList} tint="from-slate-700 to-slate-900" />
-        {TEMPLATE_FOLDERS.map(f => (
+        {TEMPLATE_FOLDERS.filter(f => ['topic', 'subject', 'full'].includes(f.key)).map(f => (
           <SummaryTile key={f.key} label={f.name} value={totals[f.key]} icon={TEMPLATE_META[f.key].icon} tint={TEMPLATE_META[f.key].badge} />
         ))}
       </div>
@@ -69,7 +70,10 @@ export function DepartmentTestFolders({ folders, onOpen }) {
           const p = f.name === 'Uncategorized' ? NEUTRAL : paletteFor(f.name);
           const mono = f.name === 'Uncategorized' ? '?' : monogramOf(f.name);
           const counts = countByTemplate(f.tests);
-          const keys = [...TEMPLATE_FOLDERS.map(t => t.key), ...(counts.other ? [OTHER_FOLDER.key] : [])];
+          const isCommon = isCommonDeptName(f.name);
+          const keys = isCommon
+            ? (counts.aptitude ? ['aptitude'] : counts.maths ? ['maths'] : ['topic', 'subject', 'full'])
+            : ['topic', 'subject', 'full', ...(counts.other ? [OTHER_FOLDER.key] : [])];
           const total = f.tests.length;
           return (
             <button
@@ -93,7 +97,7 @@ export function DepartmentTestFolders({ folders, onOpen }) {
               </div>
 
               {/* Tests per template */}
-              <div className={`relative mt-5 grid gap-2 ${keys.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+              <div className={`relative mt-5 grid gap-2 ${keys.length === 4 ? 'grid-cols-4' : keys.length === 1 ? 'grid-cols-1' : 'grid-cols-3'}`}>
                 {keys.map(k => {
                   const m = TEMPLATE_META[k];
                   return (
