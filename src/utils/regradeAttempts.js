@@ -162,8 +162,8 @@ export const regradeAttemptsForQuestion = async (before, after) => {
         const payload = {
           keyAnswer: keyAnswerText,
           status: 'resolved',
-          resolvedBy: resolver,
-          resolvedAt: new Date(),
+          resolvedBy: repData.resolvedBy || resolver,
+          resolvedAt: repData.resolvedAt || new Date(),
         };
         // Update resolution if attempts were regraded or if previous resolution had 0 or was unset
         if (regradedCount > 0 || !repData.resolution || repData.resolution.includes('0 attempt(s) re-graded')) {
