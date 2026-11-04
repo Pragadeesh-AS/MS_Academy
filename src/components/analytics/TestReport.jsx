@@ -304,20 +304,23 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
             <Card title="Section Wise Result View" className="lg:col-span-2">
               <div className="space-y-5">
                 {sections.map(sec => (
-                  <div key={sec.name} className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 gap-x-4">
+                  <div key={sec.name} className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 gap-x-4 pb-4 border-b border-slate-100 last:border-b-0 last:pb-0">
                     <p className="col-span-2 text-xl font-bold text-slate-800 break-words">{sec.name}</p>
                     <div>
                       <p className="text-slate-500 text-sm">Obtained Marks</p>
-                      <p className={`text-xl ${sec.obtained < 0 ? 'text-red-600' : 'text-green-700'}`}>{round2(sec.obtained)}</p>
+                      <p className={`text-xl font-bold ${sec.obtained < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                        {round2(sec.obtained)} <span className="text-slate-400 text-base font-normal">/ {round2(sec.total)}</span>
+                      </p>
                     </div>
                     <div>
                       <p className="text-slate-500 text-sm">Percentage</p>
                       <p className="text-xl text-slate-800">{sec.total ? round2((sec.obtained / sec.total) * 100) : 0} %</p>
                     </div>
-                    <div><p className="text-slate-700 text-sm">Total Marks</p><p className="text-lg text-slate-800">{round2(sec.total)}</p></div>
-                    <div><p className="text-green-700 text-sm">Correct</p><p className="text-lg text-green-700">{sec.correct}</p></div>
-                    <div><p className="text-red-600 text-sm">Wrong</p><p className="text-lg text-red-600">{sec.wrong}</p></div>
-                    <div><p className="text-slate-400 text-sm">Unattempted</p><p className="text-lg text-slate-400">{sec.unattempted}</p></div>
+                    <div className="col-span-2 sm:col-span-4 flex items-center gap-8 sm:gap-14 pt-1">
+                      <div><p className="text-green-700 text-sm">Correct</p><p className="text-lg text-green-700 font-semibold">{sec.correct}</p></div>
+                      <div><p className="text-red-600 text-sm">Wrong</p><p className="text-lg text-red-600 font-semibold">{sec.wrong}</p></div>
+                      <div><p className="text-slate-400 text-sm">Unattempted</p><p className="text-lg text-slate-400 font-semibold">{sec.unattempted}</p></div>
+                    </div>
                   </div>
                 ))}
               </div>
