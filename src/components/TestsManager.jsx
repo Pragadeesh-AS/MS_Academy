@@ -311,21 +311,29 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   const commonDeptObjs = attributes.filter(a => a.type === 'department' && isCommonDeptName(a.name) && a.id !== selectedDeptObj?.id);
 
-  // Target department buttons: use the departments set up in the Attributes tab (not the shared
-  // Maths / Aptitude banks).
-  const targetDepartments = attributes
+  // Target departments: core engineering departments + common streams (Engineering Mathematics & Aptitude)
+  const coreDepartments = attributes
     .filter(a => a.type === 'department' && !isCommonDeptName(a.name))
-    .map(a => ({ id: a.id, label: a.name, value: a.name }))
+    .map(a => ({ id: a.id, label: a.name, value: a.name, isCommon: false }))
     .filter((d, i, all) => all.findIndex(x => sameDepartment(x.value, d.value)) === i)
     .sort((a, b) => a.label.localeCompare(b.label));
 
-  // Every department attribute that is this department (e.g. "Chemical" and "CHEMICAL ENGINEERING")
-  const selectedDeptIds = new Set(attributes.filter(a => a.type === 'department' && !isCommonDeptName(a.name) && matchesSelectedDept(a.name)).map(a => a.id));
+  const commonDepartments = attributes
+    .filter(a => a.type === 'department' && isCommonDeptName(a.name))
+    .map(a => ({ id: a.id, label: toTitleCase(a.name), value: a.name, isCommon: true }))
+    .filter((d, i, all) => all.findIndex(x => sameDepartment(x.value, d.value)) === i)
+    .sort((a, b) => a.label.localeCompare(b.label));
+
+  const targetDepartments = [...coreDepartments, ...commonDepartments];
+
+  // Every department attribute that is this department (including Maths and Aptitude if selected)
+  const selectedDeptIds = new Set(attributes.filter(a => a.type === 'department' && matchesSelectedDept(a.name)).map(a => a.id));
   const deptSubjectAttrs = attributes.filter(a => a.type === 'subject' && (selectedDept ? selectedDeptIds.has(a.parentId) : true));
 
+  const isSelectedCommon = isCommonDeptName(selectedDept);
   const subjectsList = [
     ...deptSubjectAttrs.map(a => ({ name: a.name, label: a.name, attr: a, commonDept: null })),
-    ...(selectedDept ? commonDeptObjs.flatMap(dept =>
+    ...(selectedDept && !isSelectedCommon ? commonDeptObjs.flatMap(dept =>
       attributes
         .filter(a => a.type === 'subject' && a.parentId === dept.id)
         .map(a => ({ name: a.name, label: `${toTitleCase(dept.name)} : ${a.name}`, attr: a, commonDept: dept }))
@@ -416,6 +424,13 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     setTotal2Mark(t.q2);
     setNumericalCount(templateNumerical(t));
     setTheoryCount(templateQuestions(t) - templateNumerical(t));
+    if (t.defaultDept) {
+      const match = attributes.find(a => a.type === 'department' && sameDepartment(a.name, t.defaultDept));
+      const targetVal = match ? match.name : t.defaultDept;
+      setSelectedDept(targetVal);
+      setSelectedSubjects([]);
+      setSelectedTopics([]);
+    }
   };
 
   // Full-length papers fill General Aptitude / Mathematics / Core from the matching topics
@@ -1117,7 +1132,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const folderOf = (t) => {
     const raw = (t.department || '').trim();
     if (!raw) return 'Uncategorized';
-    const attr = attributes.find(a => a.type === 'department' && !isCommonDeptName(a.name) && sameDepartment(a.name, raw));
+    const attr = attributes.find(a => a.type === 'department' && sameDepartment(a.name, raw));
     if (attr) {
       if (raw === attr.name) return attr.name;
       const hasExactAttrTest = tests.some(x => (x.department || '').trim() === attr.name);
@@ -1718,34 +1733,72 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
               {step === 2 && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                   
-                  {/* Target Department */}
-                  <div className="space-y-2.5">
-                    <label className="text-[13px] font-[900] text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                      <Landmark className="text-amber-500" size={16} /> 1. Select Target Department
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {targetDepartments.map(({ id, label, value }) => {
-                        const isSelected = sameDepartment(selectedDept, value);
-                        return (
-                          <button
-                            key={id}
-                            type="button"
-                            disabled={isTeacher && department && !sameDepartment(department, value)}
-                            onClick={() => { setSelectedDept(value); setSelectedSubjects([]); setSelectedTopics([]); }}
-                            title={value}
-                            className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
-                              isSelected
-                                ? 'bg-[#F59E0B] border-transparent text-white shadow-md shadow-amber-500/20'
-                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40'
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                      {targetDepartments.length === 0 && (
-                        <div className="text-slate-400 text-xs font-semibold py-2">No departments yet - add them in the Attributes tab.</div>
-                      )}
+                  {/* Target Department / Stream */}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[13px] font-[900] text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                        <Landmark className="text-amber-500" size={16} /> 1. Select Target Department / Stream
+                      </label>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        Create a test for a specific engineering branch, or a separate test for Engineering Mathematics or Aptitude.
+                      </p>
+                    </div>
+
+                    {/* Common Streams: Mathematics & Aptitude */}
+                    {commonDepartments.length > 0 && (
+                      <div className="p-3 bg-violet-50/50 border border-violet-100 rounded-2xl space-y-1.5">
+                        <div className="text-[11px] font-black uppercase tracking-wider text-violet-700 flex items-center gap-1.5">
+                          <Star size={13} className="text-violet-500" /> Common Subject Streams (Maths & Aptitude)
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {commonDepartments.map(({ id, label, value }) => {
+                            const isSelected = sameDepartment(selectedDept, value);
+                            return (
+                              <button
+                                key={id}
+                                type="button"
+                                onClick={() => { setSelectedDept(value); setSelectedSubjects([]); setSelectedTopics([]); }}
+                                className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all flex items-center gap-1.5 ${
+                                  isSelected
+                                    ? 'bg-violet-600 border-transparent text-white shadow-md shadow-violet-500/25 ring-2 ring-violet-200'
+                                    : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-100/70'
+                                }`}
+                              >
+                                <span>✦</span> {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Core Engineering Departments */}
+                    <div className="space-y-1.5">
+                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">Engineering Departments</div>
+                      <div className="flex flex-wrap gap-2">
+                        {coreDepartments.map(({ id, label, value }) => {
+                          const isSelected = sameDepartment(selectedDept, value);
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              disabled={isTeacher && department && !sameDepartment(department, value)}
+                              onClick={() => { setSelectedDept(value); setSelectedSubjects([]); setSelectedTopics([]); }}
+                              title={value}
+                              className={`px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
+                                isSelected
+                                  ? 'bg-[#F59E0B] border-transparent text-white shadow-md shadow-amber-500/20'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                        {coreDepartments.length === 0 && (
+                          <div className="text-slate-400 text-xs font-semibold py-2">No engineering departments yet - add them in the Attributes tab.</div>
+                        )}
+                      </div>
                     </div>
                   </div>
 

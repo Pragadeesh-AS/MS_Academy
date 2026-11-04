@@ -19,6 +19,8 @@ export const sameDepartment = (a, b) => {
   const y = (b || '').trim().toLowerCase();
   if (!x || !y) return false;
   if (x === y) return true;
+  if (/ap+titude/.test(x) && /ap+titude/.test(y)) return true;
+  if ((x.includes('mathematics') || x.includes('maths')) && (y.includes('mathematics') || y.includes('maths'))) return true;
   const cx = shortCode(a);
   const cy = shortCode(b);
   if ((!!cx && (cx === y || cx === cy)) || (!!cy && cy === x)) return true;

@@ -165,7 +165,7 @@ export default function Analytics({ joinedStudents = [], department = null, stud
           }
         }
         const fetchedAttributes = attributesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        const deptAttrs = fetchedAttributes.filter(a => a.type === 'department' && !isCommonDeptName(a.name));
+        const deptAttrs = fetchedAttributes.filter(a => a.type === 'department');
 
         const resolveDept = (rawDept) => {
           const raw = (rawDept || '').trim();

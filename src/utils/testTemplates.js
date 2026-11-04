@@ -24,6 +24,24 @@ export const TEST_TEMPLATES = [
     description: 'One or more subjects - 20 x 1 mark + 10 x 2 marks',
   },
   {
+    key: 'aptitude',
+    name: 'General Aptitude Test',
+    duration: 30,
+    q1: 5,
+    q2: 5,
+    defaultDept: 'Aptitude',
+    description: 'GATE General Aptitude - 5 x 1 mark + 5 x 2 marks (15 marks)',
+  },
+  {
+    key: 'maths',
+    name: 'Engineering Mathematics Test',
+    duration: 45,
+    q1: 10,
+    q2: 5,
+    defaultDept: 'ENGINEERING MATHEMATICS',
+    description: 'Engineering Mathematics - 10 x 1 mark + 5 x 2 marks (20 marks)',
+  },
+  {
     key: 'full',
     name: 'Full Length Test',
     duration: 180,
@@ -106,6 +124,8 @@ export const distributeAllocations = (template, topics, availability, groupOf = 
 export const TEMPLATE_FOLDERS = [
   { key: 'topic', name: 'Topic Tests' },
   { key: 'subject', name: 'Subject Tests' },
+  { key: 'aptitude', name: 'Aptitude Tests' },
+  { key: 'maths', name: 'Mathematics Tests' },
   { key: 'full', name: 'Full Length Tests' },
 ];
 export const OTHER_FOLDER = { key: 'other', name: 'Other Tests' };
@@ -126,6 +146,7 @@ export const templateFoldersFor = (tests) => {
   const counts = {};
   tests.forEach(t => { const k = templateKeyOf(t); counts[k] = (counts[k] || 0) + 1; });
   return [...TEMPLATE_FOLDERS, ...(counts[OTHER_FOLDER.key] ? [OTHER_FOLDER] : [])]
+    .filter(f => counts[f.key] > 0 || ['topic', 'subject', 'full'].includes(f.key))
     .map(f => ({ ...f, count: counts[f.key] || 0, template: templateByKey(f.key) }));
 };
 

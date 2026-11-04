@@ -14,7 +14,7 @@ import { gradeAnswer, normalizeQuestion, correctAnswerText } from '../utils/test
 import { resolveQuestionType, isMsqQuestion } from '../utils/questionTypeSplit';
 import { canAccessTest as canAccessTestFor } from '../utils/testAccess';
 import { bundleIdsOf } from '../utils/bundleAccess';
-import { sameDepartment } from '../utils/subjects';
+import { sameDepartment, isCommonDeptName } from '../utils/subjects';
 import { templateKeyOf, templateFoldersFor, folderName, templateMarks, templateQuestions } from '../utils/testTemplates';
 import { TEMPLATE_META } from '../utils/templateStyles';
 import { paletteFor, monogramOf, NEUTRAL } from '../utils/departmentColors';
@@ -176,7 +176,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       
       // The student's department ("Chemical Engineering (CH)" also matches tests saved as
       // "CHEMICAL ENGINEERING" / "Chemical Engineering")
-      const studentTests = allTests.filter(t => sameDepartment(t.department, department));
+      const studentTests = allTests.filter(t => sameDepartment(t.department, department) || isCommonDeptName(t.department) || t.department === 'All' || t.department === 'General');
       setTests(studentTests);
 
       if (email) {
@@ -979,7 +979,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
       // 2. General test: bundles that grant access to tests for this department
       matching = (bundles || []).filter(b => 
         b && !b.isHidden &&
-        (sameDepartment(b.department, test.department) || b.department === 'General' || b.department === 'All') &&
+        (sameDepartment(b.department, test.department) || (isCommonDeptName(test.department) && sameDepartment(b.department, department)) || b.department === 'General' || b.department === 'All') &&
         (!b.permissions || b.permissions.includes('tests'))
       );
     }
@@ -988,7 +988,7 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     if (matching.length === 0) {
       matching = (bundles || []).filter(b =>
         b && !b.isHidden &&
-        (sameDepartment(b.department, test.department) || b.department === 'General' || b.department === 'All')
+        (sameDepartment(b.department, test.department) || (isCommonDeptName(test.department) && sameDepartment(b.department, department)) || b.department === 'General' || b.department === 'All')
       );
     }
 
@@ -1158,6 +1158,11 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
                       <span className="px-3 py-1.5 text-[11px] uppercase tracking-wider font-bold bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
                         {test.subject || 'Subject'}
                       </span>
+                      {isCommonDeptName(test.department) && (
+                        <span className="px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider bg-violet-50 text-violet-700 rounded-xl border border-violet-200">
+                          {/ap+titude/i.test(test.department) ? 'Aptitude' : 'Maths'}
+                        </span>
+                      )}
                       {test.topic && (
                         <span className="px-3 py-1.5 text-[11px] font-bold bg-slate-50 text-slate-500 rounded-xl border border-slate-100">
                           {test.topic}

@@ -65,6 +65,7 @@ export const paletteFor = (name) => {
 
 // Short badge text: "(ME)" in the name, a short all-caps name as is, else the initials
 export const monogramOf = (name) => {
+  if (isCommonDeptName(name)) return /ap+titude/i.test(name) ? 'APT' : 'MATH';
   const paren = String(name).match(/\(([A-Za-z&]{1,4})\)/);
   if (paren) return paren[1].toUpperCase();
   const clean = String(name).trim();
