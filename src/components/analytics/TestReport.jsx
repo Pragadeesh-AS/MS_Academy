@@ -423,9 +423,19 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
                 {questions.map(q => {
                   const key = plainAnswer(q.correct);
                   const yours = plainAnswer(q.selected);
+                  const cardBg = q.status === 'Correct'
+                    ? 'bg-green-100 border-green-200'
+                    : q.status === 'Wrong'
+                      ? 'bg-red-100 border-red-200'
+                      : 'bg-slate-200/80 border-slate-300';
+                  const headerBorder = q.status === 'Correct'
+                    ? 'border-green-200'
+                    : q.status === 'Wrong'
+                      ? 'border-red-200'
+                      : 'border-slate-300';
                   return (
-                    <div key={q.qIndex} className={`rounded-xl border shadow-sm overflow-hidden ${q.status === 'Wrong' ? 'bg-red-100 border-red-200' : 'bg-white border-slate-200'}`}>
-                      <p className={`text-center text-lg py-2 border-b ${q.status === 'Wrong' ? 'border-red-200' : 'border-slate-100 bg-slate-50'}`}>Q.No : {q.qIndex}</p>
+                    <div key={q.qIndex} className={`rounded-xl border shadow-sm overflow-hidden ${cardBg}`}>
+                      <p className={`text-center text-lg py-2 border-b ${headerBorder}`}>Q.No : {q.qIndex}</p>
                       <div className="grid grid-cols-3 gap-2 px-4 py-3 text-sm">
                         <div><p className="font-semibold text-slate-800">{humanTime(q.timeSeconds)}</p><p className="text-slate-500">Time</p></div>
                         <div><p className="font-bold text-slate-800 break-words">{key || '-'}</p><p className="text-slate-500">Answer</p></div>
