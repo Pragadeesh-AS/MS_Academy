@@ -227,13 +227,13 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
                   <span className={`text-4xl font-medium tabular-nums ${score < 0 ? 'text-red-600' : 'text-slate-800'}`}>{score}</span>
                 </div>
                 <p className="mt-1 text-sm text-slate-500">Negative Marks: {negative}</p>
-                <div className="mt-3 flex items-end justify-center gap-3">
+                <div className="mt-4 flex items-end justify-center gap-3">
                   <span className="text-xl text-slate-700 mb-2">Rank</span>
-                  <span className="text-7xl font-medium text-sky-600 leading-none tabular-nums">{allAttempts === null ? '…' : (myRank ?? '-')}</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-7xl font-medium text-sky-600 leading-none tabular-nums">{allAttempts === null ? '…' : (myRank ?? '-')}</span>
+                    <span className="text-2xl sm:text-3xl font-medium text-slate-400 leading-none">/ {allAttempts === null ? '…' : allAttempts.length}</span>
+                  </div>
                 </div>
-                <p className="mt-3 text-sm text-slate-600">
-                  Total Attempted students (till now) : <strong>{allAttempts === null ? '…' : allAttempts.length}</strong>
-                </p>
               </div>
             </Card>
 
