@@ -17,6 +17,7 @@ import QuestionBank from './admin/QuestionBank';
 import { prewarmQuestionBankCache, deptNameVariants, COMMON_DEPARTMENT_NAMES, getCachedQuestionsSync } from '../utils/questionBankCache';
 import AttributesManager from './admin/AttributesManager';
 import { gateCoursesData } from './GateCourses';
+import { sameDepartment } from '../utils/subjects';
 import RoleSwitcher from './shared/RoleSwitcher';
 import ReportCountBadge, { usePendingReportCount } from './shared/ReportCountBadge';
 
@@ -186,11 +187,13 @@ export default function TeacherDashboard() {
             .catch(() => 0);
         }
 
+        const deptVariants = deptNameVariants(teacherDepartment).slice(0, 30);
+
         const [testsSnap, questionsCount, recordingsCountSnap, classesSnap] = await Promise.all([
-          getDocs(query(collection(db, 'tests'), where('department', '==', teacherDepartment))),
+          getDocs(query(collection(db, 'tests'), where('department', 'in', deptVariants))),
           questionsCountPromise,
-          getCountFromServer(query(collection(db, 'recordings'), where('department', '==', teacherDepartment))),
-          getDocs(query(collection(db, 'scheduled_classes'), where('department', '==', teacherDepartment))),
+          getCountFromServer(query(collection(db, 'recordings'), where('department', 'in', deptVariants))),
+          getDocs(query(collection(db, 'scheduled_classes'), where('department', 'in', deptVariants))),
         ]);
 
         const tests = testsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -399,11 +402,9 @@ export default function TeacherDashboard() {
               </p>
             </div>
           ) : (() => {
-            const deptMatch = teacherDepartment.match(/\(([^)]+)\)/);
-            const deptCode = deptMatch ? deptMatch[1] : null;
-            const courseInfo = gateCoursesData.find(c => c.code === deptCode);
+            const courseInfo = gateCoursesData.find(c => sameDepartment(c.name, teacherDepartment) || c.name === teacherDepartment || c.code === teacherDepartment);
             const CourseIcon = courseInfo?.icon || BookOpen;
-            const deptStudentCount = joinedStudents.filter(s => s.department === teacherDepartment).length;
+            const deptStudentCount = joinedStudents.filter(s => sameDepartment(s.department, teacherDepartment)).length;
 
             return (
               <div className="mt-6 space-y-6">

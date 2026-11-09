@@ -31,8 +31,9 @@ const formatIst = (ms) => new Date(ms).toLocaleString('en-IN', {
   hour: 'numeric', minute: '2-digit', hour12: true,
 });
 
-// "Chemical (CH)" and "Chemical Engineering (CH)" are the same department: same name, or same (CODE)
+// "Chemical (CH)" and "Chemical Engineering (CH)" and "CHEMICAL ENGINEERING" are the same department
 const deptCode = (name) => ((name || '').match(/\(([^)]+)\)/) || [])[1]?.trim().toLowerCase() || '';
+const baseName = (name) => (name || '').replace(/\([^)]*\)/g, '').trim().toLowerCase().replace(/\s+engineering$/, '').trim();
 const sameDept = (a, b) => {
   const x = (a || '').trim().toLowerCase();
   const y = (b || '').trim().toLowerCase();
@@ -40,7 +41,11 @@ const sameDept = (a, b) => {
   if (x === y) return true;
   if (/ap+titude/.test(x) && /ap+titude/.test(y)) return true;
   if ((x.includes('mathematics') || x.includes('maths')) && (y.includes('mathematics') || y.includes('maths'))) return true;
-  return (!!deptCode(a) && deptCode(a) === deptCode(b));
+  const cx = deptCode(a);
+  const cy = deptCode(b);
+  if ((!!cx && (cx === y || cx === cy)) || (!!cy && cy === x)) return true;
+  const bx = baseName(a);
+  return !!bx && bx === baseName(b);
 };
 
 const isCommonDeptName = (name) => {
@@ -178,19 +183,16 @@ exports.sendTestNotifications = onSchedule({ schedule: 'every 5 minutes', timeZo
         bundles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }
       
+      if (!allStudentsCache) {
+        const snap = await db.collection('joined_students').get();
+        allStudentsCache = snap.docs.map(d => d.data());
+      }
+      
       let candidateStudents = [];
       if (isCommonDeptName(test.department) || test.department === 'All' || test.department === 'General') {
-        if (!allStudentsCache) {
-          const snap = await db.collection('joined_students').get();
-          allStudentsCache = snap.docs.map(d => d.data());
-        }
         candidateStudents = allStudentsCache;
       } else {
-        if (!studentsByDept[test.department]) {
-          const snap = await db.collection('joined_students').where('department', '==', test.department || '').get();
-          studentsByDept[test.department] = snap.docs.map(d => d.data());
-        }
-        candidateStudents = studentsByDept[test.department];
+        candidateStudents = allStudentsCache.filter(s => sameDept(s.department, test.department));
       }
 
       const emails = [...new Set(candidateStudents

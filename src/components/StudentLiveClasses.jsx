@@ -1,4 +1,6 @@
 import { isNatQuestion, isMsqQuestion } from '../utils/questionTypeSplit';
+import { sameDepartment, isCommonDeptName } from '../utils/subjects';
+import { deptNameVariants } from '../utils/questionBankCache';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { sendWebhookEmail } from '../utils/emailWebhook';
 import { 
@@ -744,9 +746,10 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
       setActiveClasses(merged);
     };
 
+    const deptVariants = deptNameVariants(department).slice(0, 30);
     const deptQ = query(
       collection(db, 'live_sessions'),
-      where('department', '==', department),
+      where('department', 'in', deptVariants),
       where('status', '==', 'live')
     );
     const unsubDept = onSnapshot(deptQ, (snapshot) => {
@@ -932,7 +935,7 @@ export default function StudentLiveClasses({ department, isPro, purchasedBundles
     // Check if they own any bundle for this department that has the 'live_classes' permission
     const studentPurchasedDeptBundles = (bundles || []).filter(b => 
       purchasedBundles.includes(b.id) && 
-      b.department === cls.department &&
+      (sameDepartment(b.department, cls.department) || b.department === 'General' || b.department === 'All' || cls.department === 'General' || cls.department === 'All' || isCommonDeptName(cls.department)) &&
       (b.permissions?.includes('live_classes') || !b.permissions)
     );
     if (studentPurchasedDeptBundles.length > 0) return true;

@@ -15,7 +15,7 @@ import {
   RotateCcw,
   X
 } from 'lucide-react';
-import { STUDENT_DEPARTMENTS } from '../../utils/subjects';
+import { STUDENT_DEPARTMENTS, sameDepartment } from '../../utils/subjects';
 
 const DEPARTMENT_OPTIONS = [...STUDENT_DEPARTMENTS, "Other"];
 
@@ -103,7 +103,7 @@ const TeacherDirectory = ({
       const matchesSearch = teacher.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         teacher.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
         teacher.department.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesDept = !filterDepartment || teacher.department === filterDepartment;
+      const matchesDept = !filterDepartment || sameDepartment(teacher.department, filterDepartment);
       const matchesQualification = !filterQualification || teacher.qualification === filterQualification;
       const matchesExperience = !filterExperience || teacher.experience === filterExperience;
       const matchesStatus = !filterStatus || teacher.status === filterStatus;

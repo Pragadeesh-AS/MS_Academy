@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { Users, Mail, Phone, Calendar, BookOpen, Clock } from 'lucide-react';
+import { sameDepartment } from '../../utils/subjects';
 
 export default function TeacherStudents({ department }) {
   const [students, setStudents] = useState([]);
@@ -15,10 +16,10 @@ export default function TeacherStudents({ department }) {
         const studentsSnapshot = await getDocs(collection(db, 'joined_students'));
         let allStudents = studentsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
         
-        // Filter by department (ensure case-insensitive match)
+        // Filter by department (matching canonical names and variants)
         if (department) {
           allStudents = allStudents.filter(student => 
-            student.department && student.department.toLowerCase() === department.toLowerCase()
+            student.department && sameDepartment(student.department, department)
           );
         }
 

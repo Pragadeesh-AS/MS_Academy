@@ -14,6 +14,7 @@ import StudentLiveClasses from './StudentLiveClasses';
 import RecordingPlayerModal from './shared/RecordingPlayerModal';
 import RoleSwitcher from './shared/RoleSwitcher';
 import { STUDENT_DEPARTMENTS, groupBySubject, NO_SUBJECT, sameDepartment, isCommonDeptName, canonicalDepartment } from '../utils/subjects';
+import { deptNameVariants } from '../utils/questionBankCache';
 import StudentTests from './StudentTests';
 import TestAlerts from './student/TestAlerts';
 import { canAccessTest } from '../utils/testAccess';
@@ -225,7 +226,7 @@ export default function Dashboard() {
     // Check if they own any bundle for this department that has the 'recordings' permission
     const studentPurchasedDeptBundles = (availableBundles || []).filter(b => 
       purchasedBundles.includes(b.id) && 
-      (b.department === rec.department || rec.department === 'General' || !rec.department) &&
+      (sameDepartment(b.department, rec.department) || b.department === 'General' || b.department === 'All' || rec.department === 'General' || !rec.department) &&
       (b.permissions?.includes('recordings') || !b.permissions)
     );
     
@@ -318,9 +319,10 @@ export default function Dashboard() {
       setScheduledClasses(merged);
     };
 
+    const deptVariants = deptNameVariants(studentDepartment).slice(0, 30);
     const deptQ = query(
       collection(db, 'scheduled_classes'),
-      where('department', '==', studentDepartment)
+      where('department', 'in', deptVariants)
     );
     const unsubDept = onSnapshot(deptQ, (snapshot) => {
       deptClasses = mineOnly(snapshot.docs);

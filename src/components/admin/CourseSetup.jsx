@@ -10,6 +10,7 @@ import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { gateCoursesData } from '../GateCourses';
 import { isFullBundle, FREE_PRACTICE_QUESTIONS } from '../../utils/practiceTests';
+import { sameDepartment } from '../../utils/subjects';
 
 export default function CourseSetup() {
   const [bundles, setBundles] = useState([]);
@@ -619,7 +620,7 @@ export default function CourseSetup() {
 
                 {(formData.permissions || []).includes('notes') && (() => {
                   const deptSubjects = noteSubjects
-                    .filter(f => f.department === formData.department)
+                    .filter(f => sameDepartment(f.department, formData.department))
                     .sort((a, b) => a.name.localeCompare(b.name));
                   return (
                     <div className="md:col-span-2 space-y-3 text-left border border-slate-200 p-5 rounded-2xl bg-slate-50/50 mt-4">
