@@ -1,16 +1,17 @@
 import React from 'react';
-import { Bookmark, Lock, CheckCircle, Users, Tag, Trash2, ArrowRight } from 'lucide-react';
+import { Bookmark, Lock, CheckCircle, Users, Tag, Trash2 } from 'lucide-react';
 import { getSubjectAcronym, getSubjectSubtitle, getSubjectStreamCodes } from '../../utils/subjectAcronyms';
 
 /**
  * Premium Note Subject Card matching the official MS Academy mobile & web design.
  * Features:
  *  - Rich emerald-to-forest green gradient
- *  - Centered stream tags (e.g. "ME · XE · PI")
+ *  - Dedicated centered stream header (e.g. "ME · XE · PI") with zero overlap
  *  - Embossed bronze/copper coin with white Bookmark icon
  *  - Prominent bold white acronym (e.g. "SOM", "TOM", "FM", "ET")
- *  - Subtle white divider
- *  - Clean uppercase full subject title (e.g. "STRENGTH OF MATERIALS")
+ *  - Centered thin white divider
+ *  - Clean uppercase full subject title (e.g. "FLUID MECHANICS")
+ *  - Harmonious files and topic count metadata
  *  - Full preservation of student lock/unlock state, buy button, and admin actions
  */
 export default function NoteSubjectCard({
@@ -51,56 +52,41 @@ export default function NoteSubjectCard({
       {/* Background radial glow */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent pointer-events-none" />
 
-      {/* Top Bar: Badges & Stream Codes */}
-      <div className="relative w-full flex items-center justify-between gap-2 mb-2">
-        {/* Left: Notes count / Topic count pill */}
-        <div className="flex items-center gap-1.5">
-          {fileCount !== undefined && (
-            <span className="px-2 py-0.5 rounded-full bg-black/25 backdrop-blur-md border border-white/15 text-[10.5px] font-bold text-white/90">
-              {fileCount} {fileCount === 1 ? 'file' : 'files'}
-            </span>
-          )}
-          {topicCount > 0 && (
-            <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-white/15 backdrop-blur-md border border-white/10 text-[10.5px] font-bold text-white/80">
-              {topicCount} {topicCount === 1 ? 'topic' : 'topics'}
-            </span>
-          )}
-        </div>
-
-        {/* Center: Top Stream Tags (ME · XE · PI) */}
-        <div className="absolute left-1/2 -translate-x-1/2 text-[11px] sm:text-[12px] font-[800] tracking-[0.22em] uppercase text-white/85 text-center truncate max-w-[55%]">
+      {/* Top Header Row: Centered Stream Codes without collision */}
+      <div className="relative w-full text-center px-8 pt-0.5 pb-1">
+        <span className="text-[11.5px] sm:text-[12.5px] font-[800] tracking-[0.22em] uppercase text-white/90 truncate block drop-shadow-sm">
           {streamCodes}
-        </div>
+        </span>
+      </div>
 
-        {/* Right: Status pill (Locked / Owned / Unlocked) or Admin Delete */}
-        <div className="flex items-center gap-1">
-          {status && (
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10.5px] font-[800] backdrop-blur-md border flex items-center gap-1 ${
-                status === 'locked'
-                  ? 'bg-amber-500/20 text-amber-200 border-amber-300/30'
-                  : 'bg-emerald-400/20 text-emerald-200 border-emerald-300/30'
-              }`}
-            >
-              {status === 'locked' ? <Lock size={10} /> : <CheckCircle size={10} />}
-              {status === 'owned' ? 'Owned' : status === 'included' ? 'Unlocked' : 'Locked'}
-            </span>
-          )}
+      {/* Top Right Actions (Admin Trash or Student Access Status) */}
+      <div className="absolute top-3.5 right-3.5 z-10 flex items-center gap-1.5">
+        {status && (
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-[800] backdrop-blur-md border flex items-center gap-1 ${
+              status === 'locked'
+                ? 'bg-amber-500/20 text-amber-200 border-amber-300/30'
+                : 'bg-emerald-400/20 text-emerald-200 border-emerald-300/30'
+            }`}
+          >
+            {status === 'locked' ? <Lock size={10} /> : <CheckCircle size={10} />}
+            {status === 'owned' ? 'Owned' : status === 'included' ? 'Unlocked' : 'Locked'}
+          </span>
+        )}
 
-          {isAdmin && onDelete && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(subject);
-              }}
-              className="w-7 h-7 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-red-500/80 transition-colors"
-              title="Delete folder"
-            >
-              <Trash2 size={13} />
-            </button>
-          )}
-        </div>
+        {isAdmin && onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(subject);
+            }}
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white/50 hover:text-white hover:bg-black/25 active:scale-95 transition-all"
+            title="Delete folder"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
 
       {/* Main Center Content: Bronze Coin + Bold Acronym */}
@@ -117,19 +103,35 @@ export default function NoteSubjectCard({
       </div>
 
       {/* Thin Divider Line */}
-      <div className="relative w-14 sm:w-16 h-[1.5px] bg-white/40 rounded-full mx-auto my-1.5" />
+      <div className="relative w-14 sm:w-16 h-[1.5px] bg-white/40 rounded-full mx-auto my-2" />
 
       {/* Subtitle: Full Subject Title */}
       <div
-        className="relative text-[12px] sm:text-[13px] font-[800] tracking-wider uppercase text-white text-center leading-snug px-3 line-clamp-2 min-h-[32px] flex items-center justify-center drop-shadow-sm"
+        className="relative text-[12.5px] sm:text-[13.5px] font-[900] tracking-wider uppercase text-white text-center leading-snug px-3 line-clamp-2 min-h-[34px] flex items-center justify-center drop-shadow-sm"
         title={subtitle}
       >
         {subtitle}
       </div>
 
-      {/* Footer: Locked Buy Button or Admin Controls */}
+      {/* File & Topic Count info cleanly integrated below subtitle */}
+      {(fileCount !== undefined || topicCount > 0) && (
+        <div className="relative mt-2 flex items-center justify-center gap-1.5 text-[11px] font-bold text-emerald-100/85">
+          {fileCount !== undefined && (
+            <span className="px-2 py-0.5 rounded-full bg-black/20 border border-white/10 backdrop-blur-sm">
+              {fileCount} {fileCount === 1 ? 'file' : 'files'}
+            </span>
+          )}
+          {topicCount > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-black/20 border border-white/10 backdrop-blur-sm">
+              {topicCount} {topicCount === 1 ? 'topic' : 'topics'}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Footer: Locked Buy Button */}
       {status === 'locked' && onBuy && (
-        <div className="relative mt-3 pt-3 border-t border-white/15">
+        <div className="relative mt-4 pt-3 border-t border-white/15">
           <button
             type="button"
             onClick={(e) => {
@@ -137,7 +139,7 @@ export default function NoteSubjectCard({
               onBuy();
             }}
             disabled={isPaying}
-            className="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-[900] text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 disabled:opacity-70"
+            className="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-[0.98] text-white font-[900] text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 disabled:opacity-70"
           >
             {isPaying ? 'Processing…' : price ? `Buy Subject • ₹${price}` : 'Buy Subject'}
           </button>
@@ -146,16 +148,16 @@ export default function NoteSubjectCard({
 
       {/* Admin Quick Controls */}
       {isAdmin && (
-        <div className="relative mt-3 pt-3 border-t border-white/15 space-y-2">
-          <div className="flex items-center justify-between text-[11px] font-bold text-white/80">
-            <span className={price ? 'text-amber-200' : 'text-white/60'}>
+        <div className="relative mt-4 pt-3.5 border-t border-white/15 space-y-2.5">
+          <div className="flex items-center justify-between text-[11.5px] font-bold text-white/80 px-1">
+            <span className={price ? 'text-amber-200' : 'text-white/65'}>
               {price ? `₹${price}` : 'Not for sale'}
             </span>
-            <span className="flex items-center gap-1 text-white/70">
-              <Users size={11} /> {accessCount} with access
+            <span className="flex items-center gap-1 text-white/75">
+              <Users size={12} /> {accessCount} with access
             </span>
           </div>
-          <div className="flex gap-1.5">
+          <div className="grid grid-cols-2 gap-2">
             {onAssign && (
               <button
                 type="button"
@@ -163,9 +165,9 @@ export default function NoteSubjectCard({
                   e.stopPropagation();
                   onAssign(subject);
                 }}
-                className="flex-1 px-2 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[11px] font-bold backdrop-blur-md flex items-center justify-center gap-1 transition-colors"
+                className="w-full py-2 rounded-xl bg-white/15 hover:bg-white/25 active:scale-[0.98] text-white text-[12px] font-bold backdrop-blur-md flex items-center justify-center gap-1.5 transition-all border border-white/10 shadow-sm"
               >
-                <Users size={11} /> Assign
+                <Users size={13} /> Assign
               </button>
             )}
             {onPrice && (
@@ -175,9 +177,9 @@ export default function NoteSubjectCard({
                   e.stopPropagation();
                   onPrice(subject);
                 }}
-                className="flex-1 px-2 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[11px] font-bold backdrop-blur-md flex items-center justify-center gap-1 transition-colors"
+                className="w-full py-2 rounded-xl bg-white/15 hover:bg-white/25 active:scale-[0.98] text-white text-[12px] font-bold backdrop-blur-md flex items-center justify-center gap-1.5 transition-all border border-white/10 shadow-sm"
               >
-                <Tag size={11} /> Price
+                <Tag size={13} /> Price
               </button>
             )}
           </div>
