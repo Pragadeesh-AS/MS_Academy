@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut, Package, Layers } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut, Package, Layers, Bookmark } from 'lucide-react';
 
 const VALID_STUDENT_TABS = [
   'learning', 'live', 'recordings', 'notes', 'schedule', 'analytics', 'tests', 'practice', 'upgrade'
@@ -30,6 +30,7 @@ import { bundleIdsOf } from '../utils/bundleAccess';
 import { isEliteStudent } from '../utils/membership';
 import { paletteFor, monogramOf, NEUTRAL } from '../utils/departmentColors';
 import { FolderHero, FolderBreadcrumb, FolderCard } from './student/StudentFolderCards';
+import NoteSubjectCard from './notes/NoteSubjectCard';
 import { formatDay, latestOf } from '../utils/folderDates';
 import { TrendingUp, Dumbbell } from 'lucide-react';
 import Toast from './shared/Toast';
@@ -706,37 +707,64 @@ export default function Dashboard() {
   const renderNoteCard = (note) => {
     const hasAccess = canAccessNote(note);
     return (
-      <div key={note.id} className={`bg-white rounded-2xl border ${hasAccess ? 'border-slate-200 hover:border-blue-300 hover:shadow-md' : 'border-slate-100 opacity-75'} p-5 transition-all flex flex-col`}>
-        <div className="flex items-start gap-4 mb-4">
-          <div className={`w-14 h-14 shrink-0 rounded-[14px] flex items-center justify-center shadow-inner ${hasAccess ? 'bg-blue-50 text-blue-500' : 'bg-slate-100 text-slate-400'}`}>
-            <FileText size={28} />
+      <div
+        key={note.id}
+        className={`group relative overflow-hidden rounded-[20px] border transition-all duration-300 flex flex-col justify-between ${
+          hasAccess
+            ? 'bg-white border-slate-200/90 shadow-[0_4px_16px_rgba(15,23,42,0.06)] hover:shadow-xl hover:border-emerald-500/60 hover:-translate-y-0.5'
+            : 'bg-slate-50/80 border-slate-200 opacity-80'
+        } p-5`}
+      >
+        <div className="flex items-start gap-3.5 mb-3">
+          <div className="w-11 h-11 rounded-full bg-gradient-to-b from-[#e58a36] via-[#cb6b1d] to-[#96420a] border border-amber-300/40 shadow-[0_3px_8px_rgba(0,0,0,0.3),inset_0_1.5px_2px_rgba(255,255,255,0.4)] flex items-center justify-center shrink-0">
+            <Bookmark size={18} className="text-white fill-white/20" strokeWidth={2.4} />
           </div>
           <div className="flex-1 min-w-0">
-            <h4 className="font-[900] text-slate-900 text-[16px] mb-1 truncate" title={note.title}>{note.title}</h4>
-            {note.description && (
-              <p className="text-[13px] text-slate-500 font-medium line-clamp-2 mb-2">{note.description}</p>
-            )}
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-auto">
+            <h4 className="font-[900] text-slate-900 text-[15px] sm:text-[16px] leading-snug truncate" title={note.title}>
+              {note.title}
+            </h4>
+            {note.description ? (
+              <p className="text-[12.5px] text-slate-500 font-medium line-clamp-2 mt-1">{note.description}</p>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px] font-bold text-slate-400">
               {note.fileName && (
-                <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-                  <FileText size={12} /> {note.fileName}
+                <span className="flex items-center gap-1 truncate max-w-[200px]" title={note.fileName}>
+                  <FileText size={12} className="text-emerald-600 shrink-0" /> {note.fileName}
                 </span>
               )}
-              <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
-                <Calendar size={12} /> {note.createdAt?.toDate ? note.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
+              {note.fileSize ? (
+                <span>{(note.fileSize / (1024 * 1024)).toFixed(1)} MB</span>
+              ) : null}
+              <span className="flex items-center gap-1">
+                <Calendar size={12} className="shrink-0" />{' '}
+                {note.createdAt?.toDate ? note.createdAt.toDate().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="mt-auto pt-4 border-t border-slate-100">
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
           {hasAccess ? (
-            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteObj(note); setViewingNoteAccess(true); }} className="w-full py-2.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
-              <Eye size={16} /> View Full Note
+            <button
+              onClick={() => {
+                setViewingNoteUrl(note.url);
+                setViewingNoteObj(note);
+                setViewingNoteAccess(true);
+              }}
+              className="w-full py-2.5 bg-gradient-to-r from-[#088c4b] to-[#046c37] hover:from-[#0a9b54] hover:to-[#057a3e] text-white rounded-xl text-xs sm:text-sm font-[800] uppercase tracking-wider transition-all shadow-[0_4px_12px_rgba(4,108,55,0.25)] flex items-center justify-center gap-2"
+            >
+              <Eye size={15} /> View Full Note
             </button>
           ) : (
-            <button onClick={() => { setViewingNoteUrl(note.url); setViewingNoteObj(note); setViewingNoteAccess(false); }} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2">
-              <Eye size={16} /> Preview (3 Pages)
+            <button
+              onClick={() => {
+                setViewingNoteUrl(note.url);
+                setViewingNoteObj(note);
+                setViewingNoteAccess(false);
+              }}
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs sm:text-sm font-[800] uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+            >
+              <Eye size={15} /> Preview (3 Pages)
             </button>
           )}
         </div>
@@ -1343,34 +1371,24 @@ export default function Dashboard() {
                   {childFolders.length > 0 && (
                     <div>
                       <h3 className="text-[12px] font-[800] uppercase tracking-wider text-slate-400 mb-3">{noteStack.length === 0 ? 'Subjects' : 'Topics'}</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                         {childFolders.map(f => {
                           const isSubject = noteStack.length === 0;
                           const status = isSubject ? subjectAccess(f) : null;
                           const folderNotes = notesUnder(f.id);
                           const topicCount = noteFolders.filter(x => x.parentId === f.id).length;
                           return (
-                            <FolderCard
+                            <NoteSubjectCard
                               key={f.id}
-                              palette={deptPalette}
-                              icon={isSubject ? BookOpen : Layers}
-                              title={f.name}
-                              count={folderNotes.length}
-                              countLabel={folderNotes.length === 1 ? 'Note' : 'Notes'}
-                              corner={isSubject && (
-                                <span className={`text-[11px] font-[800] px-2.5 py-1 rounded-full flex items-center gap-1 ${status === 'locked' ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-600'}`}>
-                                  {status === 'locked' ? <Lock size={11} /> : <CheckCircle size={11} />}
-                                  {status === 'owned' ? 'Owned' : status === 'included' ? 'Unlocked' : 'Locked'}
-                                </span>
-                              )}
-                              chips={isSubject && topicCount > 0 && (
-                                <span className={`px-2 py-1 rounded-lg border text-[11px] font-bold ${deptPalette.soft}`}>{topicCount} {topicCount === 1 ? 'topic' : 'topics'}</span>
-                              )}
-                              footer={isSubject && status === 'locked' && (
-                                folderPrice(f) ? buyButton(f, true) : <p className="text-xs font-bold text-slate-400">Included in course bundles</p>
-                              )}
-                              latest={latestOf(folderNotes)}
+                              subject={f}
+                              department={studentDepartment}
+                              fileCount={folderNotes.length}
+                              topicCount={topicCount}
+                              status={status}
+                              price={folderPrice(f)}
                               onOpen={() => setNoteStack([...noteStack, f])}
+                              onBuy={() => handleBuySubject(f.id)}
+                              isPaying={payingSubjectId === f.id}
                             />
                           );
                         })}

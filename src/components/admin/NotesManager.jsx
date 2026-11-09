@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db, storage } from '../../firebase';
 import { collection, query, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, onSnapshot, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { FileText, Plus, Trash2, UploadCloud, Link as LinkIcon, X, CheckCircle2, ChevronRight, Book, Search, AlertCircle, ArrowUpRight, Save, Folder, FolderPlus, Home, Users, Tag, Package, Pencil, BookOpen, Layers, Building2, CalendarClock, ArrowRight } from 'lucide-react';
+import { FileText, Plus, Trash2, UploadCloud, Link as LinkIcon, X, CheckCircle2, ChevronRight, Book, Search, AlertCircle, ArrowUpRight, Save, Folder, FolderPlus, Home, Users, Tag, Package, Pencil, BookOpen, Layers, Building2, CalendarClock, ArrowRight, Bookmark } from 'lucide-react';
 import Loader from '../Loader';
 import { BundleAccessPicker, BundleAccessModal } from '../shared/BundleAccessPicker';
 import Toast from '../shared/Toast';
@@ -10,6 +10,7 @@ import { accessOf, accessFields, bundleNamesOf } from '../../utils/bundleAccess'
 import { paletteFor, monogramOf, NEUTRAL } from '../../utils/departmentColors';
 import { gateCoursesData } from '../GateCourses';
 import { sameDepartment } from '../../utils/subjects';
+import NoteSubjectCard from '../notes/NoteSubjectCard';
 
 // Folder depth: Department (fixed) -> Subject -> Topic. Topics cannot contain further folders.
 const LEVEL_NAMES = ['Subject', 'Topic'];
@@ -508,23 +509,23 @@ export default function NotesManager() {
   const locationLabel = (n) => [n.department || 'General', n.subject, n.topic].filter(Boolean).join(' / ');
 
   const renderNoteCard = (note, showLocation = false) => (
-    <div key={note.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden group hover:border-blue-300 hover:shadow-md transition-all">
+    <div key={note.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden group hover:border-emerald-500/60 hover:shadow-lg hover:-translate-y-0.5 transition-all">
       <div className="p-5">
         <div className="flex justify-between items-start mb-3 gap-2">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            {note.type === 'link' ? <LinkIcon size={18} /> : <FileText size={18} />}
+          <div className="w-11 h-11 rounded-full bg-gradient-to-b from-[#e58a36] via-[#cb6b1d] to-[#96420a] border border-amber-300/40 shadow-[0_3px_8px_rgba(0,0,0,0.3),inset_0_1.5px_2px_rgba(255,255,255,0.4)] flex items-center justify-center shrink-0">
+            <Bookmark size={18} className="text-white fill-white/20" strokeWidth={2.4} />
           </div>
           <button onClick={() => handleDelete(note)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete note">
             <Trash2 size={16} />
           </button>
         </div>
         <h3 className="text-[16px] font-[900] text-slate-900 mb-1 line-clamp-2" title={note.title}>{note.title}</h3>
-        {showLocation && <p className="text-[11px] font-bold text-blue-600 mb-1 truncate" title={locationLabel(note)}>{locationLabel(note)}</p>}
+        {showLocation && <p className="text-[11px] font-bold text-emerald-700 mb-1 truncate" title={locationLabel(note)}>{locationLabel(note)}</p>}
         {note.description && <p className="text-sm font-medium text-slate-500 line-clamp-2">{note.description}</p>}
         <div className="space-y-2 mt-4 pt-3 border-t border-slate-100 text-sm">
           <div className="flex items-center justify-between gap-2">
             <span className="text-slate-400 font-medium flex items-center gap-1.5 shrink-0"><Book size={14} /> Access:</span>
-            <button type="button" onClick={() => openAccessEditor(note)} className="min-w-0 flex items-center gap-1.5 text-slate-700 hover:text-blue-600 font-bold transition-colors" title={`${getBundleName(note)} - click to change`}>
+            <button type="button" onClick={() => openAccessEditor(note)} className="min-w-0 flex items-center gap-1.5 text-slate-700 hover:text-emerald-700 font-bold transition-colors" title={`${getBundleName(note)} - click to change`}>
               <span className="truncate">{getBundleName(note)}</span>
               <Pencil size={12} className="shrink-0 text-slate-400" />
             </button>
@@ -539,9 +540,9 @@ export default function NotesManager() {
       </div>
       <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
         <span className="text-xs font-bold text-slate-400">
-          {note.createdAt?.toDate ? note.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Just now'}
+          {note.createdAt?.toDate ? note.createdAt.toDate().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Just now'}
         </span>
-        <a href={note.url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+        <a href={note.url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1">
           View File <ArrowUpRight size={14} />
         </a>
       </div>
@@ -808,54 +809,25 @@ export default function NotesManager() {
               <h3 className="text-[12px] font-[800] uppercase tracking-wider text-slate-400 mb-3">
                 {stack.length === 0 ? 'Subjects' : stack.length === 1 ? 'Topics' : 'Folders'}
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {childFolders.map(f => {
                   const fileCount = notesInFolder(f.id).length;
                   const subCount = folders.filter(x => x.parentId === f.id).length;
-                  const isSubject = stack.length === 0;
-                  const p = deptPalette(department);
-                  const FolderIcon = isSubject ? BookOpen : Layers;
                   return (
-                    <div key={f.id} className={`group relative overflow-hidden bg-white rounded-[24px] border border-slate-200/80 shadow-[0_8px_24px_rgba(15,23,42,0.04)] hover:shadow-2xl ${p.glow} ${p.ring} hover:-translate-y-1 transition-all duration-300 flex flex-col`}>
-                      <FolderIcon aria-hidden size={110} strokeWidth={1.5} className={`pointer-events-none absolute -right-5 -top-5 opacity-[0.06] ${p.text} group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500`} />
-                      <button onClick={() => setStack([...stack, f])} className="relative text-left w-full p-6 pb-4 flex-1 focus:outline-none">
-                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${p.badge} text-white flex items-center justify-center shadow-lg group-hover:rotate-[-4deg] group-hover:scale-105 transition-transform duration-300`}>
-                          <FolderIcon size={22} strokeWidth={2.2} />
-                        </div>
-                        <div className="mt-4 font-[800] text-[16px] text-slate-900 leading-snug line-clamp-2 break-words pr-6" title={f.name}>{f.name}</div>
-                        <div className="mt-3 flex items-baseline gap-2">
-                          <span className="text-[32px] font-[900] text-slate-900 leading-none tracking-tight">{fileCount}</span>
-                          <span className="text-[12px] font-[800] uppercase tracking-wider text-slate-400">{fileCount === 1 ? 'File' : 'Files'}</span>
-                        </div>
-                        {isSubject && (
-                          <span className={`inline-block mt-3 px-2 py-1 rounded-lg border text-[11px] font-bold ${p.soft}`}>{plural(subCount, 'topic')}</span>
-                        )}
-                      </button>
-                      {isSubject ? (
-                        <div className="relative mx-6 mb-5 pt-4 border-t border-slate-100 space-y-2.5">
-                          <div className="flex items-center justify-between text-xs font-bold">
-                            <span className={subjectPrice(f) ? 'text-emerald-600' : 'text-slate-400'}>{subjectPrice(f) ? `₹${subjectPrice(f)}` : 'Not for sale'}</span>
-                            <span className="text-slate-400 flex items-center gap-1"><Users size={12} /> {studentsWithAccess(f.id).length} with access</span>
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => openAssign(f)} className="flex-1 px-2 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 flex items-center justify-center gap-1"><Users size={12} /> Assign</button>
-                            <button onClick={() => openPrice(f)} className="flex-1 px-2 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 flex items-center justify-center gap-1"><Tag size={12} /> Price</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className={`relative mx-6 mb-5 pt-4 border-t border-slate-100 flex items-center justify-between text-[12.5px] font-[800] ${p.text}`}>
-                          <span>Open folder</span>
-                          <ArrowRight size={18} className="group-hover:translate-x-1.5 transition-transform duration-300" />
-                        </div>
-                      )}
-                      <button
-                        onClick={() => handleDeleteFolder(f)}
-                        className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-                        title="Delete folder"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
+                    <NoteSubjectCard
+                      key={f.id}
+                      subject={f}
+                      department={department}
+                      fileCount={fileCount}
+                      topicCount={subCount}
+                      price={subjectPrice(f)}
+                      isAdmin={true}
+                      accessCount={studentsWithAccess(f.id).length}
+                      onOpen={() => setStack([...stack, f])}
+                      onAssign={() => openAssign(f)}
+                      onPrice={() => openPrice(f)}
+                      onDelete={() => handleDeleteFolder(f)}
+                    />
                   );
                 })}
                 {canCreateFolder && (
