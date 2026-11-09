@@ -1136,7 +1136,8 @@ export default function AttributesManager({ lockedDepartment = null }) {
                         )}
                         {WEBSITE_DEPARTMENTS.map(dept => {
                           const isCurrent = editingAttr.name === dept;
-                          const alreadyAdded = !isCurrent && currentValues.some(v => sameDepartment(v.name, dept) || v.name.trim().toLowerCase() === dept.trim().toLowerCase());
+                          const isSameDeptAsEditing = !isCurrent && editingAttr.id !== 'NEW' && sameDepartment(editingAttr.name, dept);
+                          const alreadyAdded = !isCurrent && !isSameDeptAsEditing && currentValues.some(v => (editingAttr.id !== 'NEW' ? v.id !== editingAttr.id : true) && (sameDepartment(v.name, dept) || v.name.trim().toLowerCase() === dept.trim().toLowerCase()));
                           return (
                             <option key={dept} value={dept} disabled={alreadyAdded}>
                               {dept} {alreadyAdded ? '(Already Added)' : ''}
