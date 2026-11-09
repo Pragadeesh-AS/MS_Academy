@@ -2914,25 +2914,9 @@ export default function AdminDashboard() {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#1D4ED8] focus:ring-4 focus:ring-blue-500/10 transition-all font-semibold text-slate-800"
                 >
                   <option value="">Select Department...</option>
-                  <option value="Computer Science (CSE)">Computer Science (CSE)</option>
-                  <option value="Electronics (ECE)">Electronics (ECE)</option>
-                  <option value="Mechanical (ME)">Mechanical (ME)</option>
-                  <option value="Civil (CE)">Civil (CE)</option>
-                  <option value="Electrical (EE)">Electrical (EE)</option>
-                  <option value="Data Science & AI (DS)">Data Science & AI (DS)</option>
-                  <option value="Production & Industrial Engg (PI)">Production & Industrial Engg (PI)</option>
-                  <option value="Instrumentation Engg (IN)">Instrumentation Engg (IN)</option>
-                  <option value="Biotechnology (BT)">Biotechnology (BT)</option>
-                  <option value="Chemical Engineering (CH)">Chemical Engineering (CH)</option>
-                  <option value="Biomedical Engineering (BM)">Biomedical Engineering (BM)</option>
-                  <option value="Physics (PH)">Physics (PH)</option>
-                  <option value="Architecture & Planning (AR)">Architecture & Planning (AR)</option>
-                  <option value="Agricultural Engineering (AG)">Agricultural Engineering (AG)</option>
-                  <option value="Metallurgical Engineering (MT)">Metallurgical Engineering (MT)</option>
-                  <option value="Environmental Science (ES)">Environmental Science (ES)</option>
-                  <option value="Life Sciences (XL)">Life Sciences (XL)</option>
-                  <option value="Aerospace Engineering (AE)">Aerospace Engineering (AE)</option>
-                  <option value="Statistics (ST)">Statistics (ST)</option>
+                  {STUDENT_DEPARTMENTS.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
                   <option value="Other">Other</option>
                 </select>
               </div>
@@ -3014,25 +2998,9 @@ export default function AdminDashboard() {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-[#5b32ea] focus:ring-4 focus:ring-purple-500/10 transition-all font-semibold text-slate-800"
                 >
                   <option value="">Select Department...</option>
-                  <option value="Computer Science (CSE)">Computer Science (CSE)</option>
-                  <option value="Electronics (ECE)">Electronics (ECE)</option>
-                  <option value="Mechanical (ME)">Mechanical (ME)</option>
-                  <option value="Civil (CE)">Civil (CE)</option>
-                  <option value="Electrical (EE)">Electrical (EE)</option>
-                  <option value="Data Science & AI (DS)">Data Science & AI (DS)</option>
-                  <option value="Production & Industrial Engg (PI)">Production & Industrial Engg (PI)</option>
-                  <option value="Instrumentation Engg (IN)">Instrumentation Engg (IN)</option>
-                  <option value="Biotechnology (BT)">Biotechnology (BT)</option>
-                  <option value="Chemical Engineering (CH)">Chemical Engineering (CH)</option>
-                  <option value="Biomedical Engineering (BM)">Biomedical Engineering (BM)</option>
-                  <option value="Physics (PH)">Physics (PH)</option>
-                  <option value="Architecture & Planning (AR)">Architecture & Planning (AR)</option>
-                  <option value="Agricultural Engineering (AG)">Agricultural Engineering (AG)</option>
-                  <option value="Metallurgical Engineering (MT)">Metallurgical Engineering (MT)</option>
-                  <option value="Environmental Science (ES)">Environmental Science (ES)</option>
-                  <option value="Life Sciences (XL)">Life Sciences (XL)</option>
-                  <option value="Aerospace Engineering (AE)">Aerospace Engineering (AE)</option>
-                  <option value="Statistics (ST)">Statistics (ST)</option>
+                  {STUDENT_DEPARTMENTS.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
                   <option value="Other">Other</option>
                 </select>
               </div>

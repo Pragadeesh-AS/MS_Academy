@@ -29,7 +29,7 @@ export const TEST_TEMPLATES = [
     duration: 30,
     q1: 5,
     q2: 5,
-    defaultDept: 'Aptitude',
+    defaultDept: 'General Aptitude',
     description: 'GATE General Aptitude - 5 x 1 mark + 5 x 2 marks (15 marks)',
   },
   {

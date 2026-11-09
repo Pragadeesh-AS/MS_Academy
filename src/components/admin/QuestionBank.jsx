@@ -8,7 +8,7 @@ import { questionFingerprint, isEmptyQuestion } from '../../utils/questionDuplic
 import { QUESTION_CATEGORIES, getQuestionCategory, inferQuestionCategory } from '../../utils/questionCategory';
 import { markNumberOf, markLabelFor, negativeMarkFor } from '../../utils/marking';
 import { resolveQuestionType } from '../../utils/questionTypeSplit';
-import { sameDepartment } from '../../utils/subjects';
+import { sameDepartment, canonicalDepartment } from '../../utils/subjects';
 import { answerKeyChanged } from '../../utils/testGrading';
 import { logQuestionActivity, hasDiagram, countQuestionTypes } from '../../utils/questionLogger';
 import { regradeAttemptsForQuestion } from '../../utils/regradeAttempts';
@@ -1496,18 +1496,24 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
             loading ? (
               <div className="py-12 flex justify-center"><Loader /></div>
             ) : (() => {
-              // Shared banks, one folder each, named as stored on the questions (first spelling seen)
+              // Shared banks, one folder each, named exactly as defined in attributes
               const commonNames = [];
               filteredQuestions.forEach(q => {
-                if (isCommonDeptName(q.department) && !commonNames.some(n => sameFolderName(n, q.department))) {
-                  commonNames.push(q.department.trim());
+                if (isCommonDeptName(q.department)) {
+                  const attrDept = attributes.find(a => a.type === 'department' && sameDepartment(a.name, q.department));
+                  const resolvedName = attrDept ? attrDept.name.trim() : (canonicalDepartment(q.department) || q.department.trim());
+                  if (!commonNames.some(n => sameDepartment(n, resolvedName))) {
+                    commonNames.push(resolvedName);
+                  }
                 }
               });
+              const myDeptAttr = attributes.find(a => a.type === 'department' && sameDepartment(a.name, lockedDepartment));
+              const myDeptName = myDeptAttr ? myDeptAttr.name.trim() : (canonicalDepartment(lockedDepartment) || lockedDepartment);
               const folders = [
-                { name: lockedDepartment, label: lockedDepartment, tag: 'Your department', common: false, always: true, questions: filteredQuestions.filter(isOwnDeptQuestion) },
+                { name: myDeptName, label: myDeptName, tag: 'Your department', common: false, always: true, questions: filteredQuestions.filter(isOwnDeptQuestion) },
                 ...commonNames.sort((a, b) => a.localeCompare(b)).map(name => ({
-                  name, label: toTitleCase(name), tag: 'Shared with all departments', common: true,
-                  questions: filteredQuestions.filter(q => sameFolderName(q.department, name))
+                  name, label: name, tag: 'Shared with all departments', common: true,
+                  questions: filteredQuestions.filter(q => sameDepartment(q.department, name))
                 }))
               ];
               return <DepartmentFolderGrid departments={folders} onOpen={openFolder} title="Folders" countLabel="Folders" sortBySize={false} />;

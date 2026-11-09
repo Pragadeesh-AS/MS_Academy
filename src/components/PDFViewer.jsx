@@ -135,7 +135,7 @@ const BlurredLockedPage = ({
 
   const remainingAfterThis = Math.max(0, numPages - pageNumber);
   const noteTitle = note?.title || (note?.subject ? `${note.subject} - STUDY NOTES` : 'STUDY MATERIAL');
-  const noteDept = note?.department || 'Mechanical (ME)';
+  const noteDept = note?.department || 'MECHANICAL ENGINEERING';
 
   // Combine only the actual matching suggested bundles (no artificial extra bundles)
   const combinedBundles = [
@@ -151,7 +151,7 @@ const BlurredLockedPage = ({
       {
         id: "bundle-elite",
         name: "GATE ELITE COURSE - MECHANICAL",
-        department: "MECHANICAL (ME)",
+        department: "MECHANICAL ENGINEERING",
         tagline: "IGNITE YOUR DREAMS",
         price: 90000,
         discountedPrice: 70000,

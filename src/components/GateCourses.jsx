@@ -134,7 +134,7 @@ export const gateCoursesData = [
   },
   {
     code: "ECE",
-    name: "Electronics (ECE)",
+    name: "ECE",
     icon: Cpu,
     path: "/courses/ece",
     desc: "Specialized training in signals & systems, electronic devices, analog/digital circuits, electromagnetics, and communications.",
@@ -174,7 +174,7 @@ export const gateCoursesData = [
   },
   {
     code: "ME",
-    name: "Mechanical (ME)",
+    name: "MECHANICAL ENGINEERING",
     icon: Cog,
     path: "/courses/me",
     desc: "Comprehensive modules covering applied mechanics, design, fluid mechanics, thermodynamics, and manufacturing technology.",
@@ -224,7 +224,7 @@ export const gateCoursesData = [
   },
   {
     code: "CH",
-    name: "Chemical (CH)",
+    name: "CHEMICAL ENGINEERING",
     icon: FlaskConical,
     path: "/courses/ch",
     desc: "Covers transport phenomena, chemical reaction engineering, process design, instrumentation, and plant economics.",
@@ -304,7 +304,7 @@ export const gateCoursesData = [
   },
   {
     code: "ST",
-    name: "Statistics (ST)",
+    name: "STATISTICS",
     icon: BarChart3,
     path: "/courses/st",
     desc: "Specialized training in calculus, linear algebra, probability theory, distributions, estimation, testing of hypotheses, stochastic processes, and regression.",

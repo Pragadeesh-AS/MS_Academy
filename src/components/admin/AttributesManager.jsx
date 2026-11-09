@@ -5,7 +5,7 @@ import Loader from '../Loader';
 
 export const WEBSITE_DEPARTMENTS = [
   ...STUDENT_DEPARTMENTS,
-  'Engineering Mathematics',
+  'ENGINEERING MATHEMATICS',
   'General Aptitude',
 ];
 import { Plus, Edit2, Trash2, ChevronDown, Search, MoreHorizontal, CheckCircle2, Bookmark, LayoutList, Trophy, Star, Clock, Landmark, FileText, X, ArrowRight, BookOpen } from 'lucide-react';

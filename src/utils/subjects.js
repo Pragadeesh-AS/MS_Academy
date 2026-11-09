@@ -32,15 +32,15 @@ export const sameDepartment = (a, b) => {
 // names so they reach the right students (see canonicalDepartment)
 export const STUDENT_DEPARTMENTS = [
   'Computer Science (CSE)',
-  'Electronics (ECE)',
-  'Mechanical (ME)',
+  'ECE',
+  'MECHANICAL ENGINEERING',
   'Civil (CE)',
   'Electrical (EE)',
   'Data Science & AI (DS)',
   'Production & Industrial Engg (PI)',
   'Instrumentation Engg (IN)',
   'Biotechnology (BT)',
-  'Chemical Engineering (CH)',
+  'CHEMICAL ENGINEERING',
   'Biomedical Engineering (BM)',
   'Physics (PH)',
   'Architecture & Planning (AR)',
@@ -49,10 +49,10 @@ export const STUDENT_DEPARTMENTS = [
   'Environmental Science (ES)',
   'Life Sciences (XL)',
   'Aerospace Engineering (AE)',
-  'Statistics (ST)',
+  'STATISTICS',
 ];
 
-// Other common ways admins name a department in the Attributes tab
+// Other common ways admins or users name a department, mapped to the official attribute names
 const DEPARTMENT_ALIASES = {
   aids: 'Data Science & AI (DS)',
   'ai&ds': 'Data Science & AI (DS)',
@@ -61,21 +61,42 @@ const DEPARTMENT_ALIASES = {
   'ai-ds': 'Data Science & AI (DS)',
   'artificial intelligence and data science': 'Data Science & AI (DS)',
   eee: 'Electrical (EE)',
-  chemical: 'Chemical Engineering (CH)',
   civil: 'Civil (CE)',
-  statistics: 'Statistics (ST)',
-  stats: 'Statistics (ST)',
-  st: 'Statistics (ST)',
+  'electronics (ece)': 'ECE',
+  electronics: 'ECE',
+  ece: 'ECE',
+  'mechanical (me)': 'MECHANICAL ENGINEERING',
+  'mechanical engineering (me)': 'MECHANICAL ENGINEERING',
+  'mechanical engineering': 'MECHANICAL ENGINEERING',
+  mechanical: 'MECHANICAL ENGINEERING',
+  me: 'MECHANICAL ENGINEERING',
+  'chemical (ch)': 'CHEMICAL ENGINEERING',
+  'chemical engineering (ch)': 'CHEMICAL ENGINEERING',
+  'chemical engineering': 'CHEMICAL ENGINEERING',
+  chemical: 'CHEMICAL ENGINEERING',
+  ch: 'CHEMICAL ENGINEERING',
+  'statistics (st)': 'STATISTICS',
+  statistics: 'STATISTICS',
+  stats: 'STATISTICS',
+  st: 'STATISTICS',
+  aptitude: 'General Aptitude',
+  apptitude: 'General Aptitude',
+  'general aptitude': 'General Aptitude',
+  'engineering mathematics': 'ENGINEERING MATHEMATICS',
+  mathematics: 'ENGINEERING MATHEMATICS',
+  maths: 'ENGINEERING MATHEMATICS',
 };
 
-// An attribute department name ("CHEMICAL ENGINEERING", "ECE", "AIDS") as the student-side name
-// ("Chemical Engineering (CH)", "Electronics (ECE)", "Data Science & AI (DS)"); names that match
-// none of them are kept as they are
+// Returns the official attribute department name ("MECHANICAL ENGINEERING", "CHEMICAL ENGINEERING", "ECE", "STATISTICS", "General Aptitude", etc.)
 export const canonicalDepartment = (name) => {
   const n = (name || '').trim();
   if (!n) return '';
+  const lower = n.toLowerCase();
+  if (DEPARTMENT_ALIASES[lower]) return DEPARTMENT_ALIASES[lower];
+  if (/ap+titude/.test(lower)) return 'General Aptitude';
+  if (lower.includes('mathematics') || lower.includes('maths')) return 'ENGINEERING MATHEMATICS';
   const hit = STUDENT_DEPARTMENTS.find(d => sameDepartment(d, n));
-  return hit || DEPARTMENT_ALIASES[n.toLowerCase()] || n;
+  return hit || n;
 };
 
 const toTitleCase = (s) => (s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());

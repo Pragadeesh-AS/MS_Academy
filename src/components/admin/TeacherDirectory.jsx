@@ -15,29 +15,9 @@ import {
   RotateCcw,
   X
 } from 'lucide-react';
+import { STUDENT_DEPARTMENTS } from '../../utils/subjects';
 
-const DEPARTMENT_OPTIONS = [
-  'Computer Science (CSE)',
-  'Electronics (ECE)',
-  'Mechanical (ME)',
-  'Civil (CE)',
-  'Electrical (EE)',
-  'Data Science & AI (DS)',
-  'Production & Industrial Engg (PI)',
-  'Instrumentation Engg (IN)',
-  'Biotechnology (BT)',
-  'Chemical Engineering (CH)',
-  'Biomedical Engineering (BM)',
-  'Physics (PH)',
-  'Architecture & Planning (AR)',
-  'Agricultural Engineering (AG)',
-  'Metallurgical Engineering (MT)',
-  'Environmental Science (ES)',
-  'Life Sciences (XL)',
-  'Aerospace Engineering (AE)',
-  'Statistics (ST)',
-  'Other'
-];
+const DEPARTMENT_OPTIONS = [...STUDENT_DEPARTMENTS, "Other"];
 
 const TeacherDirectory = ({
   invitedTeachers,

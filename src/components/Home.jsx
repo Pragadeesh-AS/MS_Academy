@@ -19,13 +19,13 @@ const courses = [
   },
   {
     src: "https://images.unsplash.com/photo-1517077304055-6e89abbf09b0?q=80&w=3000&auto=format&fit=crop",
-    title: "Electronics (ECE)",
+    title: "ECE",
     category: "ECE",
     path: "/courses/ece"
   },
   {
     src: "https://images.unsplash.com/photo-1537462715879-360eeb61a0ad?q=80&w=3000&auto=format&fit=crop",
-    title: "Mechanical (ME)",
+    title: "MECHANICAL ENGINEERING",
     category: "ME",
     path: "/courses/me"
   },
@@ -67,7 +67,7 @@ const courses = [
   },
   {
     src: "https://images.unsplash.com/photo-1532187643603-ba119ca4109e?q=80&w=3000&auto=format&fit=crop",
-    title: "Chemical Engineering (CH)",
+    title: "CHEMICAL ENGINEERING",
     category: "CH",
     path: "/courses/ch"
   },
@@ -121,7 +121,7 @@ const courses = [
   },
   {
     src: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=3000&auto=format&fit=crop",
-    title: "Statistics (ST)",
+    title: "STATISTICS",
     category: "ST",
     path: "/courses/st"
   }

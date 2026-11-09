@@ -47,8 +47,8 @@ export default function Courses3D() {
   return (
     <group position={[0, -2.5, 0]}>
       <CourseCard position={[-3.5, 0, 0]} color="#ea580c" emissiveColor="#f97316" title="Computer Science (CSE)" delay={0} />
-      <CourseCard position={[0, 0, 1.5]} color="#2563eb" emissiveColor="#3b82f6" title="Electronics (ECE)" delay={1} />
-      <CourseCard position={[3.5, 0, 0]} color="#059669" emissiveColor="#10b981" title="Mechanical (ME)" delay={2} />
+      <CourseCard position={[0, 0, 1.5]} color="#2563eb" emissiveColor="#3b82f6" title="ECE" delay={1} />
+      <CourseCard position={[3.5, 0, 0]} color="#059669" emissiveColor="#10b981" title="MECHANICAL ENGINEERING" delay={2} />
     </group>
   );
 }

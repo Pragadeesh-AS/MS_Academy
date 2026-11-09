@@ -13,6 +13,7 @@ import { updatePassword } from 'firebase/auth';
 import { motion } from 'framer-motion';
 import { SKILLS } from './skillsList';
 import { admissionFormBlocksPortal } from '../utils/admissionForm';
+import { STUDENT_DEPARTMENTS } from '../utils/subjects';
 
 const SKILL_STYLES = [
   "text-blue-600 bg-blue-50",
@@ -24,13 +25,7 @@ const SKILL_STYLES = [
   "text-pink-600 bg-pink-50"
 ];
 
-const DEPARTMENT_OPTIONS = [
-  "Computer Science (CSE)", "Electronics (ECE)", "Mechanical (ME)", "Civil (CE)", "Electrical (EE)",
-  "Data Science & AI (DS)", "Production & Industrial Engg (PI)", "Instrumentation Engg (IN)",
-  "Biotechnology (BT)", "Chemical Engineering (CH)", "Biomedical Engineering (BM)", "Physics (PH)",
-  "Architecture & Planning (AR)", "Agricultural Engineering (AG)", "Metallurgical Engineering (MT)",
-  "Environmental Science (ES)", "Life Sciences (XL)", "Aerospace Engineering (AE)", "Statistics (ST)", "Other"
-];
+const DEPARTMENT_OPTIONS = [...STUDENT_DEPARTMENTS, "Other"];
 
 const YEAR_OPTIONS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Graduated / Working"];
 

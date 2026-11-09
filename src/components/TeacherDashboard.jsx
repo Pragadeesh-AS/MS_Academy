@@ -63,9 +63,21 @@ function StatCard({ icon: Icon, label, value, onClick, gradient, index = 0 }) {
 
 const DEPT_EMOJI = {
   CSE: '💻', ECE: '📡', ME: '⚙️', CE: '🏗️', EE: '⚡', DS: '📊', PI: '🏭', IN: '🎛️', BT: '🧬',
-  CH: '⚗️', BM: '🩺', PH: '🔭', AR: '📐', AG: '🌾', MT: '🔩', ES: '🌿', XL: '🔬', AE: '✈️'
+  CH: '⚗️', BM: '🩺', PH: '🔭', AR: '📐', AG: '🌾', MT: '🔩', ES: '🌿', XL: '🔬', AE: '✈️',
+  ST: '📈', 'MECHANICAL ENGINEERING': '⚙️', 'CHEMICAL ENGINEERING': '⚗️', 'STATISTICS': '📈', 'General Aptitude': '🎯'
 };
-const getDeptEmoji = (dept) => DEPT_EMOJI[(dept.match(/\(([^)]+)\)/) || [])[1]] || '🎓';
+const getDeptEmoji = (dept) => {
+  if (!dept) return '🎓';
+  const code = (dept.match(/\(([^)]+)\)/) || [])[1];
+  if (code && DEPT_EMOJI[code]) return DEPT_EMOJI[code];
+  const upper = dept.trim().toUpperCase();
+  if (DEPT_EMOJI[upper]) return DEPT_EMOJI[upper];
+  if (/mechanical/i.test(dept)) return '⚙️';
+  if (/chemical/i.test(dept)) return '⚗️';
+  if (/statistics|stat/i.test(dept)) return '📈';
+  if (/electronics|ece/i.test(dept)) return '📡';
+  return '🎓';
+};
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
