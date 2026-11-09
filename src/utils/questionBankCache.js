@@ -3,7 +3,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { sameDepartment } from './subjects';
 
 const DB_NAME = 'ms_academy_cache';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'question_bank_store';
 
 // Helper: safe timestamp extraction for questions

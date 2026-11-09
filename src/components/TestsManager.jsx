@@ -344,7 +344,7 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   const questionDeptMatches = (qDept, qSubject) => {
     const subEntry = subjectsList.find(s => (s.name || '').trim().toLowerCase() === (qSubject || '').trim().toLowerCase());
     if (subEntry && subEntry.commonDept) {
-      return (qDept || '').trim().toLowerCase() === (subEntry.commonDept.name || '').trim().toLowerCase() || matchesSelectedDept(qDept);
+      return sameDepartment(qDept, subEntry.commonDept.name) || matchesSelectedDept(qDept);
     }
     return matchesSelectedDept(qDept);
   };

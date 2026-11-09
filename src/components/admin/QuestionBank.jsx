@@ -471,10 +471,34 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
     ) || null;
   }, [filterSubject, attributes, selectedDeptObj]);
 
-  const departments = useMemo(() => Array.from(new Set([
-    ...attributes.filter(a => a.type === 'department').map(a => a.name),
-    ...questions.map(q => q.department).filter(Boolean)
-  ])), [attributes, questions]);
+  const departments = useMemo(() => {
+    const deptAttrs = attributes.filter(a => a.type === 'department').map(a => a.name.trim()).filter(Boolean);
+    const questionDepts = questions.map(q => (q.department || '').trim()).filter(Boolean);
+
+    const canonicalMap = new Map();
+    deptAttrs.forEach(attrName => {
+      let matched = false;
+      for (const [key] of canonicalMap) {
+        if (sameDepartment(key, attrName)) {
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) canonicalMap.set(attrName, attrName);
+    });
+    questionDepts.forEach(qDept => {
+      let matched = false;
+      for (const [key] of canonicalMap) {
+        if (sameDepartment(key, qDept)) {
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) canonicalMap.set(qDept, qDept);
+    });
+
+    return Array.from(canonicalMap.keys());
+  }, [attributes, questions]);
 
   // ONLY subjects present in this particular department
   const subjects = useMemo(() => {
@@ -1295,8 +1319,8 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
             ? isOwnDeptQuestion(q)
             : (sameFolderName(q.department, selectedFolder) || sameDepartment(q.department, selectedFolder)))
         : selectedFolder
-          ? (selectedFolder === 'Uncategorized' ? (!q.department || q.department.trim() === '') : q.department === selectedFolder)
-          : (filterDept === 'All' || q.department === filterDept);
+          ? (selectedFolder === 'Uncategorized' ? (!q.department || q.department.trim() === '') : (q.department === selectedFolder || sameDepartment(q.department, selectedFolder)))
+          : (filterDept === 'All' || q.department === filterDept || sameDepartment(q.department, filterDept));
       const matchesSubject = filterSubject === 'All' || q.subject === filterSubject;
       const matchesTopic = filterTopic === 'All' || q.topic === filterTopic;
       const matchesYear = filterYear === 'All' || q.year === filterYear;
@@ -1491,7 +1515,7 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           ) : !selectedFolder ? (
             <DepartmentFolderGrid
               departments={[
-                ...departments.filter(d => d !== 'All Departments').map(dept => ({ name: dept, questions: filteredQuestions.filter(q => q.department === dept) })),
+                ...departments.filter(d => d !== 'All Departments').map(dept => ({ name: dept, questions: filteredQuestions.filter(q => q.department === dept || sameDepartment(q.department, dept)) })),
                 { name: 'Uncategorized', questions: filteredQuestions.filter(q => !q.department || q.department.trim() === '') }
               ]}
               onOpen={openFolder}
