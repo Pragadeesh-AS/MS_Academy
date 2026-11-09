@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, query, where, Timestamp, documentId } from 'firebase/firestore';
 import { Plus, Trash2, Camera, Calendar, Clock, BookOpen, Layers, Check, FileText, ChevronRight, X, AlertCircle, Info, Award, CheckCircle2, ChevronLeft, Landmark, Edit2, Lock, Unlock, Timer, Settings2, FolderOpen, ArrowLeft, Star, Image as ImageIcon } from 'lucide-react';
