@@ -349,18 +349,53 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
     return matchesSelectedDept(qDept);
   };
 
-    const topicsList = attributes
-    .filter(a => a.type === 'topic' && (selectedSubjects.length === 0 || selectedSubjects.some(subName => {
-      const subEntry = subjectsList.find(s => s.name === subName);
-      return subEntry && a.parentId === subEntry.attr.id;
-    })))
-    .map(a => a.name);
+  const topicMatches = (q, topicName) => {
+    if (!topicName) return false;
+    const norm = (s) => (s || '').trim().toLowerCase().replace(/_/g, ' ');
+    const tNorm = norm(topicName);
+    const qTopNorm = norm(q.topic);
+    const qSubNorm = norm(q.subject);
+    return qTopNorm === tNorm || qSubNorm === tNorm;
+  };
+
+  const topicsList = useMemo(() => {
+    const norm = (s) => (s || '').trim().toLowerCase().replace(/_/g, ' ');
+    const list = [];
+    selectedSubjects.forEach(subName => {
+      const sNorm = norm(subName);
+      const subEntry = subjectsList.find(s => norm(s.name) === sNorm);
+
+      // 1. Topics from attributes under this subject
+      const fromAttrs = subEntry
+        ? attributes.filter(a => a.type === 'topic' && a.parentId === subEntry.attr.id).map(a => a.name.trim())
+        : [];
+      fromAttrs.forEach(t => {
+        if (!list.some(x => norm(x) === norm(t))) list.push(t);
+      });
+
+      // 2. Topics from questions in this subject
+      questions.forEach(q => {
+        if (questionDeptMatches(q.department, q.subject) && norm(q.subject) === sNorm) {
+          const t = (q.topic || '').trim();
+          if (t && !list.some(x => norm(x) === norm(t))) list.push(t);
+        }
+      });
+
+      // 3. Fallback: if no topics found, offer the subject name itself
+      if (list.length === 0) {
+        list.push(subName.replace(/_/g, ' '));
+      }
+    });
+    return list;
+  }, [selectedSubjects, subjectsList, attributes, questions, selectedDept]);
 
   // Helper to count available questions per topic (robust trimming & case-insensitive matching)
   const getTopicCounts = (topicName) => {
+    const norm = (s) => (s || '').trim().toLowerCase().replace(/_/g, ' ');
     const pool = questions.filter(q => 
-      questionDeptMatches(q.department, q.subject) && selectedSubjects.some(sub => (q.subject || '').trim().toLowerCase() === sub.toLowerCase()) &&
-      (q.topic || '').trim().toLowerCase() === (topicName || '').trim().toLowerCase()
+      questionDeptMatches(q.department, q.subject) &&
+      selectedSubjects.some(sub => norm(q.subject) === norm(sub)) &&
+      topicMatches(q, topicName)
     );
     const pool1 = pool.filter(q => markValue(q) === 1);
     const pool2 = pool.filter(q => markValue(q) === 2);
@@ -474,11 +509,11 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
 
   // Filtered pool of questions based on Step 2 Hierarchy (combines selected topics, case-insensitive)
   const availablePool = questions.filter(q => {
+    const norm = (s) => (s || '').trim().toLowerCase().replace(/_/g, ' ');
     if (selectedDept && !questionDeptMatches(q.department, q.subject)) return false;
-      if (selectedSubjects.length > 0 && !selectedSubjects.some(sub => (q.subject || '').trim().toLowerCase() === sub.toLowerCase())) return false;
+    if (selectedSubjects.length > 0 && !selectedSubjects.some(sub => norm(q.subject) === norm(sub))) return false;
     if (selectedTopics.length > 0) {
-      const qTopic = (q.topic || '').trim().toLowerCase();
-      const match = selectedTopics.some(t => t.trim().toLowerCase() === qTopic);
+      const match = selectedTopics.some(t => topicMatches(q, t));
       if (!match) return false;
     }
     return true;
@@ -487,10 +522,12 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
   // One cell per topic x mark allocation (Step 3) with the questions it can draw from. A topic with
   // an Easy / Medium / Hard mix gets one cell per mark x difficulty instead, so the picks follow it.
   const autoCells = (excludeIds = new Set()) => selectedTopics.flatMap(topic => {
+    const norm = (s) => (s || '').trim().toLowerCase().replace(/_/g, ' ');
     const alloc = allocations[topic] || {};
     const topicPool = questions.filter(q =>
-      questionDeptMatches(q.department, q.subject) && selectedSubjects.some(sub => (q.subject || '').trim().toLowerCase() === sub.toLowerCase()) &&
-      (q.topic || '').trim().toLowerCase() === topic.trim().toLowerCase() &&
+      questionDeptMatches(q.department, q.subject) &&
+      selectedSubjects.some(sub => norm(q.subject) === norm(sub)) &&
+      topicMatches(q, topic) &&
       !excludeIds.has(q.id)
     );
     const plan = difficultyPlanFor(topic);
@@ -1890,10 +1927,12 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
               {step === 3 && (() => {
                 
                 // --- MANUAL MODE LOGIC ---
-                const topicPool = questions.filter(q =>
-                  questionDeptMatches(q.department, q.subject) && selectedSubjects.some(sub => (q.subject || '').trim().toLowerCase() === sub.toLowerCase()) &&
-                  selectedTopics.map(t => t.toLowerCase()).includes((q.topic || '').trim().toLowerCase())
-                );
+                const topicPool = questions.filter(q => {
+                  const norm = (s) => (s || '').trim().toLowerCase().replace(/_/g, ' ');
+                  return questionDeptMatches(q.department, q.subject) &&
+                    selectedSubjects.some(sub => norm(q.subject) === norm(sub)) &&
+                    selectedTopics.some(t => topicMatches(q, t));
+                });
                 
                 const filteredPool = topicPool.filter(q => {
                   if (manualFilters.topic !== 'All' && q.topic !== manualFilters.topic) return false;
