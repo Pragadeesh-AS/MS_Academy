@@ -13,7 +13,7 @@ import { ref, listAll, getDownloadURL } from 'firebase/storage';
 import StudentLiveClasses from './StudentLiveClasses';
 import RecordingPlayerModal from './shared/RecordingPlayerModal';
 import RoleSwitcher from './shared/RoleSwitcher';
-import { STUDENT_DEPARTMENTS, groupBySubject, NO_SUBJECT, sameDepartment, isCommonDeptName } from '../utils/subjects';
+import { STUDENT_DEPARTMENTS, groupBySubject, NO_SUBJECT, sameDepartment, isCommonDeptName, canonicalDepartment } from '../utils/subjects';
 import StudentTests from './StudentTests';
 import TestAlerts from './student/TestAlerts';
 import { canAccessTest } from '../utils/testAccess';
@@ -253,7 +253,7 @@ export default function Dashboard() {
     // A purchased course bundle with notes access: all subjects, or only those the admin selected
     purchasedBundles.includes(b.id) &&
     (b.permissions?.includes('notes') || !b.permissions) &&
-    (b.department === studentDepartment || b.department === 'General') &&
+    ((b.department && sameDepartment(b.department, studentDepartment)) || b.department === 'General') &&
     (b.notesSubjectMode !== 'selected' || (b.noteSubjectIds || []).includes(subjectId))
   );
 
@@ -278,7 +278,7 @@ export default function Dashboard() {
     // unlock it if they have any purchased bundle for this department with 'notes' permission.
     const studentPurchasedDeptBundles = (availableBundles || []).filter(b => 
       purchasedBundles.includes(b.id) && 
-      (b.department === note.department || b.department === 'General' || note.department === 'General') &&
+      ((b.department && note.department && sameDepartment(b.department, note.department)) || b.department === 'General' || note.department === 'General') &&
       (b.permissions?.includes('notes') || !b.permissions)
     );
     
@@ -389,10 +389,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!studentDepartment) return;
-    const q = query(
-      collection(db, 'notes'),
-      where('department', '==', studentDepartment)
-    );
+    const depts = Array.from(new Set([studentDepartment, canonicalDepartment(studentDepartment)].filter(Boolean)));
+    const q = depts.length === 1
+      ? query(collection(db, 'notes'), where('department', '==', depts[0]))
+      : query(collection(db, 'notes'), where('department', 'in', depts));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedNotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       fetchedNotes.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
@@ -404,7 +404,10 @@ export default function Dashboard() {
   // Only the student's own department's subject folders are ever loaded
   useEffect(() => {
     if (!studentDepartment) return;
-    const q = query(collection(db, 'note_folders'), where('department', '==', studentDepartment));
+    const depts = Array.from(new Set([studentDepartment, canonicalDepartment(studentDepartment)].filter(Boolean)));
+    const q = depts.length === 1
+      ? query(collection(db, 'note_folders'), where('department', '==', depts[0]))
+      : query(collection(db, 'note_folders'), where('department', 'in', depts));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setNoteFolders(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (err) => console.error('Failed to load note folders', err));
@@ -1536,7 +1539,7 @@ export default function Dashboard() {
               ) : (
                 (() => {
                   const filteredBundles = availableBundles.filter(b => 
-                    (b.department === studentDepartment || b.department === 'General') &&
+                    ((b.department && sameDepartment(b.department, studentDepartment)) || b.department === 'General') &&
                     (!b.isHidden || purchasedBundles.includes(b.id))
                   );
                   

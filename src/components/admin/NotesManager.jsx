@@ -9,6 +9,7 @@ import Toast from '../shared/Toast';
 import { accessOf, accessFields, bundleNamesOf } from '../../utils/bundleAccess';
 import { paletteFor, monogramOf, NEUTRAL } from '../../utils/departmentColors';
 import { gateCoursesData } from '../GateCourses';
+import { sameDepartment } from '../../utils/subjects';
 
 // Folder depth: Department (fixed) -> Subject -> Topic. Topics cannot contain further folders.
 const LEVEL_NAMES = ['Subject', 'Topic'];
@@ -71,7 +72,20 @@ export default function NotesManager() {
 
   const [confirmDialog, setConfirmDialog] = useState(null);
 
-  const departments = useMemo(() => ['General', ...gateCoursesData.map(c => c.name)], []);
+  const departments = useMemo(() => {
+    const list = ['General', ...gateCoursesData.map(c => c.name)];
+    notes.forEach(n => {
+      if (n.department && !list.some(d => sameDepartment(d, n.department))) {
+        list.push(n.department);
+      }
+    });
+    folders.forEach(f => {
+      if (f.department && !list.some(d => sameDepartment(d, f.department))) {
+        list.push(f.department);
+      }
+    });
+    return list;
+  }, [notes, folders]);
 
   useEffect(() => {
     const fetchBundles = async () => {
@@ -123,17 +137,17 @@ export default function NotesManager() {
     return notes.filter(n => n.folderId && ids.has(n.folderId));
   };
 
-  const notesInDepartment = (dept) => notes.filter(n => (n.department || 'General') === dept);
+  const notesInDepartment = (dept) => notes.filter(n => (dept === 'General' ? (!n.department || n.department === 'General') : sameDepartment(n.department, dept)));
 
   // What to show in the current location
   const childFolders = department
     ? folders
-        .filter(f => f.department === department && (f.parentId || null) === (currentFolder ? currentFolder.id : null))
+        .filter(f => (department === 'General' ? (!f.department || f.department === 'General') : sameDepartment(f.department, department)) && (f.parentId || null) === (currentFolder ? currentFolder.id : null))
         .sort((a, b) => a.name.localeCompare(b.name))
     : [];
 
   const filesHere = department
-    ? notes.filter(n => (n.department || 'General') === department && (n.folderId || null) === (currentFolder ? currentFolder.id : null))
+    ? notes.filter(n => (department === 'General' ? (!n.department || n.department === 'General') : sameDepartment(n.department, department)) && (n.folderId || null) === (currentFolder ? currentFolder.id : null))
     : [];
 
   const isSearching = search.trim().length > 0;
@@ -237,7 +251,7 @@ export default function NotesManager() {
 
   const assignList = assignFolder
     ? students
-        .filter(st => assignShowAll || (st.department || '') === assignFolder.department)
+        .filter(st => assignShowAll || (st.department && sameDepartment(st.department, assignFolder.department)))
         .filter(st => {
           const q = assignSearch.toLowerCase();
           return !q || (st.name || '').toLowerCase().includes(q) || (st.email || '').toLowerCase().includes(q);
@@ -245,7 +259,7 @@ export default function NotesManager() {
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
     : [];
 
-  const deptSubjects = (dept) => folders.filter(f => f.department === dept && !f.parentId).sort((a, b) => a.name.localeCompare(b.name));
+  const deptSubjects = (dept) => folders.filter(f => (dept === 'General' ? (!f.department || f.department === 'General') : sameDepartment(f.department, dept)) && !f.parentId).sort((a, b) => a.name.localeCompare(b.name));
   const bundlePrice = (b) => Number(String(b.discountedPrice || b.price || '').replace(/[^\d.]/g, '')) || 0;
   const bundleSubjectCount = (b) => (b.includeAll ? deptSubjects(b.department).length : (b.subjectIds || []).filter(id => folders.some(f => f.id === id)).length);
 
@@ -755,13 +769,13 @@ export default function NotesManager() {
                 <h3 className="text-[12px] font-[800] uppercase tracking-wider text-slate-400">Notes Bundles</h3>
                 <button onClick={() => openBundleModal()} className="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 flex items-center gap-1.5"><Package size={14} /> Create Bundle</button>
               </div>
-              {noteBundles.filter(b => b.department === department).length === 0 ? (
+              {noteBundles.filter(b => sameDepartment(b.department, department)).length === 0 ? (
                 <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-6 text-center text-sm font-semibold text-slate-400">
                   No bundles yet. Create one to sell all subjects of {department} together.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {noteBundles.filter(b => b.department === department).map(b => (
+                  {noteBundles.filter(b => sameDepartment(b.department, department)).map(b => (
                     <div key={b.id} className="bg-white border border-indigo-100 rounded-2xl p-5 shadow-sm space-y-3">
                       <div className="flex items-start gap-3">
                         <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><Package size={22} /></div>
