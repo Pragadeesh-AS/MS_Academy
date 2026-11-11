@@ -129,6 +129,15 @@ const courses = [
 
 const testimonials = [
   {
+    name: "Sajin Mohan",
+    role: "Google Reviewer",
+    discipline: "2 weeks ago",
+    quote: "My experience at GATE Academy has been very good. The concepts are explained in a simple and easy to understand way which helps me learn quickly. The teaching methods are effective and make even difficult topics easier to understand. The study materials and guidance are also helpful for my GATE preparation. Overall, GATE Academy provides a good learning environment and helps me improve my knowledge and confidence.",
+    rating: 5,
+    initials: "SM",
+    bgGradient: "from-blue-600 to-indigo-700"
+  },
+  {
     name: "Myl samy M",
     role: "Google Reviewer",
     discipline: "2 months ago",
