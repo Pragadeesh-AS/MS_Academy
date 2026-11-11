@@ -234,6 +234,13 @@ export default function Analytics({ joinedStudents = [], department = null, stud
           if (attempt.responses && Array.isArray(attempt.responses)) {
               attemptTimeTaken = attempt.responses.reduce((sum, r) => sum + (r.timeSpent || 0), 0);
           }
+          if (!attemptTimeTaken && attempt.timeTakenSeconds) {
+              attemptTimeTaken = Number(attempt.timeTakenSeconds) || 0;
+          }
+          const maxSecs = (Number(testSummary.duration) || 0) * 60;
+          if (maxSecs > 0 && attemptTimeTaken > maxSecs) {
+              attemptTimeTaken = maxSecs;
+          }
           testSummary._totalTime += attemptTimeTaken;
 
           if ((attempt.score || 0) > testSummary.highestScore) {
@@ -366,14 +373,19 @@ export default function Analytics({ joinedStudents = [], department = null, stud
 
           // Leaderboard row for this test (also what the Excel / PDF export writes out)
           const totalQ = attempt.totalQuestions || allQuestions.length;
+          const testDurSecs = (Number(testSummary.duration) || 0) * 60;
+          let studentTimeSecs = attemptTimeTaken || Number(attempt.timeTakenSeconds) || 0;
+          if (testDurSecs > 0 && studentTimeSecs > testDurSecs) {
+            studentTimeSecs = testDurSecs;
+          }
           testSummary.students.push({
             id: attempt.id,
             name: attempt.studentName || attempt.studentEmail || 'Unknown',
             email: attempt.studentEmail || '',
             score: attempt.score || 0,
             maxScore: maxScore,
-            timeTaken: formatTime(attemptTimeTaken),
-            timeSeconds: attemptTimeTaken,
+            timeTaken: formatTime(studentTimeSecs),
+            timeSeconds: studentTimeSecs,
             correct,
             wrong,
             unattempted: allQuestions.length ? unattempted : Math.max(0, totalQ - correct - wrong),
@@ -390,15 +402,15 @@ export default function Analytics({ joinedStudents = [], department = null, stud
             studentName: attempt.studentName || sName,
             maxScore: maxScore,
             score: attempt.score || 0,
-            timeTaken: formatTime(attemptTimeTaken),
-            timeSeconds: attemptTimeTaken,
+            timeTaken: formatTime(studentTimeSecs),
+            timeSeconds: studentTimeSecs,
             totalQ: attempt.totalQuestions || allQuestions.length,
             attempted: correct + wrong,
             correct,
             wrong,
             negMarks: 0,
             totalMarks: attempt.totalMarks ?? maxScore,
-            timeTakenSeconds: attempt.timeTakenSeconds ?? attemptTimeTaken,
+            timeTakenSeconds: studentTimeSecs,
             submittedAt: attempt.submittedAt?.toDate ? attempt.submittedAt.toDate() : null,
             test: fetchedTests.find(t => t.id === attempt.testId) || null,
             // Students only see answers / explanations once the test's solutions are released

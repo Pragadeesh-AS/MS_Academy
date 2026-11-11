@@ -34,6 +34,9 @@ export default function TestLeaderboard({ testId, currentStudentEmail }) {
           if (data.responses && Array.isArray(data.responses)) {
             attemptTimeTaken = data.responses.reduce((acc, r) => acc + (r.timeSpent || 0), 0);
           }
+          if (!attemptTimeTaken && data.timeTakenSeconds) {
+            attemptTimeTaken = Number(data.timeTakenSeconds) || 0;
+          }
           const maxScore = data.totalMarks || (data.responses ? data.responses.length : 100);
           
           return {

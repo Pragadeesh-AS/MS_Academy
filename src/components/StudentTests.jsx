@@ -248,10 +248,11 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
         // Time ran out while the student was away - submit what they had saved
         showToast('Time ran out for this test while you were away. Your saved answers will now be submitted.', 'warning');
         startTimeRef.current = saved.startedAt;
+        const maxSecs = (Number(timedTest.duration) || 0) * 60;
         await handleSubmitTest(matchedQuestions, timedTest, saved.answers, {
           timeSpent: saved.timeSpent,
           shownOrder: saved.order,
-          timeTakenSeconds: Math.round((saved.deadline - saved.startedAt) / 1000)
+          timeTakenSeconds: maxSecs > 0 ? maxSecs : Math.round((saved.deadline - saved.startedAt) / 1000)
         });
         return;
       }
@@ -312,7 +313,13 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
     let totalScore = 0;
     let totalMarks = 0;
 
-    const timeTakenSeconds = meta.timeTakenSeconds ?? (startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0);
+    const maxDurationSecs = (Number(test?.duration) || 0) * 60;
+    let timeTakenSeconds = typeof meta.timeTakenSeconds === 'number'
+      ? meta.timeTakenSeconds
+      : (startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0);
+    if (maxDurationSecs > 0) {
+      timeTakenSeconds = Math.min(maxDurationSecs, Math.max(0, timeTakenSeconds));
+    }
     const avgTimePerQuestion = questionsList.length > 0 ? timeTakenSeconds / questionsList.length : 0;
     // Saved in the test's standard order (aptitude section first, 1-mark before 2-mark), the same
     // for every student, so Q5 is the same question in everyone's analytics. The shuffled order this
@@ -341,6 +348,16 @@ export default function StudentTests({ department, isPro, purchasedBundles = [],
           timeSpent: hasRealTimes ? (meta.timeSpent[q.id] || 0) : avgTimePerQuestion
         };
       });
+
+      if (maxDurationSecs > 0 && hasRealTimes) {
+        const sumTimes = evaluation.reduce((s, r) => s + (Number(r.timeSpent) || 0), 0);
+        if (sumTimes > maxDurationSecs) {
+          const ratio = maxDurationSecs / sumTimes;
+          evaluation.forEach(r => {
+            r.timeSpent = Math.round((r.timeSpent || 0) * ratio);
+          });
+        }
+      }
 
     const attemptPayload = {
       testId: test.id,

@@ -45,18 +45,25 @@ const plainAnswer = (text) => (text ? String(text).replace(/^Option\s+/i, '') : 
 // Same sections as the exam screen: General Aptitude, then the core subject
 const sectionOf = (q, coreName) => (/ap+titude/i.test(q.department || '') ? 'General Aptitude' : coreName);
 
-// Time on a test: the stored total, else the sum of per-question times
-const attemptSeconds = (a) => a.timeTakenSeconds
-  ?? (Array.isArray(a.responses) ? a.responses.reduce((sum, r) => sum + (Number(r.timeSpent) || 0), 0) : 0);
+// Time on a test: the stored total, else the sum of per-question times (capped at test duration if known)
+const attemptSeconds = (a, maxDurationSecs = 0) => {
+  const respSum = Array.isArray(a.responses) ? a.responses.reduce((sum, r) => sum + (Number(r.timeSpent) || 0), 0) : 0;
+  let s = Number(a.timeTakenSeconds ?? a.timeSeconds) || respSum || 0;
+  const limit = maxDurationSecs || (Number(a.test?.duration) || 0) * 60;
+  if (limit > 0 && s > limit) {
+    s = (respSum > 0 && respSum <= limit) ? respSum : limit;
+  }
+  return s;
+};
 
 const isAnswered = (r) => (Array.isArray(r.selectedAnswer) ? r.selectedAnswer.length > 0 : r.selectedAnswer !== undefined && r.selectedAnswer !== null && String(r.selectedAnswer).trim() !== '');
 
 // Best score first; equal scores -> the faster attempt ranks higher; same score and time share a rank
-const rankAttempts = (attempts) => {
-  const sorted = [...attempts].sort((a, b) => (b.score || 0) - (a.score || 0) || attemptSeconds(a) - attemptSeconds(b));
+const rankAttempts = (attempts, maxDurationSecs = 0) => {
+  const sorted = [...attempts].sort((a, b) => (b.score || 0) - (a.score || 0) || attemptSeconds(a, maxDurationSecs) - attemptSeconds(b, maxDurationSecs));
   let prev = null;
   return sorted.map((a, i) => {
-    const same = prev && (prev.score || 0) === (a.score || 0) && attemptSeconds(prev) === attemptSeconds(a);
+    const same = prev && (prev.score || 0) === (a.score || 0) && attemptSeconds(prev, maxDurationSecs) === attemptSeconds(a, maxDurationSecs);
     const rank = same ? prev.rank : i + 1;
     prev = { ...a, rank };
     return prev;
@@ -103,11 +110,17 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
     unattempted: questions.filter(q => q.status === 'Unattempted').length,
   };
   const durationSecs = (Number(test.duration) || 0) * 60;
-  const yourSecs = Number(attempt.timeTakenSeconds ?? attempt.timeSeconds) || 0;
+  const responsesSum = Array.isArray(attempt.responses) && attempt.responses.length > 0
+    ? attempt.responses.reduce((sum, r) => sum + (Number(r.timeSpent) || 0), 0)
+    : 0;
+  const rawSecs = Number(attempt.timeTakenSeconds ?? attempt.timeSeconds) || responsesSum || 0;
+  const yourSecs = durationSecs > 0
+    ? (rawSecs > durationSecs && responsesSum > 0 && responsesSum <= durationSecs ? responsesSum : Math.min(rawSecs, durationSecs))
+    : rawSecs;
   const timeProgress = durationSecs > 0 ? Math.min(100, round2((yourSecs / durationSecs) * 100)) : null;
   const coreName = test.subject || attempt.subject || 'Technical';
 
-  const ranked = useMemo(() => (allAttempts ? rankAttempts(allAttempts) : []), [allAttempts]);
+  const ranked = useMemo(() => (allAttempts ? rankAttempts(allAttempts, durationSecs) : []), [allAttempts, durationSecs]);
   const mine = ranked.find(a => a.id === attempt.id);
   const myRank = mine?.rank ?? null;
 
@@ -585,7 +598,7 @@ export default function TestReport({ attempt, studentName, hideKey = false, onBa
                       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
                         <dt className="text-slate-600">Obtained Marks</dt><dd className="font-bold text-slate-800">{round2(a.score)}</dd>
                         <dt className="text-slate-600">Percentage</dt><dd className="font-bold text-slate-800">{max ? `${round2((a.score / max) * 100).toFixed(2)} %` : '-'}</dd>
-                        <dt className="text-slate-600">Time Duration</dt><dd className="font-bold text-slate-800">{humanTime(attemptSeconds(a))}</dd>
+                        <dt className="text-slate-600">Time Duration</dt><dd className="font-bold text-slate-800">{humanTime(attemptSeconds(a, durationSecs))}</dd>
                         <dt className="text-slate-600">Success Rate</dt>
                         <dd className="font-bold text-slate-800">
                           {attempted ? `${round2((correct / attempted) * 100).toFixed(2)} %` : '-'}

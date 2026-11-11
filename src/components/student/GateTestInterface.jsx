@@ -205,7 +205,12 @@ export default function GateTestInterface({ test, testQuestions: rawTestQuestion
     flushQuestionTime();
     const timeSpent = {};
     Object.entries(timeSpentRef.current).forEach(([id, secs]) => { timeSpent[id] = Math.round(secs); });
-    onSubmit(answers, { timeSpent, order: standardOrder, shownOrder: testQuestions.map(q => q.id) });
+    const maxSecs = (Number(test?.duration) || 0) * 60;
+    const actualElapsed = startedAtRef.current
+      ? Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000))
+      : (maxSecs > 0 && typeof timeRemaining === 'number' ? Math.max(0, maxSecs - timeRemaining) : 0);
+    const timeTakenSeconds = maxSecs > 0 ? Math.min(maxSecs, actualElapsed) : actualElapsed;
+    onSubmit(answers, { timeSpent, order: standardOrder, shownOrder: testQuestions.map(q => q.id), timeTakenSeconds });
   };
   const [fsWarningCount, setFsWarningCount] = useState(fsWarningsRef.current);
   const [showFsWarning, setShowFsWarning] = useState(false);
