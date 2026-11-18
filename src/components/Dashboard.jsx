@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Loader from './Loader';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut, Package, Layers, Bookmark } from 'lucide-react';
+import { BookOpen, Video, PlayCircle, Play, Calendar, GraduationCap, Building2, HelpCircle, School, FileText, Eye, Trophy, ChevronLeft, ChevronRight, Crown, Lock, ArrowRight, Clock, CheckCircle, Menu, X, LogOut, Package, Layers } from 'lucide-react';
 
 const VALID_STUDENT_TABS = [
   'learning', 'live', 'recordings', 'notes', 'schedule', 'analytics', 'tests', 'practice', 'upgrade'
@@ -716,8 +716,8 @@ export default function Dashboard() {
         } p-5`}
       >
         <div className="flex items-start gap-3.5 mb-3">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-b from-[#e58a36] via-[#cb6b1d] to-[#96420a] border border-amber-300/40 shadow-[0_3px_8px_rgba(0,0,0,0.3),inset_0_1.5px_2px_rgba(255,255,255,0.4)] flex items-center justify-center shrink-0">
-            <Bookmark size={18} className="text-white fill-white/20" strokeWidth={2.4} />
+          <div className="w-11 h-11 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center p-1.5 shrink-0 group-hover:scale-105 transition-all">
+            <img src={logoImg} alt="MS Academy Logo" className="w-full h-full object-contain" />
           </div>
           <div className="flex-1 min-w-0">
             <h4 className="font-[900] text-slate-900 text-[15px] sm:text-[16px] leading-snug truncate" title={note.title}>

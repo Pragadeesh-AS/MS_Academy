@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db, storage } from '../../firebase';
 import { collection, query, getDocs, addDoc, deleteDoc, updateDoc, doc, serverTimestamp, onSnapshot, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { FileText, Plus, Trash2, UploadCloud, Link as LinkIcon, X, CheckCircle2, ChevronRight, Book, Search, AlertCircle, ArrowUpRight, Save, Folder, FolderPlus, Home, Users, Tag, Package, Pencil, BookOpen, Layers, Building2, CalendarClock, ArrowRight, Bookmark } from 'lucide-react';
+import { FileText, Plus, Trash2, UploadCloud, Link as LinkIcon, X, CheckCircle2, ChevronRight, Book, Search, AlertCircle, ArrowUpRight, Save, Folder, FolderPlus, Home, Users, Tag, Package, Pencil, BookOpen, Layers, Building2, CalendarClock, ArrowRight } from 'lucide-react';
+import logoImg from '../../assets/msgate_logo.png';
 import Loader from '../Loader';
 import { BundleAccessPicker, BundleAccessModal } from '../shared/BundleAccessPicker';
 import Toast from '../shared/Toast';
@@ -512,8 +513,8 @@ export default function NotesManager() {
     <div key={note.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden group hover:border-emerald-500/60 hover:shadow-lg hover:-translate-y-0.5 transition-all">
       <div className="p-5">
         <div className="flex justify-between items-start mb-3 gap-2">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-b from-[#e58a36] via-[#cb6b1d] to-[#96420a] border border-amber-300/40 shadow-[0_3px_8px_rgba(0,0,0,0.3),inset_0_1.5px_2px_rgba(255,255,255,0.4)] flex items-center justify-center shrink-0">
-            <Bookmark size={18} className="text-white fill-white/20" strokeWidth={2.4} />
+          <div className="w-11 h-11 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center p-1.5 shrink-0 group-hover:scale-105 transition-all">
+            <img src={logoImg} alt="MS Academy Logo" className="w-full h-full object-contain" />
           </div>
           <button onClick={() => handleDelete(note)} className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete note">
             <Trash2 size={16} />
