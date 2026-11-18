@@ -318,7 +318,29 @@ export default function PracticeTests({
           </div>
 
           <div className="space-y-2">
-            <label className="text-[13px] font-[800] text-slate-800">1. Subjects</label>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <label className="text-[13px] font-[800] text-slate-800">1. Subjects</label>
+              {subjects.length > 0 && (
+                <div className="flex items-center gap-1.5 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSubjects(subjects.map(s => s.attr.name))}
+                    disabled={selectedSubjects.length === subjects.length}
+                    className="px-2 py-0.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedSubjects([]); setSelectedTopics([]); }}
+                    disabled={selectedSubjects.length === 0}
+                    className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              )}
+            </div>
             {subjects.length === 0 ? (
               <p className="text-sm font-semibold text-slate-400">{attributes.length ? 'No subjects are set up for your department yet.' : 'Loading subjects...'}</p>
             ) : (
@@ -337,12 +359,27 @@ export default function PracticeTests({
 
           {selectedSubjects.length > 0 && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <label className="text-[13px] font-[800] text-slate-800">2. Topics</label>
                 {topics.length > 0 && (
-                  <button type="button" onClick={() => setSelectedTopics(selectedTopics.length === topics.length ? [] : topics)} className="text-[12px] font-[800] text-blue-600 hover:text-blue-800">
-                    {selectedTopics.length === topics.length ? 'Clear all' : 'Select all'}
-                  </button>
+                  <div className="flex items-center gap-1.5 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTopics([...topics])}
+                      disabled={selectedTopics.length === topics.length}
+                      className="px-2 py-0.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTopics([])}
+                      disabled={selectedTopics.length === 0}
+                      className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
                 )}
               </div>
               {topics.length === 0 ? (

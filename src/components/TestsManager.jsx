@@ -1842,9 +1842,37 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   {/* Select Subjects */}
                   {selectedDept && (
                     <div className="space-y-2.5 border-t border-slate-100 pt-4 animate-in fade-in duration-300">
-                      <label className="text-[13px] font-[900] text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                        <BookOpen className="text-blue-500" size={16} /> 2. Select Subjects
-                      </label>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <label className="text-[13px] font-[900] text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                          <BookOpen className="text-blue-500" size={16} /> 2. Select Subjects
+                          {selectedSubjects.length > 0 && (
+                            <span className="text-[11px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full lowercase tracking-normal">
+                              {selectedSubjects.length}/{subjectsList.length} selected
+                            </span>
+                          )}
+                        </label>
+
+                        {subjectsList.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-xs font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSubjects(subjectsList.map(s => s.name))}
+                              disabled={selectedSubjects.length === subjectsList.length}
+                              className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40 disabled:hover:bg-blue-50 disabled:cursor-not-allowed transition-all"
+                            >
+                              Select All
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setSelectedSubjects([]); setSelectedTopics([]); }}
+                              disabled={selectedSubjects.length === 0}
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-100 disabled:cursor-not-allowed transition-all"
+                            >
+                              Deselect All
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       {subjectsList.length === 0 && (
                         <div className="text-slate-400 text-xs font-semibold py-2">No subjects are set up for this department yet. Add them in the Attributes tab.</div>
                       )}
@@ -1883,9 +1911,37 @@ export default function TestsManager({ department = '', isTeacher = false, onEdi
                   {/* Select Topics */}
                   {selectedSubjects.length > 0 && (
                     <div className="space-y-2.5 border-t border-slate-100 pt-4 animate-in fade-in duration-300">
-                      <label className="text-[13px] font-[900] text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                        <Layers className="text-purple-500" size={16} /> 3. Select Topics (Showing Available Questions in DB)
-                      </label>
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <label className="text-[13px] font-[900] text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                          <Layers className="text-purple-500" size={16} /> 3. Select Topics (Showing Available Questions in DB)
+                          {selectedTopics.length > 0 && (
+                            <span className="text-[11px] font-bold text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded-full lowercase tracking-normal">
+                              {selectedTopics.length}/{topicsList.length} selected
+                            </span>
+                          )}
+                        </label>
+
+                        {topicsList.length > 0 && (
+                          <div className="flex items-center gap-1.5 text-xs font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTopics([...topicsList])}
+                              disabled={selectedTopics.length === topicsList.length}
+                              className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 disabled:opacity-40 disabled:hover:bg-purple-50 disabled:cursor-not-allowed transition-all"
+                            >
+                              Select All
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTopics([])}
+                              disabled={selectedTopics.length === 0}
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800 disabled:opacity-40 disabled:hover:bg-slate-100 disabled:cursor-not-allowed transition-all"
+                            >
+                              Deselect All
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       
                       {topicsList.length === 0 ? (
                         <div className="text-slate-400 text-xs font-semibold py-4">No topics found in the attributes bank under this subject.</div>
