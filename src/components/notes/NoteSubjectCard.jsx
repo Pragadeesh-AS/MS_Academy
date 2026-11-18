@@ -1,13 +1,14 @@
 import React from 'react';
-import { Bookmark, Lock, CheckCircle, Users, Tag, Trash2 } from 'lucide-react';
+import { Lock, CheckCircle, Users, Tag, Trash2 } from 'lucide-react';
+import logoImg from '../../assets/msgate_logo.png';
 import { getSubjectAcronym, getSubjectSubtitle, getSubjectStreamCodes } from '../../utils/subjectAcronyms';
 
 /**
  * Premium Note Subject Card matching the official MS Academy mobile & web design.
  * Features:
  *  - Rich emerald-to-forest green gradient
- *  - Dedicated centered stream header (e.g. "ME · XE · PI") with zero overlap
- *  - Embossed bronze/copper coin with white Bookmark icon
+ *  - Dedicated centered stream header (e.g. "ME", "CS · IT") with zero overlap
+ *  - Official MS GATE Academy logo badge
  *  - Prominent bold white acronym (e.g. "SOM", "TOM", "FM", "ET")
  *  - Centered thin white divider
  *  - Clean uppercase full subject title (e.g. "FLUID MECHANICS")
@@ -89,11 +90,11 @@ export default function NoteSubjectCard({
         )}
       </div>
 
-      {/* Main Center Content: Bronze Coin + Bold Acronym */}
+      {/* Main Center Content: Academy Logo + Bold Acronym */}
       <div className="relative my-3 flex items-center justify-center gap-3.5 sm:gap-4">
-        {/* Bronze/Copper Coin Badge */}
-        <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-gradient-to-b from-[#e58a36] via-[#cb6b1d] to-[#96420a] border-2 border-[#f7a552]/40 shadow-[0_4px_10px_rgba(0,0,0,0.4),inset_0_2px_4px_rgba(255,255,255,0.4)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:rotate-[-3deg] transition-all duration-300">
-          <Bookmark size={20} className="text-white fill-white/20 drop-shadow-sm" strokeWidth={2.4} />
+        {/* Academy Logo Badge */}
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white border-2 border-white/80 shadow-[0_4px_12px_rgba(0,0,0,0.3)] flex items-center justify-center p-1.5 shrink-0 group-hover:scale-105 group-hover:rotate-[-3deg] transition-all duration-300">
+          <img src={logoImg} alt="MS Academy Logo" className="w-full h-full object-contain" />
         </div>
 
         {/* Acronym Text */}

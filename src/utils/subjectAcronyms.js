@@ -100,24 +100,24 @@ const KNOWN_ACRONYMS = {
 };
 
 const SUBJECT_STREAM_CODES = {
-  'strength of materials': 'ME · XE · PI',
-  'theory of machines': 'ME · PI',
-  'fluid mechanics': 'ME · XE · PI',
-  'fulid mechanics-mech': 'ME · XE · PI',
-  'fluid mechanics-chem': 'CH · XE',
-  'engineering thermodynamics': 'ME · XE · PI',
-  'thermodynamics - mech': 'ME · XE · PI',
-  'thermodynamics-chem': 'CH · XE',
-  'thermodynamics': 'ME · XE · PI',
-  'heat transfer': 'ME · XE · PI',
-  'heat transfer-mech': 'ME · XE · PI',
-  'heat transfer-chem': 'CH · XE',
-  'machine design': 'ME · PI',
-  'production engineering': 'ME · PI',
-  'manufacturing': 'ME · PI',
-  'industrial engineering': 'ME · PI',
-  'engineering mechanics': 'ME · XE · PI',
-  'vibrations': 'ME · PI',
+  'strength of materials': 'ME',
+  'theory of machines': 'ME',
+  'fluid mechanics': 'ME',
+  'fulid mechanics-mech': 'ME',
+  'fluid mechanics-chem': 'CH',
+  'engineering thermodynamics': 'ME',
+  'thermodynamics - mech': 'ME',
+  'thermodynamics-chem': 'CH',
+  'thermodynamics': 'ME',
+  'heat transfer': 'ME',
+  'heat transfer-mech': 'ME',
+  'heat transfer-chem': 'CH',
+  'machine design': 'ME',
+  'production engineering': 'ME',
+  'manufacturing': 'ME',
+  'industrial engineering': 'ME',
+  'engineering mechanics': 'ME',
+  'vibrations': 'ME',
   'algorithms': 'CS · DA · IT',
   'programming and data structures': 'CS · DA · IT',
   'computer organization and architecture': 'CS · IT',
@@ -142,11 +142,11 @@ const SUBJECT_STREAM_CODES = {
 };
 
 const DEPT_DEFAULT_STREAMS = {
-  'MECHANICAL ENGINEERING': 'ME · XE · PI',
+  'MECHANICAL ENGINEERING': 'ME',
   'Computer Science (CSE)': 'CS · IT · DA',
   'Data Science & AI (DS)': 'DA · CS · ST',
   'ECE': 'EC · EE · IN',
-  'CHEMICAL ENGINEERING': 'CH · XE',
+  'CHEMICAL ENGINEERING': 'CH',
   'Civil (CE)': 'CE · ES',
   'Electrical (EE)': 'EE · IN',
   'Biotechnology (BT)': 'BT · XL',
@@ -189,14 +189,28 @@ export const getSubjectSubtitle = (name) => {
 };
 
 export const getSubjectStreamCodes = (subjectName, departmentName) => {
+  let result = 'GATE · ESE';
   if (subjectName) {
     const lower = subjectName.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
-    if (SUBJECT_STREAM_CODES[lower]) return SUBJECT_STREAM_CODES[lower];
-    const stripped = lower.replace(/\s*-\s*(chem|mech|maths)$/, '').trim();
-    if (SUBJECT_STREAM_CODES[stripped]) return SUBJECT_STREAM_CODES[stripped];
+    if (SUBJECT_STREAM_CODES[lower]) {
+      result = SUBJECT_STREAM_CODES[lower];
+    } else {
+      const stripped = lower.replace(/\s*-\s*(chem|mech|maths)$/, '').trim();
+      if (SUBJECT_STREAM_CODES[stripped]) {
+        result = SUBJECT_STREAM_CODES[stripped];
+      } else if (departmentName && DEPT_DEFAULT_STREAMS[departmentName]) {
+        result = DEPT_DEFAULT_STREAMS[departmentName];
+      }
+    }
+  } else if (departmentName && DEPT_DEFAULT_STREAMS[departmentName]) {
+    result = DEPT_DEFAULT_STREAMS[departmentName];
   }
-  if (departmentName && DEPT_DEFAULT_STREAMS[departmentName]) {
-    return DEPT_DEFAULT_STREAMS[departmentName];
-  }
-  return 'GATE · ESE';
+
+  // Filter out any XE or PI stream codes
+  const parts = result
+    .split(/\s*·\s*/)
+    .map(s => s.trim())
+    .filter(s => s && s.toUpperCase() !== 'XE' && s.toUpperCase() !== 'PI');
+
+  return parts.length > 0 ? parts.join(' · ') : result;
 };
