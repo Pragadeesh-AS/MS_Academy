@@ -1109,7 +1109,7 @@ export default function Dashboard() {
                 <div className="divide-y divide-slate-100">
                   {notes.length === 0 ? (
                     <div className="p-8 text-center text-slate-500 font-medium">
-                      No study materials available yet.
+                      The notes will be available after the purchase of the course.
                     </div>
                   ) : (
                     notes.slice(0, 5).map(note => {
@@ -1357,14 +1357,26 @@ export default function Dashboard() {
               )}
 
               {childFolders.length === 0 && filesHere.length === 0 ? (
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm text-center py-12 px-6">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm text-center py-14 px-6 max-w-2xl mx-auto">
                   <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
                     <FileText size={32} />
                   </div>
-                  <h3 className="text-xl font-[900] text-slate-900 mb-2">{noteStack.length ? 'This folder is empty' : 'No Study Notes Yet'}</h3>
-                  <p className="text-slate-500 max-w-md mx-auto">
-                    {noteStack.length ? 'Notes added here will show up automatically.' : 'Once study materials are uploaded for your department, they will appear here.'}
+                  <h3 className="text-xl sm:text-2xl font-[900] text-slate-900 mb-2">
+                    {noteStack.length ? 'This folder is empty' : 'The notes will be available after the purchase of the course'}
+                  </h3>
+                  <p className="text-slate-500 max-w-md mx-auto mb-6 font-medium">
+                    {noteStack.length
+                      ? 'Notes added here will show up automatically.'
+                      : `Study notes for ${studentDepartment || 'your department'} will be accessible after purchasing the course.`}
                   </p>
+                  {!noteStack.length && (
+                    <button
+                      onClick={() => setActiveTab('upgrade')}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all"
+                    >
+                      <Crown size={16} /> Explore Course Bundles
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-8">
