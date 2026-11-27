@@ -494,7 +494,10 @@ export default function QuestionBank({ externalFilter = null, isPremiumView = fa
           break;
         }
       }
-      if (!matched) canonicalMap.set(qDept, qDept);
+      if (!matched) {
+        const canon = canonicalDepartment(qDept) || qDept;
+        canonicalMap.set(canon, canon);
+      }
     });
 
     return Array.from(canonicalMap.keys());

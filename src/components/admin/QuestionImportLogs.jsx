@@ -31,6 +31,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { hasDiagram, countQuestionTypes } from '../../utils/questionLogger';
+import { canonicalDepartment, sameDepartment } from '../../utils/subjects';
 
 export default function QuestionImportLogs() {
   const [logs, setLogs] = useState([]);
@@ -281,7 +282,7 @@ export default function QuestionImportLogs() {
       }
 
       // Filter by Department
-      if (filterDept !== 'all' && item.department !== filterDept) {
+      if (filterDept !== 'all' && item.department !== filterDept && !sameDepartment(item.department, filterDept)) {
         return false;
       }
 
@@ -317,8 +318,16 @@ export default function QuestionImportLogs() {
 
   // Unique departments for filter dropdown
   const departmentOptions = useMemo(() => {
-    const depts = new Set(logs.map(l => l.department).filter(Boolean));
-    return Array.from(depts).sort();
+    const depts = [];
+    logs.forEach(l => {
+      const raw = (l.department || '').trim();
+      if (!raw) return;
+      const canon = canonicalDepartment(raw) || raw;
+      if (!depts.some(d => sameDepartment(d, canon))) {
+        depts.push(canon);
+      }
+    });
+    return depts.sort();
   }, [logs]);
 
   // Overall Statistics calculated across filtered logs

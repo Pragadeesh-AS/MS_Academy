@@ -3,7 +3,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { sameDepartment } from './subjects';
 
 const DB_NAME = 'ms_academy_cache';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_NAME = 'question_bank_store';
 
 // Helper: safe timestamp extraction for questions
@@ -102,6 +102,9 @@ function openIndexedDB() {
         const idb = event.target.result;
         if (!idb.objectStoreNames.contains(STORE_NAME)) {
           idb.createObjectStore(STORE_NAME);
+        } else {
+          // Wipe stale cached questions/attributes so renamed departments never linger locally
+          event.target.transaction.objectStore(STORE_NAME).clear();
         }
       };
       request.onsuccess = (event) => resolve(event.target.result);

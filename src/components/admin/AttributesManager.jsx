@@ -184,7 +184,8 @@ export default function AttributesManager({ lockedDepartment = null }) {
           const docs = snap.docs.filter(d => belongsHere(d.data()));
           for (let i = 0; i < docs.length; i += 450) {
             const batch = writeBatch(db);
-            docs.slice(i, i + 450).forEach(d => batch.update(d.ref, { [field]: newName }));
+            const stamp = coll === 'question_bank' ? { updatedAt: new Date().toISOString() } : {};
+            docs.slice(i, i + 450).forEach(d => batch.update(d.ref, { [field]: newName, ...stamp }));
             await batch.commit();
           }
           counts[label] = (counts[label] || 0) + docs.length;

@@ -13,6 +13,11 @@ const shortCode = (name) => ((name || '').match(/\(([^)]+)\)/) || [])[1]?.trim()
 // The name without its "(CODE)" and a trailing "Engineering": "Mechanical Engineering (ME)" -> "mechanical"
 const baseName = (name) => (name || '').replace(/\([^)]*\)/g, '').trim().toLowerCase().replace(/\s+engineering$/, '').trim();
 
+const isBiotechName = (name) => {
+  const b = baseName(name).replace(/[\s-]+/g, '');
+  return b === 'biotech' || b === 'biotechnology' || b === 'bt' || shortCode(name) === 'bt';
+};
+
 // "Mechanical (ME)", "ME", "Mechanical" and "Mechanical Engineering" are all the same department
 export const sameDepartment = (a, b) => {
   const x = (a || '').trim().toLowerCase();
@@ -21,6 +26,7 @@ export const sameDepartment = (a, b) => {
   if (x === y) return true;
   if (/ap+titude/.test(x) && /ap+titude/.test(y)) return true;
   if ((x.includes('mathematics') || x.includes('maths')) && (y.includes('mathematics') || y.includes('maths'))) return true;
+  if (isBiotechName(a) && isBiotechName(b)) return true;
   const cx = shortCode(a);
   const cy = shortCode(b);
   if ((!!cx && (cx === y || cx === cy)) || (!!cy && cy === x)) return true;
@@ -79,6 +85,16 @@ const DEPARTMENT_ALIASES = {
   statistics: 'STATISTICS',
   stats: 'STATISTICS',
   st: 'STATISTICS',
+  biotechnology: 'Biotechnology (BT)',
+  'biotechnology (bt)': 'Biotechnology (BT)',
+  'bio technology': 'Biotechnology (BT)',
+  'bio-technology': 'Biotechnology (BT)',
+  'bio -technology': 'Biotechnology (BT)',
+  'bio - technology': 'Biotechnology (BT)',
+  biotech: 'Biotechnology (BT)',
+  'bio tech': 'Biotechnology (BT)',
+  'bio-tech': 'Biotechnology (BT)',
+  bt: 'Biotechnology (BT)',
   aptitude: 'General Aptitude',
   apptitude: 'General Aptitude',
   'general aptitude': 'General Aptitude',
